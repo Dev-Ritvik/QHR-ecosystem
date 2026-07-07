@@ -1,0 +1,9 @@
+{
+  "name": "@estate/ui",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "echo 'No types to check yet'",
+    "lint": "echo 'No linting configured yet'"
+  }
+}

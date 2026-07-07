@@ -1,0 +1,1 @@
+- [x] T01 — Monorepo scaffold + CI skeleton — files: package.json, pnpm-workspace.yaml, turbo.json, tsconfig.base.json, .gitignore, .env.example, .github/workflows/ci.yml, and workspace package.json/tsconfig.json stubs
