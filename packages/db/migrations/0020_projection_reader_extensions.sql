@@ -1,0 +1,11 @@
+-- 0020: Allow the public site's read-only role to call PostGIS functions.
+--
+-- The projection reader serializes geometry server-side via
+-- extensions.ST_AsGeoJSON(geom)::json (FRONTEND_BLUEPRINT §4.2). PostGIS lives
+-- in the `extensions` schema (managed Supabase layout), and projection_reader
+-- had no USAGE on it — the exact 42501 crm_app hit before 0016.
+--
+-- Scope: schema USAGE only. Function EXECUTE is already granted to PUBLIC by
+-- the extension install. No table grants change; projection_reader still has
+-- SELECT on `projection` only and zero grants on `core`.
+GRANT USAGE ON SCHEMA extensions TO projection_reader;

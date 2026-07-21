@@ -1,0 +1,11 @@
+-- packages/db/migrations/0016_extensions_usage.sql
+--
+-- PostGIS lives in the `extensions` schema on Supabase, but crm_app's
+-- search_path is `"$user", public` and it had no USAGE on that schema —
+-- so ANY PostGIS call from the app role failed:
+--   unqualified:  42704 type "geometry" does not exist
+--   qualified:    42501 permission denied for schema extensions
+-- This broke publishing (ST_Extent bbox) and saving traced unit geometries
+-- (ST_SetSRID/ST_GeomFromGeoJSON). Application SQL is schema-qualified
+-- (extensions.ST_*); this grant makes that resolvable.
+GRANT USAGE ON SCHEMA extensions TO crm_app;

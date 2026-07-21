@@ -1,0 +1,24 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/expire-holds",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/daily-notifications",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/expiry-alerts",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/demo-export",
+      "schedule": "0 2 * * 0"
+    }
+  ]
+}

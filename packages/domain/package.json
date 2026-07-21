@@ -3,7 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "typecheck": "echo 'No types to check yet'",
-    "lint": "echo 'No linting configured yet'"
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'No linting configured yet'",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "@turf/turf": "^7.3.5"
   }
 }
