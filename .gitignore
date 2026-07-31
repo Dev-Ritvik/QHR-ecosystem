@@ -10,3 +10,13 @@ build
 .env.production.local
 playwright-report/
 test-results/
+
+# Source art library (1.9 GB: models, 2K PBR maps, HDRIs) - too large for git.
+# Back this up separately; ASSET_MANIFEST.md records what belongs here.
+assets/
+
+# Nested upstream repo - has its own .git, would commit as a broken gitlink
+blender-skills/
+
+# TypeScript incremental build artifact
+*.tsbuildinfo

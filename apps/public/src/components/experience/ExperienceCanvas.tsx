@@ -19,9 +19,22 @@
 'use client';
 
 import { Canvas, useFrame } from '@react-three/fiber';
-import { useRef } from 'react';
+import { lazy, Suspense, useRef } from 'react';
 import type { Mesh } from 'three';
-import { Perf } from 'r3f-perf';
+
+/**
+ * r3f-perf is a devDependency. Importing it at module top level puts it in the
+ * production module graph, so any build that prunes devDependencies (CI, a
+ * `--prod` install, most container builds) fails to resolve it — the runtime
+ * NODE_ENV check does not help, because resolution happens at build time.
+ *
+ * NODE_ENV is statically inlined, so in a production build this ternary folds
+ * to `null` and the import() inside the dead branch is dropped with it.
+ */
+const Perf =
+  process.env.NODE_ENV === 'development'
+    ? lazy(() => import('r3f-perf').then((m) => ({ default: m.Perf })))
+    : null;
 
 /**
  * Module scope deliberately: this state must outlive React component
@@ -88,7 +101,11 @@ function VoidScene({ refs }: { refs: ProbeRefs }) {
         />
       </mesh>
 
-      {process.env.NODE_ENV === 'development' && <Perf position="bottom-right" />}
+      {Perf && (
+        <Suspense fallback={null}>
+          <Perf position="bottom-right" />
+        </Suspense>
+      )}
     </>
   );
 }

@@ -31,7 +31,9 @@ const nextConfig = {
           { key: 'Content-Security-Policy', value: cspHeader },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'Referrer-Policy', value: 'DENY' },
+          // DENY is an X-Frame-Options token, not a Referrer-Policy one. Browsers
+          // ignore an unrecognised Referrer-Policy value, so the header was inert.
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },
     ];

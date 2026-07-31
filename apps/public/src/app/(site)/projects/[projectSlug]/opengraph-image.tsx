@@ -3,7 +3,11 @@ import { db } from '@/lib/projection';
 import { projectsPub } from '@estate/db/src/schema/projection';
 import { eq } from 'drizzle-orm';
 
-export const runtime = 'edge';
+// Must stay on the Node runtime: this route reads the projection through the
+// `postgres` driver, which needs `stream` and `perf_hooks`. Those do not exist
+// on Edge, so 'edge' here failed the production build outright. next/og's
+// ImageResponse is supported on both runtimes, so Node costs us nothing.
+export const runtime = 'nodejs';
 export const alt = 'Project Preview';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
