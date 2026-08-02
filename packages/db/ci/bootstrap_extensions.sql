@@ -1,0 +1,21 @@
+-- packages/db/ci/bootstrap_extensions.sql
+--
+-- CI-only. Not a migration, and deliberately not in migrations/ so the
+-- migration loop does not pick it up.
+--
+-- Production runs on Supabase, which installs PostGIS into a schema called
+-- `extensions` rather than public. The application depends on that layout: the
+-- SQL is schema-qualified in five places (apps/crm publish + geometry actions,
+-- apps/public projection), and two migrations grant USAGE on that schema to
+-- crm_app and projection_reader.
+--
+-- A stock postgis/postgis image puts PostGIS in public and has no `extensions`
+-- schema, so 0016_extensions_usage.sql fails outright with 3F000 - and even if
+-- the grants were skipped, every extensions.ST_* call the app makes would fail
+-- at runtime. Recreating the Supabase layout here keeps CI representative of
+-- production rather than passing against a shape we do not deploy.
+--
+-- Runs BEFORE the migrations, so 0000_init's `CREATE EXTENSION IF NOT EXISTS
+-- postgis` becomes a no-op instead of installing into public first.
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA extensions;

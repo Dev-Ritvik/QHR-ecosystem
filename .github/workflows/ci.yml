@@ -67,8 +67,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Production is Supabase, which keeps PostGIS in an `extensions` schema.
+      # The app hard-codes that (extensions.ST_*) and two migrations grant USAGE
+      # on it, so the stock postgis image's public-schema layout fails both.
+      - name: Provision PostGIS the way Supabase does
+        run: pnpm dlx tsx packages/db/apply_migration.ts packages/db/ci/bootstrap_extensions.sql
+
       - name: Apply DB migrations for E2E
         run: |
+          set -e
           for file in packages/db/migrations/*.sql; do
             pnpm dlx tsx packages/db/apply_migration.ts "$file"
           done
