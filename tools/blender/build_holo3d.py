@@ -41,6 +41,19 @@ STATIONS = {
         "calls": [("LAKE", 0.90, 0.38), ("CLUB HOUSE", 0.30, 0.19),
                   ("PARK", 0.09, 0.71)],
     },
+    # S3 sits on the opposite wall and is approached from -X, so its near edge
+    # faces the room the same way S1's does, mirrored.
+    "S3": {
+        "cells": "gayatri_cells.json",
+        "tex":   "gayatri_holo_tex.png",
+        "mat":   "MAT_Holo_Gayatri",
+        "wm": 1.100, "hm": 0.784,
+        "at": (5.95, 0.90), "yaw": math.radians(-90.0),
+        "title": ("VSR GAYATRI TOWNSHIP", "A VSR GROUP PROJECT", 0.50, 0.03),
+        # Every label below is printed on the sheet - nothing inferred.
+        "calls": [("PUBLIC OPEN SPACE", 0.125, 0.30), ("AMENITY", 0.25, 0.72),
+                  ("UTILITY AREA", 0.14, 0.66)],
+    },
     "S2": {
         "cells": "lucky_cells.json",
         "tex":   "lucky_holo_tex.png",
@@ -85,8 +98,18 @@ def load_tex(fname):
 
 def retune_plate(mat_name, image):
     """Point the existing plate material at the re-masked artwork and take the
-    emission down; the rims are what should carry the highlight now."""
-    m = bpy.data.materials[mat_name]
+    emission down; the rims are what should carry the highlight now.
+
+    A station added after the originals (S3) has no plate material yet, so build
+    one with the same emission-over-transparent shape rather than requiring it to
+    be authored by hand in the .blend first."""
+    m = bpy.data.materials.get(mat_name)
+    if m is None:
+        m = mat_top(mat_name, image)
+        for n in m.node_tree.nodes:
+            if n.type == 'MATH':          # drop the block-top alpha floor:
+                n.inputs[1].default_value = 0.0   # the plate honours real alpha
+        return m
     for n in m.node_tree.nodes:
         if n.type == 'TEX_IMAGE':
             n.image = image

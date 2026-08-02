@@ -79,10 +79,16 @@ SHOTS = [
     # --- S2 Lucky Garden, approached from -Y
     ("h1_S2_eye",     (-4.60,  1.50, 1.58), (-4.60,  3.80, 1.42),  40.0, 5.6, -0.05, (1800, 1300)),
     ("h1_S2_oblique", (-3.00,  1.95, 1.62), (-4.62,  3.80, 1.48),  40.0, 5.0, -0.05, (1800, 1300)),
+    # --- S3 VSR Gayatri Township, on the opposite wall, approached from -X
+    ("h1_S3_eye",     ( 3.40,  0.90, 1.60), ( 5.95,  0.90, 1.42),  40.0, 5.6, -0.05, (1800, 1300)),
+    ("h1_S3_oblique", ( 3.75,  2.55, 1.64), ( 5.98,  1.00, 1.50),  40.0, 5.0, -0.05, (1800, 1300)),
     # --- both in the room, to check they still sit inside the architecture
     ("h1_wide",       ( 0.90, -0.60, 1.66), (-5.30,  1.10, 1.72),  28.0, 4.5, -0.10, (2000, 1250)),
 ]
+ONLY = argv[3] if len(argv) > 3 else None
 for name, pos, look, lens, fstop, exp, res in SHOTS:
+    if ONLY and ONLY not in name:
+        continue
     sc.render.resolution_x = int(res[0] * SCALE)
     sc.render.resolution_y = int(res[1] * SCALE)
     cam.data.lens = lens

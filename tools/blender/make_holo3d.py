@@ -57,6 +57,27 @@ CFG = {
         "min_area": 60,
         "layers": [("green", (55, 155), 0.18, 2500, 0.006)],
     },
+    # Third palette. Semantic like Kartikeya - green is real open space, grey is
+    # real carriageway - but drawn at 300dpi, so the linework is several pixels
+    # wide and needs a larger adaptive window than the 745px Kartikeya scan.
+    "gayatri": {
+        "src":  "holo_gayatri.png",
+        # Right-hand strip carries marketing bleed that survived the crop (the
+        # Quality Homes mark and a letter of the Telugu wordmark).
+        "mask": [(2230, 1150, 2400, 1710), (275, 1190, 350, 1500)],
+        "fence": [],
+        "nogeo": [(2230, 1150, 2400, 1710), (275, 1190, 350, 1500)],
+        "mode": "semantic",
+        "block": 25, "C": 6, "dark": 0.26,
+        "heights": {"plot": 0.016, "plot_hot": 0.016, "green": 0.006,
+                    "water": 0.0, "road": 0.0, "pad": 0.005},
+        "min_area": 400,
+        # (min local wall density, min parcel area px, height) - the sheet marks
+        # a run of parcels with a diagonal hatch fill.
+        "hatch": (0.34, 60000, 0.016),
+        "hatch_win": 27,
+        "layers": [("green", (80, 165), 0.16, 20000, 0.006)],
+    },
     # Status sheet: every fill colour is an availability state, not terrain.
     # There is no landscape and no water on this drawing, so the semantic
     # hue rules must be switched off or green plots sink into the lawn.
@@ -177,6 +198,59 @@ def classify(s, l, h, area):
 
 cells = []
 H_MAP = cfg["heights"]
+
+# ------------------------------------------------------------------- hatching
+# A hatched block is a solid parcel drawn with a diagonal fill pattern. Cell
+# labelling shatters it: every hatch stroke reads as linework, so all that
+# survives is a scatter of slivers between the strokes, and the block appears as
+# a hole in the model.
+#
+# The discriminator is DENSITY, not colour or hue. Plot boundaries are sparse -
+# a few percent of any neighbourhood. Hatching fills a third or more of it. So
+# measure local wall density, take the dense regions as single parcels, and mark
+# them no-go for the normal pass so the slivers are not emitted as well.
+if cfg.get("hatch"):
+    dmin, hamin, hz = cfg["hatch"]
+    K = cfg.get("hatch_win", 25) | 1
+    # Solid fill is not hatching. The carriageways are a dark flat colour, so
+    # they are 100% "wall" and would otherwise register as the densest hatch on
+    # the sheet - the first attempt swallowed the entire road network and, after
+    # closing, most of the plan with it. Strip large solid areas first, then
+    # require density in a BAND: hatching is strokes with gaps between them, so
+    # it never saturates the window the way a filled region does.
+    solid = cv2.morphologyEx((lum < cfg["dark"]).astype(np.uint8),
+                             cv2.MORPH_OPEN, np.ones((9, 9), np.uint8)).astype(bool)
+    dens = cv2.boxFilter((wall & ~solid).astype(np.float32), -1, (K, K))
+    hm = ((dens > dmin) & (dens < 0.85) & ~solid).astype(np.uint8)
+    # Plot NUMBERS are locally dense too. Opening hard first removes those blobs
+    # (a two-digit label is ~40x80px) while a hatched parcel, two orders of
+    # magnitude larger in area, survives; the dilate afterwards restores the
+    # edge the opening ate.
+    hm = cv2.morphologyEx(hm, cv2.MORPH_OPEN, np.ones((21, 21), np.uint8))
+    hm = cv2.dilate(hm, np.ones((21, 21), np.uint8))
+    hm = cv2.morphologyEx(hm, cv2.MORPH_CLOSE, np.ones((K, K), np.uint8))
+    hm[nogeo] = 0
+    hcnts, hhier = cv2.findContours(hm, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    nhatch = 0
+    for ci, c in enumerate(hcnts):
+        if hhier[0][ci][3] >= 0 or abs(cv2.contourArea(c)) < hamin:
+            continue
+        ap = cv2.approxPolyDP(c, 2.0, True).reshape(-1, 2).astype(np.float32)
+        if len(ap) < 3:
+            continue
+        m = np.zeros((H, W), np.uint8)
+        cv2.drawContours(m, [c], -1, 1, -1)
+        sel = m.astype(bool)
+        cells.append({
+            "cat": "plot", "h": hz,
+            "rgb": [round(float(rgb[..., i][sel].mean()), 4) for i in range(3)],
+            "area": float(abs(cv2.contourArea(c))),
+            "rings": [[[float(p[0]) / W, 1.0 - float(p[1]) / H] for p in ap]],
+            "holes": [],
+        })
+        nhatch += 1
+    nogeo |= hm.astype(bool)
+    print("HATCH|parcels=%d" % nhatch)
 for i in range(1, n + 1):
     if i == bg_id:
         continue
@@ -283,6 +357,20 @@ print("JSON|%s|%.2fMB" % (os.path.basename(dst), os.path.getsize(dst) / 1048576.
 tex = rgba.copy()
 if tex.shape[2] == 3:
     tex = np.dstack([tex, np.full(tex.shape[:2], 255, np.uint8)])
+
+# A sheet that arrives straight from a scan (Gayatri, from a 300dpi TIFF) has no
+# alpha at all, so the paper ships as an opaque slab and the "hologram" reads as
+# a lit signboard. Derive alpha the same way the first two sheets got it:
+# per pixel, max(1 - luminance, saturation). White paper -> 0 and disappears;
+# ink and coloured fills -> 1 and stay. Saturation is weighted up because the
+# content that matters (plot fills, landscape) is coloured but LIGHT, and on
+# luminance alone it would fade out with the paper.
+if tex[..., 3].min() == 255:
+    a = np.maximum(1.0 - lum, sat * 1.6)
+    a = np.clip((a - 0.14) / 0.66, 0.0, 1.0) ** 0.80
+    a[a < 0.05] = 0.0
+    tex[..., 3] = (a * 255.0).astype(np.uint8)
+    print("ALPHA|derived|opaque_frac=%.3f" % float((a > 0.5).mean()))
 for (l, t, r, b) in cfg["mask"]:
     tex[max(0, t):min(H, b), max(0, l):min(W, r), 3] = 0
 
