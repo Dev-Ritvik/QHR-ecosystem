@@ -24,6 +24,7 @@ assets/floorplans/source/*.pdf
 !assets/floorplans/holo_kartikeya.png
 !assets/floorplans/holo_lucky_garden.png
 !assets/floorplans/lucky_garden_raw.png
+!assets/floorplans/holo_gayatri.png
 
 # Nested upstream repo - has its own .git, would commit as a broken gitlink
 blender-skills/
