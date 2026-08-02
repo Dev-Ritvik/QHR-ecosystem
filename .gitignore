@@ -13,7 +13,17 @@ test-results/
 
 # Source art library (1.9 GB: models, 2K PBR maps, HDRIs) - too large for git.
 # Back this up separately; ASSET_MANIFEST.md records what belongs here.
-assets/
+# assets/ is 1.9GB of source art and stays out of the repo, EXCEPT the layout
+# sheets the hologram pipeline consumes. Those are irreplaceable client inputs
+# and only ~4.5MB; everything the scripts can regenerate stays ignored.
+assets/*
+!assets/floorplans/
+assets/floorplans/*
+!assets/floorplans/source/
+assets/floorplans/source/*.pdf
+!assets/floorplans/holo_kartikeya.png
+!assets/floorplans/holo_lucky_garden.png
+!assets/floorplans/lucky_garden_raw.png
 
 # Nested upstream repo - has its own .git, would commit as a broken gitlink
 blender-skills/
