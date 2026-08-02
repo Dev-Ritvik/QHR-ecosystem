@@ -53,7 +53,13 @@ jobs:
       DATABASE_URL: postgresql://postgres@127.0.0.1:5432/estate_ci
       DATABASE_URL_MIGRATIONS: postgresql://postgres@127.0.0.1:5432/estate_ci
       DATABASE_URL_SEED: postgresql://postgres@127.0.0.1:5432/estate_ci
-      PLAYWRIGHT_TEST_BASE_URL: http://present.localhost:3000
+      # apps/public dev runs on 3001 ("next dev --port 3001"), and Playwright's
+      # own webServer health check already targets 3001. This was pointing at
+      # 3000, so every navigation hit a closed port and failed with
+      # ERR_CONNECTION_REFUSED. The `present.` subdomain is what the Next
+      # middleware keys on to route into the (present) segment; Chromium
+      # resolves *.localhost to 127.0.0.1 per RFC 6761, so it needs no hosts entry.
+      PLAYWRIGHT_TEST_BASE_URL: http://present.localhost:3001
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
