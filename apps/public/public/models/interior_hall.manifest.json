@@ -1,9 +1,9 @@
 {
   "model": "interior_hall.glb",
-  "size_mb": 14.04,
+  "size_mb": 14.38,
   "loaders_required": {
-    "KTX2Loader": "all 28 textures are KTX2/Basis (KHR_texture_basisu is in extensionsRequired). Set the transcoder path and call detectSupport(renderer) before loading.",
-    "DRACOLoader": "geometry is Draco compressed (KHR_draco_mesh_compression)."
+    "KTX2Loader": "all 28 textures are KTX2/Basis (KHR_texture_basisu is in extensionsRequired). setTranscoderPath('/basis/') and detectSupport(renderer) before loading; the transcoder is served from apps/public/public/basis/.",
+    "DRACOLoader": "geometry is Draco compressed. setDecoderPath('/draco/'); the decoder is served from apps/public/public/draco/."
   },
   "lightmap": {
     "slot": "occlusionTexture",
@@ -79,8 +79,16 @@
     "blender --background mansion_exterior.blend --python tools/blender/bake_lightmap.py -- out/web 4096 1024 1800",
     "blender --background mansion_web.blend --python tools/blender/export_web_interior.py -- out/web/lightmap_manifest.json _raw.glb",
     "gltf-transform dedup _raw.glb _a.glb && gltf-transform prune _a.glb _b.glb && gltf-transform copy _b.glb ex/scene.gltf",
+    "python tools/gltf/fix_ranges.py ex/scene.gltf",
     "python tools/gltf/optimize_textures.py ex/scene.gltf 1024 4096 png",
     "python tools/gltf/encode_ktx2.py ex/scene.gltf",
     "gltf-transform copy ex/scene.gltf _k.glb && gltf-transform draco _k.glb interior_hall.glb"
-  ]
+  ],
+  "validation": {
+    "errors": 0,
+    "known_notices": [
+      "IMAGE_UNRECOGNIZED_FORMAT and VALUE_NOT_IN_LIST 'image/ktx2' are limitations of the validator bundled with gltf-transform, which predates KHR_texture_basisu. The extension is declared correctly in extensionsUsed and extensionsRequired.",
+      "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE on one primitive: it has a normal map but no UVs to derive a tangent basis from, so the runtime generates one. three.js handles this."
+    ]
+  }
 }
