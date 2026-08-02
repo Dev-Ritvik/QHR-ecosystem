@@ -85,10 +85,14 @@
     "gltf-transform copy ex/scene.gltf _k.glb && gltf-transform draco _k.glb interior_hall.glb"
   ],
   "validation": {
+    "validator": "Khronos glTF-Validator 2.0.0-dev.3.9",
     "errors": 0,
-    "known_notices": [
-      "IMAGE_UNRECOGNIZED_FORMAT and VALUE_NOT_IN_LIST 'image/ktx2' are limitations of the validator bundled with gltf-transform, which predates KHR_texture_basisu. The extension is declared correctly in extensionsUsed and extensionsRequired.",
-      "MESH_PRIMITIVE_GENERATED_TANGENT_SPACE on one primitive: it has a normal map but no UVs to derive a tangent basis from, so the runtime generates one. three.js handles this."
-    ]
+    "warnings": 56,
+    "known_false_positives": [
+      "VALUE_NOT_IN_LIST 'image/ktx2' (x28) and IMAGE_UNRECOGNIZED_FORMAT (x28): this validator build predates KHR_texture_basisu. The extension declares mimeType image/ktx2 exactly as the spec requires, and is listed in extensionsUsed and extensionsRequired.",
+      "UNUSED_OBJECT on 28 images and 218 bufferViews: they are reached only through KHR_texture_basisu and KHR_draco_mesh_compression, which the validator cannot follow, so it cannot see the references.",
+      "UNSUPPORTED_EXTENSION (x3): informational, same cause."
+    ],
+    "real_but_negligible": "One primitive carries a TEXCOORD_1 its material does not sample - a single unused attribute, left in place rather than hand-editing the buffer."
   }
 }
