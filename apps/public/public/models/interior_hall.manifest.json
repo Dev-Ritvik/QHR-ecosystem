@@ -1,0 +1,86 @@
+{
+  "model": "interior_hall.glb",
+  "size_mb": 14.04,
+  "loaders_required": {
+    "KTX2Loader": "all 28 textures are KTX2/Basis (KHR_texture_basisu is in extensionsRequired). Set the transcoder path and call detectSupport(renderer) before loading.",
+    "DRACOLoader": "geometry is Draco compressed (KHR_draco_mesh_compression)."
+  },
+  "lightmap": {
+    "slot": "occlusionTexture",
+    "uv": "TEXCOORD_1",
+    "atlas_px": 4096,
+    "codec": "ETC1S (basis-lz, qlevel 255)",
+    "intensity": 4.6597,
+    "encoding": "sRGB",
+    "note": "glTF has no lightmap slot, so baked GI rides in occlusion. On load promote aoMap -> lightMap and set colorSpace = SRGBColorSpace: the atlas is normalised then sRGB-encoded for precision, because linear 8-bit puts the room near value 13 and bands."
+  },
+  "textures": {
+    "count": 28,
+    "normal_maps": "UASTC - ETC1S quantises a direction field hard enough to facet across large flat walls",
+    "everything_else": "ETC1S - on the 4K atlas it is 1.1MB against 7.1MB for UASTC, on smooth low-frequency light",
+    "pbr_max_px": 1024
+  },
+  "geometry": {
+    "drawn_triangles": 480385,
+    "vertices_uploaded": 214328,
+    "vertices_rendered_per_pass": 1438890,
+    "shell_objects_lightmapped": 147,
+    "shell_triangles": 22751,
+    "decimated": [
+      {
+        "mesh": "KIT_column_M.001",
+        "from": 60000,
+        "to": 10000
+      },
+      {
+        "mesh": "KIT_newel_hi_M",
+        "from": 40000,
+        "to": 6000
+      },
+      {
+        "mesh": "KIT_baluster_hi_M",
+        "from": 4499,
+        "to": 1200
+      },
+      {
+        "mesh": "KIT_anth_M",
+        "from": 2464,
+        "to": 800
+      },
+      {
+        "mesh": "ceiling_rosette_M.001",
+        "from": 34794,
+        "to": 8999
+      },
+      {
+        "mesh": "786242_Ampollo_Osgona_Glass_Clear_Fog_0.002",
+        "from": 259998,
+        "to": 62000
+      },
+      {
+        "mesh": "dress_urn_master_M",
+        "from": 29999,
+        "to": 7000
+      },
+      {
+        "mesh": "dress_bench_M",
+        "from": 24999,
+        "to": 7000
+      },
+      {
+        "mesh": "Object_0.001",
+        "from": 18112,
+        "to": 6000
+      }
+    ]
+  },
+  "not_lightmapped": "Instanced ornament (153 anthemions, 54 balusters, 11 capitals, 6 newels) and props/emitters. A lightmap needs per-placement UVs, which would cost the instancing that keeps the upload at 214k vertices.",
+  "rebuild": [
+    "blender --background mansion_exterior.blend --python tools/blender/bake_lightmap.py -- out/web 4096 1024 1800",
+    "blender --background mansion_web.blend --python tools/blender/export_web_interior.py -- out/web/lightmap_manifest.json _raw.glb",
+    "gltf-transform dedup _raw.glb _a.glb && gltf-transform prune _a.glb _b.glb && gltf-transform copy _b.glb ex/scene.gltf",
+    "python tools/gltf/optimize_textures.py ex/scene.gltf 1024 4096 png",
+    "python tools/gltf/encode_ktx2.py ex/scene.gltf",
+    "gltf-transform copy ex/scene.gltf _k.glb && gltf-transform draco _k.glb interior_hall.glb"
+  ]
+}
