@@ -17,6 +17,10 @@ SRC, DST = argv[0], argv[1]
 TARGET = int(argv[2])
 HEIGHT = float(argv[3])
 STANDUP = (len(argv) < 5) or (argv[4] == "1")
+# Explicit X rotation in degrees, applied instead of the standup heuristic.
+# Furniture defeats that heuristic: a console lying on its back is taller than
+# it is deep, so the rule "rotate if Y > Z" fires the wrong way round.
+ROTX = float(argv[5]) if len(argv) > 5 else 0.0
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
@@ -92,7 +96,11 @@ def ext3():
     return min(xs), max(xs), min(ys), max(ys), min(zs), max(zs)
 
 x0, x1, y0, y1, z0, z1 = ext3()
-if STANDUP and (y1 - y0) > (z1 - z0) * 1.2:
+if ROTX:
+    me.transform(mathutils.Matrix.Rotation(math.radians(ROTX), 4, 'X'))
+    me.update()
+    x0, x1, y0, y1, z0, z1 = ext3()
+elif STANDUP and (y1 - y0) > (z1 - z0) * 1.2:
     me.transform(mathutils.Matrix.Rotation(math.radians(90), 4, 'X'))
     me.update()
     x0, x1, y0, y1, z0, z1 = ext3()

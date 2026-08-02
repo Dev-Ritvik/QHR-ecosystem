@@ -34,7 +34,7 @@ for o in objs:
     o.data.materials.clear()
     o.data.materials.append(clay)
 
-d = rad * 3.4
+d = rad * 5.0
 cam_d = bpy.data.cameras.new("c"); cam_d.lens = 85
 cam = bpy.data.objects.new("cam", cam_d)
 bpy.context.scene.collection.objects.link(cam)

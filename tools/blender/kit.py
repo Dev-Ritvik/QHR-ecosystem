@@ -163,6 +163,40 @@ def fluted_shaft(name, r0, r1, z0, z1, mat, col, flutes=20, depth=0.022, cx=0.0,
     return o
 
 
+def revolve(name, profile, mat, col, seg=32, cx=0.0, cy=0.0, smooth=True):
+    """Lathe a 2D (radius, z) profile around Z. Urns, lamp bases, vases, finial
+    stems - anything turned on a wheel."""
+    verts, faces = [], []
+    n = len(profile)
+    for i in range(seg):
+        a = 2 * math.pi * i / seg
+        ca, sa = math.cos(a), math.sin(a)
+        for (r, z) in profile:
+            verts.append((cx + r * ca, cy + r * sa, z))
+    for i in range(seg):
+        j = (i + 1) % seg
+        for k in range(n - 1):
+            a0 = i * n + k; b0 = j * n + k
+            faces.append((a0, b0, b0 + 1, a0 + 1))
+    # cap whichever ends are not already closed on the axis
+    if profile[0][0] > 1e-5:
+        faces.append(tuple(i * n for i in range(seg - 1, -1, -1)))
+    if profile[-1][0] > 1e-5:
+        faces.append(tuple(i * n + (n - 1) for i in range(seg)))
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts, [], faces); me.validate(); me.update()
+    bm = bmesh.new(); bm.from_mesh(me)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me); bm.free(); me.update()
+    if smooth:
+        for p in me.polygons:
+            p.use_smooth = True
+    box_uv(me, 2.0); me.materials.append(bpy.data.materials[mat])
+    o = bpy.data.objects.new(name, me); col.objects.link(o)
+    return o
+
+
 def multibox(name, boxes, mat, col, uv=2.0):
     """One mesh from many boxes - lets a whole window surround be a single
     datablock that can be linked-duplicated across every facade."""
