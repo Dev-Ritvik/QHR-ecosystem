@@ -536,4 +536,238 @@ data · ambient 2D ember layer for Tier 2 · idle preloading of the experience b
 
 *Authoritative companions: `BACKEND_CONTRACT_FINAL.md` (data contract with verified samples) ·
 `FRONTEND_ARCHITECTURE.md` (experience design) · `apps/public/PHASE1_PLAN.md` (page plan) ·
-`FIXLOG.md` (chronological fix record, 30 entries through 2026-07-20).*
+`FIXLOG.md` (chronological fix record, 39 entries through 2026-08-02) · `§7` below for the
+2026-08-02 session.*
+
+---
+
+# §7 — SESSION 2026-08-02: 3D delivery, web export pipeline, and first CI run
+
+> Appended, not rewritten. Where this section contradicts an earlier one, **this section is
+> current** — the superseded claims are named explicitly below so the audit trail stays honest.
+> Every line was verified by rendering, querying the scene, running the tool, or reading the
+> CI log. Full per-bug detail with evidence is in `FIXLOG.md` (9 new entries, all 2026-08-02).
+
+## What changed in the repo
+
+| | Before | After | Evidence |
+|---|---|---|---|
+| **Git remote** | 🔴 none — everything local-only | ✅ `github.com/Dev-Ritvik/QHR-ecosystem` (private) | `git remote -v` |
+| **CI** | 🔴 had never run | ✅ **both jobs green on `main`** | Actions run on `06f1d7b` |
+| **3D assets in repo** | ❌ none | ✅ `apps/public/public/models/interior_hall.glb` (14.4 MB) | §7.2 |
+| **Blender/glTF automation** | 🔴 20 scripts on `C:\` only | ✅ `tools/blender/` (18) + `tools/gltf/` (3) | `git ls-files tools/` |
+| **Hologram source sheets** | 🔴 unversioned under ignored `assets/` | ✅ tracked; ignore rule narrowed | `.gitignore` |
+
+### ⛔ Claims in earlier sections that are now WRONG
+
+- **§3 "There are no 3D asset files in this repository."** — no longer true. See §7.2.
+- **§6 repo hygiene, "Duplicate migration numbers: `0009_media.sql` + `0009_missing_rls.sql`"** —
+  `0009_media.sql` has been **deleted** (it was a content duplicate, not just a number clash),
+  so `0009_missing_rls.sql` is now unambiguous. `0010_media.sql` + `0010_office_settings.sql`
+  still share a prefix but create disjoint objects.
+- **§4 "`packages/db` — 8 suites require a live database"** — still true, but they no longer
+  *throw at import* without one. They are now skipped, and consequently `packages/db` runs
+  **zero tests in CI**. See §7.4.
+- **§6 "`*.tsbuildinfo`"** was not previously listed; it *was* tracked, and is now untracked.
+
+---
+
+## §7.1 — Hologram displays rebuilt (client defect, closed)
+
+The two layout stations were flat textured quads lying horizontally. At standing eye height the
+grazing angle is ~6°, so the layouts foreshortened into a line and disappeared entirely from a
+side approach. Rebuilt as **raked, extruded tables**:
+
+- **38° rake about the near edge** (not the centre — that would drop the near edge through the
+  pedestal cap). Grazing angle ~6° → ~31°.
+- **Real prisms** from the drawings' closed cells: 114 on Kartikeya, 183 on Lucky Garden. Roads
+  are deliberately not built — they read as negative space, as on a physical model.
+- **Upright callout cards** on leader rods, world-vertical and square to the approach vector.
+
+Six bugs were found and fixed *while* building this, each caught by rendering and looking rather
+than by trusting the code — a falsy-list trap that silently produced zero cells, a global
+threshold that could not serve both sheets, status colours misread as terrain, mask fences
+extruding as ghost geometry, texture/geometry masks drifting apart, and leader rods lying flat.
+Detail in `FIXLOG.md`.
+
+**Status: client approved and locked.**
+
+Still open on the 3D set (unchanged from before this session):
+- 🔴 **Patterned rug asset never delivered** — foreground remains placeholder maroon.
+- 🔴 **S3 / S4 pedestals have no artwork** — VSR Gayatri Township layout never supplied; they
+  render bare.
+- 🟡 **"CLUB HOUSE" and "PARK" on S1 are inferred** from what the drawing depicts (a pool with a
+  structure; playground equipment), not label text. Editable in `STATIONS` in
+  `tools/blender/build_holo3d.py`.
+- 🟡 **Kartikeya source is only 745×725** after crop — adequate at delivered framings, the
+  limiting factor for closer inserts.
+
+---
+
+## §7.2 — `interior_hall.glb` — baked GI, KTX2, Draco
+
+`apps/public/public/models/interior_hall.glb` — **14.4 MB**, down from a 235 MB raw export.
+
+| | |
+|---|---|
+| Drawn triangles | **480k** (was 2.01M) |
+| Vertices uploaded | **214k** — instancing survives the pipeline |
+| Lightmap | 4096² atlas, Cycles DIFFUSE direct+indirect, 1024 samples, OptiX |
+| Textures | 28, all KTX2 — UASTC for normals, ETC1S for the rest |
+| glTF validation | **0 errors** (Khronos glTF-Validator 2.0.0-dev.3.9) |
+
+**Correction to a figure stated earlier in this session:** unique geometry is **519k triangles,
+not 2.01M**. The 2.01M counts *instances* — the heavy repeats already share mesh data (153
+anthemions off one 2.5k mesh, 54 balusters off one, 11 capitals off one). Decimation was
+therefore applied to the shared **datablocks**, so one pass propagates through every instance.
+
+**Only the 147 unique shell objects are lightmapped.** A lightmap needs per-placement UVs, which
+would have destroyed the instancing that keeps the upload at 214k vertices against 1.44M
+rendered. Ornament and props are lit at runtime.
+
+### Integration contract — read before wiring this up
+
+Baked GI rides in the **occlusion slot**, because glTF has no lightmap slot. Both loaders are
+mandatory (`KHR_texture_basisu` and `KHR_draco_mesh_compression` are in `extensionsRequired`):
+
+```js
+const ktx2 = new KTX2Loader().setTranscoderPath('/basis/').detectSupport(renderer);
+loader.setKTX2Loader(ktx2).setDRACOLoader(new DRACOLoader().setDecoderPath('/draco/'));
+
+gltf.scene.traverse((o) => {
+  const m = o.material;
+  if (!m?.aoMap) return;
+  m.lightMap = m.aoMap;
+  m.lightMap.colorSpace = THREE.SRGBColorSpace;   // required — see below
+  m.lightMapIntensity = 4.6597;                   // the bake's normalisation divisor
+  m.aoMap = null;
+  m.needsUpdate = true;
+});
+```
+
+`colorSpace` must be set explicitly: GLTFLoader treats occlusion as linear data, but this atlas
+is sRGB-encoded, because normalised against its 99.5th percentile the room sits near 0.05 —
+value ≈13 in linear 8-bit, which bands visibly.
+
+Decoders are served from `apps/public/public/basis/` and `apps/public/public/draco/` (decode
+only — the Draco *encoder* is deliberately not shipped). Full contract and the six rebuild
+commands are in `apps/public/public/models/interior_hall.manifest.json`.
+
+### Scene defects found only because the exporter tripped over them
+
+- **`EXT_HAZE`** — a 480 m volumetric box living in the Scene Collection, not `COL_Exterior`, so
+  excluding the exterior never dropped it. It shipped, blowing scene bounds to ±240 m. Fixed.
+- **`KIT_` instancing masters** — parked at z=−50 and not hidden, so they exported as real
+  geometry 50 m under the floor. Fixed.
+- **Both rug materials had the wrong normal map** — they drive a Bump node from a 16-bit
+  *displacement* map, and since glTF has no bump node the exporter wrote that height map into
+  `normalTexture`. Both already carry a proper `NormalGL` map. **Fixed on the export path only;
+  `mansion_exterior.blend` is untouched** — if the interactive build ever bakes from the .blend
+  directly, fix the material there too.
+- **`pedestal_inlay_S1/S3/S4`** were authored in world space *and* given the pedestal yaw, so
+  they were rotated twice and sat on the open entrance floor. Fixed.
+
+### 🟡 Known-benign validator noise (do not re-open)
+
+56 warnings, all from the validator build predating `KHR_texture_basisu` — it cannot follow
+references made through the Basis and Draco extensions, so it reports the 28 images and 218
+bufferViews they reach as "unused" and calls `image/ktx2` an invalid mime type. The extension is
+declared correctly. Recorded in the manifest.
+
+One genuine finding, left alone: a single primitive carries a `TEXCOORD_1` its material does not
+sample — one unused attribute, not worth hand-editing the buffer for.
+
+---
+
+## §7.3 — Tooling notes for anyone re-running the pipeline
+
+These cost a full cycle each and are recorded so they do not cost another:
+
+| Trap | Symptom |
+|---|---|
+| `nodes.new()` returns a **stale pointer** | `nd is n` matches nothing → bake target never selected → Cycles bakes a **black atlas and reports success** |
+| Depsgraph skips **hidden objects** | Decimation silently returns the original mesh while printing a plausible ratio |
+| `colorspace_settings.name` set **after** `img.pixels` | Invalidates the buffer → saves a black PNG |
+| `gltf-transform` 4.4.2 vs **KTX-Software v5** | Calls `--assign-oetf`, renamed to `--assign-tf` → every texture fails to encode |
+| `gltf-transform` `resize`/`webp` → **sharp/libvips** | Fails on *every* PNG here with `colourspace: parameter space not set` |
+
+Consequently the texture stage runs in Pillow (`tools/gltf/optimize_textures.py`) and KTX2
+encoding drives `ktx` directly (`tools/gltf/encode_ktx2.py`), which also allows per-slot codec
+choice the wrapper does not expose usefully.
+
+🟡 **`tools/blender/decimate_chandelier.py` is still missing the world-transform bake** its
+siblings have. Nothing is broken in the scene today — it was corrected downstream by hand — but
+any asset re-run through it will come out rotated 90°.
+
+---
+
+## §7.4 — CI: first execution, five nested failures
+
+CI had **never run on this code** — the remote repo previously held only a README. Neither
+failing job was a regression from the 3D work; both were latent, and each failure was hiding the
+next.
+
+| # | Job | Cause | Status |
+|---|---|---|---|
+| 1 | Lint | No ESLint config or dependency anywhere → `next lint` opened its **interactive setup prompt** on a TTY-less runner | ✅ fixed |
+| 2 | Unit tests | Every `packages/db` spec **throws at import** without a database; would have failed the instant lint was fixed | ✅ fixed |
+| 3 | E2E | No database on the runner | ✅ fixed (PR #1) |
+| 4 | E2E | **Migrations had never applied to an empty server** | ✅ fixed |
+| 5 | E2E | Tests hit port 3000; dev server listens on **3001** | ✅ fixed |
+
+### 🔴 The migration set could not build a database from scratch
+
+A static pass over every `CREATE TYPE` / `CREATE TABLE` / `ADD CONSTRAINT` across all 23
+migrations found **twelve objects created by more than one migration**. `0009_media.sql` was a
+content duplicate of half of `0010_media.sql` and — alone among every migration in the repo —
+carried **no idempotency guards at all**, so it could not even be re-run by itself. Removed;
+`0010`'s three collisions with `0007` are now guarded in the repo's existing
+`DO $$ ... EXCEPTION WHEN duplicate_object` style.
+
+Practical consequence of the bug: **nobody could stand up a fresh environment.** The schema had
+only ever existed through incremental application on machines that already had most of it.
+
+False positive, recorded so it is not "fixed" later: `unit_status_events_legal_transition`
+appears in `0003` and `0019`, but `0019` DROPs it before re-adding to widen the check. Correct
+as written.
+
+### 🔴 CI was not testing the database shape we deploy
+
+Production is Supabase, which installs PostGIS into an **`extensions` schema** rather than
+`public`. The codebase depends on that layout in two ways: two migrations grant USAGE on it
+(`0016`, `0020`), and application SQL is schema-qualified in **five places** (`publish.ts`
+ST_Extent, `geometry.ts` ST_SetSRID/ST_GeomFromGeoJSON, `projection.ts` ST_AsGeoJSON). The stock
+`postgis/postgis` image uses `public`.
+
+Relaxing the grants would have gone green **while testing a shape we never deploy** — every
+`extensions.ST_*` call would then fail at runtime. `packages/db/ci/bootstrap_extensions.sql`
+recreates the Supabase layout before the migration loop instead. It lives in `packages/db/ci/`,
+not `migrations/`, because it describes the managed platform rather than our schema.
+
+### 🟡 Open decisions left from the CI work
+
+- **`packages/db` now runs zero tests in CI.** Its specs are all integration tests and stay
+  skipped without a database. Scaffolding is in place: give the validate job a Postgres service
+  and set `DATABASE_URL_MIGRATIONS` + `DATABASE_URL_CRM` and they run unchanged. A scope call,
+  not a CI fix.
+- **`apply_migration.ts` keeps no record of what it has applied**, so every run re-executes every
+  file. Survivable now the statements are idempotent; a migrations table would be better.
+- **Lint warnings are not enforced** — mostly `<img>` vs `next/image` across both apps, plus two
+  `react-hooks/exhaustive-deps`. They do not fail the build.
+- **`main` is not branch-protected** (GitHub is showing the prompt). Direct pushes are possible.
+
+---
+
+## §7.5 — Repo hygiene resolved this session
+
+- ✅ `*.tsbuildinfo` untracked and ignored — the tracked copies made a rebase abort with
+  "untracked working tree files would be overwritten".
+- ✅ Hologram **inputs** versioned, not just the scripts: the pipeline is deterministic, so it is
+  reproducible only for as long as its source sheets survive. The `assets/` ignore rule was
+  narrowed rather than dropped (`assets/` is 1.9 GB and stays out).
+- 🟡 The issued Lucky Garden PDF is **deliberately not tracked** — 26 MB, larger than everything
+  else in the repo combined. `lucky_garden_raw.png` (2.6 MB, 300 dpi) is what the pipeline
+  actually reads. Keep the PDF in document storage.
+- 🔴 Still outstanding from §6: `apps/public/.ignored_node_modules/` (stray maplibre-gl sources)
+  and `blender-skills/` (third-party clone with its own `.git`). Neither was touched.
+- 🟡 `.claude/` remains untracked pending a decision.
