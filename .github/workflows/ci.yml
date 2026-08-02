@@ -35,6 +35,25 @@ jobs:
   e2e-pacemaker:
     name: Playwright E2E (Merge Blocking)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: estate_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d estate_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/estate_ci
+      DATABASE_URL_MIGRATIONS: postgresql://postgres@127.0.0.1:5432/estate_ci
+      DATABASE_URL_SEED: postgresql://postgres@127.0.0.1:5432/estate_ci
+      PLAYWRIGHT_TEST_BASE_URL: http://present.localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
@@ -48,12 +67,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Apply DB migrations for E2E
+        run: |
+          for file in packages/db/migrations/*.sql; do
+            pnpm dlx tsx packages/db/apply_migration.ts "$file"
+          done
+
       - name: Install Playwright Browsers
         run: pnpm --filter public exec playwright install --with-deps chromium
 
       - name: Run Presentation Flow E2E
         run: pnpm --filter public exec playwright test
-        env:
-          # Expects the staging projection DB URL from GitHub Secrets for the seeded test data
-          DATABASE_URL: ${{ secrets.DATABASE_URL_STAGING_PROJECTION }}
-          PLAYWRIGHT_TEST_BASE_URL: http://present.localhost:3000
