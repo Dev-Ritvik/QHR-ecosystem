@@ -43,9 +43,13 @@ ALTER TABLE "core"."media" ADD CONSTRAINT "media_ready_has_variants" CHECK (stat
 --> statement-breakpoint
 ALTER TABLE "core"."media" ADD CONSTRAINT "media_ready_has_path" CHECK (status <> 'ready' OR storage_path IS NOT NULL);
 --> statement-breakpoint
-CREATE TYPE "projection"."pub_media_kind" AS ENUM('hero', 'gallery', 'plan', 'og_image');
+DO $$ BEGIN
+ CREATE TYPE "projection"."pub_media_kind" AS ENUM('hero', 'gallery', 'plan', 'og_image');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "projection"."media_manifests" (
+CREATE TABLE IF NOT EXISTS "projection"."media_manifests" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"project_id" uuid NOT NULL,
 	"unit_id" uuid,
@@ -56,8 +60,12 @@ CREATE TABLE "projection"."media_manifests" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX "media_manifests_project_kind_idx" ON "projection"."media_manifests" USING btree ("project_id","kind","sort_order");
+CREATE INDEX IF NOT EXISTS "media_manifests_project_kind_idx" ON "projection"."media_manifests" USING btree ("project_id","kind","sort_order");
 --> statement-breakpoint
-CREATE UNIQUE INDEX "media_manifests_singleton_kinds_uq" ON "projection"."media_manifests" USING btree ("project_id","kind") WHERE kind IN ('hero','og_image') AND unit_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS "media_manifests_singleton_kinds_uq" ON "projection"."media_manifests" USING btree ("project_id","kind") WHERE kind IN ('hero','og_image') AND unit_id IS NULL;
 --> statement-breakpoint
-ALTER TABLE "projection"."media_manifests" ADD CONSTRAINT "media_manifests_project_id_projects_pub_project_id_fk" FOREIGN KEY ("project_id") REFERENCES "projection"."projects_pub"("project_id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN
+ ALTER TABLE "projection"."media_manifests" ADD CONSTRAINT "media_manifests_project_id_projects_pub_project_id_fk" FOREIGN KEY ("project_id") REFERENCES "projection"."projects_pub"("project_id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
