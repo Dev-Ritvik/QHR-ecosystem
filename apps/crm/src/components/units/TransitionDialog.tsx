@@ -83,7 +83,7 @@ export function TransitionDialog({ unitId, currentStatus }: TransitionDialogProp
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">New Status</label>
-                <p className="text-xs text-gray-500 mb-2">Note: 'booked' and 'on_hold' are typically driven by deal creation workflows and require linking those entities.</p>
+                <p className="text-xs text-gray-500 mb-2">Note: &apos;booked&apos; and &apos;on_hold&apos; are typically driven by deal creation workflows and require linking those entities.</p>
                 <select 
                   name="toStatus" 
                   required 

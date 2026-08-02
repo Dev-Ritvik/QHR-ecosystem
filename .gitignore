@@ -30,3 +30,8 @@ blender-skills/
 
 # TypeScript incremental build artifact
 *.tsbuildinfo
+
+# TypeScript incremental build cache - a build artefact, not source.
+# Tracked copies caused a rebase to abort with "untracked working tree files
+# would be overwritten".
+*.tsbuildinfo

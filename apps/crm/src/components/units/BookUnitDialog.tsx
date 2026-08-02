@@ -177,7 +177,7 @@ export function BookUnitDialog({ unitId, unitStatus, clients, agents, defaultAge
 
               <p className="text-xs text-gray-500 bg-gray-50 border rounded p-2">
                 After saving, the deal-document checklist (agreement, ID proof, payment receipt, …)
-                appears on this unit's page for uploads.
+                appears on this unit&rsquo;s page for uploads.
               </p>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">

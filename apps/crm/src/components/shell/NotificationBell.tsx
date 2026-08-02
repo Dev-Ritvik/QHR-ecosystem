@@ -77,7 +77,7 @@ export function NotificationBell() {
           
           <div className="overflow-y-auto flex-1">
             {items.length === 0 ? (
-              <div className="p-8 text-center text-sm text-muted-foreground">You're all caught up!</div>
+              <div className="p-8 text-center text-sm text-muted-foreground">You&rsquo;re all caught up!</div>
             ) : (
               <div className="divide-y">
                 {items.map(n => (

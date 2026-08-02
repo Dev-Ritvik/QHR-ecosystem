@@ -191,7 +191,7 @@ export function TriageTable({ inboxLeads, agents, existingLeads }: { inboxLeads:
           </DialogHeader>
           <div className="py-4 space-y-4">
             <p className="text-sm text-muted-foreground">
-              This will mark the new enquiry as a duplicate and append a merge event to the target lead's timeline.
+              This will mark the new enquiry as a duplicate and append a merge event to the target lead&rsquo;s timeline.
             </p>
             <Select value={selectedTargetLead} onValueChange={setSelectedTargetLead}>
               <SelectTrigger>

@@ -121,7 +121,7 @@ export function GlobalSearch() {
                 )}
 
                 {results.projects.length === 0 && results.leads.length === 0 && results.units.length === 0 && (
-                  <div className="p-8 text-center text-sm text-muted-foreground">No results found for "{query}".</div>
+                  <div className="p-8 text-center text-sm text-muted-foreground">No results found for &ldquo;{query}&rdquo;.</div>
                 )}
               </div>
             )}

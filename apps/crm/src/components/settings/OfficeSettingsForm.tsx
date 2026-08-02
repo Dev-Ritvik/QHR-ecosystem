@@ -67,7 +67,7 @@ export function OfficeSettingsForm({ holdMaxDurationDays, overdueEscalationDays,
 
         <div>
           <label className="block text-sm font-medium mb-1">Selling Fast Threshold (%)</label>
-          <p className="text-xs text-muted-foreground mb-2">Suggest "Selling Fast" label when available inventory drops below this percentage.</p>
+          <p className="text-xs text-muted-foreground mb-2">Suggest &ldquo;Selling Fast&rdquo; label when available inventory drops below this percentage.</p>
           <input 
             type="number" 
             name="defaultSellingFastThresholdPct" 
