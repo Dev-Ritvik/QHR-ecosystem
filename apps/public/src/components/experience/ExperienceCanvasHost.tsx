@@ -15,7 +15,7 @@
 import dynamic from 'next/dynamic';
 
 const ExperienceCanvas = dynamic(
-  () => import('./ExperienceCanvas').then((m) => m.ExperienceCanvas),
+  () => import('./WorldCanvas').then((m) => m.WorldCanvas),
   {
     ssr: false,
     loading: () => <div aria-hidden="true" className="fixed inset-0 z-0 bg-[#0A1120]" />,
