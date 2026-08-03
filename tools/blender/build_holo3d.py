@@ -37,7 +37,7 @@ STATIONS = {
         "mat":   "MAT_Holo_Kartikeya",
         "wm": 1.020, "hm": 0.992,          # local X, local Y
         "at": (-5.95, -1.90), "yaw": math.radians(90.0),
-        "title": ("KARTIKEYA WATER FRONT", "GATED PLOT DEVELOPMENT", 0.50, 0.03),
+        "title": ("KARTIKEYA WATER FRONT", "POOSAPATIREGA  ·  VIZIANAGARAM", 0.50, 0.03),
         "calls": [("LAKE", 0.90, 0.38), ("CLUB HOUSE", 0.30, 0.19),
                   ("PARK", 0.09, 0.71)],
     },
@@ -49,7 +49,7 @@ STATIONS = {
         "mat":   "MAT_Holo_Gayatri",
         "wm": 1.100, "hm": 0.784,
         "at": (5.95, 0.90), "yaw": math.radians(-90.0),
-        "title": ("VSR GAYATRI TOWNSHIP", "A VSR GROUP PROJECT", 0.50, 0.03),
+        "title": ("VSR GAYATRI TOWNSHIP", "BAYYANNAPETA  ·  SRIKAKULAM", 0.50, 0.03),
         # Every label below is printed on the sheet - nothing inferred.
         "calls": [("PUBLIC OPEN SPACE", 0.125, 0.30), ("AMENITY", 0.25, 0.72),
                   ("UTILITY AREA", 0.14, 0.66)],
@@ -60,7 +60,7 @@ STATIONS = {
         "mat":   "MAT_Holo_LuckyGarden",
         "wm": 1.100, "hm": 0.652,
         "at": (-4.60, 3.80), "yaw": 0.0,
-        "title": ("LUCKY GARDEN", "KUMARAM VILLAGE  \u00b7  VIZIANAGARAM", 0.50, 0.04),
+        "title": ("LUCKY GARDEN", "KUMARAM VILLAGE  \u00b7  GARIVIDI", 0.50, 0.04),
         "calls": [("FUTURE EXTENSION", 0.34, 0.33), ("RESORT", 0.83, 0.72)],
     },
 }
