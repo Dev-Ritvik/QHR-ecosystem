@@ -1,5 +1,5 @@
 import { ConsentProvider } from '@/lib/consent/ConsentProvider';
-import { ConsentPanel } from '@/components/consent/ConsentPanel';
+import { ConsentPanel, PrivacyControl } from '@/components/consent/ConsentPanel';
 import { TelemetryProvider } from '@/lib/telemetry/TelemetryProvider';
 import { PostHogProvider } from './posthog-provider';
 
@@ -14,7 +14,13 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <PostHogProvider>
         <TelemetryProvider>
           <div className="flex flex-col min-h-screen">
-            {children}
+            <div className="flex-1">{children}</div>
+            {/* Withdrawal has to be as easy as granting, so the control lives on
+                every page rather than only wherever a footer eventually lands.
+                This strip is a placeholder for the real footer. */}
+            <footer className="border-t border-neutral-200 px-6 py-5">
+              <PrivacyControl />
+            </footer>
           </div>
           <ConsentPanel />
         </TelemetryProvider>
