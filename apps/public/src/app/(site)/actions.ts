@@ -1,6 +1,9 @@
 // apps/public/src/app/(site)/actions.ts
 "use server";
 
+import { cookies } from 'next/headers';
+import { SESSION_COOKIE } from '@/lib/consent/types';
+
 import { z } from 'zod';
 import crypto from 'crypto';
 
@@ -47,8 +50,15 @@ export async function submitEnquiry(
     return { ok: true };
   }
 
+  // Attach the session so the CRM can stitch this enquiry to the visitor's
+  // consented spatial history and score it. Read from the HttpOnly cookie
+  // server-side, never from the form: a session id in a submitted body would be
+  // an identity the caller chose for themselves.
+  const sessionId = cookies().get(SESSION_COOKIE)?.value ?? null;
+
   const payload = {
     source: 'website',
+    sessionId,
     name: parsed.data.name,
     phone: parsed.data.phone,
     preferredTime: parsed.data.preferredTime,

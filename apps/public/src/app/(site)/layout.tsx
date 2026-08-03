@@ -1,6 +1,7 @@
 import { ConsentProvider } from '@/lib/consent/ConsentProvider';
 import { ConsentPanel, PrivacyControl } from '@/components/consent/ConsentPanel';
 import { TelemetryProvider } from '@/lib/telemetry/TelemetryProvider';
+import { MarketingPixels } from '@/lib/marketing/pixels';
 import { PostHogProvider } from './posthog-provider';
 
 // NFR-S6: PostHog loaded EXCLUSIVELY in the (site) layout to prevent loading inside (present) bundle.
@@ -23,6 +24,10 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             </footer>
           </div>
           <ConsentPanel />
+          {/* Renders nothing at all without Marketing consent — no script tag,
+              no network request. A pixel loaded and then told not to track has
+              still handed the vendor an IP and a referrer. */}
+          <MarketingPixels />
         </TelemetryProvider>
       </PostHogProvider>
     </ConsentProvider>

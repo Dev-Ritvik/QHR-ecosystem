@@ -1,0 +1,11 @@
+-- packages/db/migrations/0022_high_intent_notification.sql
+--
+-- The client's answer to "what does immediate outbound actually trigger" was:
+-- a task in the CRM. The notification fan-out is the existing mechanism for
+-- that, but its type enum is closed, so the new kind has to be declared before
+-- anything can raise one.
+--
+-- ALTER TYPE ... ADD VALUE is transaction-safe from PostgreSQL 12 onward as long
+-- as the new value is not USED in the same transaction. It is not: this file only
+-- declares it, and the first insert happens at runtime.
+ALTER TYPE core.notification_type ADD VALUE IF NOT EXISTS 'high_intent_lead';

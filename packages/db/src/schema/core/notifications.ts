@@ -5,7 +5,9 @@ import { users } from './auth';
 const core = pgSchema('core');
 
 export const notificationType = core.enum('notification_type', [
-  'assigned_lead', 'hold_expiring', 'follow_up_due', 'visit_tomorrow', 'document_expiring'
+  'assigned_lead', 'hold_expiring', 'follow_up_due', 'visit_tomorrow', 'document_expiring',
+  // Raised when a scored enquiry lands in the outbound band (see 0022).
+  'high_intent_lead'
 ]);
 
 export const notifications = core.table(
