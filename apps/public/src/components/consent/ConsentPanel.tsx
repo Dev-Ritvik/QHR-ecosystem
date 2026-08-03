@@ -39,6 +39,33 @@ export function ConsentPanel() {
   } = useConsent();
 
   const [detail, setDetail] = useState(false);
+  const [erasing, setErasing] = useState(false);
+  const [erased, setErased] = useState(false);
+  const [eraseFailed, setEraseFailed] = useState(false);
+
+  const erase = useCallback(async () => {
+    setErasing(true);
+    setEraseFailed(false);
+    try {
+      const res = await fetch('/api/privacy', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      // Only claim success when the server actually confirms it. `fetch` not
+      // throwing is not evidence: the first cut here showed "Deleted" after a
+      // relay failure, which is the one thing this control must never do.
+      const body = res.ok ? await res.json().catch(() => null) : null;
+      if (res.ok && body?.ok === true) {
+        setErased(true);
+      } else {
+        setEraseFailed(true);
+        setErasing(false);
+      }
+    } catch {
+      setEraseFailed(true);
+      setErasing(false);
+    }
+  }, []);
   const [choice, setChoice] = useState<Record<ConsentCategory, boolean>>({
     experience: false,
     analytics: false,
@@ -198,6 +225,37 @@ export function ConsentPanel() {
               {detail ? 'Save choices' : 'Choose'}
             </button>
           </div>
+
+          {/* Erasure. The DPDP Act grants this, and an endpoint nobody can find
+              is not a right — so it lives here, next to the choice that created
+              the data, rather than behind an email address. Shown only in the
+              detail view so it cannot be hit by accident. */}
+          {detail && (
+            <div className="mt-5 border-t border-white/10 pt-4">
+              {erased ? (
+                <p className="text-xs text-neutral-400">
+                  Deleted. Nothing from this visit is retained.
+                </p>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={erase}
+                    disabled={erasing}
+                    className="text-xs uppercase tracking-[0.14em] text-neutral-400 underline-offset-4 transition hover:text-neutral-100 hover:underline disabled:opacity-50"
+                  >
+                    {erasing ? 'Deleting…' : 'Delete the data from this visit'}
+                  </button>
+                  {eraseFailed && (
+                    <p className="mt-2 text-xs text-amber-200/80">
+                      We could not complete that just now, so nothing was
+                      deleted. Please try again.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
