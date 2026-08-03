@@ -4,6 +4,7 @@
 // replace with the owner's verified proof points before launch.
 import type { Metadata } from 'next';
 import { NodePanel } from '@/components/experience/NodePanel';
+import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 
 export const metadata: Metadata = {
   title: 'Why Choose Us — The Residence',
@@ -13,6 +14,8 @@ export const metadata: Metadata = {
 
 export default function WhyUsPage() {
   return (
+    <>
+      <RouteTelemetry routeId="why-us" />
     <NodePanel
       eyebrow="Chapter II"
       title="Proof, not persuasion"
@@ -32,5 +35,6 @@ export default function WhyUsPage() {
         from a published basis, so a corner plot costs more for a reason you can read.
       </p>
     </NodePanel>
+    </>
   );
 }

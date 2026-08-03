@@ -5,6 +5,7 @@
 // Replace with the owner's verified facts before launch.
 import type { Metadata } from 'next';
 import { NodePanel } from '@/components/experience/NodePanel';
+import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 
 export const metadata: Metadata = {
   title: 'About — The Residence',
@@ -14,6 +15,8 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
+    <>
+      <RouteTelemetry routeId="about" />
     <NodePanel
       eyebrow="Chapter I"
       title="Built for the long horizon"
@@ -29,5 +32,6 @@ export default function AboutPage() {
         you are given enough to decide.
       </p>
     </NodePanel>
+    </>
   );
 }

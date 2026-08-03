@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { telemetry } from './collector';
+import { ScrollAccumulator } from '@estate/domain/telemetry/scroll';
 
 /**
  * Route dwell, scroll depth and PACING.
@@ -23,72 +24,50 @@ import { telemetry } from './collector';
  */
 export function useRouteTelemetry(routeId: string) {
   const openedAt = useRef(0);
-  const maxDepth = useRef(0);
-  const distance = useRef(0);
-  const movingMs = useRef(0);
-  const lastY = useRef(0);
-  const lastT = useRef(0);
-  const slowMs = useRef(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     openedAt.current = Date.now();
-    maxDepth.current = 0;
-    distance.current = 0;
-    movingMs.current = 0;
-    slowMs.current = 0;
-    lastY.current = window.scrollY;
-    lastT.current = performance.now();
-
     telemetry.push('route_open', routeId);
 
-    let queued = false;
-    const measure = () => {
-      queued = false;
-      const y = window.scrollY;
-      const now = performance.now();
-      const dy = Math.abs(y - lastY.current);
-      const dt = now - lastT.current;
+    // Reading scrollHeight forces layout, so it is sampled here and on resize
+    // rather than on every scroll event.
+    const scrollableNow = () =>
+      document.documentElement.scrollHeight - window.innerHeight;
 
-      if (dt > 0 && dy > 0) {
-        distance.current += dy;
-        movingMs.current += dt;
-        // Under ~250 px/s is reading pace rather than seeking.
-        if (dy / (dt / 1000) < 250) slowMs.current += dt;
-      }
-      lastY.current = y;
-      lastT.current = now;
+    // The accumulation maths lives in @estate/domain and is unit-tested there.
+    // It could not be verified through a browser — the preview pane never
+    // dispatches scroll events, so every metric read back as zero and a broken
+    // implementation would have looked identical to a working one.
+    const acc = new ScrollAccumulator(
+      window.scrollY,
+      performance.now(),
+      scrollableNow(),
+    );
+    const remeasure = () => acc.setScrollable(scrollableNow());
 
-      const scrollable = Math.max(
-        1,
-        document.documentElement.scrollHeight - window.innerHeight,
-      );
-      const pct = Math.round(Math.min(100, (y / scrollable) * 100));
-      if (pct > maxDepth.current) maxDepth.current = pct;
-    };
-
-    // rAF-throttled and passive: this runs alongside a WebGL scene on mid-tier
-    // phones, so it must not touch layout on the scroll event itself.
-    const onScroll = () => {
-      if (queued) return;
-      queued = true;
-      requestAnimationFrame(measure);
-    };
+    // Sample SYNCHRONOUSLY on scroll. The first cut deferred this to
+    // requestAnimationFrame to stay off the hot path, which was wrong twice
+    // over: rAF does not run at all while the tab is not compositing, and by
+    // the time a route unmounts the browser has already restored scroll to the
+    // top — so a visitor who read to the bottom was reported at zero depth.
+    //
+    // Reading window.scrollY costs nothing (no layout); only scrollHeight does,
+    // and that is cached above. So the handler stays cheap without deferring.
+    const onScroll = () => acc.sample(window.scrollY, performance.now());
     window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', remeasure, { passive: true });
 
     return () => {
       window.removeEventListener('scroll', onScroll);
-      const dwellMs = Date.now() - openedAt.current;
-      const moving = movingMs.current;
+      window.removeEventListener('resize', remeasure);
+      // No final sample here on purpose: by unmount the browser has already
+      // restored scroll to the top, so reading position now would report zero.
+      // maxDepth is accumulated live instead.
       telemetry.push('route_close', routeId, {
-        dwellMs,
-        maxScrollPct: maxDepth.current,
-        pacingPxPerS:
-          moving > 0 ? Math.round(distance.current / (moving / 1000)) : 0,
-        // The share of scrolling done at reading pace — the signal that
-        // separates consideration from skimming.
-        consideredMs: Math.round(slowMs.current),
+        dwellMs: Date.now() - openedAt.current,
+        ...acc.summary(),
       });
     };
   }, [routeId]);

@@ -1,6 +1,7 @@
 // apps/public/src/app/(site)/page.tsx
 import { getPublishedProjects } from '@/lib/projection';
 import { ProjectCard } from '@/components/site/ProjectCard';
+import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 
 // ISR: Background revalidation every hour, unless manually cleared by the webhook (T37)
 export const revalidate = 3600;
@@ -13,6 +14,7 @@ export default async function SiteHomePage() {
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-16 md:py-24">
+      <RouteTelemetry routeId="site-home" />
       <header className="mb-16 md:mb-24">
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif tracking-tight text-gray-900 mb-6">
           Featured Properties

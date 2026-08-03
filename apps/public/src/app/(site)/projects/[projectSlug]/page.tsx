@@ -12,6 +12,7 @@ import { EmptyStates } from '@/components/site/EmptyStates';
 import { ProjectMap } from '@/components/map/ProjectMap';
 import { LocationSection } from '@/components/site/LocationSection';
 import Image from 'next/image';
+import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 
 export default async function ProjectDetailPage({
   params,
@@ -36,6 +37,7 @@ export default async function ProjectDetailPage({
 
   return (
     <main className="min-h-screen py-12">
+      <RouteTelemetry routeId="project-detail" />
       <div className="container mx-auto px-4 space-y-16">
         
         {/* Header & Narrative */}

@@ -3,7 +3,11 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@estate/domain": ["../../packages/domain/src/index.ts"],
+      "@estate/domain/*": ["../../packages/domain/src/*"],
+      "@estate/db": ["../../packages/db/src/index.ts"],
+      "@estate/db/*": ["../../packages/db/src/*"]
     },
     "plugins": [
       {

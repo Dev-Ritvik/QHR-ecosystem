@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useTransition } from 'react';
+import { useFormTelemetry } from '@/lib/telemetry/hooks';
 import { submitEnquiry, type EnquiryActionState } from './actions';
 
 interface EnquiryFormProps {
@@ -13,6 +14,9 @@ interface EnquiryFormProps {
 
 export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: EnquiryFormProps) {
   const [isPending, startTransition] = useTransition();
+  // form_start on first focus, form_submit on send, form_abandon on unmount.
+  // Abandon carries the field COUNT reached and nothing else - never values.
+  const { onFieldFocus, onSubmit: trackSubmit } = useFormTelemetry('enquiry');
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -26,6 +30,7 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
   const whatsappUrl = `https://wa.me/${formattedWaNumber}?text=${encodeURIComponent(contextText)}`;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    trackSubmit();
     e.preventDefault();
     setStatus('idle');
     setErrors({});
@@ -107,6 +112,7 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
           <input
             type="text"
             name="name"
+            onFocus={() => onFieldFocus(0)}
             id="name"
             required
             className="block w-full border border-neutral-300 px-4 py-2.5 text-neutral-900 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 transition-colors"
@@ -121,6 +127,7 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
           <input
             type="tel"
             name="phone"
+            onFocus={() => onFieldFocus(1)}
             id="phone"
             required
             placeholder="+91"
@@ -136,6 +143,7 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
           </label>
           <select
             name="preferredTime"
+            onFocus={() => onFieldFocus(2)}
             id="preferredTime"
             className="block w-full border border-neutral-300 px-4 py-2.5 text-neutral-900 bg-white focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 transition-colors"
           >
@@ -152,6 +160,7 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
           </label>
           <textarea
             name="message"
+            onFocus={() => onFieldFocus(3)}
             id="message"
             rows={3}
             className="block w-full border border-neutral-300 px-4 py-2.5 text-neutral-900 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 transition-colors resize-none"

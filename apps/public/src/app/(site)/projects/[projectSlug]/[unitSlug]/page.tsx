@@ -8,6 +8,7 @@ import { DownloadBrochureButton } from '@/components/site/DownloadBrochureButton
 import { ProjectMap } from '@/components/map/ProjectMap';
 import { formatPaise } from '@estate/domain/src/money/format';
 import { format } from 'date-fns';
+import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 
 export default async function UnitDetailPage({ params }: { params: Promise<{ projectSlug: string, unitSlug: string }> }) {
   const { projectSlug, unitSlug } = await params;
@@ -40,6 +41,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
 
   return (
     <main className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 print:p-0 print:max-w-none bg-background text-foreground">
+      <RouteTelemetry routeId="unit-detail" />
       
       {/* ── Print-only PDF Stamped Header (FR-W6 / NFR-D5) ── */}
       <div className="hidden print:block mb-8 border-b-2 border-foreground pb-4">
