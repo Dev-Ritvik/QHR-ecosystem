@@ -36,3 +36,6 @@ blender-skills/
 # Tracked copies caused a rebase to abort with "untracked working tree files
 # would be overwritten".
 *.tsbuildinfo
+
+# Scratch notes kept beside the repo, not part of it.
+timelineleft.md
