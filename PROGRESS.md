@@ -875,3 +875,99 @@ Reported 2026-08-03, both on the existing public sites rather than in this repo:
 | 🟡 Live but `noindex` pending client documents | `/privacy` `/terms` `/refund-policy` |
 | ⚪ Pre-redesign, not yet surfaces | `/` (site-home) `/projects/[slug]` `/projects/[slug]/[unit]` |
 | ❌ Dropped by agreement | `/construction-updates` |
+
+---
+
+# §9 — Phase A: real inventory replaces the demo data
+
+> 2026-08-04. Canonical domain confirmed as **qualityhomesreality.in**.
+
+## What changed
+
+The database held four demo projects — `the-azure-residences` (fictional),
+`lucky-gardens`, `nirvik-garden`, `dev-ritvik` — and 187 demo units. Every
+`/projects/<slug>` link on `/start-here` and `/properties` pointed at the three
+real layouts and returned **404**, while the sitemap published the fictional
+project and 187 thin unit pages under `https://example.com`.
+
+All four demo projects are gone. The three real layouts are in `core` and
+published through `publishProject()` — the same gate the CRM's publish button
+uses, not a direct write to `projection`, so the script cannot publish anything
+the CRM would have refused.
+
+| Project | Plots | Available | Layout | Approval |
+|---|---|---|---|---|
+| Kartikeya Water Front | 113 | 113 | VMRDA | VMRDA approved layout |
+| Lucky Garden | 181 | 118 | Panchayat | on the sanctioned plan |
+| VSR Gayatri Township | 113 | 113 | SUDA | F.L.P. No. 10/2025/1178/DTCP/DPMS |
+
+**407 plots total.** All three are `price_on_request`; no price is published
+anywhere on the site.
+
+## Where the plot counts come from
+
+Not from marketing material. They are the closed cells detected in the client's
+own approved layout sheets by `tools/blender/make_holo3d.py` — the same cells
+extruded into the 3D hall, so the website, the hologram and the CRM count the
+same plots:
+
+```
+assets/floorplans/kartikeya_cells.json   113 plot
+assets/floorplans/lucky_cells.json       118 plot + 63 plot_hot
+assets/floorplans/gayatri_cells.json     113 plot
+```
+
+`plot_hot` is a plot the sheet has coloured in — Lucky Garden's sheet marks
+status that way. Which colour means sold and which means booked is in the sheet
+legend, which has not been transcribed, so those 63 are imported as `sold`.
+Understating availability costs a phone call; overstating it means telling a
+buyer a plot is free when the client's own drawing says otherwise.
+
+## ⚠ PROVISIONAL — plot numbers must be replaced
+
+**Plot numbers are sequential 1..N and are almost certainly not the numbers
+printed on the sheets.** The cell classifier reads geometry; it never read the
+numbers. The cardinality is right, the identity is not.
+
+Nothing public exposes them — `/properties` publishes sizes only — so the
+exposure is limited to the CRM. **Before any agent quotes a plot number to a
+buyer, re-import from the client's plot register.** Add it to the document
+request in §8.
+
+Re-import with:
+
+```bash
+pnpm dlx tsx packages/db/src/seed/import-real-projects.ts
+```
+
+## Also in this phase
+
+- **Sitemap rewritten.** Was 190 URLs, mostly fictional; now 18, every one
+  verified to return 200. Derived from the `places.ts` route registry rather
+  than a hand-kept list, minus three sets: `NOINDEX_PENDING` (the legal pages
+  from §8), `UNWRITTEN` (`/about`, `/why-us`, `/site-home`), and `UNBUILT`
+  (`/book-a-site-visit`, `/projects`, `/sitemap` — registered in the registry
+  with no page behind them). **Delete an entry from `UNBUILT` the day its page
+  lands and the sitemap picks it up with no other change.**
+- Individual plot pages are deliberately **not** in the sitemap. 407 thin pages
+  with no price and no copy would dilute the three project pages that rank, and
+  would publish plot numbers we have just said are provisional.
+- **`sitemap.ts` and `robots.ts` now throw** if `NEXT_PUBLIC_SITE_URL` is unset
+  rather than falling back to `example.com`. A robots.txt naming
+  `example.com/sitemap.xml` tells every crawler the site has no sitemap.
+- Three demo bookings (2026-07-18, on fictional projects, zero payment-ledger
+  rows) were deleted. The import script refuses outright if a payment ledger
+  entry exists, and requires `--delete-demo-bookings` to remove a booking at
+  all — the deletion order came from `pg_constraint`, not from guessing until
+  the errors stopped.
+
+## Known gaps left open by this phase
+
+- **Project pages have no `<title>`** — `metadata` is missing on
+  `/projects/[slug]`. Phase G.
+- **Hero images are the layout PDFs.** The publish gate requires a hero and no
+  site photography exists. It is the real drawing rather than stock imagery,
+  which is the rule `/gallery` already follows — but it is not a photograph.
+- No geometry version, so every project page shows "Map Unavailable". The plot
+  polygons exist in the `*_cells.json` files; wiring them to
+  `core.unit_geometries` would light up the master plan map. Not in Phase A.
