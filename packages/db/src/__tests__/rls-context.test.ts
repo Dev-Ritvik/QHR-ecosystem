@@ -1,7 +1,7 @@
 // packages/db/src/__tests__/rls-context.test.ts
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { sql } from 'drizzle-orm';
+import { sql, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { config } from 'dotenv';
@@ -72,6 +72,42 @@ const DOC_UNIT_ID = '00000000-0000-4000-d000-000000000002';
 const DOC_BOOKING_A_ID = '00000000-0000-4000-d000-000000000003';
 const DOC_BOOKING_B_ID = '00000000-0000-4000-d000-000000000004';
 const DOC_CLIENT_A_ID = '00000000-0000-4000-d000-000000000005';
+
+// ---------------------------------------------------------------------------
+// Fixture scoping
+// ---------------------------------------------------------------------------
+//
+// This suite runs against a shared database that also carries development data,
+// so an unqualified `SELECT` returns rows this fixture never planted. The
+// `leads` cases below have always constrained their queries to the fixture IDs
+// for exactly that reason; the table suites further down did not, and so
+// "owner sees all bookings" was really asserting "this database contains
+// precisely two bookings" — true only on a freshly migrated server, and a
+// failure that says nothing about RLS when it breaks.
+//
+// Scoping is applied only where the count is structurally unstable:
+//
+//   * every `owner sees all X` case — an owner sees the whole table by design,
+//     so the honest assertion is that no fixture row is hidden from them;
+//   * both `documents` agent cases — project- and unit-scoped documents are
+//     visible to every agent by policy, so foreign projects inflate the count.
+//
+// The agent cases on holds, bookings, site visits and the ledger stay
+// unqualified on purpose. Those policies filter by assigned agent, and these
+// agent IDs are synthetic, so "in this entire database agent A sees exactly one
+// booking" is both stable and a stronger claim than a scoped count would be.
+// The `raw query without context` cases stay unqualified for the same reason:
+// default-deny has to hide every row in the table, not merely ours.
+const ALL_HOLDS = [HOLD_1_ID, HOLD_2_ID];
+const ALL_BOOKINGS = [BOOKING_1_ID, BOOKING_2_ID];
+const ALL_VISITS = [VISIT_1_ID, VISIT_2_ID];
+const ALL_DOCS = [
+  DOC_PROJECT_ID,
+  DOC_UNIT_ID,
+  DOC_BOOKING_A_ID,
+  DOC_BOOKING_B_ID,
+  DOC_CLIENT_A_ID,
+];
 
 // ---------------------------------------------------------------------------
 // Seed & Cleanup
@@ -270,9 +306,9 @@ describe('withCoreContext RLS enforcement', () => {
     it('owner sees all holds', async () => {
       const session: AppSession = { role: 'owner', userId: OWNER_ID };
       const rows = await dbAccess.authedQuery(session, async (tx) => {
-        return tx.select({ id: holds.id }).from(holds);
+        return tx.select({ id: holds.id }).from(holds).where(inArray(holds.id, ALL_HOLDS));
       });
-      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => r.id).sort()).toEqual([...ALL_HOLDS].sort());
     });
 
     it('raw query without context returns zero holds', async () => {
@@ -306,9 +342,12 @@ describe('withCoreContext RLS enforcement', () => {
     it('owner sees all bookings', async () => {
       const session: AppSession = { role: 'owner', userId: OWNER_ID };
       const rows = await dbAccess.authedQuery(session, async (tx) => {
-        return tx.select({ id: bookings.id }).from(bookings);
+        return tx
+          .select({ id: bookings.id })
+          .from(bookings)
+          .where(inArray(bookings.id, ALL_BOOKINGS));
       });
-      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => r.id).sort()).toEqual([...ALL_BOOKINGS].sort());
     });
 
     it('raw query without context returns zero bookings', async () => {
@@ -343,9 +382,12 @@ describe('withCoreContext RLS enforcement', () => {
     it('owner sees all site visits', async () => {
       const session: AppSession = { role: 'owner', userId: OWNER_ID };
       const rows = await dbAccess.authedQuery(session, async (tx) => {
-        return tx.select({ id: siteVisits.id }).from(siteVisits);
+        return tx
+          .select({ id: siteVisits.id })
+          .from(siteVisits)
+          .where(inArray(siteVisits.id, ALL_VISITS));
       });
-      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => r.id).sort()).toEqual([...ALL_VISITS].sort());
     });
 
     it('raw query without context returns zero site visits', async () => {
@@ -379,9 +421,12 @@ describe('withCoreContext RLS enforcement', () => {
     it('owner sees all payment ledger entries', async () => {
       const session: AppSession = { role: 'owner', userId: OWNER_ID };
       const rows = await dbAccess.authedQuery(session, async (tx) => {
-        return tx.select({ bookingId: paymentLedger.bookingId }).from(paymentLedger);
+        return tx
+          .select({ bookingId: paymentLedger.bookingId })
+          .from(paymentLedger)
+          .where(inArray(paymentLedger.bookingId, ALL_BOOKINGS));
       });
-      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => r.bookingId).sort()).toEqual([...ALL_BOOKINGS].sort());
     });
 
     it('raw query without context returns zero payment ledger entries', async () => {
@@ -397,9 +442,14 @@ describe('withCoreContext RLS enforcement', () => {
     it('agent A sees project/unit docs, and their own booking/client docs', async () => {
       const session: AppSession = { role: 'agent', userId: AGENT_A_ID };
       const rows = await dbAccess.authedQuery(session, async (tx) => {
-        return tx.select({ id: documents.id, scope: documents.scope }).from(documents);
+        return tx
+          .select({ id: documents.id, scope: documents.scope })
+          .from(documents)
+          .where(inArray(documents.id, ALL_DOCS));
       });
-      
+
+      // DOC_BOOKING_B_ID is inside the scoped set, so the negative assertion
+      // below is exactly as strong as it was before scoping.
       const ids = rows.map((r) => r.id);
       expect(ids).toHaveLength(4);
       expect(ids).toContain(DOC_PROJECT_ID);
@@ -412,9 +462,12 @@ describe('withCoreContext RLS enforcement', () => {
     it('agent B sees project/unit docs, and their own booking/client docs', async () => {
       const session: AppSession = { role: 'agent', userId: AGENT_B_ID };
       const rows = await dbAccess.authedQuery(session, async (tx) => {
-        return tx.select({ id: documents.id }).from(documents);
+        return tx
+          .select({ id: documents.id })
+          .from(documents)
+          .where(inArray(documents.id, ALL_DOCS));
       });
-      
+
       const ids = rows.map((r) => r.id);
       expect(ids).toHaveLength(3);
       expect(ids).toContain(DOC_PROJECT_ID);
@@ -427,9 +480,14 @@ describe('withCoreContext RLS enforcement', () => {
     it('owner sees all documents', async () => {
       const session: AppSession = { role: 'owner', userId: OWNER_ID };
       const rows = await dbAccess.authedQuery(session, async (tx) => {
-        return tx.select({ id: documents.id }).from(documents);
+        return tx
+          .select({ id: documents.id })
+          .from(documents)
+          .where(inArray(documents.id, ALL_DOCS));
       });
-      expect(rows).toHaveLength(5);
+      // Including DOC_BOOKING_B_ID and DOC_CLIENT_A_ID, each of which is hidden
+      // from one of the two agents above — nothing is withheld from an owner.
+      expect(rows.map((r) => r.id).sort()).toEqual([...ALL_DOCS].sort());
     });
 
     it('raw query without context returns zero documents', async () => {
