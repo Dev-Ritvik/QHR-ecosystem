@@ -6,8 +6,11 @@ import { useFormTelemetry } from '@/lib/telemetry/hooks';
 import { submitEnquiry, type EnquiryActionState } from './actions';
 
 interface EnquiryFormProps {
-  projectId: string;
-  projectName: string;
+  /** Omitted on the general contact page: an enquiry that names no project is
+   *  still a lead, and the CRM routes it on the layouts the visitor actually
+   *  spent time with rather than on a hidden field. */
+  projectId?: string;
+  projectName?: string;
   unitId?: string;
   unitNumber?: string;
 }
@@ -22,9 +25,11 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
   const [globalError, setGlobalError] = useState<string | null>(null);
 
   const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '';
-  const contextText = unitNumber
+  const contextText = unitNumber && projectName
     ? `Hi, I'm interested in Unit ${unitNumber} at ${projectName}.`
-    : `Hi, I'm interested in the ${projectName} project.`;
+    : projectName
+      ? `Hi, I'm interested in the ${projectName} project.`
+      : '';
   // Strip non-numeric characters (except leading +) for the deep link
   const formattedWaNumber = whatsappNumber.replace(/[^\d+]/g, '');
   const whatsappUrl = `https://wa.me/${formattedWaNumber}?text=${encodeURIComponent(contextText)}`;

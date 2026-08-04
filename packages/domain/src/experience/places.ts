@@ -56,7 +56,6 @@ export const SURFACE_ROUTES: Readonly<Record<string, PlaceId>> = {
   '/downloads': 'study',
   '/gallery': 'hall',
   '/testimonials': 'approach',
-  '/construction-updates': 'table',
   '/contact': 'desk',
   '/book-a-site-visit': 'desk',
   '/careers': 'desk',

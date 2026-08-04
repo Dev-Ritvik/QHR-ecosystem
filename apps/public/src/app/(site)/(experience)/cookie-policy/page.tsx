@@ -9,13 +9,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Surface } from '@/components/experience/Surface';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
-import { Pending, PendingNotice, pendingRobots } from '@/components/experience/Pending';
 
 export const metadata: Metadata = {
   title: 'Cookies — Quality Homes Reality',
   description:
     'Every cookie this site sets, what it is for, how long it lasts, and how to refuse or remove it.',
-  ...pendingRobots,
 };
 
 const ESSENTIAL = [
@@ -76,8 +74,6 @@ export default function CookiePolicyPage() {
         title="What this site stores on your device"
         lede="Two cookies are needed to run the site. Everything else is off until you switch it on, and can be switched off again at any time."
       >
-        <PendingNotice what="The cookie descriptions here are accurate to the software as built." />
-
         <h2 className="font-serif text-xl text-[#F2EDE4]">Needed to run the site</h2>
         <p>
           These carry no profiling and nothing that outlives your visit beyond
@@ -112,7 +108,7 @@ export default function CookiePolicyPage() {
         <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Questions</h2>
         <p>
           Written enquiries about cookies or personal data go to{' '}
-          <Pending>DATA PROTECTION OFFICER — NAME AND EMAIL</Pending> at Quality
+          <a className="underline underline-offset-4" href="mailto:devritvik70@gmail.com">Dev Ritvik, devritvik70@gmail.com</a> at Quality
           Homes Reality, D.No. 50-92-36, 2nd Floor, Opp. Canara Bank,
           Shantipuram, Shankara Matam Road, Visakhapatnam 530 016, Andhra
           Pradesh.

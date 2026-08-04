@@ -40,7 +40,7 @@ export default function PrivacyPage() {
         </p>
         <p>
           Data Protection Officer:{' '}
-          <Pending>NAME, EMAIL, POSTAL ADDRESS</Pending>. Grievances about how
+          Dev Ritvik, <a className="underline underline-offset-4" href="mailto:devritvik70@gmail.com">devritvik70@gmail.com</a>. Grievances about how
           your data has been handled go here first.
         </p>
 
