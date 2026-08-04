@@ -771,3 +771,107 @@ not `migrations/`, because it describes the managed platform rather than our sch
 - 🔴 Still outstanding from §6: `apps/public/.ignored_node_modules/` (stray maplibre-gl sources)
   and `blender-skills/` (third-party clone with its own `.git`). Neither was touched.
 - 🟡 `.claude/` remains untracked pending a decision.
+
+---
+
+# §8 — OUTSTANDING: documents awaited from the client
+
+> Added 2026-08-03. **These are the only things standing between three legal
+> pages and publication.** The client was asked on 2026-08-03 and expects to
+> take about a week, so this is due back around **2026-08-10**.
+
+## Why this cannot quietly slip
+
+`/privacy`, `/terms` and `/refund-policy` are live routes today, but every
+unresolved fact in them renders as a loud amber `<Pending>` marker **and forces
+the whole page to `noindex`** (`apps/public/src/components/experience/Pending.tsx`).
+
+That was deliberate: a placeholder that looks like prose eventually ships as
+prose, and an invented cancellation window is a binding representation to a
+consumer. The consequence is that **these three pages are invisible to search
+until the gaps are filled** — so leaving them is not a cosmetic debt, it is
+three missing pages.
+
+**How to check the current count at any time:**
+
+```bash
+pnpm --filter @estate/public dev
+# then, per route:
+curl -s localhost:3001/privacy | grep -c '<mark'
+```
+
+Zero marks on a page ⇒ remove `...pendingRobots` from its `metadata` and it
+becomes indexable. Nothing else is required.
+
+## What is needed, by page
+
+### `/privacy` — 5 outstanding
+
+| Fact | Who has it |
+|---|---|
+| Registered entity name | Client |
+| CIN / GST identifiers | Client |
+| Retention period for lead records | Client (a business decision, not a technical one) |
+| Response period for a data-subject request | Client — the DPDP Act expects one to be stated |
+| Hosting, CRM and storage processors | Us, once deployment targets are fixed |
+
+*Already resolved:* Data Protection Officer — **Dev Ritvik,
+devritvik70@gmail.com** (supplied 2026-08-03).
+
+### `/terms` — 9 outstanding
+
+Registered entity and identifiers · RERA registration numbers per project ·
+booking terms (what a booking amount actually reserves, and for how long) ·
+payment terms and schedule · amenity delivery and construction-status
+commitments · limitation of liability · governing law and jurisdiction ·
+dispute-resolution mechanism · publication date.
+
+### `/refund-policy` — 11 outstanding
+
+Pre-agreement cancellation terms · cooling-off or notice period ·
+post-agreement cancellation terms and the clause reference in the sale
+agreement · **seller-side cancellation terms** · refund processing period ·
+required documents · tax and statutory treatment · named refund contact ·
+grievance and escalation route · publication date.
+
+> The seller-side clause is the one buyers weigh most heavily. It is worth
+> stating generously and plainly rather than minimally — it is the cheapest
+> trust the client can buy on that page.
+
+## Everything else that is still open
+
+- **Marketing account IDs** — Meta Pixel + CAPI token, GA4 / Google Ads,
+  LinkedIn Partner ID, Microsoft Clarity. The loader ships as a working shell
+  and turns on with env vars alone; no code change at that point. Client is
+  supplying these *after* production, by their own decision.
+- **Call tracking** (CallRail / WhatConverts) — a paid subscription. Confirm
+  the client wants it before anything is built against it.
+- **Live chat vendor** — Intercom, Crisp, or none.
+- **`/hall` has never been confirmed in a real browser.** The preview pane
+  reports WebGL2 available but never fires `requestAnimationFrame`, so r3f
+  cannot render there. See §7.2.
+- **Patterned rug asset** and **site photography** — still absent. `/gallery`
+  states the absence rather than using stock imagery.
+
+## Two defects found on the client's own live sites
+
+Reported 2026-08-03, both on the existing public sites rather than in this repo:
+
+1. **`qualityhomesreality.com` has placeholder text in production.** Slides 4
+   and 5 of the home-page testimonial carousel read *"Lorem De Ipsum"* and
+   *"Ms. Lorem R. Ipsum"* with Latin filler. Not carried into this build.
+2. **`.in` and `.com` do not serve the same content.** A fetch of
+   `qualityhomesreality.in` returned a different navigation and two testimonials
+   ("Rajesh Kumar, Hyderabad", "Priya Sharma, Vijayawada") that appear nowhere
+   on `.com` and nowhere in the screenshots supplied. Those were discarded.
+   **Treat `.in` as an untrusted content source** until someone establishes what
+   it is actually serving. Everything used in this build came from `.com`.
+
+## Route status at 2026-08-03
+
+| State | Routes |
+|---|---|
+| ✅ Complete, indexable | `/hall` `/faqs` `/cookie-policy` `/branches` `/locations` `/contact` `/gallery` `/investment-guide` `/knowledge` `/knowledge/reading-a-layout-plan` `/testimonials` `/careers` `/downloads` `/properties` `/start-here` |
+| 🟡 Live but `noindex` pending client documents | `/privacy` `/terms` `/refund-policy` |
+| ⚪ Pre-redesign, not yet surfaces | `/` (site-home) `/projects/[slug]` `/projects/[slug]/[unit]` |
+| ❌ Dropped by agreement | `/construction-updates` |
