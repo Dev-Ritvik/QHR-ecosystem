@@ -971,3 +971,104 @@ pnpm dlx tsx packages/db/src/seed/import-real-projects.ts
 - No geometry version, so every project page shows "Map Unavailable". The plot
   polygons exist in the `*_cells.json` files; wiring them to
   `core.unit_geometries` would light up the master plan map. Not in Phase A.
+
+---
+
+# §10 — Phase B: about, why-us, site-home
+
+> 2026-08-04. Sourced from the client's own two sites, with one significant
+> exception recorded below.
+
+## The sourcing rule applied
+
+`qualityhomesreality.com` is the legacy site; `qualityhomesreality.in` is a
+newer one built on the same 26-route information architecture the client
+supplied. **Anything published on our pages is corroborated on both.** Where
+the two disagreed, nothing was published.
+
+Corroborated and now live: 20 years in the field · 5,000 customers · 12 lakh
+sq yd developed · 8 lakh sq yd in development · the vision, mission and five
+values in the company's own words · and the Managing Director's line, which the
+`.in` about page carries in Telugu:
+
+> భూమిలో పెట్టుబడి పెట్టండి, అది ఎప్పుడూ నిరాశపరచదు.
+> *Invest in land — it will never disappoint you.*
+
+## ⚠ NOT PUBLISHED — unverified third-party credentials on the .in site
+
+The `.in` home page carries a block headed **"Certifications & Professional
+Recognition — Verified credentials, regulatory approvals, and national
+recognition"**:
+
+| Claim | Why it was withheld |
+|---|---|
+| ISO 9001 CERTIFIED | Certification bodies maintain public registers |
+| CREDAI MEMBER | CREDAI publishes a member directory and polices false claims |
+| RERA APPROVED PROJECTS | True per project, but stated site-wide it over-reaches |
+| NATIONAL REALTY EXCELLENCE AWARD | No conferring body identified |
+| TOP MOST SENIOR DEVELOPER OF ANDHRA PRADESH | No such award is known to exist |
+
+Plus a press strip — **"As Featured & Recognized By"** — naming *Economic
+Times, Hindu Business, Real Estate Weekly, Property Today, Construction World*.
+
+**None of it appears on the legacy site**, which is the property that has
+actually been trading for twenty years. A firm holding ISO 9001 or a CREDAI
+membership puts that on everything it owns.
+
+Every one of these is a third-party claim with a public register or a
+conferring body behind it. Each is checkable by a buyer, a competitor or a
+regulator — and each is a **misleading advertisement** under the Consumer
+Protection Act 2019 if wrong (up to ₹10 lakh and 2 years; ₹50 lakh and 5 years
+on repeat, with CCPA power to bar the endorser). Using the Economic Times or
+Hindu BusinessLine name or mark without actual coverage is separately a
+trademark problem.
+
+**Ask the client for the certificate, membership number or award citation for
+each.** Anything he can evidence goes up immediately — these are strong trust
+signals when true, which is exactly why they are dangerous when not. Anything
+he cannot evidence should also come down from the `.in` site.
+
+The leadership section there lists three titles — Managing Director, Legal &
+Compliance Head, Operations Director — with **no names**, so there is nobody to
+introduce. Names, photographs and a line of biography each would make it real.
+
+## Neither existing site is a reliable source of fact
+
+- `.com` has **Lorem Ipsum in production** — testimonial slides 4 and 5 read
+  "Lorem De Ipsum" and "Ms. Lorem R. Ipsum" (§8).
+- `.in` carries a testimonial from **"Rajesh Kumar / Hyderabad"** that appears
+  nowhere on `.com` and is not among the three screenshots the client supplied.
+  Not used. `/testimonials` carries only the three supplied.
+
+Treat both sites as evidence of *intent*, not of *fact*. That is the rule this
+phase followed and it should hold for the rest of the build.
+
+## Copy corrections made while rewriting
+
+- **`/why-us` promised two features that do not exist.** The placeholder said
+  "status is drawn live from our records — what you see is what remains" and
+  "rates are computed from a published basis". We publish neither availability
+  nor price, deliberately. A differentiators page describing features we
+  decided against is worse than none, because each claim is disproved in about
+  four seconds. Rewritten so all five claims are checkable from the site.
+- **`/site-home` advertised a portfolio we do not have** — "premium plotted
+  developments, commercial spaces, and luxury residences". Every open project
+  is plotted land. Rewritten, and given metadata it never had.
+- `/careers` needed no change: the two roles already matched the source exactly
+  (Sales Executive 1–3 yrs, Sr. Sales Executive 1–4 yrs, any graduate).
+
+## Test infrastructure
+
+`packages/db` specs now run with `testTimeout: 30s` / `hookTimeout: 60s`.
+Vitest's defaults assume a local database; these talk to a hosted one where one
+round trip costs ~2s, and `rls-context`'s `beforeAll` plants a dozen rows in FK
+order, so it crossed the 10s hook limit on latency alone once the tables held
+real inventory. The assertions were never wrong.
+
+## Still outstanding for these pages
+
+- Leadership names, titles, photographs, biographies
+- Evidence for each credential claim above
+- Founding year (both sites say "more than 20 years"; neither gives a date)
+- The registered entity name — `.com`'s careers page says **"Quality Homes
+  Reality Services"**, longer than the wordmark. Fold into the §8 request.
