@@ -4,15 +4,14 @@
 // second one: that form already carries the honeypot, the E.164 normalisation
 // and the form telemetry, and a duplicate would drift from it.
 //
-// No phone numbers are printed here. The brochures leave the "For More Details"
-// box blank and the Gayatri contact panel empty, so there is no number to
-// publish — inventing one would be worse than the form.
+// The switchboard number and address come from the client's own site at
+// qualityhomesreality.com; the brochures leave their "For More Details" boxes
+// blank, so nothing here is inferred from them.
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Surface } from '@/components/experience/Surface';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
-import { Pending, pendingRobots } from '@/components/experience/Pending';
 import { EnquiryForm } from '../../enquiry-form';
 import { BRANCHES } from '@estate/domain/leads/branches';
 
@@ -20,7 +19,6 @@ export const metadata: Metadata = {
   title: 'Contact — Quality Homes Reality',
   description:
     'Ask about any of the three layouts. Your enquiry reaches the office that holds that site.',
-  ...pendingRobots,
 };
 
 export default function ContactPage() {
@@ -56,9 +54,19 @@ export default function ContactPage() {
           })}
         </div>
 
-        <p className="mt-10 text-sm text-[#F2EDE4]/60">
-          Telephone: <Pending>OFFICE PHONE NUMBERS</Pending>. The brochures
-          leave this blank, so nothing is published here yet.
+        <p className="mt-10 text-[15px] text-[#F2EDE4]/75">
+          Or call{' '}
+          <a className="underline underline-offset-4" href="tel:+919553513366">
+            +91 95535 13366
+          </a>
+          , or write to{' '}
+          <a
+            className="underline underline-offset-4"
+            href="mailto:qualityhomesreality@gmail.com"
+          >
+            qualityhomesreality@gmail.com
+          </a>
+          .
         </p>
 
         <p className="mt-6 text-sm text-[#F2EDE4]/55">

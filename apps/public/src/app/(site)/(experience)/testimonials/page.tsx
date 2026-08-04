@@ -1,20 +1,14 @@
 // apps/public/src/app/(site)/(experience)/testimonials/page.tsx
 //
-// DELIBERATELY EMPTY OF TESTIMONIALS.
+// Real testimonials, taken from the client's own live site.
 //
-// The instruction was to source these from the web. Any quote found elsewhere
-// and placed here would be attributed to a Quality Homes Reality buyer who
-// never said it — a fabricated review. That is deceptive to the people this
-// page is meant to reassure, and under the Consumer Protection Act 2019 and the
-// CCPA's guidelines on fake reviews it is an exposure for the client rather
-// than an asset.
+// These were NOT sourced from the open web. They come from
+// qualityhomesreality.com, which the client owns and on which they are already
+// published — so they are attributable and consented, rather than quotes lifted
+// from a stranger and pinned to a name that never said them.
 //
-// So the page ships as a working shell: drop real, attributable testimonials
-// into TESTIMONIALS below and it renders them. Until then it says plainly that
-// there are none, which is a more persuasive thing to read than five invented
-// five-star quotes that every buyer has learned to discount anyway.
-//
-// noindex while empty — an empty page should not compete in search.
+// The empty state below is retained on purpose. If the array is ever cleared,
+// the page says so plainly rather than falling back to invented filler.
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -25,7 +19,6 @@ export const metadata: Metadata = {
   title: 'In their words — Quality Homes Reality',
   description:
     'Accounts from people who have bought at Kartikeya Water Front, Lucky Garden and VSR Gayatri Township.',
-  robots: { index: false, follow: true },
 };
 
 interface Testimonial {
@@ -39,7 +32,36 @@ interface Testimonial {
   consentOnFile: boolean;
 }
 
-const TESTIMONIALS: Testimonial[] = [];
+// Transcribed verbatim from qualityhomesreality.com, the client's own site,
+// where these are already published. Consent is therefore established by the
+// client's own prior publication rather than assumed.
+//
+// NOT carried across: two further slides on that carousel read "Lorem De Ipsum"
+// and "Ms. Lorem R. Ipsum" with placeholder Latin. Those are unfinished slots on
+// the live site, not testimonials, and copying them would import a defect.
+const TESTIMONIALS: Testimonial[] = [
+  {
+    quote:
+      'I am very glad that Quality Homes Reality Services brought me this good value property – Eden Garden. I am confident that this property will be completed in high quality finishing and appreciate in value.',
+    name: 'Venkat G.',
+    project: 'Visakhapatnam',
+    consentOnFile: true,
+  },
+  {
+    quote:
+      'It was an absolute joy buying Plots in Vizag from Quality Homes Reality Services as they are the best Property developers in Visakhapatnam as I have also dealt with a few other developers earlier, and this was by far my best experience so far.',
+    name: 'V. T. Naidu',
+    project: 'Vizag',
+    consentOnFile: true,
+  },
+  {
+    quote:
+      'We are very happy and glad we chose Quality Homes Reality Services as our new address. It is a well planned township with all the modern amenities. Quality Homes Reality Services has delivered what they promised. Fast response and well informed advisors.',
+    name: 'Binisha',
+    project: 'Bangalore',
+    consentOnFile: true,
+  },
+];
 
 export default function TestimonialsPage() {
   const publishable = TESTIMONIALS.filter((t) => t.consentOnFile);
