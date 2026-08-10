@@ -39,3 +39,6 @@ blender-skills/
 
 # Scratch notes kept beside the repo, not part of it.
 timelineleft.md
+
+__pycache__/
+*.pyc
