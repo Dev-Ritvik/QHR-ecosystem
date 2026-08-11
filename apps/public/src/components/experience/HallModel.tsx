@@ -86,7 +86,19 @@ export function HallModel({
   onReady?: (info: { promoted: number; meshes: number; tris: number }) => void;
 }) {
   const gl = useThree((s) => s.gl);
-  const { scene } = useGLTF(HALL_MODEL_URL, undefined, undefined, (loader) => {
+  // The second argument is `useDraco`, and it must be the local decoder path.
+  //
+  // Leaving it undefined does NOT mean "leave Draco alone" — drei defaults it
+  // to true and then attaches its own DRACOLoader pointed at
+  // https://www.gstatic.com/draco/..., applied AFTER the extendLoader callback
+  // below. So attachLoaders' setDecoderPath('/draco/') was being silently
+  // overwritten on every mount, the decoder fetch was blocked by our own CSP
+  // (connect-src does not allow gstatic, and should not), and the model never
+  // decoded. The hall rendered nothing on every device, not just mobile.
+  //
+  // Passing the path explicitly makes drei configure its loader against the
+  // copy we already ship in public/draco/.
+  const { scene } = useGLTF(HALL_MODEL_URL, '/draco/', undefined, (loader) => {
     attachLoaders(loader as unknown as GLTFLoader, gl);
   });
 
@@ -112,4 +124,14 @@ export function HallModel({
   return <primitive object={root} />;
 }
 
-useGLTF.preload(HALL_MODEL_URL);
+// No module-scope preload.
+//
+// useGLTF.preload() takes no loader configuration, so it ran with drei's
+// defaults: the gstatic Draco decoder (CSP-blocked) and no KTX2 loader at all.
+// It could never have succeeded — every texture in this GLB is KTX2, and
+// KTX2Loader needs detectSupport(renderer) to pick a transcode target, so it
+// cannot be built before a WebGL context exists.
+//
+// It fired on every page that imports this module, so a route with no 3D on it
+// still paid for a doomed cross-origin request. The component's own useGLTF
+// above is correctly configured and is the only place the model is fetched.
