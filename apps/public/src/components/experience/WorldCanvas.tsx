@@ -26,8 +26,8 @@ import {
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { placeForRoute, type PlaceId } from '@estate/domain/experience/places';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { HallModel } from './HallModel';
@@ -196,6 +196,45 @@ function webglSupported(): boolean {
   }
 }
 
+/**
+ * Reflection environment for the metals, generated on the GPU at runtime.
+ *
+ * This replaces drei's <Environment preset="apartment" />, which is not a local
+ * asset: the preset names an HDRI that drei fetches from raw.githack.com. Our
+ * CSP does not allow that host and must not — so on a phone the request was
+ * refused, the rejection went unhandled, and it took the whole Canvas down with
+ * it. The hall showed its "could not load" fallback while the actual model was
+ * fine. An external dependency for a decorative reflection is a bad trade even
+ * when it works; it puts a third-party CDN on the critical path of the scene.
+ *
+ * RoomEnvironment ships inside three, costs one render into a 256px cube, and
+ * for an interior it is the more correct choice anyway — it is a box of emissive
+ * panels, which is what this room actually is.
+ *
+ * The generated target is disposed on unmount. PMREM targets are float cube
+ * maps and leaking one per navigation would be a real cost on a phone.
+ */
+function RoomEnvironmentMap() {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const room = new RoomEnvironment();
+    const target = pmrem.fromScene(room, 0.04);
+    scene.environment = target.texture;
+
+    return () => {
+      scene.environment = null;
+      target.dispose();
+      room.dispose?.();
+      pmrem.dispose();
+    };
+  }, [gl, scene]);
+
+  return null;
+}
+
 export function WorldCanvas() {
   const pathname = usePathname() || '/';
   const place = placeForRoute(pathname);
@@ -236,7 +275,7 @@ export function WorldCanvas() {
           <Suspense fallback={null}>
             <HallModel />
             {/* Metals need something to reflect or they read as flat paint. */}
-            <Environment preset="apartment" background={false} />
+            <RoomEnvironmentMap />
           </Suspense>
           <Rig place={place} onTier={onTier} />
         </Canvas>

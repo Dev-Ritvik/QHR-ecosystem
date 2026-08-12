@@ -18,8 +18,20 @@ const cspHeader = `
   form-action 'self';
   frame-ancestors 'none';
   worker-src 'self' blob:;
-  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.maptiler.com https://us.i.posthog.com;
+  connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co https://*.maptiler.com https://us.i.posthog.com;
 `.replace(/\s{2,}/g, ' ').trim();
+
+// `blob:` in connect-src is required, not a loosening.
+//
+// GLTFLoader hands each embedded KTX2 texture to KTX2Loader as a blob: URL
+// created from the GLB's own buffer, and the transcoder worker fetches it back.
+// Without this every one of the hall's 28 textures failed with "THREE.
+// GLTFLoader: Couldn't load texture blob:..." and the WASM transcoder then
+// aborted with a LinkError, which read like a corrupt binary but was only the
+// downstream symptom.
+//
+// It grants nothing outward-facing: a blob: URL is same-origin by construction
+// and can only ever address data this page already produced.
 
 /** @type {import("next").NextConfig} */
 const nextConfig = {
