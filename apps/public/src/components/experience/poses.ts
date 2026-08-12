@@ -26,7 +26,13 @@ export interface Pose {
 
 export const POSES: Readonly<Record<PlaceId, Pose>> = {
   // Wide, holding all three tables — the establishing frame.
-  hall: { position: [4.2, 1.65, -4.6], target: [0, 1.5, 0], ease: 1.1 },
+  // VERIFIED by rendering this exact GLB in Blender from this exact pose
+  // (tools/blender/inspect_hall_camera.py). The previous value, [4.2, 1.65,
+  // -4.6] -> [0, 1.5, 0], was a hand-converted Blender coordinate nobody had
+  // ever looked through: it stands beside the staircase with the treads and
+  // balusters filling the entire frame, which is exactly what the first device
+  // test showed. The model, the scale and the loader were all fine.
+  hall: { position: [6.4, 1.65, 0.25], target: [-5.27, 2.04, -0.95], ease: 1.1 },
 
   // Reading distance at the Kartikeya table (S1). Blender (-3.40,-1.90,1.60).
   table: { position: [-3.4, 1.6, 1.9], target: [-5.95, 1.45, 1.9], ease: 0.9 },
