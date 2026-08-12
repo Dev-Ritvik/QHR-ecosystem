@@ -1,3 +1,103 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Type scale
+   ---------------------------------------------------------------------------
+
+   Two tiers, and only two: a serif that carries voice, and a grotesque that
+   carries information. Playfair Display and Inter are what this project is
+   licensed for. The review asked for PP Editorial New / Ogg / Neue Montreal —
+   all commercial licences nobody has bought, and shipping an unlicensed
+   webfont on a client's production site is a real liability, not a detail. The
+   SCALE is what makes type feel considered, and the scale is font-agnostic:
+   swap the two families here and every page follows.
+
+   clamp() rather than breakpoints. A step that jumps at 768px announces the
+   breakpoint; one that scales with the viewport just looks right at every
+   width, which is most of what separates considered typography from a
+   responsive template.
+
+   Ratio is 1.26 — a major third flattened slightly, because a 6.5-step display
+   scale at 1.333 gets shouty on a phone, and this build is judged on the phone.
+   --------------------------------------------------------------------------- */
+:root {
+  --step--1: clamp(0.78rem, 0.76rem + 0.10vw, 0.84rem);
+  --step-0:  clamp(0.94rem, 0.90rem + 0.18vw, 1.05rem);
+  --step-1:  clamp(1.18rem, 1.10rem + 0.38vw, 1.45rem);
+  --step-2:  clamp(1.48rem, 1.32rem + 0.76vw, 2.02rem);
+  --step-3:  clamp(1.86rem, 1.58rem + 1.36vw, 2.82rem);
+  --step-4:  clamp(2.34rem, 1.86rem + 2.30vw, 3.94rem);
+  --step-5:  clamp(2.94rem, 2.14rem + 3.80vw, 5.50rem);
+
+  /* Tracking tightens as size grows — the single most reliable tell of typography
+     that was set rather than defaulted. */
+  --track-display: -0.022em;
+  --track-heading: -0.014em;
+  --track-body: 0em;
+  --track-eyebrow: 0.22em;
+}
+
+.t-display {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--step-5);
+  line-height: 0.98;
+  letter-spacing: var(--track-display);
+  font-weight: 400;
+}
+.t-h1 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--step-4);
+  line-height: 1.04;
+  letter-spacing: var(--track-display);
+  font-weight: 400;
+}
+.t-h2 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--step-3);
+  line-height: 1.1;
+  letter-spacing: var(--track-heading);
+  font-weight: 400;
+}
+.t-h3 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--step-2);
+  line-height: 1.18;
+  letter-spacing: var(--track-heading);
+  font-weight: 400;
+}
+.t-lede {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: var(--step-1);
+  line-height: 1.55;
+  font-weight: 300;
+}
+.t-body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: var(--step-0);
+  line-height: 1.68;
+}
+.t-small {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: var(--step--1);
+  line-height: 1.55;
+}
+.t-eyebrow {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: var(--track-eyebrow);
+  font-weight: 500;
+}
+
+/* Hairlines. The review called the rules above headings too heavy — they were
+   1px at full opacity, which on a dark ground reads as a border rather than a
+   division. A true hairline is sub-pixel and low-contrast. */
+.rule-hair {
+  border: 0;
+  height: 1px;
+  background: rgba(242, 237, 228, 0.12);
+  transform: scaleY(0.5);
+  transform-origin: top;
+}

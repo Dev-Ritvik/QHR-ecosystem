@@ -276,11 +276,21 @@ function webglSupported(): boolean {
  * is a bad loop. Look-dev only; the defaults are what ships.
  */
 const LOOK = {
-  exposure: 1.0,
-  /** scene.environmentIntensity — specular contribution only. */
-  env: 0.25,
-  /** Lifts the instanced ornament, which carries no lightmap. */
-  ambient: 0.35,
+  // 0.32, not 1.0. This is the number that was blowing the room to white.
+  //
+  // The lightmap is multiplied by 4.66 to restore the range the bake was
+  // normalised out of, so the scene arrives at the tone mapper carrying values
+  // around 4-5, not 0-1. ACES then maps ~4.0 to almost pure white. Exposure is
+  // the reciprocal of that gain, so it belongs near 1/4.66 - not at the default
+  // nobody had reconsidered after the lightmap intensity was chosen.
+  //
+  // There is no bloom or post-processing in this scene to blame, and ACES was
+  // already configured. It was arithmetic.
+  exposure: 0.32,
+  /** scene.environmentIntensity — specular response only, never a light source. */
+  env: 0.1,
+  /** Lifts the instanced ornament, which carries no lightmap. Nothing more. */
+  ambient: 0.12,
 };
 
 function useLook() {
@@ -403,6 +413,40 @@ export function WorldCanvas() {
           {look.free ? <FreeCamera /> : <Rig place={place} onTier={onTier} />}
         </Canvas>
       </SceneBoundary>
+
+      {/*
+        The scrim. Copy has to stay legible whatever the camera is looking at,
+        and the room cannot be trusted to be dark behind any particular line.
+
+        Deliberately NOT frosted panels behind each block. Glassmorphism reads
+        as 2021 SaaS and fights the material language of the rest of this build:
+        it announces the UI instead of letting the room hold it. Cinema has been
+        putting titles over image for a century with a graded scrim, and that is
+        what this is — dense where the copy sits, open through the middle so the
+        room is never boxed in.
+
+        Two gradients, not one wash. A flat overlay costs the same contrast
+        everywhere and flattens the depth that justifies having a 3D room at
+        all. The vertical pass protects the top and bottom thirds where headings
+        and footers live; the radial pass keeps the centre clear.
+
+        pointer-events-none: this must never intercept a tap meant for the
+        canvas beneath or the copy above.
+      */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[1]"
+        style={{
+          background:
+            'linear-gradient(to bottom, rgba(6,10,20,0.86) 0%, rgba(6,10,20,0.34) 24%, rgba(6,10,20,0.34) 60%, rgba(6,10,20,0.94) 100%)',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-[1]"
+        style={{
+          background:
+            'radial-gradient(122% 78% at 50% 44%, rgba(6,10,20,0) 0%, rgba(6,10,20,0.30) 60%, rgba(6,10,20,0.70) 100%)',
+        }}
+      />
     </div>
   );
 }
