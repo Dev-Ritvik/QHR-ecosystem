@@ -105,7 +105,25 @@ export function HallModel({
   // Clone so two mounts cannot fight over one object graph. `clone` shares
   // geometry and materials, which is what we want — the promotion guard makes
   // sharing safe and the GPU upload is not duplicated.
-  const root = useMemo(() => scene.clone(true), [scene]);
+  const root = useMemo(() => {
+    const g = scene.clone(true);
+
+    // Drop the model so its lowest point sits on y=0.
+    //
+    // The export's own floor is at y=-3.20 (measured from the POSITION
+    // accessors: y spans -3.20 to 6.42). Every pose in poses.ts was written as
+    // an eye height above a floor at zero, so on device the camera stood 4.85m
+    // up in a room 6.42m tall - level with the chandeliers, looking at the
+    // underside of the stair. Nothing was wrong with the poses or the scale;
+    // they simply disagreed with the model about where the ground was.
+    //
+    // Correcting it here rather than by editing eight poses keeps poses.ts
+    // meaning what it says - 1.65 is eye height - and leaves one number to
+    // change if the model is ever re-exported with its origin on the floor.
+    const box = new THREE.Box3().setFromObject(g);
+    g.position.y = -box.min.y;
+    return g;
+  }, [scene]);
 
   useEffect(() => {
     const promoted = promoteLightmaps(root);
@@ -118,6 +136,33 @@ export function HallModel({
       const g = m.geometry as THREE.BufferGeometry;
       tris += g.index ? g.index.count / 3 : g.attributes.position.count / 3;
     });
+
+    // The scene's real extents, logged once.
+    //
+    // Every camera pose in poses.ts is a Blender coordinate converted by hand,
+    // and there is no way to tell a correct pose from one standing inside a
+    // wall except by knowing how big the room actually is. The first render on
+    // a device came back looking up at the ceiling from under the staircase,
+    // and there was no number anywhere in the app to say whether the camera was
+    // misplaced or the model was a hundred times too large.
+    //
+    // A hall is roughly 12-16 units across if the export is in metres. Anything
+    // near 1200 means the GLB came out in centimetres and every pose - plus the
+    // 60-unit far plane - is wrong by two orders of magnitude.
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    // eslint-disable-next-line no-console
+    console.info(
+      '[hall_ready] meshes=%d tris=%d lightmaps=%d | size %sx%sx%s | centre %s,%s,%s | y %s..%s',
+      meshes,
+      Math.round(tris),
+      promoted,
+      size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2),
+      centre.x.toFixed(2), centre.y.toFixed(2), centre.z.toFixed(2),
+      box.min.y.toFixed(2), box.max.y.toFixed(2),
+    );
+
     onReady?.({ promoted, meshes, tris: Math.round(tris) });
   }, [root, onReady]);
 

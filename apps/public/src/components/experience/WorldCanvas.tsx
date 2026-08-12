@@ -28,6 +28,7 @@ import { usePathname } from 'next/navigation';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { placeForRoute, type PlaceId } from '@estate/domain/experience/places';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { HallModel } from './HallModel';
@@ -51,11 +52,71 @@ function stationOf(o: THREE.Object3D | null): string | null {
 /** Eases the camera toward the current place. Damped rather than tweened so an
  *  interruption mid-move is graceful — a visitor who opens two surfaces quickly
  *  should not see the camera finish a journey they abandoned. */
+/**
+ * Free orbit camera, behind ?free=1.
+ *
+ * Every pose in poses.ts is a Blender coordinate converted by hand, and the
+ * only way to tell a good one from one standing inside a wall is to stand
+ * there and look. Judging that from a phone by editing constants and rebuilding
+ * is a loop measured in minutes per guess.
+ *
+ * With this, the room can be flown around on the device and a working vantage
+ * read straight off the console, which is where the poses should have come from
+ * in the first place. Look-dev only; the scripted rig is what ships.
+ */
+function FreeCamera() {
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+
+  useEffect(() => {
+    let controls: OrbitControls | null = new OrbitControls(camera, gl.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 1.5, 0);
+
+    // Log on release rather than on change: a pose is only interesting once
+    // the camera has stopped, and a per-frame log would bury it.
+    const report = () => {
+      const p = camera.position;
+      const t = controls!.target;
+      // eslint-disable-next-line no-console
+      console.info(
+        '[pose] position: [%s, %s, %s], target: [%s, %s, %s]',
+        p.x.toFixed(2), p.y.toFixed(2), p.z.toFixed(2),
+        t.x.toFixed(2), t.y.toFixed(2), t.z.toFixed(2),
+      );
+    };
+    controls.addEventListener('end', report);
+
+    return () => {
+      controls?.removeEventListener('end', report);
+      controls?.dispose();
+      controls = null;
+    };
+  }, [camera, gl]);
+
+  useFrame(() => {});
+  return null;
+}
+
 function CameraRig({ place }: { place: PlaceId }) {
   const { camera } = useThree();
   const target = useRef(new THREE.Vector3());
   const desired = useRef(new THREE.Vector3());
   const look = useRef(new THREE.Vector3());
+
+  // Seed both vectors from the first pose before any frame runs. `target`
+  // otherwise starts at the world origin, so the opening frames aim at a point
+  // on the floor and swing up — a lurch on entry that reads as a bug rather
+  // than a move.
+  const seeded = useRef(false);
+  if (!seeded.current) {
+    const p = poseFor(place);
+    desired.current.set(...p.position);
+    look.current.set(...p.target);
+    target.current.set(...p.target);
+    seeded.current = true;
+  }
 
   useEffect(() => {
     const p = poseFor(place);
@@ -224,19 +285,21 @@ const LOOK = {
 
 function useLook() {
   const [look, setLook] = useState(LOOK);
+  const [free, setFree] = useState(false);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const num = (k: string, d: number) => {
       const v = parseFloat(q.get(k) ?? '');
       return Number.isFinite(v) ? v : d;
     };
+    setFree(q.get('free') === '1');
     setLook({
       exposure: num('exposure', LOOK.exposure),
       env: num('env', LOOK.env),
       ambient: num('ambient', LOOK.ambient),
     });
   }, []);
-  return look;
+  return { ...look, free };
 }
 
 /**
@@ -337,7 +400,7 @@ export function WorldCanvas() {
             {/* Metals need something to reflect or they read as flat paint. */}
             <RoomEnvironmentMap intensity={look.env} />
           </Suspense>
-          <Rig place={place} onTier={onTier} />
+          {look.free ? <FreeCamera /> : <Rig place={place} onTier={onTier} />}
         </Canvas>
       </SceneBoundary>
     </div>
