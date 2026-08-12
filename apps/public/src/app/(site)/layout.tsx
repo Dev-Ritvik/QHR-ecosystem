@@ -1,5 +1,7 @@
 import { ConsentProvider } from '@/lib/consent/ConsentProvider';
-import { ConsentPanel, PrivacyControl } from '@/components/consent/ConsentPanel';
+import { ConsentPanel } from '@/components/consent/ConsentPanel';
+import { SiteHeader } from '@/components/site/SiteHeader';
+import { SiteFooter } from '@/components/site/SiteFooter';
 import { TelemetryProvider } from '@/lib/telemetry/TelemetryProvider';
 import { MarketingPixels } from '@/lib/marketing/pixels';
 import { PostHogProvider } from './posthog-provider';
@@ -14,14 +16,20 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
     <ConsentProvider>
       <PostHogProvider>
         <TelemetryProvider>
-          <div className="flex flex-col min-h-screen">
-            <div className="flex-1">{children}</div>
-            {/* Withdrawal has to be as easy as granting, so the control lives on
-                every page rather than only wherever a footer eventually lands.
-                This strip is a placeholder for the real footer. */}
-            <footer className="border-t border-neutral-200 px-6 py-5">
-              <PrivacyControl />
-            </footer>
+          {/* Chrome lives in the layout, not the pages. App Router keeps this
+              subtree mounted across every navigation inside the segment, so the
+              header never remounts and the WebGL canvas behind it survives —
+              which is the whole reason the experience is a route group.
+
+              pt-[62px] clears the fixed bar. A fixed header over scrolling
+              content needs the offset somewhere, and putting it here means a
+              page cannot forget it. */}
+          <div className="flex min-h-screen flex-col bg-[#0A1120]">
+            <SiteHeader />
+            <div className="flex-1 pt-[62px]">{children}</div>
+            {/* Withdrawal has to be as easy as granting, so PrivacyControl sits
+                inside the footer, which is on every page. */}
+            <SiteFooter />
           </div>
           <ConsentPanel />
           {/* Renders nothing at all without Marketing consent — no script tag,
