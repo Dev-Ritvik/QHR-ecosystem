@@ -197,6 +197,49 @@ function webglSupported(): boolean {
 }
 
 /**
+ * Exposure budget for the hall.
+ *
+ * The bake was calibrated against a scene that had NO environment at all: the
+ * drei preset it used to reference was fetched from a CDN our CSP blocks, so it
+ * had failed silently since the day it was written. Adding a working
+ * environment therefore added light the lightmap never accounted for, and the
+ * first render on a real device came back blown to white.
+ *
+ * The lightmap is the diffuse lighting and it is already correct. The
+ * environment exists for specular response on the metals, so it is dialled well
+ * below 1 — high enough for a highlight to travel across brass, too low to lift
+ * the whole room a second time.
+ *
+ * Each value is overridable from the query string (?exposure=&env=&ambient=)
+ * because these can only honestly be judged on a phone, and a rebuild per guess
+ * is a bad loop. Look-dev only; the defaults are what ships.
+ */
+const LOOK = {
+  exposure: 1.0,
+  /** scene.environmentIntensity — specular contribution only. */
+  env: 0.25,
+  /** Lifts the instanced ornament, which carries no lightmap. */
+  ambient: 0.35,
+};
+
+function useLook() {
+  const [look, setLook] = useState(LOOK);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const num = (k: string, d: number) => {
+      const v = parseFloat(q.get(k) ?? '');
+      return Number.isFinite(v) ? v : d;
+    };
+    setLook({
+      exposure: num('exposure', LOOK.exposure),
+      env: num('env', LOOK.env),
+      ambient: num('ambient', LOOK.ambient),
+    });
+  }, []);
+  return look;
+}
+
+/**
  * Reflection environment for the metals, generated on the GPU at runtime.
  *
  * This replaces drei's <Environment preset="apartment" />, which is not a local
@@ -214,7 +257,7 @@ function webglSupported(): boolean {
  * The generated target is disposed on unmount. PMREM targets are float cube
  * maps and leaking one per navigation would be a real cost on a phone.
  */
-function RoomEnvironmentMap() {
+function RoomEnvironmentMap({ intensity }: { intensity: number }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
 
@@ -232,6 +275,11 @@ function RoomEnvironmentMap() {
     };
   }, [gl, scene]);
 
+  // Separate effect: retuning intensity must not rebuild the cube map.
+  useEffect(() => {
+    scene.environmentIntensity = intensity;
+  }, [scene, intensity]);
+
   return null;
 }
 
@@ -241,6 +289,7 @@ export function WorldCanvas() {
   const [tier, setTier] = useState<DeviceTier>('mid');
   const [failed, setFailed] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
+  const look = useLook();
 
   // Probed on mount, not during render, so server and first client render agree.
   useEffect(() => setSupported(webglSupported()), []);
@@ -264,18 +313,29 @@ export function WorldCanvas() {
           // A 3x phone screen renders 9x the pixels for no perceptible gain on
           // a scene this dark, and it is the single biggest mobile cost.
           dpr={[1, tier === 'high' ? 2 : 1.5]}
-          gl={{ antialias: tier !== 'low', powerPreference: 'high-performance' }}
+          gl={{
+            antialias: tier !== 'low',
+            powerPreference: 'high-performance',
+            // Stated rather than left to the default. The room is lit almost
+            // entirely by a baked lightmap at 4.66x, so exposure is the one
+            // knob that moves the whole image, and it should be visible here
+            // next to the rest of the look budget instead of implied.
+            toneMapping: THREE.ACESFilmicToneMapping,
+          }}
+          onCreated={({ gl }) => {
+            gl.toneMappingExposure = look.exposure;
+          }}
           camera={{ position: [4.2, 1.65, -4.6], fov: 45, near: 0.1, far: 60 }}
         >
           <color attach="background" args={['#0A1120']} />
           {/* GI is baked into the lightmap. A real-time rig would double-count
               it; this only lifts the instanced ornament, which carries no
               lightmap because instancing and per-placement UVs are exclusive. */}
-          <ambientLight intensity={0.35} />
+          <ambientLight intensity={look.ambient} />
           <Suspense fallback={null}>
             <HallModel />
             {/* Metals need something to reflect or they read as flat paint. */}
-            <RoomEnvironmentMap />
+            <RoomEnvironmentMap intensity={look.env} />
           </Suspense>
           <Rig place={place} onTier={onTier} />
         </Canvas>
