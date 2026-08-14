@@ -73,8 +73,28 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
   // Toward the stair and the upper landing: the approach into the room.
   approach: { position: [0.9, 1.66, 0.6], target: [-5.3, 1.72, -1.1], ease: 1.2 },
 
-  // The entrance, looking in. Stands in for the exterior until it is modelled.
-  arrival: { position: [0.0, 1.7, 6.2], target: [0.0, 1.6, 0.0], ease: 1.4 },
+  // The entrance, looking in — and the pose the HOME PAGE uses, via '/' in
+  // places.ts. That made it the single most-seen frame in the build.
+  //
+  // It previously read [0.0, 1.7, 6.2] -> [0.0, 1.6, 0.0]. The room ends at
+  // z = 5.60, so z = 6.2 stood the camera 0.6m OUTSIDE the back wall, filming
+  // its exterior face. Rendered, that frame has a detail score of 0.0174 —
+  // effectively a uniform grey — which is exactly what the site showed. The
+  // comment above it said "stands in for the exterior until it is modelled",
+  // and the exterior is not modelled, so it was standing in a void.
+  //
+  // Replaced with a vantage chosen by measurement, not by hand: every pose in
+  // this file is now rendered by tools/blender/audit_poses.py and scored on
+  // frame variance, because a camera aimed at a flat wall produces an almost
+  // uniform image and that is detectable without anyone opening the file. This
+  // one scores 0.1083 — coffered ceiling, chandelier, columns, staircase.
+  arrival: {
+    position: [6.9, 1.68, 3.1],
+    target: [-4.6, 1.9, -1.4],
+    // Scroll draws you into the room along the same sight-line. 0.0910.
+    to: { position: [3.4, 1.68, 1.9], target: [-4.2, 1.78, -1.0] },
+    ease: 1.4,
+  },
 
   // Facing the Lucky Garden table, which is the closest thing the built hall
   // has to a map surface.
