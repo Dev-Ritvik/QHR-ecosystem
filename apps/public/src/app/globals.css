@@ -101,3 +101,26 @@
   transform: scaleY(0.5);
   transform-origin: top;
 }
+
+/* Placeholder sheen. Slow and low-contrast on purpose: a shimmer that reads as
+   "loading" belongs on a feed, not on a card that may sit unfilled for weeks
+   while photography is commissioned. This is closer to light moving across
+   paper. Respects reduced-motion, because a permanent looping animation is
+   exactly what that preference exists to stop. */
+.qhr-sheen {
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(242, 237, 228, 0.05) 48%,
+    transparent 66%
+  );
+  background-size: 220% 100%;
+  animation: qhr-sheen 7s ease-in-out infinite;
+}
+@keyframes qhr-sheen {
+  0%   { background-position: 150% 0; }
+  100% { background-position: -50% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qhr-sheen { animation: none; }
+}

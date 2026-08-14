@@ -30,58 +30,87 @@ export default async function SiteHomePage() {
   const soldOutProjects = projects.filter((p: any) => p.isSoldOut);
 
   return (
-    <main className="max-w-7xl mx-auto px-6 py-16 md:py-24">
+    // Asymmetric on purpose. A centred max-width column with three equal cards
+    // under it is the shape every template ships with; holding the copy to the
+    // left seven columns and letting the right breathe is what gives the page
+    // tension rather than symmetry.
+    <main className="mx-auto max-w-6xl px-6 pb-28 pt-20 md:pt-28">
       <RouteTelemetry routeId="site-home" />
-      <header className="mb-16 md:mb-24">
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif tracking-tight text-gray-900 mb-6">
-          Land, in the districts we come from
-        </h1>
-        <p className="text-lg text-gray-600 max-w-2xl font-sans leading-relaxed">
-          Approved plotted layouts in Vizianagaram and Srikakulam, developed and
-          sold directly by Quality Homes Reality. Every sanctioned plan is
-          published in full below — sizes exactly as drawn, and the rate for the
-          size you want from the office that holds the site.
-        </p>
-        <p className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <Link
-            href="/start-here"
-            className="uppercase tracking-[0.14em] text-gray-500 underline-offset-4 hover:text-gray-900 hover:underline"
-          >
-            In a hurry? Start here
-          </Link>
-          <Link
-            href="/hall"
-            className="uppercase tracking-[0.14em] text-gray-500 underline-offset-4 hover:text-gray-900 hover:underline"
-          >
-            See the layouts raised
-          </Link>
-        </p>
+
+      <header className="grid gap-10 md:grid-cols-12">
+        <div className="md:col-span-7">
+          {/* t-display, not an ad-hoc text-4xl/5xl/6xl ladder. The scale is
+              fluid via clamp(), so it never jumps at a breakpoint. */}
+          <h1 className="t-display text-[#F2EDE4]">
+            Land, in the districts
+            <br className="hidden sm:block" /> we come from
+          </h1>
+          <p className="t-lede mt-8 max-w-xl text-[#F2EDE4]/70">
+            Approved plotted layouts in Vizianagaram and Srikakulam, developed
+            and sold directly by Quality Homes Reality. Every sanctioned plan is
+            published in full below &mdash; sizes exactly as drawn, and the rate
+            for the size you want from the office that holds the site.
+          </p>
+          <p className="mt-10 flex flex-wrap gap-x-8 gap-y-3">
+            <Link
+              href="/start-here"
+              className="t-eyebrow group inline-flex items-center gap-2 text-[#E8B98A] transition-colors hover:text-[#F2EDE4]"
+            >
+              In a hurry? Start here
+              <span aria-hidden className="transition-transform group-hover:translate-x-1">
+                &rarr;
+              </span>
+            </Link>
+            <Link
+              href="/hall"
+              className="t-eyebrow group inline-flex items-center gap-2 text-[#F2EDE4]/45 transition-colors hover:text-[#F2EDE4]"
+            >
+              See the layouts raised
+              <span aria-hidden className="transition-transform group-hover:translate-x-1">
+                &rarr;
+              </span>
+            </Link>
+          </p>
+        </div>
       </header>
 
       {projects.length === 0 ? (
-        <div className="py-24 text-center border border-dashed border-gray-200 rounded-sm bg-gray-50/50">
-          <p className="text-gray-500 font-medium tracking-wide">No projects are currently available.</p>
-          <p className="text-gray-400 text-sm mt-2">Check back soon for new inventory.</p>
+        <div className="mt-24 border-t border-white/10 pt-16">
+          <p className="t-h3 text-[#F2EDE4]/70">No layouts are open right now.</p>
+          <p className="t-body mt-3 text-[#F2EDE4]/45">
+            Ask the head office what is coming — new layouts are released before
+            they reach this page.
+          </p>
         </div>
       ) : (
-        <div className="space-y-24">
+        <div className="mt-24 space-y-24">
           {availableProjects.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-16">
-              {availableProjects.map((project: any) => (
-                <ProjectCard key={project.projectId} project={project} />
+            // Deliberately not three equal columns. The first card takes seven
+            // of twelve and the other two stack beside it, so the grid has a
+            // subject rather than a row of equals.
+            <div className="grid gap-x-8 gap-y-12 md:grid-cols-12">
+              {availableProjects.map((project: any, i: number) => (
+                <div
+                  key={project.projectId}
+                  className={i === 0 ? 'md:col-span-7' : 'md:col-span-5'}
+                >
+                  <ProjectCard project={project} />
+                </div>
               ))}
             </div>
           )}
 
           {soldOutProjects.length > 0 && (
             <section>
-              <div className="flex items-center space-x-6 mb-10">
-                <h2 className="text-2xl font-serif text-gray-400">Sold out</h2>
-                <div className="flex-grow h-px bg-gray-100"></div>
+              <div className="mb-10 flex items-baseline gap-6">
+                <h2 className="t-eyebrow text-[#F2EDE4]/40">Sold out</h2>
+                <hr className="rule-hair flex-1" />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-16 opacity-80">
+              <div className="grid gap-x-8 gap-y-12 opacity-70 md:grid-cols-12">
                 {soldOutProjects.map((project: any) => (
-                  <ProjectCard key={project.projectId} project={project} />
+                  <div key={project.projectId} className="md:col-span-5">
+                    <ProjectCard project={project} />
+                  </div>
                 ))}
               </div>
             </section>

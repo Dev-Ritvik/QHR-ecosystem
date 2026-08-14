@@ -105,7 +105,7 @@ const PROJECTS: ProjectSpec[] = [
     approvalNumber: 'VMRDA approved layout',
     reraNumber: null,
     amenities: ['40ft blacktop roads', '30ft internal roads', 'street lighting', 'underground drainage', 'avenue plantation'],
-    hero: '/downloads/kartikeya-water-front-layout.pdf',
+    hero: '/gallery/kartikeya-layout.jpg',
     plots: [
       { label: "30' x 50'", sqYd: sqYd(30, 50), count: 38 },
       { label: "30' x 56'", sqYd: sqYd(30, 56), count: 37 },
@@ -126,7 +126,7 @@ const PROJECTS: ProjectSpec[] = [
     approvalNumber: 'See approval block on the sanctioned layout plan',
     reraNumber: null,
     amenities: ['20ft internal roads', 'demarcated plots', 'future extension reserved'],
-    hero: '/downloads/lucky-garden-layout.pdf',
+    hero: '/gallery/lucky-garden-layout.jpg',
     plots: [
       { label: "15' x 60'", sqYd: sqYd(15, 60), count: 91 },
       { label: "18' x 60'", sqYd: sqYd(18, 60), count: 90 },
@@ -146,7 +146,7 @@ const PROJECTS: ProjectSpec[] = [
     approvalNumber: 'F.L.P. No. 10/2025/1178/DTCP/DPMS',
     reraNumber: null,
     amenities: ['40ft internal roads', 'SUDA approved', 'open space to sanctioned plan'],
-    hero: '/downloads/vsr-gayatri-township-layout.pdf',
+    hero: '/gallery/gayatri-layout.jpg',
     plots: [{ label: "60' x 30'", sqYd: sqYd(60, 30), count: 113 }],
     soldCount: 0,
   },
@@ -285,10 +285,15 @@ async function main() {
            'on_request', now(), ${owner.id}::uuid)
       `);
 
-      // The publish gate requires a hero. Site photography does not exist yet
-      // (PROGRESS.md), so the approved layout plan stands in. It is the real
-      // drawing rather than stock imagery, which is the same rule /gallery
-      // follows.
+      // The publish gate requires a hero, and site photography still does not
+      // exist. The approved layout plan stands in — the real drawing rather
+      // than stock imagery, the same rule /gallery follows.
+      //
+      // It must be a RASTER. This previously pointed at the layout PDF, which
+      // a browser cannot render inside an <img>, so every project card on the
+      // home page fell back to showing its alt text. The publish gate only
+      // checks that a hero row exists, not that the file is displayable, so
+      // nothing caught it until a card was looked at.
       await tx.execute(sql`
         INSERT INTO core.media (project_id, kind, status, storage_path, variants, alt_text, uploaded_by_id)
         VALUES (${p.id}::uuid, 'hero', 'ready', ${p.hero},
