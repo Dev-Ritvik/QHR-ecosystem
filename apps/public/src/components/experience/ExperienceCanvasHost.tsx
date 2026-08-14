@@ -13,6 +13,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { SmoothScroll } from './SmoothScroll';
 
 const ExperienceCanvas = dynamic(
   () => import('./WorldCanvas').then((m) => m.WorldCanvas),
@@ -22,6 +23,20 @@ const ExperienceCanvas = dynamic(
   },
 );
 
+// Split from the canvas import on purpose: the counter must be on screen while
+// the WebGL bundle itself is still downloading, so it cannot live behind the
+// same ssr:false boundary it is covering for.
+const ExperiencePreloader = dynamic(
+  () => import('./Preloader').then((m) => m.Preloader),
+  { ssr: false },
+);
+
 export function ExperienceCanvasHost() {
-  return <ExperienceCanvas />;
+  return (
+    <>
+      <SmoothScroll />
+      <ExperienceCanvas />
+      <ExperiencePreloader />
+    </>
+  );
 }

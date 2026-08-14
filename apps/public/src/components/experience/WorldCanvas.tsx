@@ -39,6 +39,18 @@ import { useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { telemetry } from '@/lib/telemetry/collector';
 
+/**
+ * Scrub, in seconds per unit of a pose's `ease` — the lag between where scroll
+ * says the camera should be and where it actually is.
+ *
+ * 2.2 puts `arrival` (ease 1.4) at ~3.1s, matching the reference build's
+ * scrub: 3 on its main scrubbed timeline. Deliberately heavy: the camera should
+ * still be settling for a beat after the wheel stops. That trailing motion is
+ * most of what separates a cinematic move from a scrollbar attached to a
+ * viewport.
+ */
+const SCRUB = 2.2;
+
 const STATION_RE = /^holo3d_(S[123])_/;
 
 function stationOf(o: THREE.Object3D | null): string | null {
@@ -160,7 +172,15 @@ function CameraRig({ place }: { place: PlaceId }) {
     // Frame-rate independent: a fixed lerp factor would travel twice as far per
     // second at 120fps as at 60, which is how a move tuned on a desktop ends up
     // sluggish on the phones this has to serve.
-    const k = 1 - Math.exp(-delta / Math.max(0.05, p.ease / 3));
+    //
+    // The time constant IS `scrub`. GSAP's scrub:3 means the tween takes ~3s to
+    // catch up to where scroll says it should be, which is a first-order lag —
+    // exactly this expression. It was ease/3, so `arrival` lagged by 0.47s:
+    // fast enough that the camera arrived with the scroll rather than trailing
+    // it, which is the "rigid, mechanical" reading. At SCRUB 2.2 the same pose
+    // lags 3.1s and the room keeps moving after the wheel stops, which is the
+    // whole effect.
+    const k = 1 - Math.exp(-delta / Math.max(0.05, p.ease * SCRUB));
     camera.position.lerp(desired.current, k);
     target.current.lerp(look.current, k);
     camera.lookAt(target.current);

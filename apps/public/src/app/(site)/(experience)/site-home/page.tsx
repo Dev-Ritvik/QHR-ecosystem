@@ -30,15 +30,32 @@ export default async function SiteHomePage() {
   const soldOutProjects = projects.filter((p: any) => p.isSoldOut);
 
   return (
-    // Asymmetric on purpose. A centred max-width column with three equal cards
-    // under it is the shape every template ships with; holding the copy to the
-    // left seven columns and letting the right breathe is what gives the page
-    // tension rather than symmetry.
-    <main className="mx-auto max-w-6xl px-6 pb-28 pt-20 md:pt-28">
+    // THE SCROLL TRACK.
+    //
+    // min-h-[10000px] is load-bearing, not padding. The camera dolly is 12
+    // metres of travel mapped onto document scroll progress, and this page used
+    // to be 2,514px — about 3.5 viewports — so the entire move was crammed into
+    // ~1,800px of wheel. That is why it read as frantic rather than cinematic,
+    // and why the layout sheets collided with the architecture: there was no
+    // room between sections for either to breathe.
+    //
+    // The reference build runs 10,800px (15 viewports) for far LESS motion than
+    // this. The floor here guarantees the minimum regardless of how many
+    // projects are published, so a quiet month cannot silently re-compress the
+    // pacing back to where it was.
+    //
+    // Every section below is sized in vh and the cards are sticky, so the extra
+    // distance is spent holding a frame while the camera moves through it —
+    // not on empty space.
+    <main className="min-h-[10000px] pb-40">
       <RouteTelemetry routeId="site-home" />
 
-      <header className="grid gap-10 md:grid-cols-12">
-        <div className="md:col-span-7">
+      {/* Copy sits in the LEFT half throughout. The arrival pose aims left of
+          the mansion, putting the building right-of-centre, so the left is the
+          half of the frame that is deliberately empty. Cards and headings live
+          there; the architecture is never covered. */}
+      <header className="mx-auto grid min-h-[130vh] max-w-6xl grid-cols-12 gap-10 px-6 pt-[22vh]">
+        <div className="col-span-12 md:col-span-6">
           {/* t-display, not an ad-hoc text-4xl/5xl/6xl ladder. The scale is
               fluid via clamp(), so it never jumps at a breakpoint. */}
           <h1 className="t-display text-[#F2EDE4]">
@@ -75,7 +92,7 @@ export default async function SiteHomePage() {
       </header>
 
       {projects.length === 0 ? (
-        <div className="mt-24 border-t border-white/10 pt-16">
+        <div className="mx-auto max-w-6xl px-6 pt-[20vh]">
           <p className="t-h3 text-[#F2EDE4]/70">No layouts are open right now.</p>
           <p className="t-body mt-3 text-[#F2EDE4]/45">
             Ask the head office what is coming — new layouts are released before
@@ -83,39 +100,57 @@ export default async function SiteHomePage() {
           </p>
         </div>
       ) : (
-        <div className="mt-24 space-y-24">
-          {availableProjects.length > 0 && (
-            // Deliberately not three equal columns. The first card takes seven
-            // of twelve and the other two stack beside it, so the grid has a
-            // subject rather than a row of equals.
-            <div className="grid gap-x-8 gap-y-12 md:grid-cols-12">
-              {availableProjects.map((project: any, i: number) => (
-                <div
-                  key={project.projectId}
-                  className={i === 0 ? 'md:col-span-7' : 'md:col-span-5'}
-                >
+        <>
+          {/*
+            One project per section, each 380vh tall with the card STICKY.
+
+            The card holds still in the left half while ~3.8 viewports of scroll
+            pass underneath it, and the camera keeps travelling the whole time.
+            That is where the extra page height goes: the visitor is not
+            scrolling past empty space, they are holding one plan while the
+            building moves behind it.
+
+            It also makes the collision structurally impossible. Only one card
+            is ever on screen, and it is confined to the half of the frame the
+            camera deliberately leaves empty. Previously three cards shared one
+            grid and the middle one landed straight over the portico.
+          */}
+          {availableProjects.map((project: any) => (
+            <section
+              key={project.projectId}
+              className="mx-auto grid min-h-[380vh] max-w-6xl grid-cols-12 px-6"
+            >
+              <div className="col-span-12 md:col-span-6">
+                <div className="sticky top-[16vh]">
                   <ProjectCard project={project} />
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            </section>
+          ))}
 
           {soldOutProjects.length > 0 && (
-            <section>
-              <div className="mb-10 flex items-baseline gap-6">
-                <h2 className="t-eyebrow text-[#F2EDE4]/40">Sold out</h2>
-                <hr className="rule-hair flex-1" />
-              </div>
-              <div className="grid gap-x-8 gap-y-12 opacity-70 md:grid-cols-12">
-                {soldOutProjects.map((project: any) => (
-                  <div key={project.projectId} className="md:col-span-5">
-                    <ProjectCard project={project} />
+            <section className="mx-auto grid min-h-[260vh] max-w-6xl grid-cols-12 px-6">
+              <div className="col-span-12 md:col-span-6">
+                <div className="sticky top-[16vh]">
+                  <div className="mb-10 flex items-baseline gap-6">
+                    <h2 className="t-eyebrow text-[#F2EDE4]/40">Sold out</h2>
+                    <hr className="rule-hair flex-1" />
                   </div>
-                ))}
+                  <div className="space-y-12 opacity-70">
+                    {soldOutProjects.map((project: any) => (
+                      <ProjectCard key={project.projectId} project={project} />
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
           )}
-        </div>
+
+          {/* The last stretch carries no copy at all. The camera finishes its
+              approach at the portico here, and the frame is allowed to be the
+              only thing on screen before the footer arrives. */}
+          <div aria-hidden className="min-h-[130vh]" />
+        </>
       )}
     </main>
   );

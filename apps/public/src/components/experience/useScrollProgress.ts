@@ -22,6 +22,7 @@
 // Returns a ref, not a value, precisely so that reading it cannot re-render.
 
 import { useEffect, useRef } from 'react';
+import { lenisInstance } from './SmoothScroll';
 
 export function useScrollProgress() {
   const progress = useRef(0);
@@ -38,7 +39,13 @@ export function useScrollProgress() {
     };
 
     const read = () => {
-      const y = window.scrollY || document.documentElement.scrollTop || 0;
+      // Lenis's smoothed position when it is running, the raw scrollbar when it
+      // is not (reduced-motion, or before it mounts). window.scrollY lags
+      // Lenis's own transform by design, so reading it here would hand the
+      // camera the staircase Lenis exists to remove.
+      const y =
+        lenisInstance?.scroll ??
+        (window.scrollY || document.documentElement.scrollTop || 0);
       progress.current = Math.min(1, Math.max(0, y / max));
     };
 
