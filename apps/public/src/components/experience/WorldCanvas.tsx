@@ -32,8 +32,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { placeForRoute, type PlaceId } from '@estate/domain/experience/places';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { HallModel } from './HallModel';
+import { ExteriorModel } from './ExteriorModel';
 import { useDeviceTier } from './useDeviceTier';
-import { poseFor } from './poses';
+import { poseFor, setFor, type SceneSet } from './poses';
 import { useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { telemetry } from '@/lib/telemetry/collector';
@@ -305,48 +306,189 @@ function webglSupported(): boolean {
  * because these can only honestly be judged on a phone, and a rebuild per guess
  * is a bad loop. Look-dev only; the defaults are what ships.
  */
-const LOOK = {
-  // 0.6. Two corrections in, and the second overshot.
-  //
-  // 1.0 blew the room to white. 0.32 was derived as the reciprocal of the 4.66x
-  // lightmap gain, which is right in isolation and wrong in context: it was set
-  // at the same time as a scrim that darkens the middle of the frame by another
-  // ~54%. Multiplied together the room disappeared, and the home page looked
-  // like it had no 3D in it at all. Two fixes for one symptom, each reasonable
-  // alone, compounding into the opposite failure.
-  //
-  // The lightmap is multiplied by 4.66 to restore the range the bake was
-  // normalised out of, so the scene arrives at the tone mapper carrying values
-  // around 4-5, not 0-1. ACES then maps ~4.0 to almost pure white. Exposure is
-  // the reciprocal of that gain, so it belongs near 1/4.66 - not at the default
-  // nobody had reconsidered after the lightmap intensity was chosen.
-  //
-  // There is no bloom or post-processing in this scene to blame, and ACES was
-  // already configured. It was arithmetic.
-  exposure: 0.6,
-  /** scene.environmentIntensity — specular response only, never a light source. */
-  env: 0.1,
-  /** Lifts the instanced ornament, which carries no lightmap. Nothing more. */
-  ambient: 0.12,
+const LOOK: Record<SceneSet, { exposure: number; env: number; ambient: number }> = {
+  interior: {
+    // 0.6. Two corrections in, and the second overshot.
+    //
+    // 1.0 blew the room to white. 0.32 was derived as the reciprocal of the
+    // 4.66x lightmap gain, which is right in isolation and wrong in context: it
+    // was set at the same time as a scrim that darkens the middle of the frame
+    // by another ~54%. Multiplied together the room disappeared, and the home
+    // page looked like it had no 3D in it at all. Two fixes for one symptom,
+    // each reasonable alone, compounding into the opposite failure.
+    //
+    // The lightmap is multiplied by 4.66 to restore the range the bake was
+    // normalised out of, so the scene arrives at the tone mapper carrying
+    // values around 4-5, not 0-1. ACES then maps ~4.0 to almost pure white.
+    // Exposure is the reciprocal of that gain.
+    //
+    // There is no bloom or post-processing in this scene to blame, and ACES was
+    // already configured. It was arithmetic.
+    exposure: 0.6,
+    /** scene.environmentIntensity — specular response only, never a light source. */
+    env: 0.1,
+    /** Lifts the instanced ornament, which carries no lightmap. Nothing more. */
+    ambient: 0.12,
+  },
+  exterior: {
+    // Unit exposure, because there is no lightmap gain to undo here. The
+    // interior's 0.6 exists solely to cancel a 4.66x multiplier that this set
+    // does not have; applying it out here would darken the facade for no
+    // reason. Different model, different grade — which is why the look budget
+    // is keyed by set rather than shared.
+    exposure: 1.0,
+    /** Higher than the interior: the glass and the fountain water are
+     *  transmissive and have nothing to refract without an environment. */
+    env: 0.45,
+    /** Low. The sky comes from the hemisphere light, which is directional
+     *  enough to keep the underside of the cornice from going flat. */
+    ambient: 0.06,
+  },
 };
 
-function useLook() {
-  const [look, setLook] = useState(LOOK);
+/**
+ * Clip planes, per set.
+ *
+ * The exterior ground plane is 450m square and the camera stands 30m out, so
+ * the interior's far:60 would cut the lawn off mid-frame and clip the spire on
+ * approach. Near moves out to 0.5 to buy back some of the depth precision that
+ * a 1200:1 range costs — there is nothing within half a metre of an outdoor
+ * camera that stands on an open axis.
+ */
+const CLIP: Record<SceneSet, { near: number; far: number }> = {
+  interior: { near: 0.1, far: 60 },
+  exterior: { near: 0.5, far: 600 },
+};
+
+/**
+ * Legibility scrim, per set — and much lighter outside than it used to be.
+ *
+ * The review was right that a heavy DOM gradient is a band-aid, and the fix it
+ * asked for is the one applied here: the contrast is now made in WebGL. The
+ * exterior renders at dusk against a #0A1120 sky, with fog from 34m matched to
+ * that same colour. The top of the frame is therefore GENUINELY dark — it is
+ * sky, not an overlay — and the distance behind the building falls away on its
+ * own. So the exterior's top stop drops from 0.80 to 0.28 and the radial pass
+ * is nearly gone.
+ *
+ * It is not deleted, and claiming otherwise would be dishonest. The bottom
+ * eighth still darkens, because the lawn in the near field is a mid-value
+ * surface and the footer sits directly on it; no amount of scene lighting fixes
+ * white text on a lit lawn without also ruining the lawn. That residue is the
+ * honest minimum, not a substitute for grading the scene.
+ *
+ * The interior keeps the heavier pass. It is a lightmapped room with bright
+ * marble and brass and no sky to sit copy against.
+ *
+ * Deliberately NOT frosted panels behind each block. Glassmorphism reads as
+ * 2021 SaaS and fights the material language of the rest of this build: it
+ * announces the UI instead of letting the scene hold it. Cinema has put titles
+ * over image for a century with a graded scrim.
+ */
+const SCRIM: Record<SceneSet, { linear: string; radial: string }> = {
+  exterior: {
+    linear:
+      'linear-gradient(to bottom, rgba(6,10,20,0.28) 0%, rgba(6,10,20,0) 18%, rgba(6,10,20,0) 62%, rgba(6,10,20,0.82) 100%)',
+    radial:
+      'radial-gradient(130% 88% at 50% 42%, rgba(6,10,20,0) 0%, rgba(6,10,20,0) 62%, rgba(6,10,20,0.22) 100%)',
+  },
+  interior: {
+    linear:
+      'linear-gradient(to bottom, rgba(6,10,20,0.80) 0%, rgba(6,10,20,0.10) 22%, rgba(6,10,20,0.10) 58%, rgba(6,10,20,0.88) 100%)',
+    radial:
+      'radial-gradient(126% 82% at 50% 44%, rgba(6,10,20,0) 0%, rgba(6,10,20,0.12) 58%, rgba(6,10,20,0.46) 100%)',
+  },
+};
+
+function useLook(set: SceneSet) {
+  const base = LOOK[set];
+  const [override, setOverride] = useState<Partial<typeof base>>({});
   const [free, setFree] = useState(false);
+
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    const num = (k: string, d: number) => {
+    const num = (k: string) => {
       const v = parseFloat(q.get(k) ?? '');
-      return Number.isFinite(v) ? v : d;
+      return Number.isFinite(v) ? v : undefined;
     };
     setFree(q.get('free') === '1');
-    setLook({
-      exposure: num('exposure', LOOK.exposure),
-      env: num('env', LOOK.env),
-      ambient: num('ambient', LOOK.ambient),
-    });
+    // Only keys actually present in the query string override, so switching
+    // sets still picks up that set's defaults for everything untouched.
+    const next: Partial<typeof base> = {};
+    const e = num('exposure'); if (e !== undefined) next.exposure = e;
+    const v = num('env'); if (v !== undefined) next.env = v;
+    const a = num('ambient'); if (a !== undefined) next.ambient = a;
+    setOverride(next);
   }, []);
-  return { ...look, free };
+
+  return { ...base, ...override, free };
+}
+
+/**
+ * Dusk key light for the exterior.
+ *
+ * The facade has no baked lighting, so without this it is flat cream paint. A
+ * single low warm key raking from the front-left is what gives the portico
+ * columns their relief and separates the cornice from the wall behind it.
+ *
+ * The fog is doing real work beyond atmosphere: it is what the client asked for
+ * when they said the contrast should be fixed in WebGL rather than with a DOM
+ * gradient. Matched to the background colour, it fades the 450m ground plane
+ * into the sky so the scene stops being a diorama on a table, and it darkens
+ * everything past the building — which is exactly the part of the frame the
+ * headings sit over.
+ */
+function ExteriorLighting() {
+  const scene = useThree((s) => s.scene);
+
+  useEffect(() => {
+    const prev = scene.fog;
+    scene.fog = new THREE.Fog('#0A1120', 34, 190);
+    return () => {
+      scene.fog = prev;
+    };
+  }, [scene]);
+
+  return (
+    <>
+      {/* Warm, low, front-left. Angled off the entry axis so the elevation is
+          lit across rather than head-on, which would flatten it again. */}
+      <directionalLight position={[-42, 30, 52]} intensity={2.3} color="#FFD7B0" />
+      {/* Cool fill from the sky, warm bounce from the ground. Cheaper than a
+          second key and it keeps the shadowed side from reading as black. */}
+      <hemisphereLight args={['#5C7099', '#1A1512', 0.55]} />
+    </>
+  );
+}
+
+/** Clip planes have to be pushed onto the live camera and the projection matrix
+ *  rebuilt; passing them to <Canvas> only seeds the first one. */
+function CameraClipping({ set }: { set: SceneSet }) {
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
+  useEffect(() => {
+    camera.near = CLIP[set].near;
+    camera.far = CLIP[set].far;
+    camera.updateProjectionMatrix();
+  }, [camera, set]);
+  return null;
+}
+
+/**
+ * Exposure, applied on every change rather than once at creation.
+ *
+ * <Canvas onCreated> fires a single time for the life of the canvas, and this
+ * canvas deliberately never unmounts — that is the whole reason the experience
+ * is a route group. So an exposure set there is the FIRST route's exposure
+ * forever. With two sets that need 1.0 and 0.6, navigating from the lawn to the
+ * hall would have carried 1.0 onto a surface already multiplied by 4.66, which
+ * is the exact blown-to-white failure this project has been rejected for once.
+ */
+function Exposure({ value }: { value: number }) {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    gl.toneMappingExposure = value;
+  }, [gl, value]);
+  return null;
 }
 
 /**
@@ -399,7 +541,9 @@ export function WorldCanvas() {
   const [tier, setTier] = useState<DeviceTier>('mid');
   const [failed, setFailed] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
-  const look = useLook();
+  // Which model this route needs. '/' is 'arrival', which is now OUTSIDE.
+  const set = setFor(place);
+  const look = useLook(set);
 
   // Probed on mount, not during render, so server and first client render agree.
   useEffect(() => setSupported(webglSupported()), []);
@@ -435,16 +579,29 @@ export function WorldCanvas() {
           onCreated={({ gl }) => {
             gl.toneMappingExposure = look.exposure;
           }}
-          camera={{ position: [4.2, 1.65, -4.6], fov: 45, near: 0.1, far: 60 }}
+          // Seeded on the exterior axis, because that is where the site opens.
+          // CameraRig takes over on the first frame; this only avoids one frame
+          // rendered from the old interior default while it settles.
+          camera={{ position: [0, 1.65, 30], fov: 45, ...CLIP.exterior }}
         >
           <color attach="background" args={['#0A1120']} />
-          {/* GI is baked into the lightmap. A real-time rig would double-count
-              it; this only lifts the instanced ornament, which carries no
-              lightmap because instancing and per-placement UVs are exclusive. */}
+          <CameraClipping set={set} />
+          <Exposure value={look.exposure} />
+          {/* Inside: GI is baked into the lightmap, so a real-time rig would
+              double-count it and this only lifts the instanced ornament, which
+              carries no lightmap because instancing and per-placement UVs are
+              exclusive. Outside: kept very low, because the sky is the
+              hemisphere light and a flat ambient would cancel the relief the
+              key light exists to create. */}
           <ambientLight intensity={look.ambient} />
+          {set === 'exterior' && <ExteriorLighting />}
           <Suspense fallback={null}>
-            <HallModel />
-            {/* Metals need something to reflect or they read as flat paint. */}
+            {/* One set at a time. Both are ~2.3MB and 15MB respectively, and
+                holding the hall in memory while standing on the lawn buys
+                nothing — drei caches the parse, so coming back is instant. */}
+            {set === 'exterior' ? <ExteriorModel /> : <HallModel />}
+            {/* Metals need something to reflect or they read as flat paint;
+                outside, the glass and fountain water need it to refract. */}
             <RoomEnvironmentMap intensity={look.env} />
           </Suspense>
           {look.free ? <FreeCamera /> : <Rig place={place} onTier={onTier} />}
@@ -452,43 +609,17 @@ export function WorldCanvas() {
       </SceneBoundary>
 
       {/*
-        The scrim, retuned. It was set against a scene rendering at exposure
-        0.32 and was far too heavy once that was corrected — 34% flat opacity
-        across the middle of the frame is enough to hide a room entirely.
-        The middle is now 10%, so the room is genuinely visible; the top and
-        bottom stay dense because that is where headings and the footer sit.
-
-        Copy has to stay legible whatever the camera is looking at,
-        and the room cannot be trusted to be dark behind any particular line.
-
-        Deliberately NOT frosted panels behind each block. Glassmorphism reads
-        as 2021 SaaS and fights the material language of the rest of this build:
-        it announces the UI instead of letting the room hold it. Cinema has been
-        putting titles over image for a century with a graded scrim, and that is
-        what this is — dense where the copy sits, open through the middle so the
-        room is never boxed in.
-
-        Two gradients, not one wash. A flat overlay costs the same contrast
-        everywhere and flattens the depth that justifies having a 3D room at
-        all. The vertical pass protects the top and bottom thirds where headings
-        and footers live; the radial pass keeps the centre clear.
-
+        The scrim, now carrying far less of the load — see SCRIM above.
         pointer-events-none: this must never intercept a tap meant for the
         canvas beneath or the copy above.
       */}
       <div
         className="pointer-events-none absolute inset-0 z-[1]"
-        style={{
-          background:
-            'linear-gradient(to bottom, rgba(6,10,20,0.80) 0%, rgba(6,10,20,0.10) 22%, rgba(6,10,20,0.10) 58%, rgba(6,10,20,0.88) 100%)',
-        }}
+        style={{ background: SCRIM[set].linear }}
       />
       <div
         className="pointer-events-none absolute inset-0 z-[1]"
-        style={{
-          background:
-            'radial-gradient(126% 82% at 50% 44%, rgba(6,10,20,0) 0%, rgba(6,10,20,0.12) 58%, rgba(6,10,20,0.46) 100%)',
-        }}
+        style={{ background: SCRIM[set].radial }}
       />
     </div>
   );

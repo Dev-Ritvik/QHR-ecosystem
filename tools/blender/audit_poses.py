@@ -28,14 +28,18 @@ import mathutils
 argv = sys.argv[sys.argv.index("--") + 1:]
 glb, outdir = argv[0], argv[1]
 
-# Mirrors POSES in apps/public/src/components/experience/poses.ts (three space).
+# Mirrors the set:'interior' entries of POSES in
+# apps/public/src/components/experience/poses.ts (three space).
+#
+# `arrival` and `approach` are NOT here any more. They are set:'exterior' and
+# their coordinates address a different GLB with a different origin, so running
+# them against the interior would score a camera standing in open air and call
+# it fine. They are audited by tools/blender/find_exterior_approach.py against
+# exterior_mansion_web.glb instead.
 POSES = {
     "hall":          ((6.4, 1.65, 0.25),   (-5.27, 2.04, -0.95)),
     "hall.to":       ((1.95, 1.72, -0.2),  (-5.27, 1.85, -0.95)),
     "table":         ((-3.4, 1.6, 1.9),    (-5.95, 1.45, 1.9)),
-    "approach":      ((0.9, 1.66, 0.6),    (-5.3, 1.72, -1.1)),
-    "arrival":       ((6.9, 1.68, 3.1),    (-4.6, 1.90, -1.4)),
-    "arrival.to":    ((3.4, 1.68, 1.9),    (-4.2, 1.78, -1.0)),
     "window":        ((-4.6, 1.58, -1.5),  (-4.6, 1.42, -3.8)),
     "study":         ((3.4, 1.6, -0.9),    (5.95, 1.42, -0.9)),
     "desk":          ((1.6, 1.6, 1.2),     (-1.0, 1.5, -1.4)),
