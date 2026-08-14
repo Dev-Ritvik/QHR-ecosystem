@@ -37,6 +37,17 @@ export interface Pose {
    * up at the bottom of a long page where nobody is looking.
    */
   to?: { position: [number, number, number]; target: [number, number, number] };
+  /**
+   * Follow the multi-point spline in cameraPath.ts instead of lerping between
+   * `position` and `to`.
+   *
+   * A straight line between two poses stops reading as motion once the page is
+   * long: stretching the home page to 15 viewports spread the same 12m over six
+   * times the scroll and the camera looked frozen. A path changes direction, so
+   * every beat reframes rather than creeps. `position`/`target` stay as the
+   * first beat, which is what seeds the camera before the first frame.
+   */
+  path?: boolean;
   /** Seconds to ease in. Places you travel to are slower than frames you simply
    *  settle into, because the movement is the content in the first case and an
    *  interruption in the second. */
@@ -120,6 +131,11 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
   // gets the weight.
   arrival: {
     set: 'exterior',
+    // Beat 0 of the spline — see cameraPath.ts. The whole path is rendered and
+    // scored by tools/blender/audit_camera_path.py, which samples BETWEEN the
+    // beats too: Catmull-Rom overshoots on unevenly spaced control points, so a
+    // path can pass through the fountain between two good keyframes.
+    path: true,
     position: [0.0, 1.65, 30.0],
     target: [-7.0, 4.2, 0.0],
     // Scroll walks you up the axis toward the door, and the aim recentres as

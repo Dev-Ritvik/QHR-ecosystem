@@ -35,6 +35,7 @@ import { HallModel } from './HallModel';
 import { ExteriorModel } from './ExteriorModel';
 import { useDeviceTier } from './useDeviceTier';
 import { poseFor, setFor, type SceneSet } from './poses';
+import { POSITION_CURVE, TARGET_CURVE, curveT, atmosphereAt } from './cameraPath';
 import { useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { telemetry } from '@/lib/telemetry/collector';
@@ -50,6 +51,10 @@ import { telemetry } from '@/lib/telemetry/collector';
  * viewport.
  */
 const SCRUB = 2.2;
+
+/** Metres of camera offset at full pointer deflection. Small on purpose - see
+ *  the note at the call site. */
+const PARALLAX = 0.42;
 
 const STATION_RE = /^holo3d_(S[123])_/;
 
@@ -114,11 +119,38 @@ function FreeCamera() {
 }
 
 function CameraRig({ place }: { place: PlaceId }) {
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const target = useRef(new THREE.Vector3());
   const desired = useRef(new THREE.Vector3());
   const look = useRef(new THREE.Vector3());
   const scroll = useScrollProgress();
+
+  // Normalised pointer, -1..1 on both axes. Fed to the parallax offset below.
+  // Zeroed on leave so the camera returns to its scripted position rather than
+  // holding whatever offset the cursor had when it left the window.
+  const pointer = useRef(new THREE.Vector2(0, 0));
+  useEffect(() => {
+    const el = gl.domElement;
+    const onMove = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      pointer.current.set(
+        ((e.clientX - r.left) / r.width) * 2 - 1,
+        -(((e.clientY - r.top) / r.height) * 2 - 1),
+      );
+    };
+    const onLeave = () => pointer.current.set(0, 0);
+    // pointermove only, and only on a device with a real pointer. On touch the
+    // finger IS the scroll, and offsetting the camera to it would fight the
+    // gesture the whole way down the page.
+    if (window.matchMedia('(pointer: fine)').matches) {
+      window.addEventListener('pointermove', onMove, { passive: true });
+      window.addEventListener('pointerout', onLeave);
+    }
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerout', onLeave);
+    };
+  }, [gl]);
 
   // Scratch vectors, allocated once. Building a Vector3 inside useFrame is the
   // most common way an r3f scene ends up garbage-collecting mid-gesture, which
@@ -162,8 +194,27 @@ function CameraRig({ place }: { place: PlaceId }) {
 
     // Where scroll says the camera should be, this instant.
     const t = scroll.current;
-    desired.current.lerpVectors(fromPos.current, toPos.current, t);
-    look.current.lerpVectors(fromLook.current, toLook.current, t);
+    if (p.path) {
+      // Multi-point spline. curveT remaps the beats' uneven `at` values onto
+      // the curve parameter, so scrolling to a beat lands ON the vantage that
+      // was rendered and approved rather than near it.
+      const u = curveT(t);
+      POSITION_CURVE.getPoint(u, desired.current);
+      TARGET_CURVE.getPoint(u, look.current);
+    } else {
+      desired.current.lerpVectors(fromPos.current, toPos.current, t);
+      look.current.lerpVectors(fromLook.current, toLook.current, t);
+    }
+
+    // Cursor parallax. A few centimetres of camera offset across the whole
+    // viewport — deliberately tiny. The scene is a backdrop that text sits on,
+    // and a camera that swings to the pointer makes the copy above it feel
+    // unstable. Enough to make the canvas feel alive to the hand, not enough to
+    // be read as a control.
+    if (pointer.current.lengthSq() > 0) {
+      desired.current.x += pointer.current.x * PARALLAX;
+      desired.current.y += pointer.current.y * PARALLAX * 0.6;
+    }
 
     // Then damp toward it rather than snapping. Scroll is jittery — a trackpad
     // flick, a phone's momentum — and binding the camera rigidly to it makes
@@ -458,8 +509,10 @@ function useLook(set: SceneSet) {
  * everything past the building — which is exactly the part of the frame the
  * headings sit over.
  */
-function ExteriorLighting() {
+function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
   const scene = useThree((s) => s.scene);
+  const scroll = useScrollProgress();
+  const key = useRef<THREE.DirectionalLight>(null);
 
   useEffect(() => {
     const prev = scene.fog;
@@ -469,11 +522,28 @@ function ExteriorLighting() {
     };
   }, [scene]);
 
+  // Atmosphere travels with the camera. The path drops from 30m out to 9m and
+  // rises to 6.8m on the way, and a fixed fog band tuned for the wide
+  // establishing shot is simply wrong by the time the camera is under the
+  // portico — the building would sit in haze at the exact moment it should be
+  // most present. Fog closes from 34..190 to 14..95 and the key lifts as the
+  // camera arrives.
+  useFrame(() => {
+    if (!driveByScroll) return;
+    const a = atmosphereAt(scroll.current);
+    const fog = scene.fog as THREE.Fog | null;
+    if (fog && (fog as THREE.Fog).isFog) {
+      fog.near = a.near;
+      fog.far = a.far;
+    }
+    if (key.current) key.current.intensity = a.key;
+  });
+
   return (
     <>
       {/* Warm, low, front-left. Angled off the entry axis so the elevation is
           lit across rather than head-on, which would flatten it again. */}
-      <directionalLight position={[-42, 30, 52]} intensity={2.3} color="#FFD7B0" />
+      <directionalLight ref={key} position={[-42, 30, 52]} intensity={2.3} color="#FFD7B0" />
       {/* Cool fill from the sky, warm bounce from the ground. Cheaper than a
           second key and it keeps the shadowed side from reading as black. */}
       <hemisphereLight args={['#5C7099', '#1A1512', 0.55]} />
@@ -614,7 +684,7 @@ export function WorldCanvas() {
               hemisphere light and a flat ambient would cancel the relief the
               key light exists to create. */}
           <ambientLight intensity={look.ambient} />
-          {set === 'exterior' && <ExteriorLighting />}
+          {set === 'exterior' && <ExteriorLighting driveByScroll={poseFor(place).path === true} />}
           <Suspense fallback={null}>
             {/* One set at a time. Both are ~2.3MB and 15MB respectively, and
                 holding the hall in memory while standing on the lawn buys

@@ -22,10 +22,33 @@
 // Returns a ref, not a value, precisely so that reading it cannot re-render.
 
 import { useEffect, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { lenisInstance } from './SmoothScroll';
 
+/**
+ * MUST be called inside the r3f <Canvas> tree — it samples inside useFrame.
+ *
+ * That is deliberate. It previously updated only from the window 'scroll'
+ * event, which made correctness depend on Lenis emitting native scroll events
+ * while it animates. If that ever stopped — a Lenis option change, a version
+ * bump, a wrapper element instead of window — the value would freeze and the
+ * camera would sit perfectly still while the page scrolled underneath it, with
+ * nothing in the console to say why. That is an entire class of silent failure
+ * for no benefit: the consumers all live inside useFrame anyway, so sampling
+ * there costs one subtraction per frame and cannot desynchronise.
+ */
 export function useScrollProgress() {
   const progress = useRef(0);
+  const maxRef = useRef(1);
+
+  // Sampled every frame from whichever scroller is authoritative. No listener
+  // timing, no event coalescing, no dependency on Lenis's emit behaviour.
+  useFrame(() => {
+    const y =
+      lenisInstance?.scroll ??
+      (window.scrollY || document.documentElement.scrollTop || 0);
+    progress.current = Math.min(1, Math.max(0, y / maxRef.current));
+  });
 
   useEffect(() => {
     let max = 1;
@@ -35,6 +58,7 @@ export function useScrollProgress() {
       // shorter than the viewport reports 0 rather than dividing by zero and
       // pinning the camera at the end of its path.
       max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      maxRef.current = max;
       read();
     };
 
