@@ -306,7 +306,14 @@ function webglSupported(): boolean {
  * is a bad loop. Look-dev only; the defaults are what ships.
  */
 const LOOK = {
-  // 0.32, not 1.0. This is the number that was blowing the room to white.
+  // 0.6. Two corrections in, and the second overshot.
+  //
+  // 1.0 blew the room to white. 0.32 was derived as the reciprocal of the 4.66x
+  // lightmap gain, which is right in isolation and wrong in context: it was set
+  // at the same time as a scrim that darkens the middle of the frame by another
+  // ~54%. Multiplied together the room disappeared, and the home page looked
+  // like it had no 3D in it at all. Two fixes for one symptom, each reasonable
+  // alone, compounding into the opposite failure.
   //
   // The lightmap is multiplied by 4.66 to restore the range the bake was
   // normalised out of, so the scene arrives at the tone mapper carrying values
@@ -316,7 +323,7 @@ const LOOK = {
   //
   // There is no bloom or post-processing in this scene to blame, and ACES was
   // already configured. It was arithmetic.
-  exposure: 0.32,
+  exposure: 0.6,
   /** scene.environmentIntensity — specular response only, never a light source. */
   env: 0.1,
   /** Lifts the instanced ornament, which carries no lightmap. Nothing more. */
@@ -445,7 +452,13 @@ export function WorldCanvas() {
       </SceneBoundary>
 
       {/*
-        The scrim. Copy has to stay legible whatever the camera is looking at,
+        The scrim, retuned. It was set against a scene rendering at exposure
+        0.32 and was far too heavy once that was corrected — 34% flat opacity
+        across the middle of the frame is enough to hide a room entirely.
+        The middle is now 10%, so the room is genuinely visible; the top and
+        bottom stay dense because that is where headings and the footer sit.
+
+        Copy has to stay legible whatever the camera is looking at,
         and the room cannot be trusted to be dark behind any particular line.
 
         Deliberately NOT frosted panels behind each block. Glassmorphism reads
@@ -467,14 +480,14 @@ export function WorldCanvas() {
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{
           background:
-            'linear-gradient(to bottom, rgba(6,10,20,0.86) 0%, rgba(6,10,20,0.34) 24%, rgba(6,10,20,0.34) 60%, rgba(6,10,20,0.94) 100%)',
+            'linear-gradient(to bottom, rgba(6,10,20,0.80) 0%, rgba(6,10,20,0.10) 22%, rgba(6,10,20,0.10) 58%, rgba(6,10,20,0.88) 100%)',
         }}
       />
       <div
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{
           background:
-            'radial-gradient(122% 78% at 50% 44%, rgba(6,10,20,0) 0%, rgba(6,10,20,0.30) 60%, rgba(6,10,20,0.70) 100%)',
+            'radial-gradient(126% 82% at 50% 44%, rgba(6,10,20,0) 0%, rgba(6,10,20,0.12) 58%, rgba(6,10,20,0.46) 100%)',
         }}
       />
     </div>
