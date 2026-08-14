@@ -46,6 +46,63 @@ export const EXTERIOR_BOUNDS = {
   groundHalfSpan: 225,
 } as const;
 
+/**
+ * Colour that the glTF export lost, restored on load.
+ *
+ * Two materials in this GLB carry baseColorFactor [1,1,1,1] and NO base colour
+ * texture, because their colour lived in Blender shader nodes the exporter
+ * cannot write. They therefore arrive as pure white:
+ *
+ *   MAT_Ground   a 450m plane. This is the bright plate the building was
+ *                sitting on — read in review as "a primitive grey plane", and
+ *                correctly so. It was white.
+ *   MAT_Hedge    the cypresses and the box hedging. White cones flanking the
+ *                portico, which is why the trees read as traffic cones.
+ *
+ * Overriding here rather than re-exporting because the values are a grade, not
+ * geometry: they are the difference between a night lawn and a lit one, and
+ * that is a decision to make against the rendered frame rather than in Blender.
+ * If the exterior is ever re-baked with real ground and foliage maps, delete
+ * this — a texture on those slots must win.
+ *
+ * Keyed by material name and applied to the shared material instances, so it
+ * runs once per parse rather than per mount.
+ */
+const GRADE: Record<string, { color: string; roughness?: number }> = {
+  // Deep and desaturated, a shade off the #0A1120 sky so the ground reads as
+  // ground and not as a hole. Anything lighter puts a bright horizon band
+  // behind the building at exactly the height the hero copy sits.
+  MAT_Ground: { color: '#0F1520', roughness: 1 },
+  // Cypress and box at dusk: green, but most of the way to black. These are
+  // silhouette, not subject.
+  MAT_Hedge: { color: '#16281B', roughness: 0.95 },
+};
+
+function applyGrade(root: THREE.Object3D): string[] {
+  const touched: string[] = [];
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) {
+      const mat = m as THREE.MeshStandardMaterial & { __graded?: boolean };
+      if (!mat || mat.__graded) continue;
+      const g = GRADE[mat.name];
+      if (!g) continue;
+      // Never override a real texture — a map means the export succeeded and
+      // this workaround should stay out of the way.
+      if (mat.map) continue;
+
+      mat.color.set(g.color);
+      if (g.roughness !== undefined) mat.roughness = g.roughness;
+      mat.__graded = true;
+      mat.needsUpdate = true;
+      touched.push(mat.name);
+    }
+  });
+  return touched;
+}
+
 export function ExteriorModel({
   onReady,
 }: {
@@ -65,6 +122,7 @@ export function ExteriorModel({
   const root = useMemo(() => scene.clone(true), [scene]);
 
   useEffect(() => {
+    const graded = applyGrade(root);
     let meshes = 0;
     let tris = 0;
     root.traverse((o) => {
@@ -81,9 +139,10 @@ export function ExteriorModel({
     const size = box.getSize(new THREE.Vector3());
     // eslint-disable-next-line no-console
     console.info(
-      '[exterior_ready] meshes=%d tris=%d | size %sx%sx%s | y %s..%s',
+      '[exterior_ready] meshes=%d tris=%d graded=[%s] | size %sx%sx%s | y %s..%s',
       meshes,
       Math.round(tris),
+      graded.join(','),
       size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2),
       box.min.y.toFixed(2), box.max.y.toFixed(2),
     );

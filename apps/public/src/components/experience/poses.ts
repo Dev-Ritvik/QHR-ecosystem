@@ -111,13 +111,22 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
   // 0.2029, against 0.1255 for the best interior pose in the file. z=13 was
   // tested and rejected: it is close enough that the door panels fill the frame
   // and the building is lost, so the dolly stops at 18.
+  // The target is aimed LEFT of the building rather than at it, which swings
+  // the mansion right-of-centre and opens the left third of the frame. Dead-on
+  // symmetry was the stronger single image, but the home page puts a four-line
+  // headline over this frame and centred symmetry put the type straight across
+  // the portico — the "typography disconnect" in review is a composition
+  // problem, not a font problem. Copy gets the negative space; the building
+  // gets the weight.
   arrival: {
     set: 'exterior',
     position: [0.0, 1.65, 30.0],
-    target: [0.0, 4.2, 0.0],
-    // Scroll walks you up the axis toward the door. A dolly, not an orbit:
-    // architecture reads through parallax between the fountain and the facade.
-    to: { position: [0.0, 1.65, 18.0], target: [0.0, 3.4, 0.0] },
+    target: [-7.0, 4.2, 0.0],
+    // Scroll walks you up the axis toward the door, and the aim recentres as
+    // you arrive: by the bottom of the page the copy has gone and the building
+    // can hold the frame on its own. A dolly, not an orbit — architecture
+    // reads through parallax between the fountain and the facade.
+    to: { position: [0.0, 1.65, 18.0], target: [-3.2, 3.4, 0.0] },
     ease: 1.4,
   },
 

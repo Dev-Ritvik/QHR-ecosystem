@@ -78,8 +78,12 @@ for stem in sorted(groups):
 
 scene = bpy.context.scene
 scene.render.engine = "BLENDER_WORKBENCH"
-scene.render.resolution_x = 360
-scene.render.resolution_y = 640
+# 16:9. The client reviews on a desktop browser, and a portrait render of a
+# landscape frame hides exactly the thing being judged — how much clear space
+# the headline has on the left. sensor_fit VERTICAL with angle_y 45 matches
+# three.js fov=45, so the vertical extent is right and the width follows aspect.
+scene.render.resolution_x = 1024
+scene.render.resolution_y = 576
 scene.render.resolution_percentage = 100
 sh = scene.display.shading
 sh.light = "STUDIO"
@@ -121,8 +125,8 @@ CANDIDATES = {
     # The pair actually shipped as POSES.arrival. Rendered explicitly rather
     # than interpolated from neighbours, because "close to a pose that scored
     # well" is how the last three broken cameras got through.
-    "SHIP_from":     ((0.0, 1.65, 30.0),   (0.0, 4.20, 0.0)),
-    "SHIP_to":       ((0.0, 1.65, 18.0),   (0.0, 3.40, 0.0)),
+    "SHIP_from":     ((0.0, 1.65, 30.0),   (-7.0, 4.20, 0.0)),
+    "SHIP_to":       ((0.0, 1.65, 18.0),   (-3.2, 3.40, 0.0)),
 }
 
 
