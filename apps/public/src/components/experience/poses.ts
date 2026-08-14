@@ -48,10 +48,22 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
   hall: {
     position: [6.4, 1.65, 0.25],
     target: [-5.27, 2.04, -0.95],
-    // Scrolling walks the length of the room toward the tables. A dolly, not an
-    // orbit: the room is architecture and architecture reads through parallax
-    // between near and far columns, which a rotation destroys.
-    to: { position: [-1.9, 1.62, -0.55], target: [-5.5, 1.58, -1.5] },
+    // Scrolling walks the length of the room. A dolly, not an orbit: the room
+    // is architecture, and architecture reads through parallax between near and
+    // far columns, which a rotation destroys.
+    //
+    // VERIFIED by render (tools/blender/inspect_hall_camera.py). The previous
+    // value, [-1.9, 1.62, -0.55] -> [-5.5, 1.58, -1.5], was invented rather
+    // than measured and put the camera a metre from a blank wall panel: on the
+    // device you saw the room for a moment at scroll 0, then it damped into
+    // featureless grey. Exactly the mistake the original `hall` pose made, made
+    // a second time because a scroll destination is only visible at the bottom
+    // of a long page where nobody is looking.
+    //
+    // This one travels ALONG the sight-line the arrival pose already looks
+    // down, so the framing is the one that was verified — just closer. A dolly
+    // that keeps its subject cannot land in a wall.
+    to: { position: [1.95, 1.72, -0.2], target: [-5.27, 1.85, -0.95] },
     ease: 1.1,
   },
 
