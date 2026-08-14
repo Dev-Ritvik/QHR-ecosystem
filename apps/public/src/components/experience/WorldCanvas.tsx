@@ -34,6 +34,7 @@ import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { HallModel } from './HallModel';
 import { useDeviceTier } from './useDeviceTier';
 import { poseFor } from './poses';
+import { useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { telemetry } from '@/lib/telemetry/collector';
 
@@ -104,31 +105,60 @@ function CameraRig({ place }: { place: PlaceId }) {
   const target = useRef(new THREE.Vector3());
   const desired = useRef(new THREE.Vector3());
   const look = useRef(new THREE.Vector3());
+  const scroll = useScrollProgress();
 
-  // Seed both vectors from the first pose before any frame runs. `target`
-  // otherwise starts at the world origin, so the opening frames aim at a point
-  // on the floor and swing up — a lurch on entry that reads as a bug rather
-  // than a move.
+  // Scratch vectors, allocated once. Building a Vector3 inside useFrame is the
+  // most common way an r3f scene ends up garbage-collecting mid-gesture, which
+  // on a phone is a visible hitch rather than a statistic.
+  const fromPos = useRef(new THREE.Vector3());
+  const toPos = useRef(new THREE.Vector3());
+  const fromLook = useRef(new THREE.Vector3());
+  const toLook = useRef(new THREE.Vector3());
+
+  const applyPose = useCallback(() => {
+    const p = poseFor(place);
+    fromPos.current.set(...p.position);
+    fromLook.current.set(...p.target);
+    if (p.to) {
+      toPos.current.set(...p.to.position);
+      toLook.current.set(...p.to.target);
+    } else {
+      // No scroll path: both ends identical, so progress has no effect and the
+      // place is a still frame. Cheaper than branching every frame.
+      toPos.current.copy(fromPos.current);
+      toLook.current.copy(fromLook.current);
+    }
+  }, [place]);
+
+  // Seed before the first frame. `target` otherwise starts at the world origin,
+  // so the opening frames aim at the floor and swing up — a lurch on entry that
+  // reads as a bug rather than a move.
   const seeded = useRef(false);
   if (!seeded.current) {
-    const p = poseFor(place);
-    desired.current.set(...p.position);
-    look.current.set(...p.target);
-    target.current.set(...p.target);
+    applyPose();
+    desired.current.copy(fromPos.current);
+    look.current.copy(fromLook.current);
+    target.current.copy(fromLook.current);
     seeded.current = true;
   }
 
-  useEffect(() => {
-    const p = poseFor(place);
-    desired.current.set(...p.position);
-    look.current.set(...p.target);
-  }, [place]);
+  useEffect(applyPose, [applyPose]);
 
   useFrame((_, delta) => {
     const p = poseFor(place);
-    // Frame-rate independent damping: a fixed lerp factor would move twice as
-    // fast at 120fps as at 60, which is how a move tuned on a desktop ends up
-    // feeling sluggish on the phones this has to serve.
+
+    // Where scroll says the camera should be, this instant.
+    const t = scroll.current;
+    desired.current.lerpVectors(fromPos.current, toPos.current, t);
+    look.current.lerpVectors(fromLook.current, toLook.current, t);
+
+    // Then damp toward it rather than snapping. Scroll is jittery — a trackpad
+    // flick, a phone's momentum — and binding the camera rigidly to it makes
+    // the room feel nervous. The damping is what turns scrolling into a move.
+    //
+    // Frame-rate independent: a fixed lerp factor would travel twice as far per
+    // second at 120fps as at 60, which is how a move tuned on a desktop ends up
+    // sluggish on the phones this has to serve.
     const k = 1 - Math.exp(-delta / Math.max(0.05, p.ease / 3));
     camera.position.lerp(desired.current, k);
     target.current.lerp(look.current, k);

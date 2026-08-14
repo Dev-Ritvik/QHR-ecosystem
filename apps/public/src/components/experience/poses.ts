@@ -18,6 +18,19 @@ import type { PlaceId } from '@estate/domain/experience/places';
 export interface Pose {
   position: [number, number, number];
   target: [number, number, number];
+  /**
+   * Where scrolling takes you. Optional: a place without one is a still frame.
+   *
+   * This is the story. `position`/`target` is where you arrive; `to` is where
+   * the page has carried you by the time you reach the bottom. The camera is
+   * interpolated between them by document scroll progress, so the room moves
+   * with the reading rather than sitting behind it.
+   *
+   * Both ends are real vantages inside the built hall — a scroll path that ends
+   * inside a wall is worse than no scroll path, because the failure only shows
+   * up at the bottom of a long page where nobody is looking.
+   */
+  to?: { position: [number, number, number]; target: [number, number, number] };
   /** Seconds to ease in. Places you travel to are slower than frames you simply
    *  settle into, because the movement is the content in the first case and an
    *  interruption in the second. */
@@ -32,7 +45,15 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
   // ever looked through: it stands beside the staircase with the treads and
   // balusters filling the entire frame, which is exactly what the first device
   // test showed. The model, the scale and the loader were all fine.
-  hall: { position: [6.4, 1.65, 0.25], target: [-5.27, 2.04, -0.95], ease: 1.1 },
+  hall: {
+    position: [6.4, 1.65, 0.25],
+    target: [-5.27, 2.04, -0.95],
+    // Scrolling walks the length of the room toward the tables. A dolly, not an
+    // orbit: the room is architecture and architecture reads through parallax
+    // between near and far columns, which a rotation destroys.
+    to: { position: [-1.9, 1.62, -0.55], target: [-5.5, 1.58, -1.5] },
+    ease: 1.1,
+  },
 
   // Reading distance at the Kartikeya table (S1). Blender (-3.40,-1.90,1.60).
   table: { position: [-3.4, 1.6, 1.9], target: [-5.95, 1.45, 1.9], ease: 0.9 },
