@@ -146,6 +146,16 @@ const FRAG = /* glsl */ `
   varying float vHeight;
   varying vec3 vWorld;
 
+  // Same lattice as the vertex stage. Reused here at metre scale for surface
+  // breakup rather than at 80m scale for landform.
+  float fhash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+  float fnoise(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(fhash(i), fhash(i + vec2(1.0, 0.0)), u.x),
+               mix(fhash(i + vec2(0.0, 1.0)), fhash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+
   void main() {
     // Face normals from screen-space derivatives of the DISPLACED world
     // position. The geometry's own normal attribute all points straight up —
@@ -188,7 +198,19 @@ const FRAG = /* glsl */ `
     // how much relief it had. The wrap term carries the base illumination and
     // lambert supplies the raking contrast on the slopes facing the sun —
     // which is exactly where a low sun SHOULD be creating the terrace edges.
-    vec3 col = albedo * (0.20 + wrap * 0.55 + lambert * 0.95);
+    // MICRO-SURFACE. Three octaves at metre and sub-metre scale, perturbing
+    // both the albedo and the diffuse term. Without it a displaced plane is
+    // mathematically smooth between vertices and light smears across it, which
+    // is the plastic read — the landform is right and the SURFACE has no grain.
+    // Cheaper than a roughnessMap here because the terrain has no UVs worth
+    // sampling at this scale and a tiling texture would visibly repeat across
+    // 460m.
+    float micro = fnoise(vWorld.xz * 1.7) * 0.55
+                + fnoise(vWorld.xz * 6.3) * 0.30
+                + fnoise(vWorld.xz * 19.0) * 0.15;
+    float grain = 0.80 + micro * 0.40;
+
+    vec3 col = albedo * grain * (0.20 + wrap * 0.55 + lambert * 0.95 * grain);
 
     // Risers catch a warm edge from the same low sun. This is the line that
     // makes a terrace read as a step rather than as a tonal gradient.

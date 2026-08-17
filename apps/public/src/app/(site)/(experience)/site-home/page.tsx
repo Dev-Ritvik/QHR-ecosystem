@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { getPublishedProjects } from '@/lib/projection';
 import { ProjectCard } from '@/components/site/ProjectCard';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
+import { PublishSceneCards } from '@/components/experience/PublishSceneCards';
 
 // ISR: Background revalidation every hour, unless manually cleared by the webhook (T37)
 export const revalidate = 3600;
@@ -76,6 +77,21 @@ export default async function SiteHomePage() {
     // not on empty space.
     <main className="min-h-[10000px] pb-40">
       <RouteTelemetry routeId="site-home" />
+
+      {/* Hands the published projects to the WebGL tree, which renders them as
+          <Html transform> cards anchored in the forecourt. Renders nothing
+          itself — the canvas is mounted by the layout above this page, so a
+          store is the only path between them. */}
+      <PublishSceneCards
+        cards={list.slice(0, 3).map((p: any) => ({
+          slug: p.slug,
+          name: p.name,
+          locality: p.locality ?? '',
+          city: p.city ?? '',
+          available: typeof p.availableUnits === 'number' ? p.availableUnits : null,
+          soldOut: Boolean(p.isSoldOut),
+        }))}
+      />
 
       {/* Copy sits in the LEFT half throughout. The arrival pose aims left of
           the mansion, putting the building right-of-centre, so the left is the

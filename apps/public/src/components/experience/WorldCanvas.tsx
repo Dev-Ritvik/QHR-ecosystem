@@ -36,12 +36,15 @@ import { HallModel } from './HallModel';
 import { ExteriorModel } from './ExteriorModel';
 import { useDeviceTier } from './useDeviceTier';
 import { poseFor, setFor, type SceneSet } from './poses';
-import { POSITION_CURVE, TARGET_CURVE, curveT, atmosphereAt, lensAt } from './cameraPath';
+import { POSITION_CURVE, TARGET_CURVE, curveT, atmosphereAt, lensAt, BEATS } from './cameraPath';
+import gsap from 'gsap';
 import { useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { PostFX } from './PostFX';
 import { Motes } from './Motes';
 import { Terrain } from './Terrain';
+import { SpatialCards } from './SpatialCards';
+import { useSceneCards } from './useSceneCards';
 import { telemetry } from '@/lib/telemetry/collector';
 
 /**
@@ -80,6 +83,26 @@ const FRAME_OFFSET = 7.4;
 // initialised before any such light is constructed. Module scope so it runs
 // exactly once regardless of how many lights mount.
 RectAreaLightUniformsLib.init();
+
+/**
+ * power4.inOut, resolved once at module load.
+ *
+ * Raw scroll progress is linear, so a linear read of it moves the camera at a
+ * constant rate along the whole curve — which is why the dive had no weight.
+ * Momentum is the DERIVATIVE of position, and a linear map has a constant one.
+ *
+ * power4 is aggressive on purpose: it holds near the beat for the first and
+ * last fifth of each leg and covers the middle fast, so the camera loads up,
+ * whips through the fastest part of the descent, and settles as it banks into
+ * each viewing angle. That acceleration profile is the swing.
+ *
+ * Applied to the CURVE parameter only. Atmosphere and lens read raw scroll, so
+ * fog and FOV stay tied to where the visitor is on the page rather than
+ * lurching with the camera.
+ */
+const SWING = gsap.parseEase('power4.inOut');
+
+const BEAT_COUNT = BEATS.length;
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -227,7 +250,18 @@ function CameraRig({ place }: { place: PlaceId }) {
       // Multi-point spline. curveT remaps the beats' uneven `at` values onto
       // the curve parameter, so scrolling to a beat lands ON the vantage that
       // was rendered and approved rather than near it.
-      const u = curveT(t);
+      // Ease WITHIN each leg rather than across the whole path: easing the
+      // global 0..1 would make the two middle beats fly past at maximum speed
+      // and never read. curveT maps scroll onto the curve in units of one leg
+      // per integer, so easing the fractional part accelerates into and
+      // decelerates out of every beat in turn.
+      // curveT returns 0..1 across the WHOLE curve, so it is scaled into leg
+      // units first — floor() on the 0..1 value would be 0 everywhere and the
+      // easing would never engage.
+      const legs = BEAT_COUNT - 1;
+      const rawLegs = curveT(t) * legs;
+      const seg = Math.min(Math.floor(rawLegs), legs - 1);
+      const u = (seg + SWING(rawLegs - seg)) / legs;
       POSITION_CURVE.getPoint(u, desired.current);
       TARGET_CURVE.getPoint(u, look.current);
     } else {
@@ -670,7 +704,15 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           every lit fragment in the scene, and five of those would cost more
           than the building.
 
-          decay={2} on all five is physically correct inverse-square falloff —
+          INTENSITY DROPPED 80%. Raising these to ~2.5x to "pay for" decay was
+          wrong: MeshStandardMaterial accumulates them in scene-linear space,
+          and the sum was arriving at the ACES curve far past the point where it
+          still has roll-off left, so the facade clipped to white and took the
+          limestone texture with it. Tone mapping cannot rescue a value that
+          entered the buffer already blown. These are a warm architectural wash
+          now, not a floodlight.
+
+          decay={2} on all remaining lights is physically correct inverse-square falloff —
           intensity / d^2 — which is why they needed roughly 2.5x the raw
           intensity to reach the same surfaces. Under-decayed light is what
           makes a source read as a sticker rather than as illumination.
@@ -691,15 +733,15 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           rotation-y turns each one to face out along +z. They are not visible
           geometry — a RectAreaLight has no mesh — so nothing new appears in
           frame. */}
-      <rectAreaLight position={[-6.2, 2.3, 6.35]} width={2.1} height={3.0} intensity={9} color="#FFAA55" />
-      <rectAreaLight position={[0, 2.2, 6.35]} width={3.0} height={3.4} intensity={11} color="#FFB068" />
-      <rectAreaLight position={[6.2, 2.3, 6.35]} width={2.1} height={3.0} intensity={9} color="#FFAA55" />
+      <rectAreaLight position={[-6.2, 2.3, 6.35]} width={2.1} height={3.0} intensity={1.8} color="#FFAA55" />
+      <rectAreaLight position={[0, 2.2, 6.35]} width={3.0} height={3.4} intensity={2.2} color="#FFB068" />
+      <rectAreaLight position={[6.2, 2.3, 6.35]} width={2.1} height={3.0} intensity={1.8} color="#FFAA55" />
       {/* The side elevation — what the camera faces from theta 70 onward.
           Without it the last third of the orbit plays against an unlit wall. */}
-      <pointLight position={[10.9, 2.5, 0]} intensity={28} distance={18} decay={2} color="#FFAA55" />
+      <pointLight position={[10.9, 2.5, 0]} intensity={5.6} distance={18} decay={2} color="#FFAA55" />
       {/* Uplight on the fountain, so the centre of the composition has a source
           of its own rather than borrowing from the windows either side. */}
-      <pointLight position={[0, 1.1, 13.2]} intensity={22} distance={14} decay={2} color="#FFC98A" />
+      <pointLight position={[0, 1.1, 13.2]} intensity={4.4} distance={14} decay={2} color="#FFC98A" />
 
       {/* Cool sky, warm ground bounce. Keeps the shadowed side from reading as
           black without lifting it toward the key's colour. */}
@@ -785,6 +827,7 @@ function RoomEnvironmentMap({ intensity }: { intensity: number }) {
 export function WorldCanvas() {
   const pathname = usePathname() || '/';
   const place = placeForRoute(pathname);
+  const sceneCards = useSceneCards((st) => st.cards);
   const [tier, setTier] = useState<DeviceTier>('mid');
   const [failed, setFailed] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -856,6 +899,10 @@ export function WorldCanvas() {
                   passed through so the ground dissolves at the same distance
                   as everything else as the camera travels. */}
               <Terrain />
+              {/* Layout plans anchored in world space. Only on the path
+                  surface — the interior sets have no forecourt to hang them
+                  in. */}
+              {poseFor(place).path ? <SpatialCards cards={sceneCards} /> : null}
             </>
           )}
           <Suspense fallback={null}>
