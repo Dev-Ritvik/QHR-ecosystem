@@ -95,6 +95,12 @@ function applyGrade(root: THREE.Object3D): string[] {
     mesh.castShadow = !isGround;
     mesh.receiveShadow = true;
 
+    // The flat exported plane is superseded by <Terrain />, which displaces
+    // karst relief on the GPU. Hidden rather than deleted so the GLB stays the
+    // single source of truth and turning the terrain off restores the old
+    // ground by changing one prop.
+    if (isGround) mesh.visible = false;
+
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of mats) {
       const mat = m as THREE.MeshStandardMaterial & { __graded?: boolean };

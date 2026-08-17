@@ -40,6 +40,7 @@ import { useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { PostFX } from './PostFX';
 import { Motes } from './Motes';
+import { Terrain } from './Terrain';
 import { telemetry } from '@/lib/telemetry/collector';
 
 /**
@@ -731,6 +732,10 @@ export function WorldCanvas() {
               {/* Halved on low tier: the field is atmosphere, and a phone
                   should get thinner air rather than no air. */}
               <Motes count={tier === 'low' ? 1100 : 2400} />
+              {/* Karst relief replacing the flat exported plane. Fog is
+                  passed through so the ground dissolves at the same distance
+                  as everything else as the camera travels. */}
+              <Terrain />
             </>
           )}
           <Suspense fallback={null}>
