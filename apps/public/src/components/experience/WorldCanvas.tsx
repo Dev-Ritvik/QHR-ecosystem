@@ -53,11 +53,29 @@ import { telemetry } from '@/lib/telemetry/collector';
  * most of what separates a cinematic move from a scrollbar attached to a
  * viewport.
  */
-const SCRUB = 2.2;
+// Was 2.2, which put `arrival` (ease 1.4) at a 3.1s lag. Stacked on top of
+// Lenis's own lerp 0.1 that is a COMPOUND delay - two first-order lags in
+// series - and the result drags rather than sweeps. Lenis already supplies the
+// smoothing; the rig only needs enough to absorb frame jitter.
+const SCRUB = 0.12;
 
 /** Metres of camera offset at full pointer deflection. Small on purpose - see
  *  the note at the call site. */
 const PARALLAX = 0.42;
+
+/**
+ * Metres the aim is pushed LEFT of the subject, in CAMERA space.
+ *
+ * A world-space target offset cannot do this. The camera orbits from theta -8
+ * to 90, so screen-left starts as -x and ends as +z: any fixed world offset
+ * that frames correctly at the hero has rotated to the wrong side of frame by
+ * the footer. Offsetting along the camera's own right vector holds the building
+ * in the right 60% for the WHOLE orbit, which is what the DOM's 40vw column
+ * requires — the typography must never touch the architecture.
+ */
+const FRAME_OFFSET = 7.4;
+
+const UP = new THREE.Vector3(0, 1, 0);
 
 const STATION_RE = /^holo3d_(S[123])_/;
 
@@ -158,6 +176,8 @@ function CameraRig({ place }: { place: PlaceId }) {
   // Scratch vectors, allocated once. Building a Vector3 inside useFrame is the
   // most common way an r3f scene ends up garbage-collecting mid-gesture, which
   // on a phone is a visible hitch rather than a statistic.
+  const fwd = useRef(new THREE.Vector3());
+  const right = useRef(new THREE.Vector3());
   const fromPos = useRef(new THREE.Vector3());
   const toPos = useRef(new THREE.Vector3());
   const fromLook = useRef(new THREE.Vector3());
@@ -208,6 +228,14 @@ function CameraRig({ place }: { place: PlaceId }) {
       desired.current.lerpVectors(fromPos.current, toPos.current, t);
       look.current.lerpVectors(fromLook.current, toLook.current, t);
     }
+
+    // FRAME THE SUBJECT RIGHT. Aim left of the target along the camera's own
+    // right vector, so the building sits in the right 60% and the left 40%
+    // stays clear for the hero column. Recomputed every frame because the
+    // right vector rotates with the orbit.
+    fwd.current.subVectors(look.current, desired.current).normalize();
+    right.current.crossVectors(fwd.current, UP).normalize();
+    look.current.addScaledVector(right.current, -FRAME_OFFSET);
 
     // Cursor parallax. A few centimetres of camera offset across the whole
     // viewport — deliberately tiny. The scene is a backdrop that text sits on,
@@ -551,15 +579,29 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           lit face, cool slate everywhere else — and the elevation reads as
           form rather than as a lit picture of form. */}
 
-      {/* Warm key, low and front-left, angled off the entry axis so the
-          elevation is lit across rather than head-on. Casts real shadows: the
-          portico columns and the cornice throwing onto the facade is most of
-          what makes the architecture feel physically present. */}
+      {/* THE SUN, RELOCATED TO A BACKLIGHT.
+
+          It sat at (-42, 30, 52): high, and on the SAME side of the building as
+          the camera for the entire orbit. That lit the facade head-on and flat,
+          and it put any scattering pass keyed to it behind the lens, where
+          nothing can be seen — which is why god rays were impossible rather
+          than merely unbuilt.
+
+          Now low and behind the architecture at (-58, 13, -44). The camera
+          sweeps the +x/+z quadrant looking at the origin, so this sits opposite
+          the lens across the whole arc: it rakes the elevation, throws the
+          cornice and spire into rim, and is IN FRAME behind the building, which
+          is the only place a volumetric source can do any work. Deeper and
+          hotter in colour because a sun at 13m elevation is a sun near the
+          horizon.
+
+          The shadow box moves with it — an ortho frustum aimed from the old
+          position would now be pointing at nothing. */}
       <directionalLight
         ref={key}
-        position={[-42, 30, 52]}
+        position={[-58, 13, -44]}
         intensity={2.3}
-        color="#FFD7B0"
+        color="#FFB264"
         castShadow
         shadow-mapSize={[2048, 2048]}
         // Tight ortho box around the building. The default frustum spans the
@@ -580,6 +622,29 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           stops the silhouette dissolving into the background. Deliberately
           cyan-slate against the amber — the contrast IS the effect. */}
       <directionalLight position={[34, 22, -40]} intensity={0.85} color="#7FB4D6" />
+
+      {/* PHYSICAL SPILL FROM THE WINDOWS.
+
+          Emissive materials in three light NOTHING — there is no GI in a
+          real-time forward renderer, so the glowing reveals were self-lit
+          stickers and the stone around them stayed black. That is exactly the
+          "neon sticker" read. These are the light those windows actually cast.
+
+          Positioned just OUTSIDE the facade planes rather than inside the
+          rooms, so the falloff lands on the wall face, the entry steps and the
+          fountain instead of on the back of a reveal nobody sees. `distance` is
+          tight on every one: an unbounded point light is evaluated against
+          every lit fragment in the scene, and five of those would cost more
+          than the building. */}
+      <pointLight position={[-6.2, 2.4, 7.4]} intensity={11} distance={17} decay={2} color="#FFAA55" />
+      <pointLight position={[0, 2.2, 7.8]} intensity={14} distance={19} decay={2} color="#FFB068" />
+      <pointLight position={[6.2, 2.4, 7.4]} intensity={11} distance={17} decay={2} color="#FFAA55" />
+      {/* The side elevation — what the camera faces from theta 70 onward.
+          Without it the last third of the orbit plays against an unlit wall. */}
+      <pointLight position={[10.9, 2.5, 0]} intensity={12} distance={18} decay={2} color="#FFAA55" />
+      {/* Uplight on the fountain, so the centre of the composition has a source
+          of its own rather than borrowing from the windows either side. */}
+      <pointLight position={[0, 1.1, 13.2]} intensity={9} distance={14} decay={2} color="#FFC98A" />
 
       {/* Cool sky, warm ground bounce. Keeps the shadowed side from reading as
           black without lifting it toward the key's colour. */}

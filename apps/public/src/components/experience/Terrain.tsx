@@ -50,8 +50,13 @@ const SEGMENTS = 320;
 
 /** Radius of the level apron under the building, and the distance over which
  *  the terrain blends up to full height beyond it. */
-const FLAT_RADIUS = 34;
-const FLAT_FEATHER = 26;
+// BUG THIS FIXES: 34 + 26 meant full relief only began 60m from the origin,
+// but the camera orbits at radius 13-30 looking AT the origin — so every metre
+// of ground in frame was inside the flat apron. The karst existed and was
+// entirely off screen. Building is +/-9.55, hedges +/-15.9, fountain reaches
+// z 16.3, so the apron only needs to clear ~20m.
+const FLAT_RADIUS = 20;
+const FLAT_FEATHER = 14;
 
 const VERT = /* glsl */ `
   uniform float uFlatRadius;
@@ -110,7 +115,11 @@ const VERT = /* glsl */ `
     // signature: flat bedding planes with sharp risers between them. The
     // fractional remainder is added back at low weight so the tops are not
     // perfectly level, which would read as CAD rather than as rock.
-    float steps = 0.85;
+    // BUG THIS FIXES: steps was 0.85 while ridge() sums to a maximum of ~0.92,
+    // so floor(r / steps) only ever returned 0 or 1. The terrain had exactly
+    // TWO elevations and rendered as a flat disc. The step has to be small
+    // relative to the ridge's range or there are no terraces to see.
+    float steps = 0.11;
     float terraced = floor(r / steps) * steps + fract(r / steps) * steps * 0.22;
 
     // Level apron under the building.

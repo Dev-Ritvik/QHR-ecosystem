@@ -23,11 +23,39 @@
 // gets the same experience, not the same shader budget. Low tier keeps vignette
 // only, which costs almost nothing and still frames the composition.
 
-import { EffectComposer, Bloom, Vignette, DepthOfField } from '@react-three/postprocessing';
+import { useState } from 'react';
+import * as THREE from 'three';
+import { EffectComposer, Bloom, Vignette, DepthOfField, GodRays } from '@react-three/postprocessing';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { SUBJECT } from './cameraPath';
 
+/**
+ * The visible sun disc that GodRays samples.
+ *
+ * The pass needs a real mesh to occlude: it renders that mesh, blurs radially
+ * from its screen position, and lets scene depth mask the rays. So the disc has
+ * to sit where the key light is and be genuinely in frame, which is why the key
+ * was moved behind the architecture first — rays from a source behind the lens
+ * are not dim, they are undefined.
+ *
+ * Matched to the directional light at (-58, 13, -44). MeshBasicMaterial because
+ * the sun must not itself be lit; it IS the light.
+ */
+function SunDisc({ onReady }: { onReady: (m: THREE.Mesh | null) => void }) {
+  return (
+    <mesh ref={onReady} position={[-58, 13, -44]} frustumCulled={false}>
+      <sphereGeometry args={[7.5, 24, 24]} />
+      <meshBasicMaterial color="#FFC072" toneMapped={false} />
+    </mesh>
+  );
+}
+
 export function PostFX({ tier }: { tier: DeviceTier }) {
+  // STATE, not a ref. GodRays needs the actual mesh instance as a prop, and a
+  // ref is populated AFTER render without scheduling another one — so the pass
+  // would read null on the first pass and never mount, silently. The callback
+  // ref sets state once, which re-renders and hands the effect a real mesh.
+  const [sun, setSun] = useState<THREE.Mesh | null>(null);
   if (tier === 'low') {
     return (
       <EffectComposer>
@@ -37,7 +65,11 @@ export function PostFX({ tier }: { tier: DeviceTier }) {
   }
 
   return (
-    <EffectComposer>
+    <>
+      {/* Mounted OUTSIDE the composer: it is scene geometry the pass samples,
+          not an effect. */}
+      <SunDisc onReady={setSun} />
+      <EffectComposer>
       {/* Selective: only the gold finials, the lit window reveals and the
           fountain highlight cross 0.85 after tone mapping. A lower threshold
           catches the cream stone and turns the whole facade into a lamp — which
@@ -75,7 +107,33 @@ export function PostFX({ tier }: { tier: DeviceTier }) {
       ) : (
         <></>
       )}
+      {/* VOLUMETRIC SCATTERING. The sun sits behind the building, so the
+          architecture occludes the disc and the rays break around the roofline
+          and through the colonnade — light with physical presence in the air
+          rather than a lens flare stuck on top.
+
+          High tier only: this is a second render of the occlusion scene plus a
+          multi-sample radial blur, which is the most expensive thing in the
+          pipeline and the first thing a phone should not pay for.
+
+          weight/decay kept low. God rays are the single easiest effect to
+          overdo, and this scene has already shipped blown out once. */}
+      {tier === 'high' && sun ? (
+        <GodRays
+          sun={sun}
+          density={0.92}
+          decay={0.93}
+          weight={0.38}
+          exposure={0.34}
+          samples={60}
+          clampMax={0.92}
+          blur
+        />
+      ) : (
+        <></>
+      )}
       <Vignette offset={0.3} darkness={0.66} eskil={false} />
     </EffectComposer>
+    </>
   );
 }
