@@ -41,7 +41,12 @@
 
 .t-display {
   font-family: var(--font-serif), Georgia, serif;
-  font-size: var(--step-5);
+  /* Tighter than --step-5 deliberately. The display size is set against the
+     3D frame behind it, not against the text scale: at --step-5 the four-line
+     hero ran 73px at a 1024px viewport and crowded the mansion out of its own
+     establishing shot. Typography frames the subject here; it is not the
+     subject. */
+  font-size: clamp(2.4rem, 4.6vw, 4.6rem);
   line-height: 0.98;
   letter-spacing: var(--track-display);
   font-weight: 400;
@@ -123,4 +128,18 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .qhr-sheen { animation: none; }
+}
+
+
+/* Scroll cue: a short bar falling down a hairline. Pauses at each end rather
+   than looping continuously, so it reads as an invitation rather than as a
+   loading spinner. Suppressed under reduced-motion. */
+@keyframes scrollcue {
+  0%   { transform: translateY(-100%); }
+  45%  { transform: translateY(150%); }
+  100% { transform: translateY(150%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[scrollcue_2\.2s_ease-in-out_infinite\] { animation: none; }
 }

@@ -2,6 +2,7 @@ import { ConsentProvider } from '@/lib/consent/ConsentProvider';
 import { ConsentPanel } from '@/components/consent/ConsentPanel';
 import { SiteHeader } from '@/components/site/SiteHeader';
 import { SiteFooter } from '@/components/site/SiteFooter';
+import { CursorRing } from '@/components/site/CursorRing';
 import { TelemetryProvider } from '@/lib/telemetry/TelemetryProvider';
 import { MarketingPixels } from '@/lib/marketing/pixels';
 import { PostHogProvider } from './posthog-provider';
@@ -31,6 +32,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
                 inside the footer, which is on every page. */}
             <SiteFooter />
           </div>
+          <CursorRing />
           <ConsentPanel />
           {/* Renders nothing at all without Marketing consent — no script tag,
               no network request. A pixel loaded and then told not to track has

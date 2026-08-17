@@ -87,7 +87,12 @@ export default async function SiteHomePage() {
               fluid via clamp(), so it never jumps at a breakpoint. */}
           <h1 className="t-display text-[#F2EDE4]">
             Land, in the districts
-            <br className="hidden sm:block" /> we come from
+            <br className="hidden sm:block" />{' '}
+            {/* The italic falls on "we come from" because that is the claim
+                the whole page rests on — a developer selling in the districts
+                it is actually from. The accent marks the sentence's meaning,
+                not a random word chosen for texture. */}
+            <em className="italic text-[#E8B98A]">we come from</em>
           </h1>
           <p className="t-lede mt-8 max-w-xl text-[#F2EDE4]/70">
             Approved plotted layouts in Vizianagaram and Srikakulam, developed
@@ -115,6 +120,16 @@ export default async function SiteHomePage() {
               </span>
             </Link>
           </p>
+        </div>
+
+        {/* Scroll indicator. Sits in the hero's own grid rather than fixed to
+            the viewport, so it scrolls away with the section it belongs to
+            instead of hovering over the whole page. */}
+        <div className="col-span-12 mt-24 flex items-center gap-4 md:col-span-6 md:col-start-1">
+          <span className="t-eyebrow text-[#F2EDE4]/35">Scroll</span>
+          <span aria-hidden className="relative h-10 w-px overflow-hidden bg-[#F2EDE4]/15">
+            <span className="absolute inset-x-0 top-0 h-4 animate-[scrollcue_2.2s_ease-in-out_infinite] bg-[#E8B98A]" />
+          </span>
         </div>
       </header>
 

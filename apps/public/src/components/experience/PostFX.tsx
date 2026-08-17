@@ -25,6 +25,7 @@
 
 import { EffectComposer, Bloom, Vignette, DepthOfField } from '@react-three/postprocessing';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
+import { SUBJECT } from './cameraPath';
 
 export function PostFX({ tier }: { tier: DeviceTier }) {
   if (tier === 'low') {
@@ -47,15 +48,28 @@ export function PostFX({ tier }: { tier: DeviceTier }) {
         luminanceSmoothing={0.28}
         mipmapBlur
       />
-      {/* Focused at the building, not at the camera. focusDistance is
-          normalised 0..1 across the camera's near..far, and the path holds the
-          mansion between roughly 9m and 30m — so the near cypresses and the far
-          horizon fall off while the architecture stays sharp. */}
+      {/* Focused ON THE BUILDING, tracked every frame.
+
+          This was `focusDistance={0.021}` — a hardcoded NORMALISED depth, not
+          metres. focusDistance is 0..1 across the camera's near..far and the
+          mapping is non-linear, so 0.021 put the focal plane a few metres in
+          front of the lens and the mansion — the subject of the entire page —
+          sat in bokeh. Passing `target` instead makes the effect compute the
+          distance from the camera to that world point each frame, which is
+          exactly right now the camera orbits: the radius changes from 30m to
+          13m along the path, so any fixed focal distance would be wrong for
+          most of the journey by construction.
+
+          bokehScale dropped 2.4 -> 0.9. The client's reference is Nolan, who
+          shoots large-format deep focus — wide lenses, everything sharp, and
+          famously little bokeh. Heavy DOF is the opposite of that house style.
+          What is left is just enough to soften the near motes and let the far
+          karst fall away. */}
       {tier === 'high' ? (
         <DepthOfField
-          focusDistance={0.021}
-          focalLength={0.05}
-          bokehScale={2.4}
+          target={SUBJECT}
+          focalLength={0.028}
+          bokehScale={0.9}
           height={480}
         />
       ) : (

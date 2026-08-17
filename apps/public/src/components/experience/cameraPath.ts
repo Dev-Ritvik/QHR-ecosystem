@@ -54,51 +54,48 @@ export interface CameraBeat {
  */
 export const BEATS: readonly CameraBeat[] = [
   {
-    // HERO. The establishing shot: full elevation, fountain in the foreground,
-    // building right-of-centre so the headline has the left. Verified 0.2247.
+    // HERO. theta -8, R 30. Wide establishing, building right of frame so the
+    // headline has the left.
     at: 0.0,
-    position: [0.0, 1.65, 30.0],
-    target: [-7.0, 4.2, 0.0],
+    position: [-4.18, 1.65, 29.71],
+    target: [0.0, 4.2, 0.0],
     fog: [34, 190],
     keyIntensity: 2.3,
   },
   {
-    // KARTIKEYA. Dolly forward and left, swinging the facade across frame. The
-    // camera is now off-axis, so the portico reads in three-quarter and the
-    // depth between the near cypress and the far wing opens up.
+    // KARTIKEYA. theta 20, R 25. The orbit begins and the radius closes: the
+    // facade swings to three-quarter and the near corner starts to lead.
     at: 0.22,
-    position: [-11.0, 2.2, 23.0],
-    target: [-1.5, 3.8, 0.0],
+    position: [8.55, 2.4, 23.49],
+    target: [0.0, 4.1, 0.0],
     fog: [30, 170],
     keyIntensity: 2.45,
   },
   {
-    // LUCKY GARDEN. Rise and orbit. The elevation change is the point: from
-    // 6.5m the roofline, cupola and spire stack against the sky instead of
-    // being read edge-on, and the hedging reads as a plan below.
+    // LUCKY GARDEN. theta 48, R 19. High point of the arc. Elevation and
+    // rotation together - the roofline, cupola and spire stack against the sky
+    // while the plan of the forecourt opens below.
     at: 0.48,
-    position: [-14.5, 6.8, 16.0],
-    target: [0.0, 4.6, 0.0],
+    position: [14.12, 6.8, 12.71],
+    target: [0.0, 4.4, 0.0],
     fog: [24, 150],
     keyIntensity: 2.6,
   },
   {
-    // VSR GAYATRI. Drop to a low, dramatic angle looking UP at the portico.
-    // Kept at x -7 so the path stays clear of the fountain cylinder, which
-    // spans x -2.7..2.7 around z 13.2.
+    // VSR GAYATRI. theta 70, R 15. Drop low and keep sweeping. Near the side
+    // elevation now, looking up the length of the building.
     at: 0.74,
-    position: [-7.0, 1.15, 12.0],
-    target: [0.0, 5.6, 0.0],
+    position: [14.1, 2.0, 5.13],
+    target: [0.0, 4.8, 0.0],
     fog: [18, 120],
     keyIntensity: 2.75,
   },
   {
-    // FOOTER. Pedestal up as the dark UI layer arrives. Ends left of the axis
-    // rather than on it: a straight run from the previous beat to x 0 would
-    // clip the fountain bowl on the way in.
+    // FOOTER. theta 90, R 13. Full broadside, pedestal up as the dark UI
+    // arrives. A quarter-turn of travel from the opening frame.
     at: 1.0,
-    position: [-2.5, 3.4, 9.0],
-    target: [0.0, 4.2, 0.0],
+    position: [13.0, 4.2, 0.0],
+    target: [0.0, 3.9, 0.0],
     fog: [14, 95],
     keyIntensity: 2.5,
   },
@@ -121,6 +118,13 @@ function curveThrough(points: readonly [number, number, number][]) {
     'centripetal',
   );
 }
+
+/**
+ * The mansion's centroid. The camera's aim stays locked here for the whole
+ * orbit, and DOF focuses on it — one shared constant so the lens and the look
+ * can never disagree about where the subject is.
+ */
+export const SUBJECT: [number, number, number] = [0, 4.0, 0];
 
 export const POSITION_CURVE = curveThrough(BEATS.map((b) => b.position));
 export const TARGET_CURVE = curveThrough(BEATS.map((b) => b.target));

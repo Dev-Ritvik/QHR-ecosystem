@@ -86,7 +86,7 @@ export function SiteHeader() {
           <Logo size={30} />
 
           <nav aria-label="Primary" className="ml-auto hidden md:block">
-            <ul className="flex items-center gap-7">
+            <ul className="flex items-center gap-5">
               {PRIMARY.map((l) => {
                 const active = pathname === l.href;
                 return (
@@ -101,7 +101,16 @@ export function SiteHeader() {
                           : 'text-[#F2EDE4]/55 hover:text-[#F2EDE4]')
                       }
                     >
-                      {l.label}
+                      {/* Bracketed micro-navigation. The brackets are
+                          aria-hidden so a screen reader hears "Plots", not
+                          "left bracket Plots right bracket" — they are a
+                          typographic device, not part of the link's name. They
+                          brighten on hover with the label, so the whole token
+                          reads as one target rather than a word inside
+                          furniture. */}
+                      <span aria-hidden className="mr-[0.35em] opacity-45">[</span>
+                      <span className="uppercase tracking-[0.14em]">{l.label}</span>
+                      <span aria-hidden className="ml-[0.35em] opacity-45">]</span>
                     </Link>
                   </li>
                 );
