@@ -88,10 +88,18 @@ export const EXTERIOR_BOUNDS = {
 const EMISSIVE: Record<string, { color: string; intensity: number }> = {
   // Warm interior spill. This is the main event — 28 window and arch reveals
   // across the elevation, so the facade reads as occupied.
-  MAT_Window_Interior: { color: '#FFAA55', intensity: 2.6 },
+  // 2.6 -> 0.55. VERIFIED: every archback node in the GLB sits at translation
+  // [0,0,0], so these meshes are NOT detached and no positional fix applies.
+  // They are large flat planes filling each arch, and at 2.6 they crossed the
+  // bloom threshold across their whole area — which is what read as floating
+  // glowing orbs in front of the arches. At 0.55 they sit below the threshold
+  // and read as a warm interior behind the opening. The LIGHT those windows
+  // cast is now the RectAreaLights in WorldCanvas, which is where it belongs:
+  // emissive was never going to illuminate the stone around it.
+  MAT_Window_Interior: { color: '#FFAA55', intensity: 0.55 },
   // The gold finials, spire tip and door furniture catch a low amber so the
   // roofline has points of light against the sky at the top of the orbit.
-  MAT_Gold: { color: '#FFC98A', intensity: 0.85 },
+  MAT_Gold: { color: '#FFC98A', intensity: 0.4 },
   // Faint: the door reveal should suggest a lit hall beyond, not a light box.
   MAT_Wood_Dark: { color: '#FF9A40', intensity: 0.35 },
 };

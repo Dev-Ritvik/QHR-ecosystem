@@ -182,8 +182,17 @@ const FRAG = /* glsl */ `
     // slope itself is worth shading on.
     float slope = 1.0 - clamp(n.y, 0.0, 1.0);
 
-    vec3 col = albedo * (0.07 + wrap * 0.16 + lambert * 0.62);
-    col += albedo * slope * 0.10;
+    // The key is nearly horizontal (elevation 15 against an 80m throw), so
+    // upward-facing ground receives a lambert of only ~0.17. Lighting the
+    // terrain on lambert alone therefore produced a near-black plane no matter
+    // how much relief it had. The wrap term carries the base illumination and
+    // lambert supplies the raking contrast on the slopes facing the sun —
+    // which is exactly where a low sun SHOULD be creating the terrace edges.
+    vec3 col = albedo * (0.20 + wrap * 0.55 + lambert * 0.95);
+
+    // Risers catch a warm edge from the same low sun. This is the line that
+    // makes a terrace read as a step rather than as a tonal gradient.
+    col += vec3(0.55, 0.42, 0.30) * slope * lambert * 0.85;
 
     // Fog matched to the scene's own THREE.Fog so the terrain dissolves into
     // the same navy at the same distance. Without this the ground would run to
@@ -207,9 +216,18 @@ export function Terrain({ driveByScroll = true }: { driveByScroll?: boolean }) {
     () => ({
       uFlatRadius: { value: FLAT_RADIUS },
       uFlatFeather: { value: FLAT_FEATHER },
-      uHeight: { value: 11.0 },
-      uLow: { value: new THREE.Color('#141A22') },
-      uHigh: { value: new THREE.Color('#3A3B33') },
+      // Exposed scalar, raised from 11. The height field was never the problem
+      // (measured: 8.72m of range and 537 distinct terrace levels across the
+      // visible annulus) — it was invisible because the SHADING crushed it to
+      // ~3% luminance. Both are addressed: more relief, and enough light on it
+      // to see the relief that was always there.
+      uHeight: { value: 30.0 },
+      // Was #141A22 / #3A3B33 — around 0.10 luminance. Multiplied by the
+      // lighting term below that landed at 0.027, i.e. black. Limestone is a
+      // PALE rock; these are lifted to where the terraces can actually read
+      // against the #0A1120 sky.
+      uLow: { value: new THREE.Color('#2E3440') },
+      uHigh: { value: new THREE.Color('#8A8778') },
       uFog: { value: new THREE.Color('#0A1120') },
       // Normalised direction TO the key light at (30, 15, -80). Must be kept
       // in step with the directionalLight in WorldCanvas.

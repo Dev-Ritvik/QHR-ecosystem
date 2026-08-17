@@ -42,6 +42,15 @@ export interface CameraBeat {
    *  the mood evolves along the journey instead of sitting flat. */
   fog: [near: number, far: number];
   keyIntensity: number;
+  /** Vertical FOV in degrees. Widening during the fast legs exaggerates
+   *  parallax and reads as speed; narrowing on arrival compresses the facade
+   *  and settles the shot. This is the single cheapest source of kinetic
+   *  energy available — it costs one projection matrix update per frame. */
+  fov: number;
+  /** Bank, in radians, applied about the camera's own view axis. Leaning into
+   *  a turn is what makes a sweep feel flown rather than driven. Small: past
+   *  ~0.09 the horizon tilt reads as a broken camera rather than as momentum. */
+  roll: number;
 }
 
 /**
@@ -54,50 +63,61 @@ export interface CameraBeat {
  */
 export const BEATS: readonly CameraBeat[] = [
   {
-    // HERO. theta -8, R 30. Wide establishing, building right of frame so the
-    // headline has the left.
+    // HERO. High above the roofline (spire tops out at 11.72) looking down on
+    // the whole forecourt. The building reads as a plan before it reads as an
+    // elevation, and the descent from here is what the rest of the page is.
     at: 0.0,
-    position: [-4.18, 1.65, 29.71],
-    target: [0.0, 4.2, 0.0],
-    fog: [34, 190],
+    position: [2.5, 12.5, 22.0],
+    target: [0.0, 3.6, 0.0],
+    fog: [40, 210],
     keyIntensity: 2.3,
+    fov: 50,
+    roll: 0.0,
   },
   {
-    // KARTIKEYA. theta 20, R 25. The orbit begins and the radius closes: the
-    // facade swings to three-quarter and the near corner starts to lead.
+    // KARTIKEYA. The dive begins: 12m of elevation dropped while swinging
+    // right. Widest FOV of the sequence — this is the fastest leg and the one
+    // that should feel like falling.
     at: 0.22,
-    position: [8.55, 2.4, 23.49],
-    target: [0.0, 4.1, 0.0],
-    fog: [30, 170],
+    position: [12.0, 14.0, 26.0],
+    target: [0.0, 4.0, 0.0],
+    fog: [32, 175],
     keyIntensity: 2.45,
+    fov: 68,
+    roll: -0.052,
   },
   {
-    // LUCKY GARDEN. theta 48, R 19. High point of the arc. Elevation and
-    // rotation together - the roofline, cupola and spire stack against the sky
-    // while the plan of the forecourt opens below.
+    // LUCKY GARDEN. Levelling into the turn at roof height, still banked.
     at: 0.48,
-    position: [14.12, 6.8, 12.71],
-    target: [0.0, 4.4, 0.0],
-    fog: [24, 150],
+    position: [17.0, 7.5, 15.0],
+    target: [0.0, 4.5, 0.0],
+    fog: [26, 150],
     keyIntensity: 2.6,
+    fov: 62,
+    roll: -0.068,
   },
   {
-    // VSR GAYATRI. theta 70, R 15. Drop low and keep sweeping. Near the side
-    // elevation now, looking up the length of the building.
+    // VSR GAYATRI. Down into the courtyard and across the front of the
+    // fountain. Camera is 7.7m from the bowl centre (radius 3.1) at 2.2m of
+    // height, so the water passes close in the foreground without the camera
+    // entering it. Tightest FOV: the shot slows here.
     at: 0.74,
-    position: [14.1, 2.0, 5.13],
-    target: [0.0, 4.8, 0.0],
+    position: [7.0, 2.2, 16.5],
+    target: [0.0, 4.5, 4.0],
     fog: [18, 120],
     keyIntensity: 2.75,
+    fov: 44,
+    roll: 0.030,
   },
   {
-    // FOOTER. theta 90, R 13. Full broadside, pedestal up as the dark UI
-    // arrives. A quarter-turn of travel from the opening frame.
+    // FOOTER. Rise and unbank onto the side elevation as the dark UI arrives.
     at: 1.0,
-    position: [13.0, 4.2, 0.0],
-    target: [0.0, 3.9, 0.0],
+    position: [15.5, 5.2, 6.4],
+    target: [0.0, 4.0, 0.0],
     fog: [14, 95],
     keyIntensity: 2.5,
+    fov: 48,
+    roll: 0.0,
   },
 ];
 
@@ -155,6 +175,26 @@ export function curveT(scroll: number): number {
 /** Fog and key intensity, interpolated between the surrounding beats. Linear
  *  on purpose: atmosphere should track the journey, not have a life of its
  *  own on top of a curve that is already easing. */
+/** FOV and bank between the surrounding beats. Same linear read as the
+ *  atmosphere: the curve is already easing, and layering a second easing on
+ *  the lens produces motion nobody asked for. */
+export function lensAt(scroll: number): { fov: number; roll: number } {
+  const s = Math.min(1, Math.max(0, scroll));
+  for (let i = 0; i < BEATS.length - 1; i += 1) {
+    const a = BEATS[i];
+    const b = BEATS[i + 1];
+    if (s <= b.at) {
+      const k = b.at === a.at ? 0 : (s - a.at) / (b.at - a.at);
+      return {
+        fov: a.fov + (b.fov - a.fov) * k,
+        roll: a.roll + (b.roll - a.roll) * k,
+      };
+    }
+  }
+  const last = BEATS[BEATS.length - 1];
+  return { fov: last.fov, roll: last.roll };
+}
+
 export function atmosphereAt(scroll: number): { near: number; far: number; key: number } {
   const s = Math.min(1, Math.max(0, scroll));
   for (let i = 0; i < BEATS.length - 1; i += 1) {

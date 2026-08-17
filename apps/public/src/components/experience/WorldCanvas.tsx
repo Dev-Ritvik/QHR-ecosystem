@@ -28,6 +28,7 @@ import { usePathname } from 'next/navigation';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { placeForRoute, type PlaceId } from '@estate/domain/experience/places';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
@@ -35,7 +36,7 @@ import { HallModel } from './HallModel';
 import { ExteriorModel } from './ExteriorModel';
 import { useDeviceTier } from './useDeviceTier';
 import { poseFor, setFor, type SceneSet } from './poses';
-import { POSITION_CURVE, TARGET_CURVE, curveT, atmosphereAt } from './cameraPath';
+import { POSITION_CURVE, TARGET_CURVE, curveT, atmosphereAt, lensAt } from './cameraPath';
 import { useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { PostFX } from './PostFX';
@@ -74,6 +75,11 @@ const PARALLAX = 0.42;
  * requires — the typography must never touch the architecture.
  */
 const FRAME_OFFSET = 7.4;
+
+// RectAreaLight renders black without this — it needs its BRDF lookup textures
+// initialised before any such light is constructed. Module scope so it runs
+// exactly once regardless of how many lights mount.
+RectAreaLightUniformsLib.init();
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -266,6 +272,29 @@ function CameraRig({ place }: { place: PlaceId }) {
     camera.position.lerp(desired.current, k);
     target.current.lerp(look.current, k);
     camera.lookAt(target.current);
+
+    if (p.path) {
+      const lens = lensAt(t);
+      const cam = camera as THREE.PerspectiveCamera;
+
+      // FOV WARP. 50 at the top, 68 through the dive, 44 crossing the fountain.
+      // Widening on the fast leg stretches the near geometry and exaggerates
+      // parallax, which the eye reads as speed; narrowing on arrival compresses
+      // the facade and settles the shot. Only touched when it has actually
+      // changed — updateProjectionMatrix rebuilds the matrix and dirties every
+      // frustum test downstream, so calling it unconditionally every frame is
+      // real cost for nothing.
+      if (Math.abs(cam.fov - lens.fov) > 0.01) {
+        cam.fov = lens.fov;
+        cam.updateProjectionMatrix();
+      }
+
+      // BANK. Applied AFTER lookAt, in the camera's own space — lookAt writes
+      // the full orientation with zero roll, so any roll set before it is
+      // discarded. rotateZ post-multiplies about the view axis, which leans the
+      // horizon into the turn instead of skewing the aim off the subject.
+      if (lens.roll !== 0) camera.rotateZ(lens.roll);
+    }
   });
 
   return null;
@@ -652,9 +681,19 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           crossing the bloom threshold, plus the GodRays sun disc — the only
           added mesh, and one the pass requires. Both are addressed above and
           below rather than by deleting a helper that does not exist. */}
-      <pointLight position={[-6.2, 2.4, 7.4]} intensity={26} distance={17} decay={2} color="#FFAA55" />
-      <pointLight position={[0, 2.2, 7.8]} intensity={32} distance={19} decay={2} color="#FFB068" />
-      <pointLight position={[6.2, 2.4, 7.4]} intensity={26} distance={17} decay={2} color="#FFAA55" />
+      {/* RectAreaLight planes aligned INSIDE the archways, replacing the front
+          point lights. A point light radiates in every direction from a
+          singularity, which is why its falloff on a flat facade reads as a
+          circular hotspot — a sticker. A rect area light is a lit RECTANGLE:
+          it throws the shape of the opening onto the stone and the steps, which
+          is what a real window does.
+
+          rotation-y turns each one to face out along +z. They are not visible
+          geometry — a RectAreaLight has no mesh — so nothing new appears in
+          frame. */}
+      <rectAreaLight position={[-6.2, 2.3, 6.35]} width={2.1} height={3.0} intensity={9} color="#FFAA55" />
+      <rectAreaLight position={[0, 2.2, 6.35]} width={3.0} height={3.4} intensity={11} color="#FFB068" />
+      <rectAreaLight position={[6.2, 2.3, 6.35]} width={2.1} height={3.0} intensity={9} color="#FFAA55" />
       {/* The side elevation — what the camera faces from theta 70 onward.
           Without it the last third of the orbit plays against an unlit wall. */}
       <pointLight position={[10.9, 2.5, 0]} intensity={28} distance={18} decay={2} color="#FFAA55" />
