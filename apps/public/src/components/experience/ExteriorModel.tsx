@@ -68,6 +68,34 @@ export const EXTERIOR_BOUNDS = {
  * Keyed by material name and applied to the shared material instances, so it
  * runs once per parse rather than per mount.
  */
+/**
+ * Emissive anchoring — the lights being ON inside the building.
+ *
+ * Bloom only ignites pixels above its luminance threshold, and every material
+ * in this GLB is diffuse: lit by the key, never emitting. So the bloom pass was
+ * running over a building that mathematically could not cross the threshold,
+ * doing nothing but cost. It also meant the mansion read as ABANDONED — a
+ * correctly lit exterior with dead black window openings is a house nobody is
+ * in, which is the opposite of what this page is selling.
+ *
+ * Emissive is not affected by scene lighting, so these are what carry the
+ * building through the dark end of the orbit where the key falls off.
+ *
+ * Applied to the window and door interiors rather than the glass: the glass is
+ * transmissive and lighting IT makes a glowing pane, whereas lighting what sits
+ * behind it reads as a lit room seen through a window.
+ */
+const EMISSIVE: Record<string, { color: string; intensity: number }> = {
+  // Warm interior spill. This is the main event — 28 window and arch reveals
+  // across the elevation, so the facade reads as occupied.
+  MAT_Window_Interior: { color: '#FFAA55', intensity: 2.6 },
+  // The gold finials, spire tip and door furniture catch a low amber so the
+  // roofline has points of light against the sky at the top of the orbit.
+  MAT_Gold: { color: '#FFC98A', intensity: 0.85 },
+  // Faint: the door reveal should suggest a lit hall beyond, not a light box.
+  MAT_Wood_Dark: { color: '#FF9A40', intensity: 0.35 },
+};
+
 const GRADE: Record<string, { color: string; roughness?: number }> = {
   // Deep and desaturated, a shade off the #0A1120 sky so the ground reads as
   // ground and not as a hole. Anything lighter puts a bright horizon band
@@ -105,6 +133,18 @@ function applyGrade(root: THREE.Object3D): string[] {
     for (const m of mats) {
       const mat = m as THREE.MeshStandardMaterial & { __graded?: boolean };
       if (!mat || mat.__graded) continue;
+
+      // Emissive first, and on its own flag — a material can be emissive
+      // without being colour-graded, and MAT_Gold is exactly that case: it has
+      // a real texture, so the GRADE pass below skips it.
+      const e = EMISSIVE[mat.name];
+      if (e && mat.emissive) {
+        mat.emissive.set(e.color);
+        mat.emissiveIntensity = e.intensity;
+        mat.needsUpdate = true;
+        if (!touched.includes(mat.name + ':emit')) touched.push(mat.name + ':emit');
+      }
+
       const g = GRADE[mat.name];
       if (!g) continue;
       // Never override a real texture — a map means the export succeeded and

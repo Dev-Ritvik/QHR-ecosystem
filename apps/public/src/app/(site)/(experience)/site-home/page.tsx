@@ -82,7 +82,13 @@ export default async function SiteHomePage() {
           half of the frame that is deliberately empty. Cards and headings live
           there; the architecture is never covered. */}
       <header className="mx-auto grid min-h-[130vh] max-w-6xl grid-cols-12 gap-10 px-6 pt-[22vh]">
-        <div className="col-span-12 md:col-span-6">
+        {/* STRICT LEFT COLUMN. max-w-[40vw] on top of the grid span, because a
+            column span is a fraction of the CONTAINER and the container is
+            capped at max-w-6xl — on a wide monitor six of twelve columns stops
+            well short of 40% of the viewport, and on a narrow one it overruns.
+            The camera keeps the right 60% as an unobstructed stage, so the copy
+            is measured against the VIEWPORT the stage is cut from. */}
+        <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
           {/* t-display, not an ad-hoc text-4xl/5xl/6xl ladder. The scale is
               fluid via clamp(), so it never jumps at a breakpoint. */}
           <h1 className="t-display text-[#F2EDE4]">
@@ -162,7 +168,13 @@ export default async function SiteHomePage() {
               key={project.projectId}
               className="mx-auto grid min-h-[380vh] max-w-6xl grid-cols-12 px-6"
             >
-              <div className="col-span-12 md:col-span-6">
+              {/* STRICT LEFT COLUMN. max-w-[40vw] on top of the grid span, because a
+            column span is a fraction of the CONTAINER and the container is
+            capped at max-w-6xl — on a wide monitor six of twelve columns stops
+            well short of 40% of the viewport, and on a narrow one it overruns.
+            The camera keeps the right 60% as an unobstructed stage, so the copy
+            is measured against the VIEWPORT the stage is cut from. */}
+        <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
                 <div className="sticky top-[16vh]">
                   <ProjectCard project={project} />
                 </div>
@@ -172,7 +184,13 @@ export default async function SiteHomePage() {
 
           {soldOutProjects.length > 0 && (
             <section className="mx-auto grid min-h-[260vh] max-w-6xl grid-cols-12 px-6">
-              <div className="col-span-12 md:col-span-6">
+              {/* STRICT LEFT COLUMN. max-w-[40vw] on top of the grid span, because a
+            column span is a fraction of the CONTAINER and the container is
+            capped at max-w-6xl — on a wide monitor six of twelve columns stops
+            well short of 40% of the viewport, and on a narrow one it overruns.
+            The camera keeps the right 60% as an unobstructed stage, so the copy
+            is measured against the VIEWPORT the stage is cut from. */}
+        <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
                 <div className="sticky top-[16vh]">
                   <div className="mb-10 flex items-baseline gap-6">
                     <h2 className="t-eyebrow text-[#F2EDE4]/40">Sold out</h2>

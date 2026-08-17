@@ -41,11 +41,17 @@ const COUNT = 2400;
 /** The volume the motes occupy, in metres, centred on the approach axis. Sized
  *  to the camera path (z 9..30, x -15..2) plus margin, so they are always in
  *  shot without wasting points behind the camera. */
-const SPREAD = { x: 46, y: 14, z: 44, zOffset: 8 };
+const SPREAD = { x: 46, y: 4.0, z: 44, zOffset: 8 };
+
+/** The fountain, which the motes circulate around. Air in a forecourt moves
+ *  around the thing in the middle of it, and anchoring the swirl to real
+ *  geometry is what stops this reading as a screensaver. */
+const FOUNTAIN = { x: 0, z: 13.2 };
 
 const VERT = /* glsl */ `
   uniform float uTime;
   uniform float uSize;
+  uniform vec2 uSwirl;
   attribute float aSeed;
   attribute float aScale;
   varying float vFade;
@@ -56,9 +62,23 @@ const VERT = /* glsl */ `
     // Three offset sines per axis: enough to look unrepeating over the ~40s a
     // visitor spends on the page, cheap enough to be free.
     float t = uTime * 0.08 + aSeed * 6.2831;
-    p.x += sin(t * 1.3) * 0.9 + sin(t * 0.41) * 1.7;
-    p.y += cos(t * 0.9) * 0.7 + sin(t * 0.23) * 1.1;
-    p.z += sin(t * 1.1 + 1.7) * 0.9;
+
+    // SWIRL. Rotate about the fountain axis at a rate that falls off with
+    // distance, so the air turns fastest where the fountain is and barely moves
+    // at the edge of the forecourt. This is what makes the field read as
+    // volume circulating around something, rather than as points drifting.
+    vec2 rel = p.xz - uSwirl;
+    float rad = length(rel);
+    float spin = uTime * 0.055 / (1.0 + rad * 0.18) + aSeed * 0.9;
+    float cs = cos(spin);
+    float sn = sin(spin);
+    p.xz = uSwirl + vec2(rel.x * cs - rel.y * sn, rel.x * sn + rel.y * cs);
+
+    p.x += sin(t * 1.3) * 0.5 + sin(t * 0.41) * 0.8;
+    // Vertical wander damped hard: motes must stay in the low band they were
+    // seeded into or they climb back out of it over time.
+    p.y += cos(t * 0.9) * 0.22 + sin(t * 0.23) * 0.3;
+    p.z += sin(t * 1.1 + 1.7) * 0.5;
 
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
 
@@ -103,7 +123,12 @@ export function Motes({ count = COUNT }: { count?: number }) {
       pos[i * 3] = (Math.random() - 0.5) * SPREAD.x;
       // Biased low: dust hangs near the ground and thins with height, so a
       // uniform distribution reads as a cube of static rather than as air.
-      pos[i * 3 + 1] = Math.pow(Math.random(), 1.9) * SPREAD.y + 0.4;
+      // Ceiling of 4m and heavily biased to the floor. It was 14m with a mild
+      // bias, which put most of the field ABOVE the roofline — motes against
+      // open sky with no geometry near them, which is why it read as a flat
+      // 2D starfield pasted over the frame rather than as air in a place. Dust
+      // hangs low; anything higher has nothing to belong to.
+      pos[i * 3 + 1] = Math.pow(Math.random(), 2.6) * SPREAD.y + 0.25;
       pos[i * 3 + 2] = (Math.random() - 0.5) * SPREAD.z + SPREAD.zOffset;
       seed[i] = Math.random();
       scale[i] = 0.45 + Math.random() * 0.9;
@@ -115,7 +140,7 @@ export function Motes({ count = COUNT }: { count?: number }) {
     // Frustum culling off: the bounding sphere is computed from the UNMOVED
     // positions, but the shader displaces by up to ~2.6m, so a mote near the
     // edge would be culled while still visible.
-    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 4, 8), 60);
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 2, 8), 60);
     return g;
   }, [count]);
 
@@ -123,6 +148,7 @@ export function Motes({ count = COUNT }: { count?: number }) {
     () => ({
       uTime: { value: 0 },
       uSize: { value: 2.6 },
+      uSwirl: { value: new THREE.Vector2(FOUNTAIN.x, FOUNTAIN.z) },
       uColor: { value: new THREE.Color('#E8B98A') },
       uOpacity: { value: 0.34 },
     }),

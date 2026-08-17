@@ -25,6 +25,7 @@
 
 import { useEffect } from 'react';
 import Lenis from 'lenis';
+import gsap from 'gsap';
 
 /** Exposed so useScrollProgress can read the smoothed value rather than
  *  window.scrollY, which Lenis leaves lagging behind its own transform. */
@@ -45,15 +46,30 @@ export function SmoothScroll() {
     });
     lenisInstance = lenis;
 
-    let raf = 0;
-    const loop = (time: number) => {
-      lenis.raf(time);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
+    // ONE TICKER. Lenis previously drove itself from its own
+    // requestAnimationFrame while r3f drove the camera from a second one. Two
+    // independent loops reading and writing the same scroll position in the
+    // same frame have no defined order, so on any frame where r3f ran first the
+    // camera sampled last frame's scroll and the canvas lagged the DOM by one
+    // frame — intermittently, which is what "floaty and uncoordinated" is.
+    //
+    // gsap.ticker is a single shared rAF, and r3f's loop is downstream of the
+    // same frame, so Lenis is now guaranteed to have advanced before the camera
+    // samples it.
+    //
+    // lagSmoothing(0) because GSAP otherwise CLAMPS delta after a slow frame to
+    // avoid a visible jump. That is right for a tween and wrong for a scroll
+    // position: clamping it makes Lenis integrate less than the real elapsed
+    // time and drift permanently behind the actual scrollbar.
+    const drive = (time: number) => lenis.raf(time * 1000);
+    gsap.ticker.add(drive);
+    gsap.ticker.lagSmoothing(0);
 
     return () => {
-      cancelAnimationFrame(raf);
+      gsap.ticker.remove(drive);
+      // Restore the default. Leaving lag smoothing off globally would change
+      // the behaviour of every GSAP tween in the app after this unmounts.
+      gsap.ticker.lagSmoothing(500, 33);
       lenis.destroy();
       lenisInstance = null;
     };
