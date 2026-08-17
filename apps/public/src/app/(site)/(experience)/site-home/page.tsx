@@ -24,10 +24,37 @@ export const metadata: Metadata = {
 };
 
 export default async function SiteHomePage() {
-  const projects = await getPublishedProjects();
+  // The home page must render even when the database does not.
+  //
+  // It crashed in front of the client: one failed query against
+  // projection.projects_pub took the whole page down and replaced the site with
+  // a raw Next.js error screen printing the SELECT statement. A marketing home
+  // page is mostly words and a 3D scene, and neither of those needs Postgres —
+  // there is no reason for a projection read to be able to destroy them.
+  //
+  // Degrades in three layers rather than throwing:
+  //   1. the query fails      -> projects = [], the page renders with the "no
+  //                              layouts open" panel and the scene intact
+  //   2. the query returns    -> Array.isArray guard, because a driver that
+  //      something odd           returns null or an object would otherwise
+  //                              throw TypeError on .filter and land in exactly
+  //                              the same crash screen
+  //   3. anything else        -> error.tsx in this segment catches it
+  //
+  // Rethrowing on a build-time prerender is deliberate: a broken database
+  // during `next build` should fail the build loudly rather than bake an empty
+  // page into the ISR cache and serve it for an hour.
+  let projects: unknown = [];
+  try {
+    projects = await getPublishedProjects();
+  } catch (err) {
+    console.error('[site-home] projection read failed; rendering without projects', err);
+    projects = [];
+  }
 
-  const availableProjects = projects.filter((p: any) => !p.isSoldOut);
-  const soldOutProjects = projects.filter((p: any) => p.isSoldOut);
+  const list: any[] = Array.isArray(projects) ? projects : [];
+  const availableProjects = list.filter((p: any) => !p.isSoldOut);
+  const soldOutProjects = list.filter((p: any) => p.isSoldOut);
 
   return (
     // THE SCROLL TRACK.
@@ -91,7 +118,7 @@ export default async function SiteHomePage() {
         </div>
       </header>
 
-      {projects.length === 0 ? (
+      {list.length === 0 ? (
         <div className="mx-auto max-w-6xl px-6 pt-[20vh]">
           <p className="t-h3 text-[#F2EDE4]/70">No layouts are open right now.</p>
           <p className="t-body mt-3 text-[#F2EDE4]/45">
