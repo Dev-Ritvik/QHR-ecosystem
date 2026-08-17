@@ -114,70 +114,6 @@ const GRADE: Record<string, { color: string; roughness?: number }> = {
   MAT_Hedge: { color: '#16281B', roughness: 0.95 },
 };
 
-/**
- * A tiling high-frequency roughness map, generated rather than shipped.
- *
- * The stone materials carry a base colour texture but a CONSTANT roughness, so
- * every point on the facade scatters light identically and the specular
- * response smears evenly across the elevation — the plastic look. Real
- * limestone varies at the millimetre scale, and that variation is what breaks
- * a highlight into something that reads as mineral.
- *
- * 256x256 of value noise at three octaves, wrapped, ~65KB in memory and zero
- * bytes over the wire. Built once and shared by every material that takes it.
- */
-let ROUGHNESS_TEX: THREE.DataTexture | null = null;
-
-function microRoughness(): THREE.DataTexture {
-  if (ROUGHNESS_TEX) return ROUGHNESS_TEX;
-
-  const N = 256;
-  const data = new Uint8Array(N * N);
-
-  // Integer hash rather than sin() — the sin trick loses precision at these
-  // coordinates and bands visibly in an 8-bit target.
-  const hash = (x: number, y: number) => {
-    let h = (x * 374761393 + y * 668265263) | 0;
-    h = (h ^ (h >> 13)) * 1274126177;
-    return ((h ^ (h >> 16)) >>> 0) / 4294967295;
-  };
-  const smooth = (t: number) => t * t * (3 - 2 * t);
-  const noise = (x: number, y: number, period: number) => {
-    const ix = Math.floor(x), iy = Math.floor(y);
-    const fx = smooth(x - ix), fy = smooth(y - iy);
-    // Wrap the lattice so the texture tiles without a seam.
-    const w = (v: number) => ((v % period) + period) % period;
-    const a = hash(w(ix), w(iy)), b = hash(w(ix + 1), w(iy));
-    const c = hash(w(ix), w(iy + 1)), d = hash(w(ix + 1), w(iy + 1));
-    return (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fy;
-  };
-
-  for (let y = 0; y < N; y += 1) {
-    for (let x = 0; x < N; x += 1) {
-      const u = x / N, v = y / N;
-      const n =
-        noise(u * 16, v * 16, 16) * 0.5 +
-        noise(u * 48, v * 48, 48) * 0.32 +
-        noise(u * 128, v * 128, 128) * 0.18;
-      // Centred near the material's own roughness so the map modulates it
-      // rather than replacing it: 0.62..1.0, never mirror-smooth.
-      data[y * N + x] = Math.round((0.62 + n * 0.38) * 255);
-    }
-  }
-
-  const tex = new THREE.DataTexture(data, N, N, THREE.RedFormat);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  // Tight repeat: the point is grain at the scale of the stone, not a pattern.
-  tex.repeat.set(14, 14);
-  tex.needsUpdate = true;
-  ROUGHNESS_TEX = tex;
-  return tex;
-}
-
-/** Materials that are stone or metal and should scatter light unevenly. */
-const MICRO_SURFACE = new Set(['MAT_Stone_Cream', 'MAT_Roof', 'MAT_Gold', 'MAT_Wood_Dark']);
-
 function applyGrade(root: THREE.Object3D): string[] {
   const touched: string[] = [];
   root.traverse((o) => {
@@ -215,17 +151,6 @@ function applyGrade(root: THREE.Object3D): string[] {
         mat.emissiveIntensity = e.intensity;
         mat.needsUpdate = true;
         if (!touched.includes(mat.name + ':emit')) touched.push(mat.name + ':emit');
-      }
-
-      // Micro-surface roughness on the stone and metal. Only applied where the
-      // material has no roughnessMap of its own — a real baked map always wins.
-      if (MICRO_SURFACE.has(mat.name) && !mat.roughnessMap) {
-        mat.roughnessMap = microRoughness();
-        // A roughnessMap multiplies roughnessFactor, so a factor of 1.0 would
-        // read the map straight and a factor of 0 would cancel it entirely.
-        // Lift anything very low so the map has something to modulate.
-        if (mat.roughness < 0.35) mat.roughness = 0.55;
-        mat.needsUpdate = true;
       }
 
       const g = GRADE[mat.name];

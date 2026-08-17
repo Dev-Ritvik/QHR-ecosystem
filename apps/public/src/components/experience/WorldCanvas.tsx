@@ -36,7 +36,7 @@ import { HallModel } from './HallModel';
 import { ExteriorModel } from './ExteriorModel';
 import { useDeviceTier } from './useDeviceTier';
 import { poseFor, setFor, type SceneSet } from './poses';
-import { POSITION_CURVE, TARGET_CURVE, curveT, atmosphereAt, lensAt, BEATS } from './cameraPath';
+import { POSITION_CURVE, TARGET_CURVE, curveT, atmosphereAt, lensAt } from './cameraPath';
 import gsap from 'gsap';
 import { useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
@@ -100,9 +100,12 @@ RectAreaLightUniformsLib.init();
  * fog and FOV stay tied to where the visitor is on the page rather than
  * lurching with the camera.
  */
-const SWING = gsap.parseEase('power4.inOut');
+// power2.inOut, not power4. Across a single continuous track power4 spends so
+// much of the range near zero velocity that the middle beats blur past in a
+// fraction of the scroll and never read; power2 accelerates and decelerates
+// over the whole journey while still crossing the centre at a real clip.
+const SWING = gsap.parseEase('power2.inOut');
 
-const BEAT_COUNT = BEATS.length;
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -250,18 +253,17 @@ function CameraRig({ place }: { place: PlaceId }) {
       // Multi-point spline. curveT remaps the beats' uneven `at` values onto
       // the curve parameter, so scrolling to a beat lands ON the vantage that
       // was rendered and approved rather than near it.
-      // Ease WITHIN each leg rather than across the whole path: easing the
-      // global 0..1 would make the two middle beats fly past at maximum speed
-      // and never read. curveT maps scroll onto the curve in units of one leg
-      // per integer, so easing the fractional part accelerates into and
-      // decelerates out of every beat in turn.
-      // curveT returns 0..1 across the WHOLE curve, so it is scaled into leg
-      // units first — floor() on the 0..1 value would be 0 everywhere and the
-      // easing would never engage.
-      const legs = BEAT_COUNT - 1;
-      const rawLegs = curveT(t) * legs;
-      const seg = Math.min(Math.floor(rawLegs), legs - 1);
-      const u = (seg + SWING(rawLegs - seg)) / legs;
+      // ONE continuous ease across the whole track.
+      //
+      // This was applied per leg, which was wrong for exactly the reason given:
+      // an inOut ease has zero derivative at both ends, so easing each segment
+      // drove the velocity to zero at EVERY waypoint. The camera braked at all
+      // five beats. That is stop-and-go, not a sweep.
+      //
+      // Applying it once across 0..1 leaves the velocity continuous everywhere
+      // in between — it only comes to rest at the very start and the very end
+      // of the scroll track, which is where a camera should rest.
+      const u = curveT(SWING(t));
       POSITION_CURVE.getPoint(u, desired.current);
       TARGET_CURVE.getPoint(u, look.current);
     } else {

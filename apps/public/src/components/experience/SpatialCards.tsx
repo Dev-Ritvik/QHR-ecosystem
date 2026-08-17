@@ -10,19 +10,17 @@
 // readable by a screen reader, and still a real <img> — which a texture on a
 // quad would not be.
 //
-// THE READABILITY PROBLEM, SOLVED RATHER THAN AVOIDED
+// THE READABILITY PROBLEM
 //
-// These are sanctioned layout plans: documents a buyer has to read. The camera
-// dives 10m and rolls 4 degrees while FOV warps to 68, and a document skewing
-// through that is unreadable. So opacity is driven by how fast the camera is
-// ACTUALLY moving, measured per frame rather than inferred from scroll:
+// These are sanctioned layout plans: documents a buyer has to read, while the
+// camera dives 10m and rolls 4 degrees with FOV warping to 68.
 //
-//   camera moving fast  -> card fades toward 0, gets out of the way
-//   camera settles      -> card comes up to full and can be read
-//
-// That is the fade the brief asked for, and measuring real speed rather than
-// scroll delta means it also behaves correctly when the rig is still catching
-// up after the wheel has stopped — which, with scrub, is most of the time.
+// Opacity is driven by DISTANCE from the camera, not by camera speed. Speed was
+// the obvious signal and the wrong one: a visitor who stops to read brings the
+// camera to rest, so the value that decided legibility went to zero at exactly
+// the moment legibility mattered. Distance depends only on where the camera is,
+// so it is stable whether or not anything is moving — a card is legible when
+// the camera is near it, and gone when it is not.
 //
 // The DOM copies in the page remain, visually hidden. They are what a crawler
 // and a no-JS reader get: <Html> content is client-only and would otherwise
@@ -45,21 +43,44 @@ export interface SpatialCard {
 /**
  * Where each plan hangs, in world metres.
  *
- * Placed on the LEFT of the forecourt — the half of frame the camera aims away
- * from (see FRAME_OFFSET in WorldCanvas) — and stepped back along the approach
- * so the camera passes them in the order the page lists them. All three sit
- * clear of the mansion shell (x -9.55..9.55, z -5.55..6.10), the fountain
- * (centre z 13.2, r 3.1) and the hedge line at x -15.9.
+ * DISTRIBUTED ALONG THE TRACK, not clustered. The first version put all three
+ * within 18m of each other on the LEFT of the forecourt (x -12 to -13), which
+ * is the side the hero column occupies and the side the camera aims away from —
+ * so they piled up behind the typography and read as broken.
+ *
+ * These are spread across 34 metres of z (24 -> -10) on the +x side, which is
+ * where the camera actually travels (beats run x 2.5 -> 12 -> 17 -> 7 -> 15.5)
+ * and the half of frame the building occupies. The camera now passes them one
+ * at a time, in the order the page lists them, and none of them shares screen
+ * space with the left 40vw the copy holds.
+ *
+ * Outside the hedge line at x 15.9 on purpose: these are floating UI, not
+ * geometry, and standing them beyond the planting keeps them clear of the
+ * cypresses rather than intersecting them.
  */
 const ANCHORS: [number, number, number][] = [
-  [-12.6, 3.4, 18.0],
-  [-13.4, 3.1, 9.0],
-  [-12.2, 3.6, 0.5],
+  [24.0, 8.5, 24.0],
+  [27.0, 5.5, 8.0],
+  [21.0, 3.0, -10.0],
 ];
 
-/** Below this speed the card is fully legible; above it, gone. Metres/second
- *  of camera travel, tuned to the dive: the fast leg runs well past 12. */
-const SPEED_FADE = 4.2;
+/**
+ * The legibility band, in metres from the camera.
+ *
+ * Fully opaque between NEAR_FULL and FAR_FULL, fading out on both sides: too
+ * close and the card fills the frame and hides the building it annotates, too
+ * far and it is unreadable anyway and only adds clutter.
+ */
+const NEAR_FADE = 4.5;
+const NEAR_FULL = 9.0;
+const FAR_FULL = 26.0;
+const FAR_FADE = 44.0;
+
+/** GLSL smoothstep, since this is the same ease used in the shaders. */
+function smoothstep(e0: number, e1: number, x: number) {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+}
 
 function Card({
   card,
@@ -71,43 +92,42 @@ function Card({
   const group = useRef<THREE.Group>(null);
   const el = useRef<HTMLDivElement>(null);
 
-  const prev = useRef(new THREE.Vector3());
-  const seeded = useRef(false);
   const shown = useRef(0);
 
-  useFrame(({ camera }, delta) => {
-    if (!seeded.current) {
-      prev.current.copy(camera.position);
-      seeded.current = true;
-      return;
-    }
+  useFrame(({ camera }) => {
+    if (!group.current) return;
 
-    // Real camera speed, not scroll delta. With a scrub the camera keeps
-    // travelling after the wheel stops, and a scroll-derived value would bring
-    // the card up while the frame was still moving under it.
-    const speed = camera.position.distanceTo(prev.current) / Math.max(delta, 1e-4);
-    prev.current.copy(camera.position);
+    // DISTANCE, not speed.
+    //
+    // Speed was the wrong signal and the criticism is right about why: when a
+    // visitor stops to READ, the camera settles and speed goes to zero — so the
+    // card's opacity was determined by the thing that stops happening exactly
+    // when it matters most. Worse, with a scrub the camera keeps drifting after
+    // the wheel stops, so the value was still moving while the page was still.
+    //
+    // Distance is stable: it depends only on where the camera IS, so a card is
+    // legible whenever the camera is near it and gone when it is not,
+    // regardless of whether anything is moving.
+    const d = group.current.getWorldPosition(TMP).distanceTo(camera.position);
 
-    // Also fade by how far off-axis the card is. At the bottom of the dive the
-    // anchors are behind the camera, and a CSS3D node facing away still costs
-    // layout and can catch a pointer.
-    const toCard = group.current
-      ? group.current.getWorldPosition(TMP).sub(camera.position).normalize()
-      : null;
-    const facing = toCard ? toCard.dot(camera.getWorldDirection(TMP2)) : 1;
+    // Full through the near band, falling off beyond it. Also fades when very
+    // close, because a card the camera is about to pass through fills the frame
+    // and blocks the architecture it is meant to annotate.
+    const near = 1 - smoothstep(NEAR_FADE, NEAR_FULL, d);
+    const far = 1 - smoothstep(FAR_FULL, FAR_FADE, d);
+    let wanted = Math.min(near, far);
 
-    const wanted =
-      facing < 0.15 ? 0 : Math.max(0, 1 - speed / SPEED_FADE);
+    // Behind the camera: a CSS3D node facing away still costs layout and can
+    // catch a pointer, and no distance band alone excludes it.
+    const toCard = group.current.getWorldPosition(TMP).sub(camera.position).normalize();
+    if (toCard.dot(camera.getWorldDirection(TMP2)) < 0.15) wanted = 0;
 
-    // Asymmetric damping: fade OUT quickly so the card is gone before it
-    // becomes an unreadable smear, fade IN slowly so it arrives as the shot
-    // settles rather than popping.
-    const k = wanted < shown.current ? 0.22 : 0.055;
-    shown.current += (wanted - shown.current) * k;
+    // Symmetric damping now. The asymmetry existed to hide speed-driven
+    // flicker; with a stable signal it is just lag.
+    shown.current += (wanted - shown.current) * 0.10;
 
     if (el.current) {
       el.current.style.opacity = shown.current.toFixed(3);
-      // Stop an invisible card swallowing clicks over the canvas.
       el.current.style.pointerEvents = shown.current > 0.5 ? 'auto' : 'none';
     }
   });
