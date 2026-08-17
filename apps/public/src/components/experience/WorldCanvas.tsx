@@ -38,6 +38,8 @@ import { poseFor, setFor, type SceneSet } from './poses';
 import { POSITION_CURVE, TARGET_CURVE, curveT, atmosphereAt } from './cameraPath';
 import { useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
+import { PostFX } from './PostFX';
+import { Motes } from './Motes';
 import { telemetry } from '@/lib/telemetry/collector';
 
 /**
@@ -541,12 +543,46 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
 
   return (
     <>
-      {/* Warm, low, front-left. Angled off the entry axis so the elevation is
-          lit across rather than head-on, which would flatten it again. */}
-      <directionalLight ref={key} position={[-42, 30, 52]} intensity={2.3} color="#FFD7B0" />
-      {/* Cool fill from the sky, warm bounce from the ground. Cheaper than a
-          second key and it keeps the shadowed side from reading as black. */}
-      <hemisphereLight args={['#5C7099', '#1A1512', 0.55]} />
+      {/* DUAL-TONE. The previous rig was warm key plus neutral hemisphere, which
+          is why the frame read as flat: every surface sat somewhere on one
+          warm ramp, so nothing separated the building from the air around it.
+          Now the two ends of the palette actively disagree — warm amber on the
+          lit face, cool slate everywhere else — and the elevation reads as
+          form rather than as a lit picture of form. */}
+
+      {/* Warm key, low and front-left, angled off the entry axis so the
+          elevation is lit across rather than head-on. Casts real shadows: the
+          portico columns and the cornice throwing onto the facade is most of
+          what makes the architecture feel physically present. */}
+      <directionalLight
+        ref={key}
+        position={[-42, 30, 52]}
+        intensity={2.3}
+        color="#FFD7B0"
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        // Tight ortho box around the building. The default frustum spans the
+        // whole scene including a 450m ground plane, which spreads 2048px
+        // across ~450m and gives shadows the resolution of a thumbnail.
+        shadow-camera-left={-26}
+        shadow-camera-right={26}
+        shadow-camera-top={26}
+        shadow-camera-bottom={-14}
+        shadow-camera-near={1}
+        shadow-camera-far={140}
+        shadow-bias={-0.0006}
+        shadow-normalBias={0.03}
+      />
+
+      {/* Cool counter-key from behind-right, no shadows. This is the rim: it
+          catches the cornice, the balustrade and the spire against the navy and
+          stops the silhouette dissolving into the background. Deliberately
+          cyan-slate against the amber — the contrast IS the effect. */}
+      <directionalLight position={[34, 22, -40]} intensity={0.85} color="#7FB4D6" />
+
+      {/* Cool sky, warm ground bounce. Keeps the shadowed side from reading as
+          black without lifting it toward the key's colour. */}
+      <hemisphereLight args={['#4A6B96', '#1A1512', 0.5]} />
     </>
   );
 }
@@ -654,6 +690,11 @@ export function WorldCanvas() {
     <div aria-hidden="true" className="fixed inset-0 z-0 bg-[#0A1120]">
       <SceneBoundary onError={onError}>
         <Canvas
+          // Soft shadow maps, and only on tiers that can afford the extra
+          // depth pass. The key light's shadow is what puts the portico
+          // columns ONTO the facade rather than beside it, which is most of
+          // the architectural presence in the frame.
+          shadows={tier === 'low' ? false : { type: THREE.PCFSoftShadowMap }}
           // A 3x phone screen renders 9x the pixels for no perceptible gain on
           // a scene this dark, and it is the single biggest mobile cost.
           dpr={[1, tier === 'high' ? 2 : 1.5]}
@@ -684,7 +725,14 @@ export function WorldCanvas() {
               hemisphere light and a flat ambient would cancel the relief the
               key light exists to create. */}
           <ambientLight intensity={look.ambient} />
-          {set === 'exterior' && <ExteriorLighting driveByScroll={poseFor(place).path === true} />}
+          {set === 'exterior' && (
+            <>
+              <ExteriorLighting driveByScroll={poseFor(place).path === true} />
+              {/* Halved on low tier: the field is atmosphere, and a phone
+                  should get thinner air rather than no air. */}
+              <Motes count={tier === 'low' ? 1100 : 2400} />
+            </>
+          )}
           <Suspense fallback={null}>
             {/* One set at a time. Both are ~2.3MB and 15MB respectively, and
                 holding the hall in memory while standing on the lawn buys
@@ -695,6 +743,11 @@ export function WorldCanvas() {
             <RoomEnvironmentMap intensity={look.env} />
           </Suspense>
           {look.free ? <FreeCamera /> : <Rig place={place} onTier={onTier} />}
+          {/* LAST child on purpose: r3f's EffectComposer wraps whatever the
+              scene rendered, so it has to mount after the content it filters.
+              Skipped entirely in free-camera look-dev, where an unfiltered
+              frame is the whole point of the mode. */}
+          {!look.free && <PostFX tier={tier} />}
         </Canvas>
       </SceneBoundary>
 

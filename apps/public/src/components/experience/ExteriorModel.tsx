@@ -83,6 +83,18 @@ function applyGrade(root: THREE.Object3D): string[] {
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
+
+    // Shadow participation, opted in per object because three defaults both
+    // flags to false and a shadow-casting light over a scene that casts nothing
+    // just costs a depth pass for no image.
+    //
+    // The ground RECEIVES but does not CAST: it is a 450m plane, so including
+    // it in the shadow camera's render would stretch the depth range across the
+    // whole world and quantise the building's own shadows into steps.
+    const isGround = mesh.name.startsWith('ground_plane');
+    mesh.castShadow = !isGround;
+    mesh.receiveShadow = true;
+
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of mats) {
       const mat = m as THREE.MeshStandardMaterial & { __graded?: boolean };
