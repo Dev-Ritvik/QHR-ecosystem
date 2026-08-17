@@ -114,6 +114,50 @@ const GRADE: Record<string, { color: string; roughness?: number }> = {
   MAT_Hedge: { color: '#16281B', roughness: 0.95 },
 };
 
+/**
+ * Real PBR sets, replacing the generated noise map.
+ *
+ * Prepared from the 2K AmbientCG masters in assets/materials (which are not in
+ * the repo — see .gitignore) down to 1K JPEG: basecolor at q88, roughness as
+ * single-channel q88, and normals at q86 with chroma subsampling OFF. That last
+ * one is the only unusual setting and it matters: a normal map stores a VECTOR
+ * FIELD in RGB, and subsampling averages neighbouring surface directions, which
+ * produces lighting that visibly swims across the surface as the camera moves.
+ * Quality is the dial that gets turned down; subsampling stays off.
+ *
+ * 2.74MB for four complete sets. The preloader already gates the page on
+ * DefaultLoadingManager, and TextureLoader registers with it, so these are
+ * counted in the percentage rather than popping in behind it.
+ */
+const PBR: Record<string, { dir: string; repeat: number; normalScale?: number }> = {
+  // The elevation. Everything the eye spends its time on.
+  MAT_Stone_Cream: { dir: 'limestone', repeat: 3.5, normalScale: 0.85 },
+  MAT_Roof: { dir: 'roof', repeat: 6, normalScale: 1.0 },
+  MAT_Gold: { dir: 'gold', repeat: 2, normalScale: 0.6 },
+  MAT_Wood_Dark: { dir: 'wood', repeat: 2, normalScale: 0.7 },
+};
+
+/** One loader and one cache for the whole app: these materials are shared
+ *  across dozens of meshes and must not each fetch their own copy. */
+const texLoader = new THREE.TextureLoader();
+const TEX_CACHE = new Map<string, THREE.Texture>();
+
+function loadTex(path: string, srgb: boolean, repeat: number): THREE.Texture {
+  const hit = TEX_CACHE.get(path);
+  if (hit) return hit;
+  const t = texLoader.load(path);
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeat, repeat);
+  // Colour maps are authored in sRGB; normal and roughness are DATA and must
+  // stay linear. Getting this backwards is the classic way a PBR set arrives
+  // looking washed out and lit wrong.
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  TEX_CACHE.set(path, t);
+  return t;
+}
+
 function applyGrade(root: THREE.Object3D): string[] {
   const touched: string[] = [];
   root.traverse((o) => {
@@ -139,7 +183,7 @@ function applyGrade(root: THREE.Object3D): string[] {
 
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of mats) {
-      const mat = m as THREE.MeshStandardMaterial & { __graded?: boolean };
+      const mat = m as THREE.MeshStandardMaterial & { __graded?: boolean; __pbr?: boolean };
       if (!mat || mat.__graded) continue;
 
       // Emissive first, and on its own flag — a material can be emissive
@@ -151,6 +195,31 @@ function applyGrade(root: THREE.Object3D): string[] {
         mat.emissiveIntensity = e.intensity;
         mat.needsUpdate = true;
         if (!touched.includes(mat.name + ':emit')) touched.push(mat.name + ':emit');
+      }
+
+      // Real PBR. Basecolor is only replaced where the GLB shipped none — the
+      // stone already carries its own baked albedo and overriding it would
+      // throw away the cornice and frieze detail that was modelled into it.
+      // Normal and roughness are always applied: those are the maps the GLB
+      // never had, and their absence is why the surfaces read as plastic.
+      const pbr = PBR[mat.name];
+      if (pbr && !mat.__pbr) {
+        const base = '/textures/' + pbr.dir + '/';
+        if (!mat.map) mat.map = loadTex(base + 'basecolor.jpg', true, pbr.repeat);
+        if (!mat.normalMap) {
+          mat.normalMap = loadTex(base + 'normal.jpg', false, pbr.repeat);
+          const n = pbr.normalScale ?? 1;
+          mat.normalScale = new THREE.Vector2(n, n);
+        }
+        if (!mat.roughnessMap) {
+          mat.roughnessMap = loadTex(base + 'roughness.jpg', false, pbr.repeat);
+          // roughnessMap MULTIPLIES roughnessFactor, so a low factor would
+          // cancel the map entirely. Lifted to 1.0 so the map reads straight.
+          mat.roughness = 1.0;
+        }
+        mat.__pbr = true;
+        mat.needsUpdate = true;
+        if (!touched.includes(mat.name + ':pbr')) touched.push(mat.name + ':pbr');
       }
 
       const g = GRADE[mat.name];

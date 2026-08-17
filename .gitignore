@@ -42,3 +42,8 @@ timelineleft.md
 
 __pycache__/
 *.pyc
+
+# Web-ready PBR sets are DERIVED from assets/materials (which is gitignored as
+# 1.9GB of source art). They are committed anyway: they are 2.74MB, the site
+# does not render correctly without them, and a deploy has no access to the
+# masters to regenerate them.
