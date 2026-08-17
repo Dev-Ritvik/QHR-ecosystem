@@ -38,14 +38,23 @@ import { SUBJECT } from './cameraPath';
  * was moved behind the architecture first — rays from a source behind the lens
  * are not dim, they are undefined.
  *
- * Matched to the directional light at (-58, 13, -44). MeshBasicMaterial because
+ * Matched to the directional light at (30, 15, -80) — deep behind the RIGHT of
+ * the mansion, so the shell occludes it and the left of frame, where the hero
+ * column sits, stays in shadow. MeshBasicMaterial because
  * the sun must not itself be lit; it IS the light.
  */
 function SunDisc({ onReady }: { onReady: (m: THREE.Mesh | null) => void }) {
   return (
-    <mesh ref={onReady} position={[-58, 13, -44]} frustumCulled={false}>
-      <sphereGeometry args={[7.5, 24, 24]} />
-      <meshBasicMaterial color="#FFC072" toneMapped={false} />
+    <mesh ref={onReady} position={[30, 15, -80]} frustumCulled={false}>
+      {/* Smaller AND further away: 4.2m at an 85m throw subtends roughly a
+          third of the angle the old 7.5m disc did at 74m. The pass only needs
+          a source to blur outward from — it does not need a visible ball, and
+          a large bright sphere on screen is a light leak rather than a sun. */}
+      <sphereGeometry args={[4.2, 20, 20]} />
+      {/* toneMapped={false} so ACES does not crush it before the pass reads it;
+          the colour is already close to the tone-mapped target rather than the
+          blown white it used to be. */}
+      <meshBasicMaterial color="#E39A52" toneMapped={false} />
     </mesh>
   );
 }
@@ -116,17 +125,24 @@ export function PostFX({ tier }: { tier: DeviceTier }) {
           multi-sample radial blur, which is the most expensive thing in the
           pipeline and the first thing a phone should not pay for.
 
-          weight/decay kept low. God rays are the single easiest effect to
-          overdo, and this scene has already shipped blown out once. */}
+          CLAMPED HARD. The first pass ran exposure 0.34 / weight 0.38 /
+          clampMax 0.92, which is a supernova, not atmosphere: the rays summed
+          into the HDR buffer well above what the already-applied ACES curve had
+          headroom for, so the whole frame lifted and the tone mapping
+          established earlier in this build was undone. exposure 0.12, weight
+          0.16 and clampMax 0.55 keep the contribution inside that headroom —
+          the effect should register as density in the air, not as a light
+          source pointed at the lens. samples 60 -> 44 for the same reason it is
+          high tier only. */}
       {tier === 'high' && sun ? (
         <GodRays
           sun={sun}
-          density={0.92}
-          decay={0.93}
-          weight={0.38}
-          exposure={0.34}
-          samples={60}
-          clampMax={0.92}
+          density={0.62}
+          decay={0.88}
+          weight={0.16}
+          exposure={0.12}
+          samples={44}
+          clampMax={0.55}
           blur
         />
       ) : (

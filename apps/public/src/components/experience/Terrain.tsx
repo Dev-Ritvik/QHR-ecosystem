@@ -142,26 +142,48 @@ const FRAG = /* glsl */ `
   uniform vec3 uFog;
   uniform float uFogNear;
   uniform float uFogFar;
+  uniform vec3 uSunDir;
   varying float vHeight;
   varying vec3 vWorld;
 
   void main() {
-    // Normals from screen-space derivatives rather than a normal attribute.
-    // The displacement happens in the vertex shader, so the geometry's own
-    // normals all still point straight up and would light this as a flat plane.
+    // Face normals from screen-space derivatives of the DISPLACED world
+    // position. The geometry's own normal attribute all points straight up —
+    // displacement happens in the vertex shader and never touches it — so
+    // without this the lighting engine shades the terraces as a flat plane no
+    // matter how much relief the vertices actually have.
+    //
+    // The cross product's sign depends on which way the triangle winds on
+    // screen, which flips depending on the viewing angle, so the result is
+    // forced to point upward. Getting this wrong lights the terrain from
+    // underneath, which reads as flat in a different way.
     vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+    if (n.y < 0.0) n = -n;
 
     // Weathered limestone: paler on the exposed bedding planes, darker in the
     // dissolution channels where water sits and vegetation takes hold.
     float exposure = clamp(vHeight / 9.0, 0.0, 1.0);
     vec3 albedo = mix(uLow, uHigh, exposure);
 
-    // Single directional term matching the scene's warm key, kept deliberately
-    // dim: this is ground at night, and it must sit UNDER the building rather
-    // than compete with it.
-    vec3 sun = normalize(vec3(-0.55, 0.62, 0.56));
-    float lambert = clamp(dot(n, sun), 0.0, 1.0);
-    vec3 col = albedo * (0.16 + lambert * 0.34);
+    // Key direction comes in as a uniform rather than being hardcoded. It was
+    // baked in as (-0.55, 0.62, 0.56) — the OLD sun position — so after the key
+    // was relocated the ground was being lit from a direction the scene no
+    // longer had a light in. The terrain and the building must agree about
+    // where the sun is or neither reads as solid.
+    float lambert = clamp(dot(n, uSunDir), 0.0, 1.0);
+
+    // Wrapped term so the faces turned away from the key still separate from
+    // each other instead of crushing to one flat shadow value — this is what
+    // makes the terrace risers legible on the unlit side.
+    float wrap = clamp(dot(n, uSunDir) * 0.5 + 0.5, 0.0, 1.0);
+
+    // A hard rim on the near-vertical risers. Karst reads as rock because the
+    // bedding planes catch light and the risers between them do not, so the
+    // slope itself is worth shading on.
+    float slope = 1.0 - clamp(n.y, 0.0, 1.0);
+
+    vec3 col = albedo * (0.07 + wrap * 0.16 + lambert * 0.62);
+    col += albedo * slope * 0.10;
 
     // Fog matched to the scene's own THREE.Fog so the terrain dissolves into
     // the same navy at the same distance. Without this the ground would run to
@@ -189,6 +211,9 @@ export function Terrain({ driveByScroll = true }: { driveByScroll?: boolean }) {
       uLow: { value: new THREE.Color('#141A22') },
       uHigh: { value: new THREE.Color('#3A3B33') },
       uFog: { value: new THREE.Color('#0A1120') },
+      // Normalised direction TO the key light at (30, 15, -80). Must be kept
+      // in step with the directionalLight in WorldCanvas.
+      uSunDir: { value: new THREE.Vector3(30, 15, -80).normalize() },
       uFogNear: { value: 34 },
       uFogFar: { value: 190 },
     }),

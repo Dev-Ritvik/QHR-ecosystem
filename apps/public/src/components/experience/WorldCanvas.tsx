@@ -587,19 +587,23 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           nothing can be seen — which is why god rays were impossible rather
           than merely unbuilt.
 
-          Now low and behind the architecture at (-58, 13, -44). The camera
-          sweeps the +x/+z quadrant looking at the origin, so this sits opposite
-          the lens across the whole arc: it rakes the elevation, throws the
-          cornice and spire into rim, and is IN FRAME behind the building, which
-          is the only place a volumetric source can do any work. Deeper and
-          hotter in colour because a sun at 13m elevation is a sun near the
-          horizon.
+          Then it went to (-58, 13, -44), which put the disc on the SAME side of
+          frame as the hero column and washed the white type out — a contrast
+          failure, not a look.
+
+          Now (30, 15, -80): deep behind the RIGHT of the mansion. From the hero
+          the sight line to it crosses the building's plane at x ~8.2, inside
+          the +/-9.55 shell, so the architecture occludes the disc and the rays
+          break around its silhouette. Everything on the left of frame — where
+          the typography lives — falls into shadow, which is what the copy needs
+          to sit on. Deeper and hotter in colour because a sun at 15m against an
+          80m throw is a sun near the horizon.
 
           The shadow box moves with it — an ortho frustum aimed from the old
           position would now be pointing at nothing. */}
       <directionalLight
         ref={key}
-        position={[-58, 13, -44]}
+        position={[30, 15, -80]}
         intensity={2.3}
         color="#FFB264"
         castShadow
@@ -635,16 +639,28 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           fountain instead of on the back of a reveal nobody sees. `distance` is
           tight on every one: an unbounded point light is evaluated against
           every lit fragment in the scene, and five of those would cost more
-          than the building. */}
-      <pointLight position={[-6.2, 2.4, 7.4]} intensity={11} distance={17} decay={2} color="#FFAA55" />
-      <pointLight position={[0, 2.2, 7.8]} intensity={14} distance={19} decay={2} color="#FFB068" />
-      <pointLight position={[6.2, 2.4, 7.4]} intensity={11} distance={17} decay={2} color="#FFAA55" />
+          than the building.
+
+          decay={2} on all five is physically correct inverse-square falloff —
+          intensity / d^2 — which is why they needed roughly 2.5x the raw
+          intensity to reach the same surfaces. Under-decayed light is what
+          makes a source read as a sticker rather than as illumination.
+
+          NOTE for the "floating glowing dots" observation: a THREE.PointLight
+          has NO geometry and cannot be seen. There are no helpers in this tree
+          and never were. The visible discs are the emissive window reveals
+          crossing the bloom threshold, plus the GodRays sun disc — the only
+          added mesh, and one the pass requires. Both are addressed above and
+          below rather than by deleting a helper that does not exist. */}
+      <pointLight position={[-6.2, 2.4, 7.4]} intensity={26} distance={17} decay={2} color="#FFAA55" />
+      <pointLight position={[0, 2.2, 7.8]} intensity={32} distance={19} decay={2} color="#FFB068" />
+      <pointLight position={[6.2, 2.4, 7.4]} intensity={26} distance={17} decay={2} color="#FFAA55" />
       {/* The side elevation — what the camera faces from theta 70 onward.
           Without it the last third of the orbit plays against an unlit wall. */}
-      <pointLight position={[10.9, 2.5, 0]} intensity={12} distance={18} decay={2} color="#FFAA55" />
+      <pointLight position={[10.9, 2.5, 0]} intensity={28} distance={18} decay={2} color="#FFAA55" />
       {/* Uplight on the fountain, so the centre of the composition has a source
           of its own rather than borrowing from the windows either side. */}
-      <pointLight position={[0, 1.1, 13.2]} intensity={9} distance={14} decay={2} color="#FFC98A" />
+      <pointLight position={[0, 1.1, 13.2]} intensity={22} distance={14} decay={2} color="#FFC98A" />
 
       {/* Cool sky, warm ground bounce. Keeps the shadowed side from reading as
           black without lifting it toward the key's colour. */}
