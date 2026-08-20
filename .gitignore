@@ -47,3 +47,4 @@ __pycache__/
 # 1.9GB of source art). They are committed anyway: they are 2.74MB, the site
 # does not render correctly without them, and a deploy has no access to the
 # masters to regenerate them.
+.next-prod

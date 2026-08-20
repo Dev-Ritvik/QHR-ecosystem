@@ -29,6 +29,20 @@ const cspHeader = `
 
 const nextConfig = {
   reactStrictMode: true,
+
+  /**
+   * Production builds write to .next-prod, NOT .next.
+   *
+   * `next build` overwrites the dev server's chunk manifest, after which every
+   * /_next/static/* request falls through to the 404 handler and is served as
+   * text/html. The browser then refuses the stylesheet on MIME grounds and the
+   * page renders completely unstyled — which looks like a CSS bug and is
+   * actually a build collision.
+   *
+   * That happened here once. Separating the directories makes it impossible
+   * rather than merely unlikely.
+   */
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   async headers() {
     return [
       {

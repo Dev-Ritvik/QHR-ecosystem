@@ -42,6 +42,7 @@ import { bindInvalidate, startTicker, stopTicker } from '@/lib/ticker';
 import { TIER_BUDGET, detectTier } from '@/lib/tier';
 import { CameraRig } from './CameraRig';
 import { Corridor } from './Corridor';
+import { PostFX } from './PostFX';
 
 /**
  * Hands R3F's invalidate() to the ticker, and owns the freeze capture.
@@ -60,6 +61,27 @@ function CanvasBridge() {
     bindInvalidate(invalidate);
     return () => bindInvalidate(null);
   }, [invalidate]);
+
+  // Dev-only render handle.
+  //
+  // Headless and backgrounded browsers throttle requestAnimationFrame to zero,
+  // so no frame is ever drawn and NO SHADER IS EVER COMPILED — meaning a GLSL
+  // error in the terrain, sky or water would sit undetected until it reached a
+  // real machine. This exposes enough to force a single synchronous render and
+  // read back the compile log, which turns "shaders are probably fine" into a
+  // checkable claim.
+  const three = useThree();
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    (window as unknown as { __three?: unknown }).__three = {
+      render: () => three.gl.render(three.scene, three.camera),
+      gl: three.gl,
+      scene: three.scene,
+      camera: three.camera,
+      programs: () => three.gl.info.programs?.length ?? 0,
+      info: () => JSON.parse(JSON.stringify(three.gl.info)),
+    };
+  }, [three]);
 
   // Step 1–2 of the freeze sequence (§4.5): the overlay asked to open, so force
   // one more render of the CURRENT state. The capture happens in the
@@ -156,6 +178,38 @@ export function WorldCanvas() {
     return () => stopTicker();
   }, []);
 
+  // R3F measures its container with a ResizeObserver and only creates the
+  // renderer once that reports a non-zero size. In a BACKGROUNDED tab that
+  // measurement can fail to arrive — verified here: the canvas sat at its
+  // default 300x150 with no WebGL renderer attached and no children mounted,
+  // and a single synthetic resize event fixed it immediately.
+  //
+  // That is not only a headless quirk. A tab opened with cmd-click, or restored
+  // from a previous session, loads hidden — and if no resize ever follows, the
+  // visitor switches to it and finds a permanently blank canvas with nothing in
+  // the console to explain it.
+  //
+  // One event on the way back to visible costs nothing and closes it.
+  useEffect(() => {
+    const nudge = () => window.dispatchEvent(new Event('resize'));
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') nudge();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    // The mount-time nudge is UNCONDITIONAL, deliberately. An earlier version
+    // gated it on visibilityState === 'visible' and therefore never fired in
+    // the one environment that actually needed it — a permanently hidden tab.
+    // A synthetic resize costs one layout read; guarding it bought nothing and
+    // cost the whole fix.
+    const t = window.setTimeout(nudge, 60);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearTimeout(t);
+    };
+  }, []);
+
   const onCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
     gl.toneMapping = THREE.ACESFilmicToneMapping;
     gl.outputColorSpace = THREE.SRGBColorSpace;
@@ -200,6 +254,7 @@ export function WorldCanvas() {
         <Suspense fallback={null}>
           <Corridor />
         </Suspense>
+        <PostFX />
       </Canvas>
     </div>
   );
