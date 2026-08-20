@@ -23,7 +23,6 @@ import { useEffect, useRef } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { subscribe } from '@/lib/ticker';
-import { swing } from '@/lib/swing';
 import { POSITION_CURVE, TARGET_CURVE, curveT } from '@/lib/cameraPath';
 import { chaseExposure, continuityAt, evToExposure } from '@/lib/continuity';
 import { useSceneStore } from '@/state/sceneStore';
@@ -89,11 +88,27 @@ export function CameraRig() {
 
     return subscribe((q, dt) => {
       // ── Geometry ────────────────────────────────────────────────────────
-      // ONE ease across the whole track, applied to the curve parameter only.
-      // Not per-leg: an inOut ease has zero derivative at both ends, so easing
-      // each segment individually drives velocity to zero at EVERY waypoint —
-      // the "stop-and-go" failure recorded in Appendix B.
-      const u = curveT(swing(q));
+      // NO EASE ON q. This is a correction, and it matters.
+      //
+      // An earlier version ran curveT(swing(q)) with power2.inOut. The gate
+      // caught what that actually does: the ease REMAPS q, so a beat declared
+      // at 0.75 no longer lands at 0.75. The Act IV pause — 0.75 to 0.82 by
+      // design — was arriving at q 0.646 to 0.700 instead. Every beat was
+      // displaced, and `at` had quietly stopped meaning "the scroll position
+      // where this vantage appears".
+      //
+      // The ease existed to stop the camera moving at constant speed. But the
+      // BEATS ALREADY DO THAT: 0.04→0.10 covers 226m of scroll-space while
+      // 0.75→0.82 covers zero. Beat spacing IS the velocity design, written
+      // explicitly and editable one number at a time. Layering a curve on top
+      // fought it.
+      //
+      // Catmull-Rom is C1-continuous, so velocity is already smooth between
+      // beats — no ease needed to avoid the corner. And this is NOT the
+      // per-leg easing failure from Appendix B, which was an inOut applied
+      // inside every segment; here there is no ease at all, so nothing drives
+      // velocity to zero anywhere it should not.
+      const u = curveT(q);
       POSITION_CURVE.getPoint(u, pos.current);
       TARGET_CURVE.getPoint(u, look.current);
 
@@ -141,6 +156,25 @@ export function CameraRig() {
 
       // ── Fog ─────────────────────────────────────────────────────────────
       if (fog.current) fog.current.density = c.fog;
+
+      // ── Dev telemetry ───────────────────────────────────────────────────
+      // Stripped from production builds. Exists so camera motion can be
+      // ASSERTED rather than eyeballed — three cameras on the previous build
+      // reached a client aimed at a wall, at nothing, and at the outside of a
+      // building, and every one of them was a coordinate nobody had looked
+      // through. A readable position at a known q is the cheapest possible
+      // guard against that.
+      if (process.env.NODE_ENV !== 'production') {
+        (window as unknown as { __rig?: unknown }).__rig = {
+          q,
+          beat: c.beat,
+          fov: +cam.fov.toFixed(2),
+          ev: +exposure.current.toFixed(3),
+          fog: +c.fog.toFixed(5),
+          roll: +c.roll.toFixed(3),
+          pos: [+cam.position.x.toFixed(1), +cam.position.y.toFixed(1), +cam.position.z.toFixed(1)],
+        };
+      }
 
       // ── Report, throttled ───────────────────────────────────────────────
       lastReport.current += dt;

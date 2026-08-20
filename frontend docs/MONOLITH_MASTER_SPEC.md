@@ -131,7 +131,7 @@ Zone and Lucky Garden a Resort zone. **See §13.5a.**
 | L4 | Server Components never touch 3D state. Bridges `return null`. | Hydration mismatch. |
 | L5 | Zustand holds camera **intent**, never the Three.js camera object. | Store becomes non-serialisable; React and Three fight over one mutable object. |
 | L6 | Freeze and capture fire on the same `onAfterRender` tick. | Crossfade pops, intermittently. Passes QA nine times, fails the tenth. |
-| L7 | ≥ 12 m of camera travel per viewport of scroll (§3.4). | Motion reads as frozen. See Appendix B. |
+| L7 | ≥ 2% of **viewing distance** covered per 5% of scroll, outside the designed pause (§3.4). | Motion reads as frozen. See Appendix B. |
 | L8 | Max 4 dynamic lights, < 100 draw calls, at all times. | Mobile tiers fall off the 60 fps target. |
 | L9 | Nothing non-essential loads before consent resolves. | DPDP / GDPR exposure. |
 | L10 | Every Act must be legible with `prefers-reduced-motion: reduce`. | Usability score collapse — the 30% we are betting on. |
@@ -169,9 +169,24 @@ that happen to meet.
 | 0.985 | IV · **Severance** | 37 | +0.35 | 0.00 | 0.000 | ramp→0 | 4 |
 | 1.00 | IV · Silence | 37 | +0.35 | 0.00 | 0.000 | 0 | 4 |
 
-**Interpolation:** monotone cubic (centripetal Catmull-Rom) over `q` for FOV, EV,
-roll and fog. Linear for sub-bass frequency. Never ease each segment
-independently — see Appendix B, failure 3.
+**Interpolation:** Fritsch–Carlson monotone cubic over `q` for FOV, EV, roll and
+fog. Linear for sub-bass frequency.
+
+**No ease is applied to `q` before the camera samples the path — [RESOLVED §23].**
+The spec originally called for one global ease. Implementation showed it has its
+own defect: an ease REMAPS q, so a beat declared at `at: 0.75` does not arrive at
+75% of scroll. The Act IV pause was landing at q 0.646–0.700 instead of
+0.75–0.82, and every beat was displaced the same way — `at` had silently stopped
+meaning "the scroll position where this vantage appears."
+
+Beat spacing already is the velocity design: 0.04→0.10 covers 226 m of travel
+while 0.75→0.82 covers zero. That is explicit, inspectable, and editable one
+number at a time. Catmull-Rom is C1-continuous, so no ease was needed to smooth
+the corners either. Removing it also fixed the distribution — travel had been 97%
+concentrated in q 0.15–0.60 with a dead final third.
+
+This is NOT a return to Appendix B failure 3, which was an inOut applied *inside
+every segment*. There is now no ease on the camera parameter at all.
 
 ### 3.2 What Was Fixed Here
 
@@ -214,16 +229,24 @@ DESKTOP    1000vh    (4 acts × 250vh)
 MOBILE      800vh    (touch scroll travels faster; thumb fatigue is real)
 ```
 
-**The invariant that matters is not the length — it is the ratio.**
+**The invariant is a RATIO, and it is relative — [RESOLVED §22].**
 
 ```
-camera_path_arc_length / scroll_viewports  ≥  12 metres per viewport
+travel per 5% scroll / distance to look target  ≥  0.02
 ```
 
-Total camera arc across the four acts is ≈ 180 m. At 10 viewports that is
-18 m/viewport — comfortably readable motion. Stretch the track to 20 viewports
-without lengthening the path and it drops to 9 m/viewport, at which point the
-camera is technically moving and visually frozen.
+The first version of this law was absolute — "≥ 12 metres per viewport" — and
+implementation proved it unusable. This narrative spans **district scale** (690 m
+viewing distance during the corridor reveal) down to **room scale** (2.6 m at the
+final aperture). 0.2 m of travel is invisible at 690 m and is 8% of the frame at
+2.6 m. No absolute floor is correct at both ends.
+
+The relative measure is what the eye actually reads: the fraction of the
+subject's own scale the camera covers. Asserted by `scripts/rig-check.mjs`,
+which also verifies the Act IV pause is present **and confined to its window** —
+a stall inside q 0.75–0.82 is the design, a stall anywhere else is the bug.
+
+Measured on the shipped path: never below **12.8%** outside the pause.
 
 This constraint exists because that exact regression shipped on the QHR build in
 this repository: a scroll track was lengthened 6× to fix pacing, the camera path
@@ -1048,6 +1071,9 @@ Neither blocks files 1–8 in §11.
 | 19 | Data residency | absent from all 11 | Supabase in `eu-central-1` (§8.2a) — India is not EU-adequate and the lead form collects personal data |
 | 20 | Consent audit trail | `PHASE_7` had UI only | `consent_ledger` table (§8.2a) — GDPR requires *demonstrable* consent, not just honoured consent |
 | 21 | Act II subject | all 11 assumed one estate | The Land — farmland and plots (§1, §5) |
+| 22 | L7 metric | spec said 12 m/viewport absolute | **Relative** — 2% of viewing distance per 5% scroll. Absolute cannot serve 690 m and 2.6 m in one narrative |
+| 23 | Global ease on `q` | spec §3.1 required one | **Removed.** It displaced every beat; the Act IV pause landed at q 0.65 instead of 0.75. Beat spacing is the velocity design |
+| 24 | Fog scale | spec authored for estate scale | Rescaled per beat against real viewing distance — seven beats were rendering 100% fogged |
 
 ---
 

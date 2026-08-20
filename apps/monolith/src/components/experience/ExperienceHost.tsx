@@ -14,6 +14,8 @@
 // "loading" moment even before the WebGL bundle arrives.
 
 import dynamic from 'next/dynamic';
+import { TierD } from './TierD';
+import { Gate } from '@/components/command/Gate';
 
 const World = dynamic(
   () => import('./WorldCanvas').then((m) => m.WorldCanvas),
@@ -21,5 +23,15 @@ const World = dynamic(
 );
 
 export function ExperienceHost() {
-  return <World />;
+  return (
+    <>
+      {/* Tier D renders INSTEAD of the canvas, not alongside it — WorldCanvas
+          returns null for tier D, so no WebGL context is ever created. */}
+      <TierD />
+      <World />
+      {/* Above both. Holds scroll until consent resolves and [ ENTER ] is
+          pressed — the same gesture that unlocks AudioContext. */}
+      <Gate />
+    </>
+  );
 }

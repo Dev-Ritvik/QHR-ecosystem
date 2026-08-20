@@ -102,6 +102,19 @@ function frame(time: number): void {
 
   for (const fn of state.subs) fn(state.q, dt);
 
+  if (process.env.NODE_ENV !== 'production') {
+    (window as unknown as { __ticker?: unknown }).__ticker = {
+      running: state.running,
+      subs: state.subs.size,
+      q: +state.q.toFixed(4),
+      maxScroll: state.maxScroll,
+      lenis: !!state.lenis,
+      lenisScroll: state.lenis ? Math.round(state.lenis.scroll) : null,
+      hasInvalidate: !!state.invalidate,
+      frames: (frames += 1),
+    };
+  }
+
   // Last, and only if the canvas is mounted and not frozen. Under
   // frameloop="demand" this is what actually produces a frame.
   state.invalidate?.();
@@ -144,6 +157,8 @@ export function startTicker(): void {
 }
 
 const cleanup: Array<() => void> = [];
+
+let frames = 0;
 
 export function stopTicker(): void {
   if (!state.running) return;
