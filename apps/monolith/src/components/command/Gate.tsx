@@ -28,6 +28,7 @@
 import { useEffect, useState } from 'react';
 import { useSceneStore } from '@/state/sceneStore';
 import { setScrollLocked } from '@/lib/ticker';
+import { startAudio } from '@/lib/audio';
 
 const POLICY_VERSION = '2026-08-20';
 const STORAGE_KEY = 'monolith.consent.v1';
@@ -152,7 +153,11 @@ export function Gate() {
             autoFocus
             onClick={() => {
               // The gesture that unlocks Web Audio. Kept separate from consent
-              // so neither decision contaminates the other.
+              // so neither decision contaminates the other. startAudio MUST run
+              // synchronously inside this handler — an AudioContext created in
+              // a later tick has no user gesture behind it and starts
+              // suspended.
+              startAudio();
               setGate('live');
               setScrollLocked(false);
             }}

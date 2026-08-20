@@ -23,12 +23,13 @@
 // not hiding a required disclosure, it is removing peripheral distraction from
 // the one moment designed for none.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { subscribe } from '@/lib/ticker';
 import { useSceneStore } from '@/state/sceneStore';
 import { useCommandStore } from '@/state/commandStore';
+import { toggleMute } from '@/lib/audio';
 
 const LEGAL = [
   { href: '/privacy', label: 'Privacy' },
@@ -42,6 +43,7 @@ export function Chrome() {
   const overlayOpen = useCommandStore((s) => s.overlayOpen);
   const router = useRouter();
   const rail = useRef<HTMLDivElement>(null);
+  const [muted, setMuted] = useState(false);
 
   // Driven from the ticker, not from React state — this value changes every
   // frame and writing it to a store would re-render the tree at frame rate for
@@ -66,6 +68,19 @@ export function Chrome() {
 
   return (
     <>
+      {/* MASTER_SPEC §10 — audio never autoplays, and the control to stop it is
+          permanent and keyboard-reachable. A sound you cannot silence without
+          leaving the page is a usability failure, and usability is the 30% this
+          build is betting on. */}
+      <button
+        type="button"
+        aria-pressed={muted}
+        onClick={() => setMuted(toggleMute())}
+        className="t-mono fixed left-6 top-6 z-[70] text-ash transition-colors hover:text-signal md:left-10 md:top-8"
+      >
+        {muted ? '[ Sound off ]' : '[ Sound on ]'}
+      </button>
+
       <button
         type="button"
         onClick={() => router.push('/about')}

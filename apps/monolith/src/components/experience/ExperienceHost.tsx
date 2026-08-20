@@ -13,10 +13,14 @@
 // indistinguishable from the not-yet-lit scene, so there is no visible
 // "loading" moment even before the WebGL bundle arrives.
 
+import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { TierD } from './TierD';
 import { Gate } from '@/components/command/Gate';
 import { Chrome } from '@/components/command/Chrome';
+import { subscribe } from '@/lib/ticker';
+import { duckAudio, updateAudio } from '@/lib/audio';
+import { useCommandStore } from '@/state/commandStore';
 
 const World = dynamic(
   () => import('./WorldCanvas').then((m) => m.WorldCanvas),
@@ -24,6 +28,15 @@ const World = dynamic(
 );
 
 export function ExperienceHost() {
+  // Audio reads q from the same clock as everything else (L1). A pure
+  // subscriber: it never schedules its own work and never decides anything.
+  useEffect(() => subscribe((q) => updateAudio(q)), []);
+
+  // Ducked while the Command Overlay is open (§7). The world stops; the
+  // dossier remains.
+  const overlayOpen = useCommandStore((s) => s.overlayOpen);
+  useEffect(() => duckAudio(overlayOpen), [overlayOpen]);
+
   return (
     <>
       {/* Tier D renders INSTEAD of the canvas, not alongside it — WorldCanvas

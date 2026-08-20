@@ -3,14 +3,36 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@estate/domain": ["../../packages/domain/src/index.ts"],
-      "@estate/domain/*": ["../../packages/domain/src/*"],
-      "@estate/db": ["../../packages/db/src/index.ts"],
-      "@estate/db/*": ["../../packages/db/src/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@estate/domain": [
+        "../../packages/domain/src/index.ts"
+      ],
+      "@estate/domain/*": [
+        "../../packages/domain/src/*"
+      ],
+      "@estate/db": [
+        "../../packages/db/src/index.ts"
+      ],
+      "@estate/db/*": [
+        "../../packages/db/src/*"
+      ]
     },
-    "plugins": [{ "name": "next" }]
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next-prod/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
