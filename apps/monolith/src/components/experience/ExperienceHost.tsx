@@ -16,6 +16,7 @@
 import dynamic from 'next/dynamic';
 import { TierD } from './TierD';
 import { Gate } from '@/components/command/Gate';
+import { Chrome } from '@/components/command/Chrome';
 
 const World = dynamic(
   () => import('./WorldCanvas').then((m) => m.WorldCanvas),
@@ -31,6 +32,7 @@ export function ExperienceHost() {
       <World />
       {/* Above both. Holds scroll until consent resolves and [ ENTER ] is
           pressed — the same gesture that unlocks AudioContext. */}
+      <Chrome />
       <Gate />
     </>
   );

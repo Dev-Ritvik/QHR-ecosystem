@@ -19,7 +19,18 @@
 import type { ReactNode } from 'react';
 import { ExperienceHost } from '@/components/experience/ExperienceHost';
 
-export default function ExperienceLayout({ children }: { children: ReactNode }) {
+export default function ExperienceLayout({
+  children,
+  modal,
+}: {
+  children: ReactNode;
+  /** The @modal parallel slot. Renders null via default.tsx when the URL does
+   *  not match an intercepted route, and the HUD when it does. Because it is a
+   *  SIBLING of children rather than a wrapper, opening the directory does not
+   *  unmount the narrative underneath it — which is what lets the frozen
+   *  canvas stay exactly where it was. */
+  modal: ReactNode;
+}) {
   return (
     <div className="relative min-h-screen bg-void text-signal">
       {/* MASTER_SPEC §10 — first tab stop. A scroll narrative that cannot be
@@ -34,6 +45,9 @@ export default function ExperienceLayout({ children }: { children: ReactNode }) 
 
       {/* The readable layer, above the world. */}
       <div className="surface">{children}</div>
+
+      {/* The Z-999 HUD. Sibling, not wrapper. */}
+      {modal}
     </div>
   );
 }
