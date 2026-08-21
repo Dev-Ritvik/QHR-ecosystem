@@ -85,6 +85,7 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { BlendFunction, Effect } from 'postprocessing';
+import { EV_AT_ZERO } from '@/lib/continuity';
 import {
   HIGH_PIVOT,
   HIGH_STRENGTH,
@@ -186,7 +187,7 @@ export class ExposureEffect extends Effect {
     super('Exposure', exposureShader, {
       blendFunction: BlendFunction.NORMAL,
       uniforms: new Map<string, THREE.Uniform>([
-        ['uExposure', new THREE.Uniform(Math.pow(2, -2.4))],
+        ['uExposure', new THREE.Uniform(Math.pow(2, EV_AT_ZERO))],
       ]),
     });
   }

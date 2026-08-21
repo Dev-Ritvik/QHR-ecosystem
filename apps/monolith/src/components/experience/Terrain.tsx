@@ -214,8 +214,20 @@ const FRAG = GEO + /* glsl */ `
     // The key is near the horizon, so upward faces receive very little direct
     // light. A wrapped term carries base illumination and lambert supplies the
     // raking contrast on slopes facing the sun.
+    //
+    // THE AMBIENT TERM IS THE REASON ACT I READS AT ALL. It was 0.16 + 0.44,
+    // and at that level raising the sensor did nothing useful: measured across
+    // the descent, more exposure lifted the ceiling (bright spread 15 -> 57)
+    // while the mean stayed at 23 and 88-99% of the frame sat in a single
+    // perceptual band. The frame was not underexposed, it was FLAT — the ground
+    // was returning almost no light to lift.
+    //
+    // An hour after sunset the dominant source is the whole sky dome, not the
+    // sun, so a large ambient with a small directional is also the physically
+    // honest reading of this hour. lambert is left alone: it is what still
+    // separates a west-facing slope from an east-facing one.
     float wrap = clamp(dot(n, normalize(uSun)) * 0.5 + 0.5, 0.0, 1.0);
-    vec3 col = albedo * (0.16 + wrap * 0.44 + lambert * 0.85);
+    vec3 col = albedo * (0.34 + wrap * 0.68 + lambert * 0.85);
 
     vec2 W = vWorld.xz;
     float land = 1.0 - vShore;

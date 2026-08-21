@@ -39,6 +39,7 @@ import * as THREE from 'three';
 import { useSceneStore } from '@/state/sceneStore';
 import { useCommandStore } from '@/state/commandStore';
 import { bindInvalidate, startTicker, stopTicker } from '@/lib/ticker';
+import { EV_AT_ZERO } from '@/lib/continuity';
 import { TIER_BUDGET, detectTier } from '@/lib/tier';
 import { CameraRig } from './CameraRig';
 import { Corridor } from './Corridor';
@@ -216,7 +217,7 @@ export function WorldCanvas() {
     // Exposure is driven per-frame by CameraRig from the continuity table.
     // Seeded at the q=0 value so the first painted frame is already correct
     // rather than flashing bright and settling.
-    gl.toneMappingExposure = Math.pow(2, -2.4);
+    gl.toneMappingExposure = Math.pow(2, EV_AT_ZERO);
   }, []);
 
   // Tier D and the error state both mean: do not create a context at all.

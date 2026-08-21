@@ -50,7 +50,7 @@
 // into one fullscreen pass, so at tier C the whole chain below is a single
 // shader.
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   Bloom,
   ChromaticAberration,
@@ -64,14 +64,40 @@ import * as THREE from 'three';
 import { useSceneStore } from '@/state/sceneStore';
 import { TIER_BUDGET } from '@/lib/tier';
 import { Exposure, SplitTone } from './SplitTone';
+import { subscribe } from '@/lib/ticker';
+import { caOffsetFor, getCameraSpeed } from '@/lib/motion';
 
 export function PostFX() {
   const tier = useSceneStore((s) => s.tier);
   const budget = TIER_BUDGET[tier];
 
-  // Chromatic aberration offset must be a Vector2 and must be stable across
-  // renders — a fresh object each frame makes the effect rebuild its uniform.
-  const caOffset = useMemo(() => new THREE.Vector2(0.0006, 0.0006), []);
+  // CHROMATIC ABERRATION IS A MOTION ARTEFACT, NOT A PROPERTY OF THE IMAGE.
+  //
+  // This was a constant 0.0006 across the entire timeline, and at rest that is
+  // not "a subtle lens" — it splits every 1-pixel emissive survey line in the
+  // Act II plotting grid into a red ghost and a blue one. Those lines are the
+  // plan being sold; crispness there is the product, not a preference. It also
+  // accounted for 100% of the residual warm pixels measured in Act I: fringing
+  // on high-contrast edges, which disappeared entirely with the pass disabled.
+  //
+  // Now driven by the camera's instantaneous speed along the path, and clamped
+  // to EXACTLY zero below a deadband — so the Act IV pause, and every moment a
+  // reader stops to look at something, are perfectly sharp. Full strength only
+  // through the Act I punch, where the frame is moving too fast to read
+  // anything anyway and dispersion registers as speed rather than as a defect.
+  //
+  // The Vector2 identity is stable and mutated in place: a fresh object each
+  // frame makes the effect rebuild its uniform.
+  const caOffset = useMemo(() => new THREE.Vector2(0, 0), []);
+
+  useEffect(
+    () =>
+      subscribe(() => {
+        const amt = caOffsetFor(getCameraSpeed());
+        caOffset.set(amt, amt);
+      }),
+    [caOffset],
+  );
 
   // DEV HANDLE — the composer, not the renderer.
   //

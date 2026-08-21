@@ -24,7 +24,8 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { subscribe } from '@/lib/ticker';
 import { POSITION_CURVE, TARGET_CURVE, curveT } from '@/lib/cameraPath';
-import { chaseExposure, continuityAt, evToExposure } from '@/lib/continuity';
+import { chaseExposure, continuityAt, EV_AT_ZERO, evToExposure } from '@/lib/continuity';
+import { setCameraSpeed } from '@/lib/motion';
 import { useSceneStore } from '@/state/sceneStore';
 
 /** Metres of camera offset at full pointer deflection. Deliberately tiny — this
@@ -42,7 +43,11 @@ export function CameraRig() {
   const pos = useRef(new THREE.Vector3());
   const look = useRef(new THREE.Vector3());
   const pointer = useRef(new THREE.Vector2(0, 0));
-  const exposure = useRef(-2.4);
+  const exposure = useRef(EV_AT_ZERO);
+  // Previous frame's position, for the speed the lens reads (lib/motion.ts).
+  const prev = useRef(new THREE.Vector3());
+  const hasPrev = useRef(false);
+  const smoothed = useRef(0);
   const fog = useRef<THREE.FogExp2 | null>(null);
 
   // Optics are reported to the store for the HUD, but at most a few times a
@@ -126,6 +131,20 @@ export function CameraRig() {
         pos.current.addScaledVector(right, pointer.current.x * PARALLAX);
         pos.current.addScaledVector(up, pointer.current.y * PARALLAX * 0.6);
       }
+
+      // ── Speed ───────────────────────────────────────────────────────────
+      // Measured from the path, not from the scroll delta: the two differ
+      // wherever beat spacing compresses or stretches travel against q, which
+      // is the whole velocity design (Appendix B, failure 3). The lens has to
+      // respond to how fast the WORLD is moving past it.
+      if (hasPrev.current && dt > 0) {
+        const inst = prev.current.distanceTo(pos.current) / dt;
+        // One long frame must not spike the lens. ~120ms of smoothing.
+        smoothed.current += (inst - smoothed.current) * Math.min(1, dt / 0.12);
+      }
+      prev.current.copy(pos.current);
+      hasPrev.current = true;
+      setCameraSpeed(smoothed.current);
 
       cam.position.copy(pos.current);
       cam.lookAt(look.current);

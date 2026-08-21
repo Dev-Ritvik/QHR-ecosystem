@@ -58,10 +58,10 @@ export interface Keyframe {
 }
 
 export const TABLE: readonly Keyframe[] = [
-  { q: 0.000, fov: 28.0, ev: -2.40, roll: 0.00, fog: 0.265, hz: 34, lights: 1, beat: 'I · Void' },
-  { q: 0.040, fov: 30.0, ev: -2.20, roll: 0.06, fog: 0.059, hz: 34, lights: 1, beat: 'I · Drop begins' },
-  { q: 0.100, fov: 49.0, ev: -1.60, roll: 0.18, fog: 0.0041, hz: 34, lights: 2, beat: 'I · The punch' },
-  { q: 0.180, fov: 45.0, ev: -1.05, roll: 0.10, fog: 0.00107, hz: 35, lights: 3, beat: 'I · Scale reveal' },
+  { q: 0.000, fov: 28.0, ev: -1.60, roll: 0.00, fog: 0.265, hz: 34, lights: 1, beat: 'I · Void' },
+  { q: 0.040, fov: 30.0, ev: -1.50, roll: 0.06, fog: 0.059, hz: 34, lights: 1, beat: 'I · Drop begins' },
+  { q: 0.100, fov: 49.0, ev: -1.30, roll: 0.18, fog: 0.0041, hz: 34, lights: 2, beat: 'I · The punch' },
+  { q: 0.180, fov: 45.0, ev: -1.00, roll: 0.10, fog: 0.00107, hz: 35, lights: 3, beat: 'I · Scale reveal' },
   { q: 0.250, fov: 41.0, ev: -0.70, roll: 0.00, fog: 0.001, hz: 35, lights: 3, beat: 'I · Settle' },
   { q: 0.320, fov: 42.0, ev: -0.70, roll: 1.30, fog: 0.00095, hz: 36, lights: 3, beat: 'II · Orbit entry' },
   { q: 0.380, fov: 43.0, ev: -0.70, roll: 2.40, fog: 0.0009, hz: 37, lights: 3, beat: 'II · Bank peak' },
@@ -223,6 +223,16 @@ export function continuityAt(q: number): Continuity {
 
 /** §3.3 — exposure chases its target rather than tracking it. τ = 1.05 s.
  *  Applies to exposure ONLY; nothing else in the table lags. */
+/**
+ * The exposure the first painted frame must already be at.
+ *
+ * Read from the table rather than written as a literal: it was previously
+ * hardcoded as -2.4 in TWO other files, and any change to the table's opening
+ * EV silently left both of them behind — the canvas seeding one value and the
+ * chase starting from another.
+ */
+export const EV_AT_ZERO = TABLE[0].ev;
+
 export const EXPOSURE_TAU = 1.05;
 
 export function chaseExposure(actual: number, target: number, dt: number): number {

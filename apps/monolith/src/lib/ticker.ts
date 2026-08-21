@@ -44,6 +44,9 @@ interface TickerState {
   running: boolean;
   q: number;
   maxScroll: number;
+  /** Dev only: overrides the scroll source so one frame can be driven by
+   *  hand. Never set in production. */
+  forcedScroll: number | null;
 }
 
 const state: TickerState = {
@@ -53,6 +56,7 @@ const state: TickerState = {
   running: false,
   q: 0,
   maxScroll: 1,
+  forcedScroll: null,
 };
 
 /** Current normalised scroll progress, 0..1. Read-only outside this module. */
@@ -93,17 +97,33 @@ function frame(time: number): void {
   // Read Lenis's smoothed position, not window.scrollY. window.scrollY lags
   // Lenis's own transform by design, so using it would hand every subscriber
   // the staircase Lenis exists to remove.
-  const y = state.lenis?.scroll ?? window.scrollY ?? 0;
+  const y = state.forcedScroll ?? state.lenis?.scroll ?? window.scrollY ?? 0;
   state.q = Math.min(1, Math.max(0, y / state.maxScroll));
 
   // gsap.ticker exposes deltaRatio() relative to 60fps; convert to seconds so
   // subscribers can do frame-rate-independent damping without guessing.
-  const dt = gsap.ticker.deltaRatio(60) / 60;
+  //
+  // CLAMPED, AND THAT IS NOT DEFENSIVE PROGRAMMING. Two subscribers integrate
+  // this value rather than merely reading it: chaseExposure carries exposure
+  // forward frame to frame, and the camera-speed smoother in CameraRig does the
+  // same. Both are IIR filters, so a single bad delta does not produce one bad
+  // frame — it poisons the running state permanently. A NaN delta makes
+  // exposure NaN, `Math.pow(2, NaN)` is NaN, and every subsequent frame renders
+  // through a NaN toneMappingExposure with no way back short of a reload.
+  //
+  // lagSmoothing(0) above is what makes this reachable: it is mandatory for
+  // scroll accuracy, and it also removes GSAP's own protection against exactly
+  // this. The 100 ms ceiling is the same magnitude GSAP's default would have
+  // used, applied here where it cannot corrupt the scroll position.
+  const rawDt = gsap.ticker.deltaRatio(60) / 60;
+  const dt = Number.isFinite(rawDt) ? Math.min(Math.max(rawDt, 0), 0.1) : 1 / 60;
 
   for (const fn of state.subs) fn(state.q, dt);
 
   if (process.env.NODE_ENV !== 'production') {
-    (window as unknown as { __ticker?: unknown }).__ticker = {
+    const w = window as unknown as { __ticker?: Record<string, unknown> };
+    w.__ticker = {
+      ...(w.__ticker ?? {}),
       running: state.running,
       subs: state.subs.size,
       q: +state.q.toFixed(4),
@@ -147,6 +167,40 @@ export function startTicker(): void {
   cleanup.push(() => ro.disconnect());
   cleanup.push(() => window.removeEventListener('resize', measure));
 
+  // DEV HARNESS. Installed here rather than inside frame(), because frame() is
+  // exactly what cannot be relied upon to run: every browser surface available
+  // to automated verification reports visibilityState "hidden" and throttles
+  // requestAnimationFrame to ZERO. Nothing downstream of this loop — camera,
+  // terrain uniforms, audio — can be observed under those conditions, and a
+  // subscriber that silently stopped firing would look identical to one that
+  // never ran.
+  //
+  // tick() drives ONE real frame at a simulated scroll position: the same q
+  // arithmetic, the same subscriber set, the same order. It is the production
+  // path with the clock supplied by hand.
+  if (process.env.NODE_ENV !== 'production') {
+    const w = window as unknown as { __ticker?: Record<string, unknown> };
+    w.__ticker = {
+      ...(w.__ticker ?? {}),
+      tick(y: number) {
+        state.forcedScroll = y;
+        frame(performance.now() / 1000);
+        state.forcedScroll = null;
+        return { q: state.q, subs: state.subs.size };
+      },
+      tickQ(q: number) {
+        return (w.__ticker as { tick: (y: number) => unknown }).tick(q * state.maxScroll);
+      },
+      read: () => ({
+        running: state.running,
+        subs: state.subs.size,
+        q: state.q,
+        maxScroll: state.maxScroll,
+        lenis: !!state.lenis,
+      }),
+    };
+  }
+
   gsap.ticker.add(frame);
 
   // lagSmoothing(0) is mandatory, not tuning. GSAP otherwise CLAMPS delta
@@ -171,8 +225,28 @@ export function stopTicker(): void {
 
   state.lenis?.destroy();
   state.lenis = null;
-  state.subs.clear();
   state.invalidate = null;
+
+  // state.subs IS DELIBERATELY NOT CLEARED, and this is the whole comment.
+  //
+  // A subscription is owned by the component that created it; subscribe()
+  // hands back an unsubscribe and every caller runs it from its own effect
+  // cleanup. Clearing the set here also destroys subscriptions belonging to
+  // components that are still mounted and will never re-subscribe.
+  //
+  // That is not hypothetical. WorldCanvas owns start/stopTicker and is loaded
+  // through next/dynamic, so it mounts LATER than ExperienceHost — which has
+  // already subscribed updateAudio and settled. React StrictMode then
+  // double-invokes WorldCanvas's effect (start -> stop -> start), and the stop
+  // wiped the audio subscription. The four in-canvas subscribers re-registered
+  // on the second mount; the audio one, owned by a parent that never re-ran,
+  // did not.
+  //
+  // Result: the sub-bass held whatever pitch it was seeded with for the entire
+  // scroll, because nothing was feeding it q. It was reported as "stuck at a
+  // constant tone" and it was invisible to every check that called updateAudio
+  // directly rather than through the ticker — which is exactly what the earlier
+  // verification did. Asserted by scripts/rig-check.mjs.
 
   while (cleanup.length) cleanup.pop()!();
 }

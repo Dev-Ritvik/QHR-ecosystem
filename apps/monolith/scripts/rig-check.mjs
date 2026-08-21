@@ -188,5 +188,49 @@ for (const r of rows) {
 console.log(`
   slowest moving window: q=${worst.q} at ${(worst.rel * 100).toFixed(1)}% of viewing distance`);
 console.log(`  endpoints exact: q0 ±${dFirst.toFixed(4)}m, q1 ±${dLast.toFixed(4)}m`);
+// ── THE SUBSCRIBER LIST ─────────────────────────────────────────────────────
+// stopTicker() MUST NOT clear state.subs.
+//
+// A subscription belongs to the component that created it: subscribe() returns
+// an unsubscribe, and every caller runs it from its own effect cleanup.
+// Clearing the set centrally also destroys subscriptions held by components
+// that are still mounted and will never re-subscribe.
+//
+// Not theoretical. WorldCanvas owns start/stopTicker and is loaded through
+// next/dynamic, so it mounts LATER than ExperienceHost — which has already
+// subscribed updateAudio and settled. React StrictMode then double-invokes
+// WorldCanvas's effect (start -> stop -> start), and the stop wiped the audio
+// subscription. Measured live: 4 subscribers where there should have been 6,
+// with the sub-bass holding a single pitch for the entire scroll because
+// nothing was feeding it q.
+//
+// It survived every earlier check because those called updateAudio DIRECTLY
+// rather than through the ticker. Verifying a subscriber by bypassing the thing
+// it subscribes to proves only that the function works.
+
+const tickerSrc = readFileSync(join(here, '../src/lib/ticker.ts'), 'utf8');
+const stopBody = (tickerSrc.match(/export function stopTicker\(\)[\s\S]*?\n\}/) || [''])[0]
+  .split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+
+if (/subs\s*\.\s*clear\s*\(/.test(stopBody)) {
+  console.error('FAIL: stopTicker() clears state.subs — that silently unsubscribes '
+    + 'components which are still mounted. Let each subscriber run its own cleanup.');
+  failures += 1;
+} else {
+  console.log('  ok  stopTicker leaves the subscriber list alone');
+}
+
+// dt must be guarded: chaseExposure and the camera-speed smoother both
+// INTEGRATE it, so one non-finite delta corrupts their running state
+// permanently rather than costing a single frame.
+if (!/Number\.isFinite\(rawDt\)/.test(tickerSrc)) {
+  console.error('FAIL: ticker dt is unguarded — a non-finite delta poisons exposure '
+    + 'through chaseExposure and never recovers');
+  failures += 1;
+} else {
+  console.log('  ok  ticker dt clamped finite, 100ms ceiling');
+}
+
+
 console.log(`\n${failures ? `FAILED (${failures})` : 'RIG OK'}  —  camera demonstrably moves across the whole track`);
 process.exit(failures ? 1 : 0);
