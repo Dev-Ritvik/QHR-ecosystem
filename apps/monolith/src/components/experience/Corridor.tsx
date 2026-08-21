@@ -12,9 +12,11 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Terrain } from './Terrain';
+import { Massing } from './Massing';
 import { subscribe } from '@/lib/ticker';
 import { useSceneStore } from '@/state/sceneStore';
 import { TIER_BUDGET } from '@/lib/tier';
+import { PRACTICAL_2700K, VOID_COLOR } from '@/lib/grade';
 
 /**
  * Dusk sky as a gradient on an inverted sphere.
@@ -27,11 +29,18 @@ import { TIER_BUDGET } from '@/lib/tier';
 function Sky() {
   const uniforms = useMemo(
     () => ({
-      uTop: { value: new THREE.Color('#070810') },
-      uHorizon: { value: new THREE.Color('#1b1c24') },
-      // The one warm note in the sky, low and west, matching the terrain's sun
-      // direction. Dusk, not sunset — the ember is nearly spent.
-      uEmber: { value: new THREE.Color('#c8642a') },
+      uTop: { value: new THREE.Color('#07070C') },
+      uHorizon: { value: new THREE.Color(VOID_COLOR) },
+      // A COLD directional lift where the sun went down — not an ember.
+      //
+      // This used to be #c8642a at 0.55 intensity with a second, much broader
+      // pow(toward, 4.0) term, and between them they laid an orange wash across
+      // the whole western horizon. That is the "global orange filter" §5 Act III
+      // forbids by name, arriving through the sky instead of through a grade.
+      // The narrow term survives so the dome still has a light direction; the
+      // broad one is gone, and the colour is now the blue of the hour after
+      // sunset rather than the hour before it.
+      uGlow: { value: new THREE.Color('#28324E') },
       uSunDir: { value: new THREE.Vector3(-0.82, 0.16, -0.34).normalize() },
     }),
     [],
@@ -54,7 +63,7 @@ function Sky() {
         fragmentShader={/* glsl */ `
           uniform vec3 uTop;
           uniform vec3 uHorizon;
-          uniform vec3 uEmber;
+          uniform vec3 uGlow;
           uniform vec3 uSunDir;
           varying vec3 vDir;
 
@@ -67,10 +76,12 @@ function Sky() {
             float h = clamp(d.y * 0.5 + 0.5, 0.0, 1.0);
             vec3 col = mix(uHorizon, uTop, pow(h, 0.75));
 
-            // Ember glow around the sun's bearing, falling off fast.
+            // Cold glow around the sun's bearing, falling off fast. The
+            // exponent stays high deliberately: anything broader than this
+            // stops being a light direction and becomes a filter over the
+            // horizon, which is the failure this replaced.
             float toward = clamp(dot(d, normalize(uSunDir)), 0.0, 1.0);
-            col += uEmber * pow(toward, 22.0) * 0.55;
-            col += uEmber * pow(toward, 4.0) * 0.06 * (1.0 - h);
+            col += uGlow * pow(toward, 22.0) * 0.30;
 
             // Dither. Banding in a dark vertical gradient on an 8-bit display
             // is the most common tell of an amateur WebGL sky.
@@ -97,7 +108,7 @@ function Water() {
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
-      uSky: { value: new THREE.Color('#1b1c24') },
+      uSky: { value: new THREE.Color(VOID_COLOR) },
       uDeep: { value: new THREE.Color('#05080c') },
       uSunDir: { value: new THREE.Vector3(-0.82, 0.16, -0.34).normalize() },
     }),
@@ -157,10 +168,14 @@ function Water() {
           varying vec3 vWorld;
 
           void main() {
-            // Normals from the displaced surface, same reasoning as the
-            // terrain: the attribute normals are all straight up and would
-            // light this as glass.
-            vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+            // Same reasoning as Terrain.tsx, including the length check: the
+            // attribute normals are all straight up and would light this as
+            // glass, and an unguarded normalize() of a degenerate cross product
+            // emits NaN into the frame.
+            vec3 dpx = dFdx(vWorld), dpy = dFdy(vWorld);
+            vec3 cr = cross(dpx, dpy);
+            float crl = length(cr);
+            vec3 n = crl > 1e-9 ? cr / crl : vec3(0.0, 1.0, 0.0);
             if (n.y < 0.0) n = -n;
 
             vec3 view = normalize(cameraPosition - vWorld);
@@ -176,7 +191,7 @@ function Water() {
             // A single specular glint on the sun's bearing. Tight exponent so
             // it is a line on the water, not a bloom.
             vec3 h = normalize(normalize(uSunDir) + view);
-            col += vec3(0.85, 0.55, 0.30) * pow(clamp(dot(n, h), 0.0, 1.0), 220.0) * 0.7;
+            col += vec3(0.58, 0.68, 0.82) * pow(clamp(dot(n, h), 0.0, 1.0), 220.0) * 0.7;
 
             gl_FragColor = vec4(col, 1.0);
           }
@@ -226,6 +241,7 @@ export function Corridor() {
     <>
       <Sky />
       <Terrain />
+      <Massing />
       <Water />
       <Villa />
 
@@ -234,14 +250,14 @@ export function Corridor() {
           2: cool sky fill so shadowed faces separate without lifting toward
              the key's colour.
           3–4: interior practicals, only above tier C. */}
-      <directionalLight position={[-820, 160, -340]} intensity={1.2} color="#ffb478" />
-      <hemisphereLight args={['#2b3550', '#0a0806', 0.42]} />
+      <directionalLight position={[-820, 160, -340]} intensity={1.2} color="#93A7C4" />
+      <hemisphereLight args={['#232C46', '#0A0A0E', 0.42]} />
 
       {budget.maxLights >= 3 && (
-        <pointLight position={[0, 2.6, -12]} intensity={14} distance={22} decay={2} color="#ffd6aa" />
+        <pointLight position={[0, 2.6, -12]} intensity={14} distance={22} decay={2} color={PRACTICAL_2700K} />
       )}
       {budget.maxLights >= 4 && (
-        <pointLight position={[-5, 2.2, -18]} intensity={10} distance={18} decay={2} color="#ffd6aa" />
+        <pointLight position={[-5, 2.2, -18]} intensity={10} distance={18} decay={2} color={PRACTICAL_2700K} />
       )}
     </>
   );

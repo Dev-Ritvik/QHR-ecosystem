@@ -161,6 +161,66 @@ const vStart = Math.abs(f(0.0005) - f(0));
 const vEnd = Math.abs(f(1) - f(0.9995));
 report.push(`   ok   endpoints |v0| ${vStart.toExponential(2)}  |v1| ${vEnd.toExponential(2)}`);
 
+// ── THE ACOUSTIC RAMP ───────────────────────────────────────────────────────
+// MASTER_SPEC §5: the sub-bass starts at 34 Hz in Act I, ramps to 42 Hz at the
+// Act III breach, holds through the interior, drops to 36 Hz at the collapse,
+// and plunges to zero at the severance.
+//
+// THE DEFECT THIS EXISTS TO CATCH: hz was previously held at a flat 34 across
+// TEN consecutive keyframes — q 0.000 to 0.580, the whole of Acts I and II —
+// then jumped 34 -> 38 -> 42 inside a 0.08-wide window. Every other check in
+// this file passed, because a flat channel has no jumps and no C1 breaks. It
+// was reported from the browser as "the sub-bass is stuck at a constant pitch",
+// which is exactly what it was for the first 58% of the scroll.
+//
+// Continuity is necessary and not sufficient: a channel can be perfectly smooth
+// and still say nothing.
+
+const hzAt = (q) => rows.reduce((best, r) => (Math.abs(r.q - q) < Math.abs(best.q - q) ? r : best)).hz;
+const BREACH = 0.66;
+
+if (rows[0].hz !== 34) fail_hz(`Act I must open at 34 Hz, table says ${rows[0].hz}`);
+if (hzAt(BREACH) !== 42) fail_hz(`the breach at q ${BREACH} must peak at 42 Hz, table says ${hzAt(BREACH)}`);
+if (hzAt(0.96) !== 36) fail_hz(`the collapse at q 0.96 must drop to 36 Hz, table says ${hzAt(0.96)}`);
+if (rows[rows.length - 1].hz !== 0) fail_hz(`the severance must reach 0 Hz, table says ${rows[rows.length - 1].hz}`);
+
+let failuresHz = 0;
+function fail_hz(m) { console.error(`FAIL: ${m}`); failuresHz += 1; failures += 1; }
+
+// Non-decreasing up to the breach, non-increasing after it.
+for (let i = 1; i < rows.length; i += 1) {
+  const a = rows[i - 1], b = rows[i];
+  if (b.q <= BREACH && b.hz < a.hz) {
+    fail_hz(`hz falls before the breach: ${a.hz} at q ${a.q} -> ${b.hz} at q ${b.q}`);
+  }
+  if (a.q >= 0.82 && b.hz > a.hz) {
+    fail_hz(`hz rises after the pause: ${a.hz} at q ${a.q} -> ${b.hz} at q ${b.q}`);
+  }
+}
+
+// THE RAMP MUST ACTUALLY RAMP. Acts I and II are 58% of the scroll; a listener
+// who scrolls that far must hear the pitch move.
+const actsI_II = rows.filter((r) => r.q <= 0.58);
+const spread = Math.max(...actsI_II.map((r) => r.hz)) - Math.min(...actsI_II.map((r) => r.hz));
+if (spread < 5) {
+  fail_hz(`hz moves only ${spread} Hz across Acts I-II (q 0 to 0.58) — that is the flat-drone defect`);
+}
+const flatRun = (() => {
+  let run = 1, worst = 1;
+  for (let i = 1; i < rows.length; i += 1) {
+    run = rows[i].hz === rows[i - 1].hz ? run + 1 : 1;
+    worst = Math.max(worst, run);
+  }
+  return worst;
+})();
+if (flatRun > 5) {
+  fail_hz(`hz is identical across ${flatRun} consecutive keyframes — the drone stops responding to scroll`);
+}
+report.push(
+  `   ok   hz    34 -> 42 at breach -> 36 at collapse -> 0`
+  + `  (Acts I-II spread ${spread} Hz, longest flat run ${flatRun} keyframes)`,
+);
+
 console.log(report.join('\n'));
 console.log(
   `\n${failures ? `FAILED (${failures})` : 'CONTINUITY OK'}` +

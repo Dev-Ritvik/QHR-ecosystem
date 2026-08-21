@@ -51,7 +51,7 @@ export function CameraRig() {
   const lastReport = useRef(0);
 
   useEffect(() => {
-    const f = new THREE.FogExp2(0x050505, 0.022);
+    const f = new THREE.FogExp2(0x0a0a0e, 0.022);
     scene.fog = f;
     fog.current = f;
     return () => {

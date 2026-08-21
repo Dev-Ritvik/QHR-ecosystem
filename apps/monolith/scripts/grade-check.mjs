@@ -356,6 +356,72 @@ if (missing.length) {
 }
 ok(`pipeline — 1 tone map, chain in camera order: ${ORDER.map((t) => t.slice(1)).join(' -> ')}`);
 
+// ── 7. SCENE WARMTH ─────────────────────────────────────────────────────────
+// MASTER_SPEC §5 Act III: "2700 K means warm *pools with falloff*, never a
+// global orange filter." Sections 3 and 4 prove the GRADE cannot manufacture a
+// warm cast. This section proves the SCENE never hands it one to begin with.
+//
+// The sky used to carry a #c8642a ember across the western horizon at two
+// separate falloffs, the key light was #ffb478, the hemisphere ground was warm,
+// the water glint was orange, and the Act II plotting grid was drawn amber —
+// while src/lib/grade.ts stated in prose that the grid was cool and built its
+// two-tint highlight logic on that claim. Every one of those is a warm source
+// outside the villa, and together they are exactly the wash the ruling forbids.
+//
+// The ONLY warm source permitted in this build is PRACTICAL_2700K, on the point
+// lights inside the model duplex villa.
+
+const sceneFiles = ['Corridor', 'Terrain', 'Massing'].map((n) => [
+  n, readFileSync(join(here, `../src/components/experience/${n}.tsx`), 'utf8'),
+]);
+
+const practical = (gradeSrc.match(/PRACTICAL_2700K = '(#[0-9A-Fa-f]{6})'/) || [])[1];
+if (!practical) fail('PRACTICAL_2700K not found in grade.ts');
+
+let scanned = 0;
+for (const [name, src] of sceneFiles) {
+  src.split('\n').forEach((line, i) => {
+    // Strip comments first: this file documents the colours it removed, and a
+    // gate that reads its own changelog fails on history rather than on code.
+    const code = line.replace(/\/\/.*$/, '');
+    // `color=` / `color:` and `args=` are here because of a mutation test: a
+    // warm key light is written `color="#ffb478"` in JSX, and the word `color`
+    // does not match \bcol\b. The gate passed a restored warm key until this
+    // line was widened, which is the exact regression it exists to catch.
+    if (!/\bcol\b|color[=:]|args=|albedo|vec3 plain|vec3 rock|vec3 sea|Color\(/.test(code)) return;
+
+    // GLSL colour literals, on lines that actually paint something.
+    for (const m of code.matchAll(/vec3\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)/g)) {
+      scanned += 1;
+      const r = +m[1];
+      const b = +m[3];
+      if (r > b + 1e-6) {
+        fail(`${name}.tsx:${i + 1} paints a WARM colour ${m[0]} — r > b. `
+          + 'Outside the villa the permitted number of warm sources is zero (§5 Act III)');
+      }
+    }
+
+    // Hex literals handed to THREE.Color — either quote style, since JSX props
+    // use double quotes and object literals use single.
+    for (const m of code.matchAll(/['"](#[0-9A-Fa-f]{6})['"]/g)) {
+      scanned += 1;
+      const n = parseInt(m[1].slice(1), 16);
+      if (((n >> 16) & 255) > (n & 255)) {
+        fail(`${name}.tsx:${i + 1} uses warm colour ${m[1]} — r > b`);
+      }
+    }
+  });
+}
+
+// ...and the practical must still BE warm, or the villa has nothing to pool and
+// Act III loses the only colour contrast in the narrative.
+const pn = parseInt(practical.slice(1), 16);
+if (((pn >> 16) & 255) <= (pn & 255)) {
+  fail(`PRACTICAL_2700K ${practical} is not warm — the villa interior has nothing to pool`);
+}
+ok(`scene warmth — ${scanned} colour literals across 3 scene files, none warm; only PRACTICAL_2700K ${practical} is`);
+
+
 // ── REPORT ──────────────────────────────────────────────────────────────────
 
 console.log(report.join('\n'));

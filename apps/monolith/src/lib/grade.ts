@@ -200,3 +200,23 @@ export const UNIFORMS = {
   warmBalance: balance(GRADE.highlightWarm),
   coolBalance: balance(GRADE.highlightCool),
 };
+
+/**
+ * THE VOID — the scene-side background and fog colour.
+ *
+ * A bruising dark violet-grey. Distinct from GRADE.shadow above, and the two
+ * must not be confused: this is the colour the SCENE renders (scene.background,
+ * FogExp2, the sky horizon, the terrain's aerial-perspective target), before
+ * exposure, before ACES, before the grade. GRADE.shadow is where a black pixel
+ * ends up AFTER all of that.
+ *
+ * Everything warm in this build lives inside the Act III villa and nowhere else
+ * (§5 Act III: "warm pools with falloff, never a global orange filter"). The
+ * sky, the key light, the hemisphere ground, the terrain albedo and the Act II
+ * plotting grid are all on the cold side of neutral by construction.
+ */
+export const VOID_COLOR = '#0A0A0E';
+
+/** True 2700 K on the Planckian locus, in sRGB. The ONLY warm source in the
+ *  build — the practicals inside the model duplex villa. */
+export const PRACTICAL_2700K = '#FFA957';

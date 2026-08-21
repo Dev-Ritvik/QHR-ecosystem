@@ -19,7 +19,7 @@ import { TierD } from './TierD';
 import { Gate } from '@/components/command/Gate';
 import { Chrome } from '@/components/command/Chrome';
 import { subscribe } from '@/lib/ticker';
-import { duckAudio, updateAudio } from '@/lib/audio';
+import { audioState, duckAudio, resumeAudio, startAudio, updateAudio } from '@/lib/audio';
 import { useCommandStore } from '@/state/commandStore';
 
 const World = dynamic(
@@ -31,6 +31,24 @@ export function ExperienceHost() {
   // Audio reads q from the same clock as everything else (L1). A pure
   // subscriber: it never schedules its own work and never decides anything.
   useEffect(() => subscribe((q) => updateAudio(q)), []);
+
+  // DEV HANDLE. This environment throttles requestAnimationFrame to zero, so
+  // the ticker never fires and the line above can never be observed working —
+  // which is how the drone sat at a constant pitch through Acts I and II
+  // without anyone being able to see why from inside the page. Exposing the
+  // engine lets q be driven by hand and the oscillator frequencies read back,
+  // harmonics included. An AudioContext may be created without a gesture (it
+  // simply starts suspended), and a suspended oscillator still reports its
+  // frequency, so this needs no [ ENTER ] to answer the question.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    (window as unknown as { __audio?: unknown }).__audio = {
+      start: startAudio,
+      update: updateAudio,
+      state: audioState,
+      resume: resumeAudio,
+    };
+  }, []);
 
   // Ducked while the Command Overlay is open (§7). The world stops; the
   // dossier remains.

@@ -517,6 +517,58 @@ reference frames, applied as an additive lift and dithered by the grain pass.
 Verified on the GPU at `#0B1018` — within 1/255. Pure `#000000` banding in the
 shadows is the most common tell of an amateur WebGL scene.
 
+**The void is `#0A0A0E`** — [ADDED §27] — a bruising dark violet-grey, and it is
+the colour of `scene.background`, `FogExp2`, the sky horizon and the terrain's
+aerial-perspective target. Do not confuse it with the grade floor above: this is
+what the SCENE renders, before exposure, before ACES, before the grade.
+
+**NO WARM SOURCE EXISTS OUTSIDE THE VILLA.** The sky once carried a `#c8642a`
+ember across the western horizon at two falloffs, the key light was `#ffb478`,
+the hemisphere ground was warm, the water glint was orange and the Act II
+plotting grid was drawn amber — while `grade.ts` asserted in prose that the grid
+was cool and built its two-tint highlight logic on that claim. All of them are
+now cold. The only warm value in the build is `PRACTICAL_2700K` `#FFA957`, on
+the point lights inside the model duplex villa, which is exactly the "warm pools
+with falloff" Act III calls for. `scripts/grade-check.mjs` scans every colour
+literal in `Corridor.tsx`, `Terrain.tsx` and `Massing.tsx` and fails on any with
+`r > b`.
+
+*Note on residual warm pixels:* about 0.6% of a typical Act I frame reads warm
+under measurement. All of it is `ChromaticAberration` fringing on high-contrast
+edges — lens dispersion, paired one-for-one with cool fringing on the opposite
+side of each edge. Disabling that one effect takes the count to exactly zero. It
+is not a colour cast and it is the spec'd `< 0.001` effect behaving correctly.
+
+### ACT I GEOGRAPHY — [ADDED §28]
+
+Act I resolves the real corridor, not an abstract plane: the coast, the NH-16 /
+AH-16 spine, Bhogapuram, the district road network, and the industrial estates
+that are the entire reason the land has a price. **"Why here" is the only
+question a plot buyer actually asks**, and Act I is where it gets answered.
+
+None of it is modelled.
+
+| Element | How | Draw calls |
+|---|---|---|
+| Coast, plain, Eastern Ghats | displaced `PlaneGeometry`, ridged multifractal | shares the terrain's 1 |
+| NH-16 spine, median, lane dashes, lamp rows | distance field from an analytic curve, fragment stage | 0 |
+| Bhogapuram runway, apron, thresholds, approach lights | one rotated rectangle of arithmetic | 0 |
+| District road network | modulo grid, fragment stage | 0 |
+| ~620 industrial buildings | one `InstancedMesh` of boxes | 1 |
+
+Measured at **30 draw calls** for the whole frame against L8's budget of 100.
+
+Two rules the massing depends on. **Clusters share a yaw** — an estate aligns to
+its access road, and uniform-random rotation is the single clearest tell of
+procedural scatter. And **the height field is mirrored in TypeScript** so
+buildings sit on GPU-displaced ground; that duplication is bounded rather than
+trusted, with every box sunk 14 m below its computed height so a mismatch buries
+a building instead of floating it.
+
+**Infrastructure fades up across `q` 0.045 → 0.16.** §5 opens on a void and
+withholds scale until `q` 0.10; a highway legible in frame one hands over the
+scale the descent exists to reveal.
+
 **The grade** — [ADDED §26] — is a three-band split-tone derived entirely from
 those four frames; every hex and its provenance live in `src/lib/grade.ts`. Its
 one structural decision is that **the highlight band carries two tints, selected
@@ -1114,6 +1166,9 @@ Neither blocks files 1–8 in §11.
 | 24 | Fog scale | spec authored for estate scale | Rescaled per beat against real viewing distance — seven beats were rendering 100% fogged |
 | 25 | Tone mapping location | spec §5: "material shader, **not** a composer pass" | **Overturned — it was happening nowhere.** `@react-three/postprocessing` forces `NoToneMapping` on mount, so three compiled the tone map out of every material. Nothing rolled off, and the whole EV column of §3 was inert because `toneMappingExposure` is only read inside a tone mapping function. Now ACES once, in `SplitTone`, after bloom |
 | 26 | Colour grade | absent from all 11 | Three-band split-tone derived from the four client reference frames (§5 Act I, `src/lib/grade.ts`). Highlight band carries **two** tints selected per pixel — the references contain warm point sources and cool atmosphere, and one tint cannot serve both |
+| 27 | Warm sources | spec forbade a "global orange filter" but never said where warmth *may* live | **Exactly one place: the villa practicals.** Sky ember, key light, hemisphere ground, water glint and the Act II grid were all warm and all outside the villa. Now gated per colour literal by `grade-check.mjs` |
+| 28 | Act I subject | spec said "corridor" but the build showed bare terrain | The real geography — NH-16, Bhogapuram, district roads, ~620 industrial buildings. All shader-drawn or instanced; 30 draw calls total (§5 Act I Geography) |
+| 29 | Acoustic ramp | table held `hz: 34` across **ten** consecutive keyframes (q 0 → 0.58) | **34 → 42 at the breach → 36 at the collapse → 0.** The flat run passed every existing continuity check, because a flat channel has no jumps and no C1 breaks: continuity is necessary, not sufficient. `continuity-check.mjs` now asserts the ramp's *shape*, not just its smoothness |
 
 ---
 
