@@ -20,6 +20,8 @@
 
   /* Swiss/brutalist scale. Fluid via clamp so it never steps at a breakpoint.
      Ratio 1.28. */
+  --step--3: clamp(0.56rem, 0.55rem + 0.06vw, 0.62rem);
+  --step--2: clamp(0.63rem, 0.61rem + 0.09vw, 0.70rem);
   --step--1: clamp(0.72rem, 0.69rem + 0.14vw, 0.80rem);
   --step-0: clamp(0.92rem, 0.87rem + 0.24vw, 1.06rem);
   --step-1: clamp(1.18rem, 1.09rem + 0.42vw, 1.42rem);
@@ -39,6 +41,8 @@ html {
 body {
   background: var(--void);
   color: var(--signal);
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 400;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -59,24 +63,70 @@ body {
 /* ── Type ─────────────────────────────────────────────────────────────────── */
 
 .t-display {
-  font-size: var(--step-5);
-  line-height: 0.94;
-  letter-spacing: -0.03em;
+  font-size: var(--step-2);
+  line-height: 1.14;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   font-weight: 500;
 }
 
-.t-h1 { font-size: var(--step-4); line-height: 1.02; letter-spacing: -0.02em; }
-.t-h2 { font-size: var(--step-3); line-height: 1.08; letter-spacing: -0.015em; }
-.t-lede { font-size: var(--step-1); line-height: 1.5; }
-.t-body { font-size: var(--step-0); line-height: 1.62; }
-
-/* The interface voice: monospace, tracked, uppercase. Every label, every
-   bracketed control, every approval number. */
-.t-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: var(--step--1);
-  letter-spacing: 0.18em;
+.t-h1 {
+  font-size: var(--step-1);
+  line-height: 1.22;
+  letter-spacing: 0.17em;
   text-transform: uppercase;
+  font-weight: 500;
+}
+
+.t-h2 {
+  font-size: var(--step-0);
+  line-height: 1.3;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.t-lede {
+  font-size: var(--step--1);
+  line-height: 1.95;
+  letter-spacing: 0.11em;
+}
+
+.t-body {
+  font-size: var(--step--2);
+  line-height: 1.95;
+  letter-spacing: 0.07em;
+}
+
+/* The interface voice. Every label, every bracketed control, every approval
+   number — and now the whole document, because the display face is gone. */
+.t-mono {
+  font-size: var(--step--2);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+/* HUD scale — the smallest legible rung. Rail, corner labels, data keys. */
+.t-hud {
+  font-size: var(--step--3);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+/* A bracketed control. The only button shape in the build. */
+.t-cmd {
+  font-size: var(--step--1);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  /* The tracking is applied to the right of every glyph including the last,
+     which optically shifts bracketed text left inside its own border. */
+  text-indent: 0.42em;
+}
+
+/* Hairline rules. 1px at DPR 2 is half a device pixel and reads as grey mush;
+   this keeps a true hairline on both. */
+.rule {
+  border-color: rgba(255, 255, 255, 0.09);
 }
 
 /* ── Focus ────────────────────────────────────────────────────────────────── */

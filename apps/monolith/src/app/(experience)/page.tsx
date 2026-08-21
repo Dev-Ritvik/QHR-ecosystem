@@ -15,6 +15,24 @@
 // shipped once on apps/public: a track lengthened 6x while the camera path
 // stayed the same length, and the camera was reported as completely dead while
 // moving perfectly correctly.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SURFACE IS AN INSTRUMENT, NOT A PAGE
+//
+// This used to open on a 4.76rem display headline set flush left across half
+// the viewport. At that size type stops annotating the frame and starts
+// competing with it — and what it competed with was the only thing the visitor
+// came to see. It also read as a template: a big sans headline over a hero is
+// the single most generic arrangement on the web.
+//
+// Everything below is now one monospace face at small rungs, uppercase, tracked
+// hard, aligned to a hairline column. Nothing is larger than it needs to be to
+// be read. The rules are the composition; the type is the label.
+//
+// The FACTS are unchanged. Sanction numbers, plot dimensions and branch roles
+// stay in the served HTML exactly as they were — the presentation is being
+// rebuilt, not the content, and every one of these is a claim the client can be
+// held to (§7 note on the Consumer Protection Act).
 
 import type { Metadata } from 'next';
 
@@ -25,13 +43,15 @@ export const metadata: Metadata = {
     + 'Visakhapatnam–Vizianagaram–Srikakulam corridor. VMRDA, RERA and SUDA sanctioned.',
 };
 
-/** One Act. 250vh of track with its copy pinned at a readable height.
+/**
+ * One Act. 250vh of track with its panel pinned at a readable height.
  *
- *  Copy is held to the LEFT and capped at 40vw so the camera keeps the right
- *  60% as an unobstructed stage. Capping by grid span alone is not enough —
- *  a span is a fraction of the CONTAINER, and on a wide monitor six of twelve
- *  columns falls well short of 40% of the viewport while on a narrow one it
- *  overruns. The stage is measured in viewport width, so the copy has to be. */
+ * The panel is held LEFT and capped at 34vw so the camera keeps the right two
+ * thirds as an unobstructed stage. Capping by grid span alone is not enough —
+ * a span is a fraction of the CONTAINER, so on a wide monitor six of twelve
+ * columns falls well short of a third of the viewport while on a narrow one it
+ * overruns. The stage is measured in viewport width, so the panel has to be.
+ */
 function Act({
   index,
   eyebrow,
@@ -46,24 +66,29 @@ function Act({
   meta?: { label: string; value: string }[];
 }) {
   return (
-    <section className="mx-auto grid min-h-[250vh] max-w-7xl grid-cols-12 px-6">
-      <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
-        <div className="sticky top-[22vh] py-[8vh]">
-          <p className="t-mono flex items-baseline gap-4 text-ash">
+    <section className="mx-auto grid min-h-[250vh] max-w-7xl grid-cols-12 px-6 md:px-10">
+      <div className="col-span-12 md:col-span-5 md:max-w-[34vw]">
+        <div className="sticky top-[26vh] py-[8vh]">
+          {/* Act marker. The index is the only ember on the surface. */}
+          <p className="t-hud flex items-baseline gap-5 text-ash/60">
             <span className="text-ember">{index}</span>
+            <span aria-hidden className="h-px w-8 bg-white/20" />
             <span>{eyebrow}</span>
           </p>
 
-          <h2 className="t-h1 mt-8 text-signal">{title}</h2>
+          <h2 className="t-h1 mt-9 max-w-[22ch] text-signal">{title}</h2>
 
-          <p className="t-body mt-6 max-w-md text-ash">{body}</p>
+          <p className="t-body mt-7 max-w-[46ch] text-ash/75">{body}</p>
 
           {meta ? (
-            <dl className="mt-10 space-y-3 border-t border-white/10 pt-6">
+            <dl className="rule mt-11 border-t pt-6">
               {meta.map((m) => (
-                <div key={m.label} className="flex items-baseline justify-between gap-8">
-                  <dt className="t-mono text-ash">{m.label}</dt>
-                  <dd className="t-mono text-signal">{m.value}</dd>
+                <div
+                  key={m.label}
+                  className="rule flex items-baseline justify-between gap-8 border-b py-3 last:border-b-0"
+                >
+                  <dt className="t-hud text-ash/60">{m.label}</dt>
+                  <dd className="t-hud text-signal">{m.value}</dd>
                 </div>
               ))}
             </dl>
@@ -79,32 +104,43 @@ export default function NarrativePage() {
     <main className="pb-[10vh]">
       {/* ACT I — THE CORRIDOR. Opens on a detail, not a vista: the camera is
           28° and inches from a survey stone, so the first frame is abstract.
-          Scale is withheld until q 0.10. */}
-      <section className="mx-auto grid min-h-[250vh] max-w-7xl grid-cols-12 px-6">
-        <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
-          <div className="sticky top-[24vh] py-[10vh]">
-            <p className="t-mono text-ember">Quality Homes Reality</p>
+          Scale is withheld until q 0.10, and the surface withholds it too —
+          there is no headline here to announce what is about to be revealed. */}
+      <section className="mx-auto grid min-h-[250vh] max-w-7xl grid-cols-12 px-6 md:px-10">
+        <div className="col-span-12 md:col-span-5 md:max-w-[34vw]">
+          <div className="sticky top-[26vh] py-[8vh]">
+            <p className="t-hud flex items-baseline gap-5 text-ash/60">
+              <span className="text-ember">I</span>
+              <span aria-hidden className="h-px w-8 bg-white/20" />
+              <span>The corridor</span>
+            </p>
 
-            <h1 className="t-display mt-10 text-signal">
-              Land, in the districts
-              <br />
-              we come from
+            <h1 className="t-display mt-9 max-w-[18ch] text-signal">
+              Land, in the districts we come from
             </h1>
 
-            <p className="t-lede mt-8 max-w-lg text-ash">
+            <p className="t-body mt-7 max-w-[46ch] text-ash/75">
               Approved layouts, plantation farmland and villas across the
               Visakhapatnam&ndash;Vizianagaram&ndash;Srikakulam corridor.
             </p>
 
-            <p className="t-body mt-6 max-w-md text-ash/70">
-              Twenty years in the field, three branch offices, and every
-              sanction number published in full. Scroll to descend.
-            </p>
+            <dl className="rule mt-11 border-t pt-6">
+              {[
+                { label: 'In the field', value: '20 years' },
+                { label: 'Branch offices', value: 'Three' },
+                { label: 'Sanction numbers', value: 'Published in full' },
+              ].map((m) => (
+                <div
+                  key={m.label}
+                  className="rule flex items-baseline justify-between gap-8 border-b py-3 last:border-b-0"
+                >
+                  <dt className="t-hud text-ash/60">{m.label}</dt>
+                  <dd className="t-hud text-signal">{m.value}</dd>
+                </div>
+              ))}
+            </dl>
 
-            <div className="mt-14 flex items-center gap-4">
-              <span className="t-mono text-ash/60">Scroll</span>
-              <span aria-hidden className="h-10 w-px bg-white/15" />
-            </div>
+            <p className="t-hud mt-12 text-ash/45">[ Scroll to descend ]</p>
           </div>
         </div>
       </section>
@@ -132,7 +168,7 @@ export default function NarrativePage() {
               underground drainage, 40ft blacktop roads."
         meta={[
           { label: 'Location', value: 'Poosapatirega' },
-          { label: 'Roads', value: "40ft & 33ft" },
+          { label: 'Roads', value: '40ft & 33ft' },
           { label: 'Security', value: '24×7 CCTV' },
         ]}
       />

@@ -145,9 +145,11 @@ export function Gate() {
           </div>
         </div>
       ) : (
-        <div className="w-full max-w-lg text-center">
-          <p className="t-mono text-ash">Quality Homes Reality</p>
-
+        /* THE IGNITION SEQUENCE. A command terminal, not a splash screen:
+           one control, one line under it, nothing else. Everything that was
+           here before — the identity line, the headphones sentence — is copy
+           competing with the only decision on the screen. */
+        <div className="flex w-full max-w-lg flex-col items-center">
           <button
             type="button"
             autoFocus
@@ -161,14 +163,12 @@ export function Gate() {
               setGate('live');
               setScrollLocked(false);
             }}
-            className="t-mono mt-12 border border-ember/50 px-14 py-6 text-ember transition-colors hover:bg-ember hover:text-void"
+            className="t-cmd border border-white/25 px-16 py-7 text-signal transition-colors duration-500 hover:border-white/70 hover:bg-white hover:text-void"
           >
-            Enter
+            [ Enter ]
           </button>
 
-          <p className="t-body mt-10 text-ash/60">
-            Sound is part of this. Headphones if you have them.
-          </p>
+          <p className="t-hud mt-7 text-ash/55">[ Initialize descent ]</p>
         </div>
       )}
     </div>

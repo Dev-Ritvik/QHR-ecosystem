@@ -307,17 +307,31 @@ const FRAG = GEO + /* glsl */ `
     float within = 1.0 - smoothstep(150.0, 340.0, ring);
     float sweep = smoothstep(0.0, 1.0, uGrid * 1.35 - ring / 340.0);
 
+    // LASER-ETCHED, NOT WIREFRAME. The line widths and the emission were both
+    // roughly 5x what a survey drawing looks like: at 0.03 cell-widths a plot
+    // boundary was a fat glowing rail, and the whole layout read as a retro
+    // vector game rather than as a sanctioned plan. Both are cut hard here.
     vec2 cell = vWorld.xz / vec2(9.14, 15.24);
     vec2 g = abs(fract(cell) - 0.5);
-    float line = 1.0 - smoothstep(0.0, 0.03, min(g.x, g.y));
+    float line = 1.0 - smoothstep(0.0, 0.006, min(g.x, g.y));
 
-    // Road grid at a coarser pitch, brighter — the 40 ft blacktop.
+    // Road grid at a coarser pitch, marginally stronger — the 40 ft blacktop.
     vec2 rcell = vWorld.xz / vec2(91.4, 76.2);
     vec2 rg = abs(fract(rcell) - 0.5);
-    float road = 1.0 - smoothstep(0.0, 0.012, min(rg.x, rg.y));
+    float road = 1.0 - smoothstep(0.0, 0.0035, min(rg.x, rg.y));
 
-    float grid = clamp(line * 0.55 + road * 1.0, 0.0, 1.0) * within * sweep;
-    col += vec3(0.62, 0.72, 0.84) * grid * 0.55;
+    // DISTANCE FALLOFF. Without this the lines hold full strength all the way
+    // to the horizon, which is both wrong — a 1px etched line does not survive
+    // a kilometre of dusk air — and the reason the far field turned into a
+    // solid luminous mesh: at range the cell pitch falls below one pixel and
+    // every sample lands on a line. Fading them out is what keeps the layout
+    // reading as a plan on the ground rather than as an overlay on the lens.
+    float gd = length(vWorld - cameraPosition);
+    float gridFade = 1.0 - smoothstep(180.0, 620.0, gd);
+    gridFade *= gridFade;
+
+    float grid = clamp(line * 0.55 + road * 1.0, 0.0, 1.0) * within * sweep * gridFade;
+    col += vec3(0.62, 0.72, 0.84) * grid * 0.11;
 
     // ── AERIAL PERSPECTIVE ─────────────────────────────────────────────────
     // The long-range haze scene.fog cannot provide at this scale. Height-aware:
