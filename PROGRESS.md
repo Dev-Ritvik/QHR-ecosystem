@@ -1,9 +1,13 @@
 # PROGRESS.md
 
-> **Audited against this working tree (`C:\dev\estate`) on 2026-07-21.** Every line was
-> verified by reading files, running tests, or querying the live database. Nothing here is
-> inferred from planning documents or commit messages — where those disagree with the code,
-> **the code is recorded**.
+> **Re-audited against this working tree (`C:\dev\estate`) on 2026-08-21** at commit
+> `79b3d89`. Every line was verified by reading files, running tests, or querying the live
+> database. Nothing here is inferred from planning documents or commit messages — where
+> those disagree with the code, **the code is recorded**.
+>
+> The original audit below was written on 2026-07-21. **79 commits have landed since.**
+> Sections §1–§10 are preserved as written; where they are now wrong they are corrected in
+> the table immediately below and in §11. Do not read §1–§6 as current.
 
 ---
 
@@ -11,36 +15,46 @@
 
 | Area | State | Evidence |
 |---|---|---|
-| **Backend / DB** | ✅ **Real** — 23 migration files (0000–0020), RLS enforced | `packages/db/migrations/` |
-| **CRM app** | ✅ **Real** — full ticket sequence T22–T90 shipped | `apps/crm/src/app/` |
+| **Backend / DB** | ✅ **Real** — 24 migration files, RLS enforced | `packages/db/migrations/` |
+| **CRM app** | ✅ **Real** — full ticket sequence T22–T90 shipped | `apps/crm/src/app/` (143 ts/tsx) |
 | **Public — data layer** | ✅ **Real** — readers + locked contract with captured live output | `BACKEND_CONTRACT_FINAL.md` |
 | **Public — presentation (kiosk)** | ✅ **Real** — T49–T64, untouched | `apps/public/src/app/(present)/` |
-| **Public — marketing pages** | ⚠️ **5 of 26 routes exist**; 3 are pre-redesign | §2 |
-| **3D experience (Slice 0)** | ⚠️ **Step 2 skeleton only** — canvas + probe + 2 nodes. **No villa, no heartbeat, no bloom** | §2 |
-| **3D assets (.glb)** | ❌ **None exist**, and no loader path exists | §3 |
-| **Domain tests** | ✅ **148 passing** (17 files, ran 2026-07-21, 1.69s) | §4 |
-| **🔴 Live bugs in committed code** | **troika/r3f-perf crash** + **invalid Referrer-Policy** — both still present | §1, §6 |
+| **Public — marketing pages** | ✅ **26 of 26 routes exist** (was 5) | §9, §10, §11.6 |
+| **`apps/monolith`** | ⚠️ **Acts I–II real, III–IV massing only.** 37 routes, 4 CI gates green | **§11** |
+| **3D assets (.glb)** | ✅ `interior_hall.glb` shipped; monolith is **100% procedural**, no .glb at all | §7.2, §11.2 |
+| **Domain tests** | ✅ **188 passing** (21 files, ran 2026-08-21, 6.8s) | §11.7 |
+| **Monolith CI gates** | ✅ **4/4 green** — continuity, path, rig, grade | §11.4 |
+| **🟢 The two live bugs from the July audit** | **BOTH FIXED** — verified in this tree | see below |
 
-### ⛔ Read this before trusting the git history
+### ✅ The July "⛔ do not trust the git history" warning is now RESOLVED
 
-**HEAD commit `e6a09dd` is titled** *"Slice 0 Step 2 fully verified: persistent canvas (GEN 1),
-**troika removed, referrer-policy bug fixed**, 3/3 tests green"* — **but neither fix is in the
-committed code.** Verified directly in the working tree (which is identical to HEAD for these files):
+Both defects the previous audit flagged as present-in-committed-code have since been fixed,
+and that was verified by reading the current files rather than by trusting a commit message:
 
-- `apps/public/src/components/experience/ExperienceCanvas.tsx:24` → `import { Perf } from 'r3f-perf';`
-- `apps/public/src/components/experience/ExperienceCanvas.tsx:91` → `<Perf position="bottom-right" />`
-- `apps/public/package.json` → `"r3f-perf": "7.2.3"` still a dependency
-- `apps/public/next.config.mjs:34` → `{ key: 'Referrer-Policy', value: 'DENY' }`
+- **troika/r3f-perf crash** — `ExperienceCanvas.tsx` no longer imports `Perf` at module top
+  level. It is now `lazy(() => import('r3f-perf'))` behind a dev-only guard, so the blob
+  worker never reaches a production bundle. `/about` and `/why-us` load clean.
+- **Invalid `Referrer-Policy: DENY`** — now `strict-origin-when-cross-origin` in
+  `apps/public/next.config.mjs:48`, with a comment recording that `DENY` is an
+  `X-Frame-Options` token and was silently inert as a referrer policy.
 
-**Consequence:** `/about` and `/why-us` will throw the troika worker error
-(*"Worker module function was called but `init` did not return a callable function"*), because
-`r3f-perf` → `@react-three/drei` → `troika-three-text` spawns a blob worker that Next 14's
-bundler breaks. The fixes for both were performed in a **different working directory** and
-were never transferred here. See §6 for the exact remediation.
+**One-line summary:** backend and CRM are production-grade; `apps/public` is complete at 26
+of 26 routes and runs clean; `apps/monolith` is a second, parallel front end whose
+continuous-motion core is finished and gated but whose Acts III–IV are still primitives.
 
-**One-line summary:** backend and CRM are production-grade; the marketing site is a Step-2
-architectural skeleton with ~19% of routes built, and it currently **does not run clean** in
-the browser because two known fixes are missing from this checkout.
+### ⚠️ WHICH FRONT END IS LIVE — read before touching either
+
+There are **two** front ends and they are not alternatives in the codebase's own opinion:
+
+| | `apps/public` (:3001) | `apps/monolith` (:3002) |
+|---|---|---|
+| Status | **The one the client has chosen** | On hold |
+| Routes | 26, all built | 37 |
+| Data | Live Supabase readers | Content in `lib/utility-content.ts`, no DB yet |
+| Risk | Low — shipped and audited | Medium — Acts III–IV unbuilt |
+
+As of 2026-08-21 the client asked to go back to `apps/public`. `apps/monolith` is **not
+deleted and must not be** — see §11.8.
 
 ---
 
@@ -1072,3 +1086,156 @@ real inventory. The assertions were never wrong.
 - Founding year (both sites say "more than 20 years"; neither gives a date)
 - The registered entity name — `.com`'s careers page says **"Quality Homes
   Reality Services"**, longer than the wordmark. Fold into the §8 request.
+
+---
+
+# §11 — SESSIONS 2026-08-20/21: `apps/monolith`, and the reversal
+
+**Audited at commit `79b3d89`, 2026-08-21.** Ten commits, `9bf44f5` → `79b3d89`.
+
+`apps/monolith` is a **second, parallel front end** built against
+`frontend docs/MONOLITH_MASTER_SPEC.md` (1,206 lines), which consolidates the eleven
+architecture documents in that folder and supersedes all of them. It was built as a
+cinematic scroll narrative in four Acts. `apps/public` was never touched by any of it.
+
+**As of the end of 2026-08-21 the client rejected the monolith and asked for `apps/public`.**
+The monolith is complete enough to be resumed and is documented here so that resuming it does
+not mean re-deriving it.
+
+## §11.1 — What exists
+
+| | |
+|---|---|
+| Source | 68 ts/tsx, 37 routes |
+| Routes | 18 utility pages × 2 (standalone + `@modal` intercepted) + the narrative |
+| CI gates | 4 (`continuity`, `path`, `rig`, `grade`) — all green |
+| Draw calls | **30** measured, against L8's budget of 100 |
+| First Load JS | 87.5 kB shared |
+| 3D assets | **Zero.** No `.glb`, no HDRI, no textures, no audio files |
+
+Everything visual and audible is arithmetic: terrain, roads, runway, survey grid, sky, water,
+the grade, and the entire soundtrack.
+
+## §11.2 — The architecture that matters
+
+- **One clock (L1).** `lib/ticker.ts` owns the only `requestAnimationFrame` in the app.
+  GSAP's ticker drives Lenis, derives `q` (0→1 scroll), and fans out to subscribers.
+- **The continuity table (`lib/continuity.ts`).** FOV, EV, roll, fog, Hz and light count are
+  each ONE continuous function of `q` across 19 keyframes, monotone-cubic interpolated with
+  a Fritsch–Carlson magnitude clamp. This is the single most important artefact in the build;
+  every cross-Act conflict in the eleven source documents was a symptom of it not existing.
+- **Act I geography is drawn, not modelled.** The NH-16 spine, Bhogapuram's runway and the
+  district road network are distance fields in the terrain fragment shader — **zero** draw
+  calls. ~620 industrial buildings are one `InstancedMesh` — **one**.
+- **The camera model** is `<Exposure/>` → `Bloom` → `CA` → `Vignette` → `<SplitTone/>` →
+  `Noise`. Optical work in scene-linear HDR; exactly one transform to display.
+- **The grade (`lib/grade.ts`)** is a three-band split-tone whose every hex was measured off
+  four client reference frames, with the provenance kept in the source.
+
+## §11.3 — Six real bugs found, each by a gate rather than by eye
+
+Recorded because each was invisible to the check that should have caught it.
+
+1. **`stopTicker()` cleared the subscriber list.** `WorldCanvas` owns start/stop and is
+   `next/dynamic`, so it mounts *after* `ExperienceHost` has subscribed the audio and
+   settled. StrictMode's double-invoke then wiped that subscription permanently — 4
+   subscribers where there should have been 6, and a sub-bass that held one pitch for the
+   whole scroll. **It survived every earlier check because those called `updateAudio`
+   directly instead of through the ticker.** Verifying a subscriber by bypassing the thing it
+   subscribes to proves only that the function works.
+2. **No tone mapping was happening at all.** `@react-three/postprocessing` sets
+   `gl.toneMapping = NoToneMapping` on mount unconditionally, so three compiled
+   `<tonemapping_fragment>` out of every material. Not double-mapped — *un*-mapped, and the
+   entire EV column of the continuity table was computed each frame and discarded.
+3. **`hz` was flat across ten consecutive keyframes** (q 0 → 0.58). Every continuity check
+   passed it, because a flat channel has no jumps and no C1 breaks. Continuity is necessary,
+   not sufficient.
+4. **Oscillators were created at the Web Audio default of 440 Hz**, producing an audible
+   descending whoop under the fade-in on `[ ENTER ]`.
+5. **Unguarded `dt`.** `chaseExposure` and the camera-speed smoother both *integrate* it, so
+   one non-finite delta poisons their running state permanently rather than costing a frame.
+6. **The Act II plotting grid was drawn amber** while `grade.ts` asserted in prose that it
+   was cool and built its two-tint highlight logic on that claim.
+
+## §11.4 — The gates
+
+`apps/monolith/scripts/*.mjs`, run by `pnpm --filter @estate/monolith test`. They parse the
+TypeScript source with regex rather than importing it, so they need no build step and cannot
+drift from what ships.
+
+| Gate | Asserts |
+|---|---|
+| `continuity-check` | No value jumps, no C1 breaks, no overshoot; the acoustic ramp's *shape*; lights ≤ 4 |
+| `path-check` | 18 beats, arc length, beat spacing |
+| `rig-check` | ≥2% of viewing distance per 5% scroll; Act IV pause confined; `stopTicker` leaves subs alone; `dt` clamped |
+| `grade-check` | Provenance, partition of unity, no global filter, level preservation, one tone map, chain order, and no warm colour literal in any scene file |
+
+**Every assertion was mutation-tested** — deliberately broken to confirm it fails. That found
+two holes in the gates themselves: the chain-order check was reading an ASCII diagram in a
+header comment instead of the JSX, and the warmth scan missed JSX `color="..."` props.
+
+## §11.5 — Where the monolith is genuinely unfinished
+
+- **Acts III–IV are massing.** A box villa and a glass plane. The Act III glass-breach shader
+  — the spec's own highest-risk item — was prototyped and verified, then reverted with
+  `79b3d89` (see §11.6). It exists in `d9ff32d` and can be cherry-picked.
+- **No database.** Content is a static `lib/utility-content.ts`. Nine of the eighteen utility
+  pages are `pending: true` and render an explicit "awaiting client documents" notice rather
+  than plausible-sounding filler.
+- **Phase 5 lead vault, Syndicate socket registry** — not started.
+- **Never tested on a real mid-range Android.** §9.4 requires it; emulation does not
+  reproduce mobile fill-rate or thermal throttling.
+- **Act I is dark.** Measured: the frame spans luminance 15→95 with ~45/55 across two
+  perceptual bands. Legible, but it is a judgement call nobody has signed off.
+
+## §11.6 — The reversal (2026-08-21)
+
+`d9ff32d` executed a client-mandated aesthetic transformation: JetBrains Mono globally,
+micro-typography, an etched plotting grid with distance falloff, and the black placeholder
+cube replaced by a real glass threshold plane with an `onBeforeCompile` dissolve.
+
+**The client rejected it and asked for the previous look.** `79b3d89` reverts it.
+
+- The revert is a **`git revert`, not a `reset`** — `d9ff32d` remains in history intact.
+- `git diff e10faca 79b3d89 -- apps/monolith` is **empty**: byte-for-byte the prior state.
+- The commit bundled three changes and the revert took back all three. Only the typography
+  was objected to. **The grid falloff and the glass plane are separable and can be
+  re-applied on their own** with `git cherry-pick d9ff32d` followed by dropping the DOM
+  hunks.
+
+Everything from before that commit — the audio fix, velocity-gated chromatic aberration, the
+Act I exposure lift, the NH-16 geography, the orange purge — sits *below* the revert in
+`618652e` and `e10faca` and was not affected.
+
+## §11.7 — Verified this session
+
+| Check | Result |
+|---|---|
+| `packages/domain` tests | **188 passing**, 21 files, 6.8s |
+| Monolith gates | **4/4 green** |
+| Monolith typecheck | clean |
+| Monolith production build | clean, 87.5 kB shared First Load JS |
+| GL errors, monolith scene | **0**, 30 draw calls, 12 programs, no non-empty link logs |
+| `apps/public` on :3001 | **200** |
+| `apps/public` troika + Referrer-Policy bugs | **both fixed** |
+| DB migrations | 24 |
+
+## §11.8 — Do not delete `apps/monolith`
+
+It is ten commits of work, a 1,206-line specification, and four CI gates that encode six real
+defects so they cannot recur. The client's preference reversed once within a single day. The
+cost of keeping it is a directory; the cost of deleting it is rebuilding it.
+
+The same argument was made for `apps/public` in the July audit and it is the reason
+`apps/public` was available to fall back to today.
+
+## §11.9 — Corrections to earlier sections
+
+| Section | Said | Now |
+|---|---|---|
+| Header | Two live bugs present in committed code | **Both fixed** — verified by reading the files |
+| Glance table | 5 of 26 marketing routes | **26 of 26** |
+| Glance table | 148 domain tests, 17 files | **188 tests, 21 files** |
+| Glance table | 23 migrations | **24** |
+| §3 | No 3D assets exist anywhere | `interior_hall.glb` shipped (§7.2); the monolith deliberately has none |
+| §6 | "Broken right now — fix before any browser work" | Resolved |
