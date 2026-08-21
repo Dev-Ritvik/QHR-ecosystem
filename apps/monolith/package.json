@@ -10,8 +10,9 @@
     "typecheck": "tsc --noEmit",
     "check:continuity": "node scripts/continuity-check.mjs",
     "check:path": "node scripts/path-check.mjs",
-    "test": "node scripts/continuity-check.mjs && node scripts/path-check.mjs && node scripts/rig-check.mjs",
-    "check:rig": "node scripts/rig-check.mjs"
+    "test": "node scripts/continuity-check.mjs && node scripts/path-check.mjs && node scripts/rig-check.mjs && node scripts/grade-check.mjs",
+    "check:rig": "node scripts/rig-check.mjs",
+    "check:grade": "node scripts/grade-check.mjs"
   },
   "dependencies": {
     "@estate/db": "workspace:*",

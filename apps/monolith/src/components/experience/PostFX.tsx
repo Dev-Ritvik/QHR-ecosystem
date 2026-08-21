@@ -4,30 +4,53 @@
 //
 // The lens — MASTER_SPEC §5 Act I, §9.3.
 //
-// ONE DECISION STATED UP FRONT: there is NO ToneMapping pass in this chain, and
-// there never will be.
+// THE CHAIN IS A CAMERA, AND IT IS ORDERED LIKE ONE:
 //
-// three applies ACES Filmic inside the material's fragment shader
-// (tonemapping_fragment), not as a final blit — so the image arriving in the
-// composer's buffer has ALREADY been tone-mapped. Adding postprocessing's
-// ToneMapping effect on top maps an already-mapped image a second time. That is
-// precisely the arithmetic that produced the "radioactive yellow glare"
-// rejection on apps/public, and it is not worth repeating for a line that looks
-// correct in a tutorial.
+//   <Exposure/>              sensor gain            HDR
+//   <Bloom/>                 lens veiling glare     HDR
+//   <ChromaticAberration/>   lens dispersion        HDR
+//   <Vignette/>              lens falloff           HDR
+//   <SplitTone/>             ACES + film stock      HDR -> display
+//   <Noise/>                 grain                  display
 //
-// Consequence: Bloom operates on tone-mapped values, so luminanceThreshold is
-// in DISPLAY space, not scene-linear. 0.92 is chosen against that.
+// Everything optical happens in scene-linear HDR. The transform to display
+// happens exactly once, in <SplitTone/>. Grain is last so it dithers the final
+// image — put it before the vignette and the vignette smooths the dither back
+// out, which defeats the entire reason it is there.
 //
-// ORDER MATTERS and this is the order: Bloom → ChromaticAberration → Vignette →
-// Noise. Grain must be last so it dithers the final image — put it before the
-// vignette and the vignette smooths the dither back out, which defeats the
-// entire reason it is there.
+// ─────────────────────────────────────────────────────────────────────────────
+// CORRECTION TO THE PREVIOUS VERSION OF THIS FILE
 //
-// Gated by tier (§9.3). Tier C keeps vignette and grain only: both are
-// single-pass, cost almost nothing, and still frame the composition. The
-// expensive passes are the ones a phone should not pay for.
+// This header used to state that three applies ACES in the material shader, so
+// there must be no tone mapping pass here. That was wrong in this pipeline, and
+// wrong in a way that hid two real defects.
+//
+// @react-three/postprocessing's EffectComposer sets `gl.toneMapping =
+// NoToneMapping` on mount, unconditionally, with no prop to opt out. three then
+// compiles <tonemapping_fragment> out of every material. So:
+//
+//   - No tone mapping was happening at tier A, B or C. Not double-mapped:
+//     UN-mapped. Highlights hard-clipped per channel.
+//   - `toneMappingExposure` is only read inside a tone mapping function, so the
+//     entire EV column of the continuity table — every value CameraRig chases
+//     through chaseExposure, the Act III exposure lag — was computed each frame
+//     and thrown away.
+//
+// The spec's ruling exists to stop the image being mapped TWICE (the documented
+// "radioactive glare" failure). Mapping it once, in <SplitTone/>, honours that
+// intent precisely. Full reasoning in SplitTone.tsx; recorded in Appendix A.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Gated by tier (§9.3) — but the grade is NOT gated, and that is deliberate.
+// Bloom, CA and multisampling are embellishments a phone can go without. The
+// tone map and the film stock are not embellishments; they are what the image
+// IS. Dropping them on mobile would not be a cheaper version of this site, it
+// would be a different one — un-tone-mapped and ungraded. They also cost
+// almost nothing to keep: postprocessing merges every non-convolution effect
+// into one fullscreen pass, so at tier C the whole chain below is a single
+// shader.
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   Bloom,
   ChromaticAberration,
@@ -35,10 +58,12 @@ import {
   Noise,
   Vignette,
 } from '@react-three/postprocessing';
+import type { EffectComposer as EffectComposerImpl } from 'postprocessing';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
 import { useSceneStore } from '@/state/sceneStore';
 import { TIER_BUDGET } from '@/lib/tier';
+import { Exposure, SplitTone } from './SplitTone';
 
 export function PostFX() {
   const tier = useSceneStore((s) => s.tier);
@@ -48,22 +73,50 @@ export function PostFX() {
   // renders — a fresh object each frame makes the effect rebuild its uniform.
   const caOffset = useMemo(() => new THREE.Vector2(0.0006, 0.0006), []);
 
+  // DEV HANDLE — the composer, not the renderer.
+  //
+  // WorldCanvas already exposes window.__three, whose render() calls
+  // gl.render(scene, camera) directly. That bypasses the composer completely:
+  // none of the passes below compile, and no Effect.update() ever runs. Trying
+  // to verify this chain through __three reports an empty shader list and a
+  // frozen exposure uniform, and both readings are artefacts of the handle
+  // rather than facts about the code.
+  //
+  // This environment throttles requestAnimationFrame to zero, so R3F's own loop
+  // never drives the composer either. Without a handle on the composer itself,
+  // a GLSL error anywhere in this chain is unobservable until it reaches a real
+  // browser. Hence window.__composer.
+  const attach = useCallback((c: EffectComposerImpl | null) => {
+    if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+      (window as unknown as { __composer?: unknown }).__composer = c;
+    }
+  }, []);
+
   if (tier === 'D') return null;
 
   return (
     <EffectComposer
+      ref={attach}
       // The composer allocates its own render targets. At tier B/C those are
       // downscaled, which is most of the fill-rate saving on a phone — the
       // passes themselves are cheap, the resolution they run at is not.
       resolutionScale={budget.composerScale}
       multisampling={tier === 'A' ? 4 : 0}
     >
+      {/* Sensor gain, ahead of everything. Bloom's threshold is only meaningful
+          against an exposed image, and exposure moves with the narrative — so
+          this cannot be folded into the tone map at the end of the chain. */}
+      <Exposure />
+
       {budget.bloom ? (
         <Bloom
-          // 0.92 in display space. A lower threshold catches the dusk sky and
-          // turns the whole horizon into a lamp, which is the failure mode this
-          // build has already paid for once.
-          luminanceThreshold={0.92}
+          // 1.0 in EXPOSED scene-linear: bloom only what is brighter than
+          // white. The old 0.92 was documented as display-space and was not —
+          // nothing had converted to display space at this point in the chain.
+          // Because exposure is now applied upstream, this threshold tracks the
+          // EV chase for free: as the eye adapts across the Act III breach, the
+          // highlights stop blooming because they stop being over-white.
+          luminanceThreshold={1.0}
           luminanceSmoothing={0.24}
           intensity={0.55}
           mipmapBlur
@@ -84,6 +137,10 @@ export function PostFX() {
         <></>
       )}
 
+      {/* Optical falloff, still in HDR — so ACES rolls the darkened corners off
+          smoothly instead of crushing them, and the grade's shadow band then
+          lifts them blue. That cool corner falloff is visible in two of the
+          four reference frames. */}
       <Vignette
         offset={0.30}
         darkness={0.62}
@@ -91,11 +148,16 @@ export function PostFX() {
         blendFunction={BlendFunction.NORMAL}
       />
 
+      {/* ACES, then the split-tone derived from the reference frames. The one
+          and only transform from scene-linear to display in this application.
+          See src/lib/grade.ts for where every hex came from. */}
+      <SplitTone />
+
       {/* Monochromatic grain, LAST. Its real job is not texture — it is
           dithering the dark vertical gradients so they do not band on 8-bit
-          displays. #050505 with grain reads as depth; #050505 without it reads
-          as stepped grey rings, which is the most common tell of an amateur
-          WebGL scene. */}
+          displays. A near-black with grain reads as depth; without it, as
+          stepped grey rings, which is the most common tell of an amateur WebGL
+          scene. */}
       <Noise
         premultiply
         opacity={tier === 'A' ? 0.035 : 0.028}

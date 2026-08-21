@@ -482,16 +482,54 @@ stone seam, a shadow edge — at 28°, so the first frame is abstract rather tha
 legible. Scale is withheld until `q` 0.10. `Gemini`'s aerial `[0,400,150]` open is
 rejected: it gives away the scale in frame one and leaves nothing to reveal.
 
-**Post-processing order** (order matters):
-`Bloom(threshold 0.92)` → `Vignette` → `ChromaticAberration(<0.001)` →
-`Noise(monochromatic)`. Tone mapping is ACES Filmic **in the material shader, not
-as a composer pass** — adding a `ToneMapping` effect on top of three's own maps an
-already-mapped image twice. That specific arithmetic error produced a documented
-"radioactive glare" failure on the QHR build in this repository.
+**Post-processing order** — [REVISED §25]. The chain is a camera and is ordered
+like one. Everything optical happens in scene-linear HDR; the transform to
+display happens exactly once; grain is last so it dithers the final image.
 
-**The black is not black.** `#050505` with the grain pass dithering it. Pure
-`#000000` banding in the shadows is the most common tell of an amateur WebGL
-scene.
+```
+Exposure          sensor gain, = gl.toneMappingExposure     HDR
+Bloom             veiling glare, threshold 1.0              HDR
+ChromaticAberration   dispersion, < 0.001                   HDR
+Vignette          optical falloff                           HDR
+SplitTone         ACES filmic, then the grade         HDR -> display
+Noise             monochromatic grain                       display
+```
+
+**Tone mapping is ACES Filmic, once, inside `SplitTone`.** The previous ruling —
+"in the material shader, not as a composer pass" — was written against a pipeline
+that does not exist. `@react-three/postprocessing`'s `EffectComposer` sets
+`gl.toneMapping = NoToneMapping` on mount, unconditionally, with no prop to opt
+out; three then compiles `<tonemapping_fragment>` out of every material. The
+result was not a double map but **zero** maps, which also made the entire EV
+column of §3 inert, since `toneMappingExposure` is only ever read inside a tone
+mapping function. The ruling's intent — never map twice, which is what produced
+the documented "radioactive glare" failure — is satisfied exactly by mapping
+once, here. Asserted by `scripts/grade-check.mjs`.
+
+**Exposure must precede bloom.** `luminanceThreshold` is compared against
+whatever reaches it, and the scene is authored to land in range only after being
+multiplied by ~0.19. It also buys the §3.3 exposure lag optically for free: as
+the eye adapts across the Act III breach, highlights stop blooming because they
+stop being over-white.
+
+**The black is not black.** `#0B1118`, the mean shadow value of the four client
+reference frames, applied as an additive lift and dithered by the grain pass.
+Verified on the GPU at `#0B1018` — within 1/255. Pure `#000000` banding in the
+shadows is the most common tell of an amateur WebGL scene.
+
+**The grade** — [ADDED §26] — is a three-band split-tone derived entirely from
+those four frames; every hex and its provenance live in `src/lib/grade.ts`. Its
+one structural decision is that **the highlight band carries two tints, selected
+per pixel by the pixel's own `r − b`**, because the references contain two
+unrelated highlight families — warm point sources (sodium, 2700 K practicals)
+and cool atmosphere (sky, fog crest, the Act II plotting grid). A single
+highlight tint cannot serve both: tint everything warm and the plotting grid
+turns amber; tint everything cool and the practicals stop being 2700 K.
+
+This is also what makes the Act III ruling below enforceable rather than
+aspirational. One grade serves all four acts: §3 already owns everything that
+varies with `q`, and a second `q`-varying system competing with it is the exact
+failure §3 exists to prevent.
 
 **Ignition.** Consent gate resolves first (§8.2), then a stark `[ ENTER ]` on
 black. That gesture unlocks `AudioContext` — browsers block Web Audio without one.
@@ -1074,6 +1112,8 @@ Neither blocks files 1–8 in §11.
 | 22 | L7 metric | spec said 12 m/viewport absolute | **Relative** — 2% of viewing distance per 5% scroll. Absolute cannot serve 690 m and 2.6 m in one narrative |
 | 23 | Global ease on `q` | spec §3.1 required one | **Removed.** It displaced every beat; the Act IV pause landed at q 0.65 instead of 0.75. Beat spacing is the velocity design |
 | 24 | Fog scale | spec authored for estate scale | Rescaled per beat against real viewing distance — seven beats were rendering 100% fogged |
+| 25 | Tone mapping location | spec §5: "material shader, **not** a composer pass" | **Overturned — it was happening nowhere.** `@react-three/postprocessing` forces `NoToneMapping` on mount, so three compiled the tone map out of every material. Nothing rolled off, and the whole EV column of §3 was inert because `toneMappingExposure` is only read inside a tone mapping function. Now ACES once, in `SplitTone`, after bloom |
+| 26 | Colour grade | absent from all 11 | Three-band split-tone derived from the four client reference frames (§5 Act I, `src/lib/grade.ts`). Highlight band carries **two** tints selected per pixel — the references contain warm point sources and cool atmosphere, and one tint cannot serve both |
 
 ---
 
