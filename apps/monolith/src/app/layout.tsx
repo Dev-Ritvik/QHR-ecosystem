@@ -18,23 +18,7 @@
 // for type that is deliberately plain.
 
 import type { Metadata, Viewport } from 'next';
-import { JetBrains_Mono } from 'next/font/google';
 import './globals.css';
-
-// ONE FACE, EVERYWHERE. There is no display face and no sans: headline, body,
-// data key and bracketed control are all this same technical monospace at
-// different rungs of the scale. That is what makes the surface read as one
-// instrument rather than as a page with a UI bolted onto it.
-//
-// next/font self-hosts at build time, so this is served from /_next/static —
-// no third-party connection, nothing render-blocking, and nothing the CSP has
-// to be widened for.
-const mono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['300', '400', '500'],
-  display: 'swap',
-  variable: '--font-mono',
-});
 
 export const metadata: Metadata = {
   title: 'The Monolith at Dusk — Quality Homes Reality',
@@ -53,7 +37,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={mono.variable}>
+    <html lang="en">
       <body>{children}</body>
     </html>
   );

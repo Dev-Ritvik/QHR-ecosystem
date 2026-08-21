@@ -16,7 +16,7 @@ const config: Config = {
         loss: '#FF2B2B',
       },
       fontFamily: {
-        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
     },
   },

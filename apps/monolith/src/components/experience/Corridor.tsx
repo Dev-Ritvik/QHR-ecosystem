@@ -202,129 +202,33 @@ function Water() {
 }
 
 /**
- * ACT III — THE THRESHOLD (§5 Act III).
+ * Act III massing — the model duplex villa (§1③).
  *
- * The placeholder box massing is gone. It was a 18x6.4x13m primitive sitting on
- * open ground with nothing around it, and from every camera position in Act III
- * that is exactly what it looked like: a black cube floating in space. A stand-in
- * that reads as a stand-in is worse than no stand-in, because it is the frame the
- * client actually sees.
- *
- * What replaces it is the only object this act structurally needs: THE GLASS.
- * §5 makes the pane, not the building, the master variable — the act is driven by
- * "the signed distance from camera to glass plane", and the breach is the moment
- * the story crosses from the plot you buy to the house you build on it.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * THE DISSOLVE — via onBeforeCompile, and NEVER by moving camera.near
- *
- * §5: "never touch camera.near". Pulling the near plane in to avoid clipping
- * wrecks depth precision for the entire scene, and it does so globally to solve
- * one local problem.
- *
- * Instead the pane phases out of existence as the camera arrives. Opacity and
- * alpha both fall to zero via smoothstep on the SIGNED distance along the pane's
- * own normal, so the glass is gone before the near plane can ever intersect it.
- *
- * Two details that are easy to get wrong:
- *
- *   worldPosition comes from the VERTEX stage. MeshPhysicalMaterial does not
- *   hand the fragment shader a world position, so the vertex chunk has to
- *   compute and pass one. Without it there is nothing to measure distance from.
- *
- *   The distance is SIGNED, not absolute. An absolute distance dissolves the
- *   pane symmetrically and it fades back IN once the camera is inside, which
- *   puts a sheet of glass behind the viewer in the interior.
- *
- * A brief luminance veil rides the same signed distance — the 120-180ms optical
- * spike §5 asks for, masking the geometric penetration.
+ * Deliberately primitive for now: the threshold machinery (signed distance to
+ * the glass plane, exposure lag, the dissolve) needs a plane to breach and a
+ * volume to be inside, and it can be developed against boxes before any real
+ * model exists. Replacing this with modelled geometry changes nothing above it.
  */
-function Threshold() {
-  const mat = useRef<THREE.MeshPhysicalMaterial>(null);
-  const uniforms = useRef({ uBreach: { value: 0 } });
-
-  const onBeforeCompile = useMemo(
-    () => (shader: THREE.WebGLProgramParametersWithUniforms) => {
-      shader.uniforms.uBreach = uniforms.current.uBreach;
-
-      shader.vertexShader = shader.vertexShader
-        .replace(
-          '#include <common>',
-          `#include <common>
-           varying vec3 vThresholdWorld;`,
-        )
-        .replace(
-          '#include <worldpos_vertex>',
-          `#include <worldpos_vertex>
-           vThresholdWorld = (modelMatrix * vec4(position, 1.0)).xyz;`,
-        );
-
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          '#include <common>',
-          `#include <common>
-           uniform float uBreach;
-           varying vec3 vThresholdWorld;`,
-        )
-        .replace(
-          '#include <dithering_fragment>',
-          `#include <dithering_fragment>
-
-           // SIGNED distance along the pane's normal (+Z in its local frame,
-           // and the group is unrotated). Positive = camera still outside.
-           float sd = cameraPosition.z - vThresholdWorld.z;
-
-           // Phase out across the last 1.6m of approach, and STAY out. The
-           // second term is what stops the pane re-forming behind the viewer.
-           float present = smoothstep(0.0, 1.6, sd);
-
-           // The optical veil: a short luminance spike right at contact, which
-           // is what actually sells the crossing. It rides the same signed
-           // distance so it cannot desynchronise from the dissolve.
-           float veil = exp(-pow(sd / 0.42, 2.0)) * 0.9;
-           gl_FragColor.rgb += vec3(0.42, 0.52, 0.66) * veil;
-
-           gl_FragColor.a *= present;
-           if (gl_FragColor.a < 0.004) discard;`,
-        );
-    },
-    [],
-  );
-
-  // Scale: this is an architectural elevation, not a window. It spans the whole
-  // viewport at the breach so the camera cannot travel around it, which is the
-  // other half of never needing to touch camera.near.
+function Villa() {
   return (
     <group position={[0, 0, -14]}>
-      <mesh position={[0, 5.4, 6.55]}>
-        <planeGeometry args={[52, 15]} />
+      <mesh position={[0, 3.2, 0]} castShadow>
+        <boxGeometry args={[18, 6.4, 13]} />
+        <meshStandardMaterial color="#15161b" roughness={0.92} metalness={0} />
+      </mesh>
+      {/* The glass the camera breaches at q 0.66. Its own material for now;
+          the distance-driven dissolve replaces this. */}
+      <mesh position={[0, 2.6, 6.55]}>
+        <planeGeometry args={[11, 5]} />
         <meshPhysicalMaterial
-          ref={mat}
-          onBeforeCompile={onBeforeCompile}
-          color="#0A0F16"
-          roughness={0.045}
+          color="#0b0e14"
+          roughness={0.06}
           metalness={0}
-          transmission={0.9}
-          thickness={0.35}
-          ior={1.46}
+          transmission={0.82}
+          thickness={0.4}
           transparent
-          side={THREE.DoubleSide}
-          // The dissolve writes alpha per fragment; depth writing would leave a
-          // hole punched in the buffer where a fully transparent fragment used
-          // to be, and the interior would render through it in bands.
-          depthWrite={false}
         />
       </mesh>
-
-      {/* Mullions. Three hairlines are what makes a transparent plane read as
-          architecture rather than as a post-processing artefact — without them
-          the glass is invisible until it distorts something. */}
-      {[-17, 0, 17].map((x) => (
-        <mesh key={x} position={[x, 5.4, 6.56]}>
-          <boxGeometry args={[0.16, 15, 0.16]} />
-          <meshStandardMaterial color="#0D1016" roughness={0.7} metalness={0.1} />
-        </mesh>
-      ))}
     </group>
   );
 }
@@ -339,7 +243,7 @@ export function Corridor() {
       <Terrain />
       <Massing />
       <Water />
-      <Threshold />
+      <Villa />
 
       {/* LIGHT BUDGET — four, hard cap (L8).
           1: the dusk key, low and west, matching both shaders' uSunDir.
