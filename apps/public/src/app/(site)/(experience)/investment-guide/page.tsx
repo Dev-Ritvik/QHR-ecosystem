@@ -69,7 +69,7 @@ export default function InvestmentGuidePage() {
         <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
           The four documents worth reading yourself
         </h2>
-        <ol className="list-decimal space-y-3 pl-5 marker:text-[#F2EDE4]/40">
+        <ol className="list-decimal space-y-3 pl-5 marker:text-[#F2EDE4]/60">
           <li>
             <strong className="text-[#F2EDE4]">The approved layout plan.</strong>{' '}
             It shows plot positions, dimensions, road widths and common areas.
@@ -100,7 +100,7 @@ export default function InvestmentGuidePage() {
         <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
           Questions that separate a good plot from a cheap one
         </h2>
-        <ul className="list-disc space-y-2 pl-5 marker:text-[#F2EDE4]/40">
+        <ul className="list-disc space-y-2 pl-5 marker:text-[#F2EDE4]/60">
           <li>
             How wide is the road at the plot, and is it laid or promised? Our
             layouts state 40&prime; and 33&prime; blacktop at Kartikeya Water
@@ -140,7 +140,7 @@ export default function InvestmentGuidePage() {
         </p>
 
         <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Sources</h2>
-        <ul className="list-disc space-y-2 pl-5 text-sm marker:text-[#F2EDE4]/40">
+        <ul className="list-disc space-y-2 pl-5 text-sm marker:text-[#F2EDE4]/60">
           <li>
             <a
               className="underline underline-offset-4"

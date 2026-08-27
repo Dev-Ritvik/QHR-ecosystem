@@ -41,7 +41,7 @@ export default function BranchesPage() {
               <section key={b.id} className="border-t border-white/10 pt-8">
                 <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
                   <h2 className="font-serif text-2xl text-[#F2EDE4]">{b.name}</h2>
-                  <span className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">
+                  <span className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
                     {b.role === 'head_office' ? 'Head office' : 'Branch'}
                   </span>
                 </div>
@@ -53,7 +53,7 @@ export default function BranchesPage() {
                 </address>
 
                 <div className="mt-5">
-                  <p className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
                     Layouts held here
                   </p>
                   {held.length > 0 ? (
@@ -66,7 +66,7 @@ export default function BranchesPage() {
                           >
                             {p.name}
                           </Link>
-                          <span className="ml-2 text-sm text-[#F2EDE4]/45">
+                          <span className="ml-2 text-sm text-[#F2EDE4]/60">
                             {p.locality}
                           </span>
                         </li>

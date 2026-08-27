@@ -48,3 +48,6 @@ __pycache__/
 # does not render correctly without them, and a deploy has no access to the
 # masters to regenerate them.
 .next-prod
+
+# Raw web exports too large for GitHub (>100MB)
+out/web_raw/

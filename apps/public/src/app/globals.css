@@ -37,6 +37,56 @@
   --track-heading: -0.014em;
   --track-body: 0em;
   --track-eyebrow: 0.22em;
+
+  /* ---------------------------------------------------------------------------
+     Semantic surface tokens.
+
+     packages/ui/tailwind-preset.ts maps `bg-background`, `text-foreground`,
+     `text-muted-foreground`, `bg-muted`, `bg-secondary`, `border-border` and the
+     rest onto these variables, with a comment saying they are "defined in
+     globals.css :root". They never were — not here, not anywhere in the repo.
+
+     Every one of those utilities therefore compiled to hsl() wrapped around an
+     empty value, which is invalid, so the browser dropped the declaration. The
+     unit detail page is built almost entirely from them: it had no background,
+     no surface fills on its price panel, and no text colour, so it simply
+     inherited whatever <body> carried. While <body> was bg-white/text-gray-900
+     that meant near-black type sitting over the dark canvas.
+
+     Defining them in the site's own palette repairs every consumer at once
+     instead of rewriting each page away from a token layer that was always
+     meant to work. Values are the existing hexes converted to HSL — this
+     introduces no new colours.
+     --------------------------------------------------------------------------- */
+  --background: 220.9 52.4% 8.2%; /* #0A1120 */
+  --foreground: 38.6 35% 92.2%; /* #F2EDE4 */
+
+  /* Lifted planes, for panels that need to separate from the page without a border. */
+  --card: 216.9 44.8% 11.4%; /* #101A2A */
+  --card-foreground: 38.6 35% 92.2%;
+  --popover: 222.9 53.8% 5.1%; /* #060A14 */
+  --popover-foreground: 38.6 35% 92.2%;
+  --muted: 216.9 44.8% 11.4%;
+  /* Passes AA on --background; the /50 tier proven in the contrast pass. */
+  --muted-foreground: 38 8% 62%;
+  --secondary: 216.9 44.8% 14%;
+  --secondary-foreground: 38.6 35% 92.2%;
+
+  /* The accent is the bronze the rest of the site already uses for actions. */
+  --primary: 30 67.1% 72.5%; /* #E8B98A */
+  --primary-foreground: 220.9 52.4% 8.2%;
+  --accent: 27.3 44% 55.9%; /* #C08A5D */
+  --accent-foreground: 38.6 35% 92.2%;
+
+  --destructive: 0 62% 52%;
+  --destructive-foreground: 38.6 35% 92.2%;
+
+  /* Hairlines, matching the rgba(242,237,228,0.10-0.12) used elsewhere. */
+  --border: 217 30% 20%;
+  --input: 217 30% 20%;
+  --ring: 30 67.1% 72.5%;
+
+  --radius: 3px;
 }
 
 .t-display {
@@ -46,8 +96,15 @@
      hero ran 73px at a 1024px viewport and crowded the mansion out of its own
      establishing shot. Typography frames the subject here; it is not the
      subject. */
-  font-size: clamp(2.4rem, 4.6vw, 4.6rem);
-  line-height: 0.98;
+  /* Max lowered 4.6rem -> 4.3rem. The hero measure is capped at 452px (see
+     the note on the hero block), and Playfair italic sets "we come from" at
+     roughly 6.1em; above 4.3rem that line wraps on a 1920 monitor and the
+     composition loses its third line. 1440 and 1280 read 4.6vw and are
+     unaffected. */
+  font-size: clamp(2.4rem, 4.6vw, 4.3rem);
+  /* 0.98 -> 0.94. Two lines set tight, with the air moved into an explicit gap
+     before the italic rather than distributed evenly down the block. */
+  line-height: 0.94;
   letter-spacing: var(--track-display);
   font-weight: 400;
 }
@@ -94,6 +151,126 @@
   text-transform: uppercase;
   letter-spacing: var(--track-eyebrow);
   font-weight: 500;
+}
+
+/* Surface prose.
+   ---------------------------------------------------------------------------
+
+   Surface.tsx has always put `prose-surface` on the wrapper around every
+   surface page's body copy — and the class was never defined anywhere. Seventeen
+   routes were rendering long-form legal, guidance and FAQ content with no rules
+   for headings, lists, emphasis or links at all: whatever an element happened to
+   carry inline, and browser defaults for everything else.
+
+   Every rule is wrapped in :where() so it contributes ZERO specificity. These
+   pages already set explicit Tailwind classes on many of their elements, and
+   `.prose-surface h2` would have outranked `.text-xs` and silently rewritten
+   them. With :where() the selector is just `h2`, so any utility class still
+   wins and this only fills the gaps.
+
+   Sizes come from the existing scale rather than new numbers — the point is to
+   apply the type system already in the file, not to invent a second one. */
+.prose-surface :where(h2) {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--step-2);
+  line-height: 1.18;
+  letter-spacing: var(--track-heading);
+  font-weight: 400;
+  color: #f2ede4;
+  margin-top: 2.75rem;
+}
+.prose-surface :where(h3) {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: var(--step-1);
+  line-height: 1.25;
+  letter-spacing: var(--track-heading);
+  font-weight: 400;
+  color: #f2ede4;
+  margin-top: 2rem;
+}
+/* First heading should not push the block away from the lede above it. */
+.prose-surface > :where(h2, h3):first-child {
+  margin-top: 0;
+}
+.prose-surface :where(p) {
+  max-width: 68ch; /* a measure, so long legal copy stays readable */
+}
+.prose-surface :where(ul, ol) {
+  padding-left: 1.25rem;
+  max-width: 68ch;
+}
+.prose-surface :where(ul) {
+  list-style: disc;
+}
+.prose-surface :where(ol) {
+  list-style: decimal;
+}
+.prose-surface :where(li) {
+  margin-top: 0.5rem;
+}
+.prose-surface :where(li)::marker {
+  color: rgba(242, 237, 228, 0.45);
+}
+.prose-surface :where(strong) {
+  font-weight: 500;
+  color: #f2ede4;
+}
+/* Links inside body copy are underlined, because colour alone is not an
+   affordance and these pages are mostly text. */
+.prose-surface :where(a) {
+  color: #e8b98a;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(232, 185, 138, 0.4);
+  transition: text-decoration-color 200ms ease, color 200ms ease;
+}
+.prose-surface :where(a):hover {
+  color: #f2ede4;
+  text-decoration-color: currentColor;
+}
+.prose-surface :where(dt) {
+  color: #f2ede4;
+  font-weight: 500;
+}
+.prose-surface :where(dd) {
+  margin-top: 0.4rem;
+}
+.prose-surface :where(hr) {
+  border: 0;
+  height: 1px;
+  background: rgba(242, 237, 228, 0.12);
+  margin: 2.5rem 0;
+}
+
+/* Touch target floor.
+   ---------------------------------------------------------------------------
+
+   Measured at 320px and 768px: 30 and 33 controls respectively came in under
+   44x44 — the logo and the menu button at 40x40, "Enquire" at 91x34, and the
+   bracketed nav items at 18px tall.
+
+   The fix is a hit area, NOT a bigger control. Growing these visually would
+   coarsen chrome that is deliberately thin, so an invisible centred pseudo
+   element carries the extra area instead: layout is untouched, nothing moves,
+   and the visible design is identical at every width.
+
+   Applied to the control itself, so it follows the element rather than needing
+   a wrapper. Elements it is used on must be position:relative — `tap-target`
+   sets that itself. */
+.tap-target {
+  position: relative;
+}
+.tap-target::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  min-width: 44px;
+  min-height: 44px;
+  transform: translate(-50%, -50%);
 }
 
 /* Hairlines. The review called the rules above headings too heavy — they were

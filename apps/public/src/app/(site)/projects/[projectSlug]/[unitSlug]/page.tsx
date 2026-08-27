@@ -1,4 +1,5 @@
 // apps/public/src/app/(site)/projects/[projectSlug]/[unitSlug]/page.tsx
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { db, getGeometryByProjectId, getPoisByProjectId, getUnitsByProjectId } from '@/lib/projection';
 import { projectsPub, unitsPub } from '@estate/db';
@@ -9,6 +10,57 @@ import { ProjectMap } from '@/components/map/ProjectMap';
 import { formatPaise } from '@estate/domain/src/money/format';
 import { format } from 'date-fns';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
+
+/**
+ * This page rendered with an EMPTY <title> — verified in the browser. There was
+ * no metadata export at all, so a shared plot link showed a blank tab and a
+ * blank preview.
+ *
+ * Built only from columns that exist: unit number, project name, locality, and
+ * the dimensions/area the layout plan already publishes. Deliberately says
+ * nothing about price — every unit in the projection is price_on_request with
+ * no price set, so any figure here would be fabricated.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ projectSlug: string; unitSlug: string }>;
+}): Promise<Metadata> {
+  const { projectSlug, unitSlug } = await params;
+
+  const rows = await db
+    .select({
+      unitNumber: unitsPub.unitNumber,
+      dimensionsLabel: unitsPub.dimensionsLabel,
+      areaSqYd: unitsPub.areaSqYd,
+      projectName: projectsPub.name,
+      locality: projectsPub.locality,
+      city: projectsPub.city,
+    })
+    .from(unitsPub)
+    .innerJoin(projectsPub, eq(unitsPub.projectId, projectsPub.projectId))
+    .where(and(eq(projectsPub.slug, projectSlug), eq(unitsPub.unitNumber, unitSlug)))
+    .limit(1)
+    .catch(() => []);
+
+  const row = rows[0];
+  if (!row) return { title: 'Plot not found — Quality Homes Reality' };
+
+  const where = [row.locality, row.city].filter(Boolean).join(', ');
+  const size = row.dimensionsLabel || (row.areaSqYd ? `${row.areaSqYd} sq yd` : null);
+
+  return {
+    title: `Plot ${row.unitNumber}, ${row.projectName} — Quality Homes Reality`,
+    description: [
+      `Plot ${row.unitNumber} at ${row.projectName}`,
+      where || null,
+      size ? `${size}.` : null,
+      'Price on request from the office that holds the site.',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  };
+}
 
 export default async function UnitDetailPage({ params }: { params: Promise<{ projectSlug: string, unitSlug: string }> }) {
   const { projectSlug, unitSlug } = await params;
@@ -155,7 +207,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
             <p className="text-sm text-muted-foreground mb-4">Contact our team to schedule a site visit or ask questions about this unit.</p>
             <a 
               href={`#enquiry`}
-              className="block text-center bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+              className="flex min-h-[44px] items-center justify-center rounded-[3px] bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Enquire Now
             </a>

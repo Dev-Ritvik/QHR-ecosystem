@@ -206,21 +206,21 @@ export function ConsentPanel() {
             <button
               type="button"
               onClick={acceptAll}
-              className="flex-1 rounded border border-white/20 px-5 py-3 text-xs uppercase tracking-[0.16em] text-neutral-100 transition hover:border-amber-200/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="flex-1 rounded border border-white/20 px-5 py-3 min-h-[44px] text-xs uppercase tracking-[0.16em] text-neutral-100 transition hover:border-amber-200/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-400"
             >
               Accept all
             </button>
             <button
               type="button"
               onClick={rejectAll}
-              className="flex-1 rounded border border-white/20 px-5 py-3 text-xs uppercase tracking-[0.16em] text-neutral-100 transition hover:border-amber-200/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="flex-1 rounded border border-white/20 px-5 py-3 min-h-[44px] text-xs uppercase tracking-[0.16em] text-neutral-100 transition hover:border-amber-200/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-400"
             >
               Essential only
             </button>
             <button
               type="button"
               onClick={() => (detail ? save(choice) : setDetail(true))}
-              className="flex-1 rounded border border-white/20 px-5 py-3 text-xs uppercase tracking-[0.16em] text-neutral-100 transition hover:border-amber-200/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="flex-1 rounded border border-white/20 px-5 py-3 min-h-[44px] text-xs uppercase tracking-[0.16em] text-neutral-100 transition hover:border-amber-200/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-400"
             >
               {detail ? 'Save choices' : 'Choose'}
             </button>
@@ -272,7 +272,11 @@ export function PrivacyControl({ className }: { className?: string }) {
       onClick={reopen}
       className={
         className ??
-        'text-xs uppercase tracking-[0.14em] text-neutral-500 underline-offset-4 transition hover:text-neutral-800 hover:underline'
+        // hover:text-neutral-800 was a light-theme leftover: this control lives
+        // in the footer, so hovering it took the label to near-black on
+        // #0A1120. tap-target brings the 16px-tall trigger up to a 44px hit
+        // area without changing how it looks.
+        'tap-target text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60 underline-offset-4 transition hover:text-[#F2EDE4] hover:underline'
       }
     >
       Privacy &amp; data choices

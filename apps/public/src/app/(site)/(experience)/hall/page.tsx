@@ -46,7 +46,7 @@ export default function HallPage() {
                 >
                   {p.name}
                 </Link>
-                <span className="ml-2 text-xs text-[#F2EDE4]/40">
+                <span className="ml-2 text-xs text-[#F2EDE4]/60">
                   {p.district}
                 </span>
               </li>

@@ -72,7 +72,7 @@ export function LocationSection({ pois, projectCentroid }: LocationSectionProps)
   if (!pois || pois.length === 0) {
     return (
       <section className="space-y-6">
-        <h2 className="text-2xl font-bold">Location & Connectivity</h2>
+        <h2 className="t-h2 text-[#F2EDE4]">Location &amp; connectivity</h2>
         <EmptyStates type="location" />
       </section>
     );
@@ -80,37 +80,41 @@ export function LocationSection({ pois, projectCentroid }: LocationSectionProps)
 
   return (
     <section className="space-y-6">
-      <h2 className="text-2xl font-bold">Location & Connectivity</h2>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+      <h2 className="t-h2 text-[#F2EDE4]">Location &amp; connectivity</h2>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Map Column */}
-        <div className="lg:col-span-2 h-[450px] bg-gray-100 rounded-xl overflow-hidden relative border border-gray-200">
+        <div className="relative h-[450px] overflow-hidden rounded-sm border border-white/10 bg-white/[0.02] lg:col-span-2">
           <div ref={mapContainer} className="absolute inset-0" />
         </div>
 
-        {/* List Column */}
-        <div className="space-y-3 max-h-[450px] overflow-y-auto pr-2">
+        {/* List Column. Distances are the load-bearing fact here, so they are
+            tabular and given the accent; the category is demoted to a label. */}
+        <ul className="max-h-[450px] space-y-px overflow-y-auto">
           {pois.map((poi) => (
-            <div key={poi.poiId} className="p-4 border rounded-lg bg-white shadow-sm flex flex-col gap-1 transition hover:shadow-md">
-              <div className="flex justify-between items-start gap-2">
-                <h3 className="font-semibold text-gray-900 leading-tight">{poi.name}</h3>
-                <span className="text-xs font-medium px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full whitespace-nowrap">
+            <li
+              key={poi.poiId}
+              className="flex flex-col gap-2 border-b border-white/10 px-1 py-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-[15px] leading-snug text-[#F2EDE4]">{poi.name}</h3>
+                <span className="t-eyebrow shrink-0 whitespace-nowrap text-[#F2EDE4]/50">
                   {poi.category}
                 </span>
               </div>
-              <div className="flex items-center gap-3 text-sm text-gray-500 mt-2">
-                <span className="flex items-center gap-1 font-medium text-gray-700">
+              <div
+                className="flex items-center gap-3 text-sm text-[#F2EDE4]/60"
+                style={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                <span className="text-[#E8B98A]">
                   {(poi.distanceM / 1000).toFixed(1)} km
                 </span>
                 {poi.driveTimeMin !== null && (
-                  <span className="flex items-center gap-1">
-                    • ~{poi.driveTimeMin} min drive
-                  </span>
+                  <span>&middot; ~{poi.driveTimeMin} min drive</span>
                 )}
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </section>
   );

@@ -113,10 +113,10 @@ export default function LocationsPage() {
                 {s.where} &middot; {s.district} district
               </p>
 
-              <h3 className="mt-6 text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">
+              <h3 className="mt-6 text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
                 Getting there
               </h3>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-[15px] text-[#F2EDE4]/75 marker:text-[#F2EDE4]/30">
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-[15px] text-[#F2EDE4]/75 marker:text-[#F2EDE4]/50">
                 {s.access.map((a) => (
                   <li key={a}>{a}</li>
                 ))}
@@ -124,7 +124,7 @@ export default function LocationsPage() {
 
               {s.near.map((group) => (
                 <div key={group.label}>
-                  <h3 className="mt-6 text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">
+                  <h3 className="mt-6 text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
                     {group.label} nearby
                   </h3>
                   <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[15px] text-[#F2EDE4]/75">

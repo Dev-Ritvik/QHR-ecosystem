@@ -142,7 +142,7 @@ function CookieTable({
               <td className="py-4 pr-4 font-mono text-[13px] text-[#F2EDE4]">
                 {r.name}
                 {r.group && (
-                  <span className="mt-1 block text-[10px] uppercase tracking-widest text-[#F2EDE4]/40">
+                  <span className="mt-1 block text-[10px] uppercase tracking-widest text-[#F2EDE4]/60">
                     {r.group}
                   </span>
                 )}

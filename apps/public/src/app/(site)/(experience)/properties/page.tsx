@@ -99,11 +99,11 @@ export default function PropertiesPage() {
 
               <dl className="mt-5 space-y-2 text-[15px]">
                 <div className="flex flex-wrap gap-x-3">
-                  <dt className="text-[#F2EDE4]/45">Roads</dt>
+                  <dt className="text-[#F2EDE4]/60">Roads</dt>
                   <dd className="text-[#F2EDE4]/80">{i.roads}</dd>
                 </div>
                 <div className="flex flex-wrap gap-x-3">
-                  <dt className="text-[#F2EDE4]/45">Approval</dt>
+                  <dt className="text-[#F2EDE4]/60">Approval</dt>
                   <dd className="text-[#F2EDE4]/80">{i.approval}</dd>
                 </div>
               </dl>

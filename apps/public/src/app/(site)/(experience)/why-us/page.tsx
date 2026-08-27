@@ -75,7 +75,7 @@ export default function WhyUsPage() {
         <ol className="space-y-10">
           {CLAIMS.map((c, i) => (
             <li key={c.title} className="border-t border-white/10 pt-8 first:border-0 first:pt-0">
-              <p className="text-xs tracking-[0.2em] text-[#F2EDE4]/35">
+              <p className="text-xs tracking-[0.2em] text-[#F2EDE4]/50">
                 {String(i + 1).padStart(2, '0')}
               </p>
               <h2 className="mt-2 font-serif text-2xl text-[#F2EDE4]">{c.title}</h2>

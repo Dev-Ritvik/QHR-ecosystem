@@ -1,0 +1,203 @@
+- generic [active] [ref=f10e1]:
+  - generic [ref=f10e2]:
+    - link "Skip to content" [ref=f10e3] [cursor=pointer]:
+      - /url: "#site-content"
+    - banner [ref=f10e4]:
+      - generic [ref=f10e5]:
+        - link "Quality Homes Reality — home" [ref=f10e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f10e9]:
+            - generic [ref=f10e10]: Quality Homes
+            - generic [ref=f10e11]: Reality
+        - navigation "Primary" [ref=f10e12]:
+          - list [ref=f10e13]:
+            - listitem [ref=f10e14]:
+              - link "Plots" [ref=f10e15] [cursor=pointer]:
+                - /url: /properties
+                - text: "[Plots]"
+            - listitem [ref=f10e16]:
+              - link "Plans" [ref=f10e17] [cursor=pointer]:
+                - /url: /downloads
+                - text: "[Plans]"
+            - listitem [ref=f10e18]:
+              - link "Knowledge" [ref=f10e19] [cursor=pointer]:
+                - /url: /knowledge
+                - text: "[Knowledge]"
+            - listitem [ref=f10e20]:
+              - link "Offices" [ref=f10e21] [cursor=pointer]:
+                - /url: /branches
+                - text: "[Offices]"
+        - link "Enquire" [ref=f10e22] [cursor=pointer]:
+          - /url: /contact
+    - main [ref=f10e27]:
+      - generic [ref=f10e30]:
+        - generic [ref=f10e31]:
+          - paragraph [ref=f10e32]: Vizianagaram · Srikakulam
+          - heading [level=1] [ref=f10e33]:
+            - text: Land, in thedistricts
+            - emphasis [ref=f10e34]: we come from
+          - paragraph [ref=f10e35]: Approved layouts, sold direct by the developer. Every sanctioned plan published in full.
+          - paragraph [ref=f10e36]:
+            - link "In a hurry? Start here" [ref=f10e37] [cursor=pointer]:
+              - /url: /start-here
+              - text: In a hurry? Start here
+              - generic [ref=f10e38]: →
+            - link "See the layouts raised" [ref=f10e39] [cursor=pointer]:
+              - /url: /hall
+              - text: See the layouts raised
+              - generic [ref=f10e40]: →
+        - generic [ref=f10e41]: Scroll
+      - generic [ref=f10e47]:
+        - paragraph [ref=f10e48]: Twenty years, one district
+        - paragraph [ref=f10e49]: We do not broker land.We develop it, and we are still here when the last plot sells.
+      - generic [ref=f10e52]:
+        - paragraph [ref=f10e53]: Every plot, plotted
+        - heading [level=2] [ref=f10e54]:
+          - text: One point for
+          - emphasis [ref=f10e55]: every plot we hold
+        - separator [ref=f10e56]
+        - generic [ref=f10e57]:
+          - generic [ref=f10e58]:
+            - term [ref=f10e59]: Layouts
+            - definition [ref=f10e60]: "3"
+          - generic [ref=f10e61]:
+            - term [ref=f10e62]: Plots
+            - definition [ref=f10e63]: "407"
+          - generic [ref=f10e64]:
+            - term [ref=f10e65]: Open
+            - definition [ref=f10e66]: "344"
+        - paragraph [ref=f10e67]: Counted from the sanctioned layout plans, not from a brochure. The hall below holds one table for each.
+      - generic [ref=f10e70]:
+        - paragraph [ref=f10e71]: Inside
+        - paragraph [ref=f10e72]: Each layout stands on its own table. Turn one to read it from another side; open it to see every plot.
+      - generic [ref=f10e75]:
+        - paragraph [ref=f10e76]: 01 / 03
+        - link "Kartikeya Water Front 113 available Plotted development Kartikeya Water Front Poosapatirega · Vizianagaram" [ref=f10e77] [cursor=pointer]:
+          - /url: /projects/kartikeya-water-front
+          - generic [ref=f10e78]:
+            - img "Kartikeya Water Front" [ref=f10e79]
+            - generic [ref=f10e80]: 113 available
+            - generic [ref=f10e82]: Plotted development
+          - generic [ref=f10e83]:
+            - heading "Kartikeya Water Front" [level=3] [ref=f10e84]
+            - paragraph [ref=f10e85]: Poosapatirega · Vizianagaram
+      - generic [ref=f10e88]:
+        - paragraph [ref=f10e89]: 02 / 03
+        - link "Lucky Garden 118 available Plotted development Lucky Garden Kumaram Village, Garividi · Vizianagaram" [ref=f10e90] [cursor=pointer]:
+          - /url: /projects/lucky-garden
+          - generic [ref=f10e91]:
+            - img "Lucky Garden" [ref=f10e92]
+            - generic [ref=f10e93]: 118 available
+            - generic [ref=f10e95]: Plotted development
+          - generic [ref=f10e96]:
+            - heading "Lucky Garden" [level=3] [ref=f10e97]
+            - paragraph [ref=f10e98]: Kumaram Village, Garividi · Vizianagaram
+      - generic [ref=f10e101]:
+        - paragraph [ref=f10e102]: 03 / 03
+        - link "VSR Gayatri Township 113 available Plotted development VSR Gayatri Township Bayyannapeta, near Allinagaram · Srikakulam" [ref=f10e103] [cursor=pointer]:
+          - /url: /projects/vsr-gayatri-township
+          - generic [ref=f10e104]:
+            - img "VSR Gayatri Township" [ref=f10e105]
+            - generic [ref=f10e106]: 113 available
+            - generic [ref=f10e108]: Plotted development
+          - generic [ref=f10e109]:
+            - heading "VSR Gayatri Township" [level=3] [ref=f10e110]
+            - paragraph [ref=f10e111]: Bayyannapeta, near Allinagaram · Srikakulam
+      - generic [ref=f10e114]:
+        - paragraph [ref=f10e115]: At the top of the stairs
+        - paragraph [ref=f10e116]: The name on the sanction letters has been the same for twenty years.
+        - paragraph [ref=f10e117]:
+          - link "Who we are" [ref=f10e118] [cursor=pointer]:
+            - /url: /about
+            - text: Who we are
+            - generic [ref=f10e119]: →
+    - contentinfo [ref=f10e121]:
+      - generic [ref=f10e122]:
+        - generic [ref=f10e123]:
+          - generic [ref=f10e124]:
+            - generic [ref=f10e127]:
+              - generic [ref=f10e128]: Quality Homes
+              - generic [ref=f10e129]: Reality
+            - paragraph [ref=f10e130]: Approved plotted layouts in the northern coastal districts of Andhra Pradesh, developed and sold directly.
+            - paragraph [ref=f10e131]:
+              - link "+91 95535 13366" [ref=f10e132] [cursor=pointer]:
+                - /url: tel:+919553513366
+              - text: ·
+              - link "qualityhomesreality@gmail.com" [ref=f10e133] [cursor=pointer]:
+                - /url: mailto:qualityhomesreality@gmail.com
+          - generic [ref=f10e134]:
+            - generic [ref=f10e135]:
+              - heading "The land" [level=2] [ref=f10e136]
+              - list [ref=f10e137]:
+                - listitem [ref=f10e138]:
+                  - link "Plots and sizes" [ref=f10e139] [cursor=pointer]:
+                    - /url: /properties
+                - listitem [ref=f10e140]:
+                  - link "Layout plans" [ref=f10e141] [cursor=pointer]:
+                    - /url: /downloads
+                - listitem [ref=f10e142]:
+                  - link "Locations" [ref=f10e143] [cursor=pointer]:
+                    - /url: /locations
+                - listitem [ref=f10e144]:
+                  - link "Gallery" [ref=f10e145] [cursor=pointer]:
+                    - /url: /gallery
+            - generic [ref=f10e146]:
+              - heading "The company" [level=2] [ref=f10e147]
+              - list [ref=f10e148]:
+                - listitem [ref=f10e149]:
+                  - link "About" [ref=f10e150] [cursor=pointer]:
+                    - /url: /about
+                - listitem [ref=f10e151]:
+                  - link "How we work" [ref=f10e152] [cursor=pointer]:
+                    - /url: /why-us
+                - listitem [ref=f10e153]:
+                  - link "Testimonials" [ref=f10e154] [cursor=pointer]:
+                    - /url: /testimonials
+                - listitem [ref=f10e155]:
+                  - link "Careers" [ref=f10e156] [cursor=pointer]:
+                    - /url: /careers
+            - generic [ref=f10e157]:
+              - heading "Before you buy" [level=2] [ref=f10e158]
+              - list [ref=f10e159]:
+                - listitem [ref=f10e160]:
+                  - link "Investment guide" [ref=f10e161] [cursor=pointer]:
+                    - /url: /investment-guide
+                - listitem [ref=f10e162]:
+                  - link "Knowledge" [ref=f10e163] [cursor=pointer]:
+                    - /url: /knowledge
+                - listitem [ref=f10e164]:
+                  - link "Questions" [ref=f10e165] [cursor=pointer]:
+                    - /url: /faqs
+                - listitem [ref=f10e166]:
+                  - link "Start here" [ref=f10e167] [cursor=pointer]:
+                    - /url: /start-here
+        - generic [ref=f10e168]:
+          - generic [ref=f10e169]:
+            - paragraph [ref=f10e170]: Visakhapatnam
+            - paragraph [ref=f10e171]: Head office
+            - generic [ref=f10e172]: D.No. 50-92-36, 2nd Floor, Opp. Canara Bank, Shantipuram, Shankara Matam Road, Visakhapatnam – 530016
+          - generic [ref=f10e173]:
+            - paragraph [ref=f10e174]: Vizianagaram
+            - paragraph [ref=f10e175]: Branch
+            - generic [ref=f10e176]: Lakshmi Nilayam, 3rd Floor, Flat No. 401, Beside Pizza Hut, Ring Road, Vizianagaram – 535002
+          - generic [ref=f10e177]:
+            - paragraph [ref=f10e178]: Srikakulam
+            - paragraph [ref=f10e179]: Branch
+            - generic [ref=f10e180]: 1st Floor, Near Simhadwaram, Above Tiles Mart, Bridge Road, Srikakulam – 532001
+        - generic [ref=f10e181]:
+          - paragraph [ref=f10e182]: © 2026 Quality Homes Reality
+          - list [ref=f10e183]:
+            - listitem [ref=f10e184]:
+              - link "Privacy" [ref=f10e185] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=f10e186]:
+              - link "Terms" [ref=f10e187] [cursor=pointer]:
+                - /url: /terms
+            - listitem [ref=f10e188]:
+              - link "Refunds" [ref=f10e189] [cursor=pointer]:
+                - /url: /refund-policy
+            - listitem [ref=f10e190]:
+              - link "Cookies" [ref=f10e191] [cursor=pointer]:
+                - /url: /cookie-policy
+          - button "Privacy & data choices" [ref=f10e193] [cursor=pointer]
+  - alert [ref=f10e194]

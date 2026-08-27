@@ -85,7 +85,7 @@ export default function PrivacyPage() {
         </p>
 
         <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">How long we keep it</h2>
-        <ul className="list-disc space-y-2 pl-5 marker:text-[#F2EDE4]/40">
+        <ul className="list-disc space-y-2 pl-5 marker:text-[#F2EDE4]/60">
           <li>Detailed visit records: 13 months, then aggregated and deleted.</li>
           <li>
             Visits that never led to an enquiry: 90 days, then deleted entirely.

@@ -15,10 +15,10 @@
 //
 //   INTERIOR   baked GI in the occlusion slot at 4.66x, KTX2 textures, lit
 //              almost entirely by that lightmap, so exposure is its reciprocal.
-//   EXTERIOR   no lightmap at all. Plain PBR with JPEG maps, transmission on
-//              the glass and the fountain water, an emissive factor on the
-//              interior window panes. It needs a real key light and renders at
-//              roughly unit exposure.
+//   EXTERIOR   no lightmap at all. Real PBR with KTX2 maps on every material,
+//              an alpha-blended glass pane, transmission on the fountain water
+//              alone, and an emissive factor on the interior window panes. It
+//              needs a real key light and renders at roughly unit exposure.
 //
 // Promoting a lightmap that does not exist, or applying the interior's exposure
 // here, would be a silent mis-grade of the kind this project has already paid
@@ -30,44 +30,26 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { attachLoaders } from './HallModel';
+import { guardAnisotropy } from './materialGuards';
 
 export const EXTERIOR_MODEL_URL = '/models/exterior_mansion.glb';
 
 /**
- * The ground plane is 450m square, which is far larger than the building and
- * exists to give the approach somewhere to stand. Its far edge has to be fogged
- * out or the scene reads as a diorama on a table.
+ * Measured from the delivered GLB: mansion x -9.55..9.55, z -5.55..6.10, roof
+ * 6.95, spire tip 11.72. Fountain centre at z 13.2, entry step at 6.15.
  *
- * Measured from the GLB: mansion x -9.55..9.55, three z -5.55..6.10, roof 6.80,
- * spire tip 11.72. Fountain centre at three z 13.2, entry step at 6.15.
+ * The ground is authored terrain rather than a plane, so its far edge is a
+ * silhouette against the sky and no longer needs fog to hide a hard boundary —
+ * but fog still has to close before 120m or the terrain simply stops.
  */
 export const EXTERIOR_BOUNDS = {
   spireTop: 11.72,
-  groundHalfSpan: 225,
+  // The delivered terrain spans +/-120m and undulates from y -2.97 to +0.97.
+  // It was a flat 450m plane; the camera far plane and the fog are tuned
+  // against this number, so it is measured rather than assumed.
+  groundHalfSpan: 120,
 } as const;
 
-/**
- * Colour that the glTF export lost, restored on load.
- *
- * Two materials in this GLB carry baseColorFactor [1,1,1,1] and NO base colour
- * texture, because their colour lived in Blender shader nodes the exporter
- * cannot write. They therefore arrive as pure white:
- *
- *   MAT_Ground   a 450m plane. This is the bright plate the building was
- *                sitting on — read in review as "a primitive grey plane", and
- *                correctly so. It was white.
- *   MAT_Hedge    the cypresses and the box hedging. White cones flanking the
- *                portico, which is why the trees read as traffic cones.
- *
- * Overriding here rather than re-exporting because the values are a grade, not
- * geometry: they are the difference between a night lawn and a lit one, and
- * that is a decision to make against the rendered frame rather than in Blender.
- * If the exterior is ever re-baked with real ground and foliage maps, delete
- * this — a texture on those slots must win.
- *
- * Keyed by material name and applied to the shared material instances, so it
- * runs once per parse rather than per mount.
- */
 /**
  * Emissive anchoring — the lights being ON inside the building.
  *
@@ -85,6 +67,45 @@ export const EXTERIOR_BOUNDS = {
  * transmissive and lighting IT makes a glowing pane, whereas lighting what sits
  * behind it reads as a lit room seen through a window.
  */
+/**
+ * THE PAVING, graded away from the elevation it shares a material with.
+ *
+ * MEASURED on the composited hero frame, sampling the framebuffer at projected
+ * world points:
+ *
+ *   terrace_upper      158     <- the BRIGHTEST surface in the whole frame
+ *   lit facade         144
+ *   roof slate         140
+ *   forecourt          127
+ *   lawn                48
+ *
+ * The terrace was reading brighter than the building it supports. That is the
+ * inverted value hierarchy behind "the hero feels game-like": the eye has
+ * nowhere to land, because the largest, nearest, brightest object in frame is a
+ * horizontal plate rather than the architecture.
+ *
+ * The cause is structural, not artistic. The delivery has exactly ONE stone
+ * material, and 107 meshes share it — terrace_lower/upper, the 95 rusticated
+ * base blocks, the entry steps and cheeks, and the whole fountain surround —
+ * along with the walls. Identical albedo on a horizontal and a vertical
+ * surface. The artist bevelled all of them at 12-14mm, which is why their EDGES
+ * now catch light properly, but a bevel cannot change what a face is worth.
+ *
+ * Splitting them and multiplying to 0.48 is also what the light actually does:
+ * at dusk a horizontal limestone terrace sees a near-black sky, while a wall
+ * sees the warm key. Verified by sweeping the multiplier on the live material —
+ * the paving moves (terrace 158 -> 116, forecourt 127 -> 92) while the facade
+ * holds at 144, because they are now different materials.
+ *
+ * WHAT THIS REPLACES. A previous pass graded MAT_Ground here instead, on the
+ * assumption that the bright band was the lawn. The sweep disproved it: tinting
+ * the ground moved the lawn 48 -> 38 and left the forecourt at 127 untouched,
+ * because the forecourt is not the ground. That grade is deleted rather than
+ * left in as a second, unjustified darkening.
+ */
+const PAVING_RE = /^(terrace_|rustic_|entry_step|entry_cheek|fount_)/;
+const PAVING_TINT = 0.48;
+
 const EMISSIVE: Record<string, { color: string; intensity: number }> = {
   // Warm interior spill. This is the main event — 28 window and arch reveals
   // across the elevation, so the facade reads as occupied.
@@ -104,62 +125,56 @@ const EMISSIVE: Record<string, { color: string; intensity: number }> = {
   MAT_Wood_Dark: { color: '#FF9A40', intensity: 0.35 },
 };
 
-const GRADE: Record<string, { color: string; roughness?: number }> = {
-  // Deep and desaturated, a shade off the #0A1120 sky so the ground reads as
-  // ground and not as a hole. Anything lighter puts a bright horizon band
-  // behind the building at exactly the height the hero copy sits.
-  MAT_Ground: { color: '#0F1520', roughness: 1 },
-  // Cypress and box at dusk: green, but most of the way to black. These are
-  // silhouette, not subject.
-  MAT_Hedge: { color: '#16281B', roughness: 0.95 },
-};
-
 /**
- * Real PBR sets, replacing the generated noise map.
+ * WHAT THIS FILE NO LONGER DOES, AND WHY.
  *
- * Prepared from the 2K AmbientCG masters in assets/materials (which are not in
- * the repo — see .gitignore) down to 1K JPEG: basecolor at q88, roughness as
- * single-channel q88, and normals at q86 with chroma subsampling OFF. That last
- * one is the only unusual setting and it matters: a normal map stores a VECTOR
- * FIELD in RGB, and subsampling averages neighbouring surface directions, which
- * produces lighting that visibly swims across the surface as the camera moves.
- * Quality is the dial that gets turned down; subsampling stays off.
+ * Until the final Blender delivery this component carried four compensations
+ * for an exterior GLB that shipped incomplete. Every one of them is now
+ * deleted, because the delivered asset does the job properly and a
+ * compensation layered on top of a correct asset is not a safety net — it is a
+ * second, worse art direction fighting the first.
  *
- * 2.74MB for four complete sets. The preloader already gates the page on
- * DefaultLoadingManager, and TextureLoader registers with it, so these are
- * counted in the percentage rather than popping in behind it.
+ *   GRADE           MAT_Ground and MAT_Hedge both shipped baseColorFactor
+ *                   [1,1,1,1] with NO texture, so the lawn and the hedging
+ *                   rendered pure white. They were tinted here to a night
+ *                   lawn and a box green. The delivery now ships MAT_Ground
+ *                   with `ground_basecolor` + `ground_roughness` (a baked 4096
+ *                   zone mask covering gravel forecourt, drive and parterres)
+ *                   and MAT_Hedge as an authored [0.026, 0.052, 0.018], with a
+ *                   separate MAT_Cypress for the trees.
+ *
+ *   PBR             Four real texture sets were fetched from /textures and
+ *                   bolted onto MAT_Stone_Cream, MAT_Roof, MAT_Gold and
+ *                   MAT_Wood_Dark because the GLB had normals and roughness
+ *                   for none of them. All four now arrive with their own KTX2
+ *                   sets, and the roof has been split onto MAT_Roof_Slate with
+ *                   real slate courses so it can be tuned apart from the spire.
+ *                   Loading JPEGs over KTX2 that already exists would cost a
+ *                   second upload to look worse.
+ *
+ *   PAVING          The terrace, the 95 rusticated base blocks, the entry steps
+ *                   and the fountain surround all shared MAT_Stone_Cream with
+ *                   the walls, so the horizontal surfaces rendered as bright as
+ *                   the elevation and the terrace read as a lit plate the
+ *                   building sat on. They were cloned and multiplied down to
+ *                   42%. The delivery bevels all of them at 12-14mm and
+ *                   re-materials them, so the edges now catch light on their
+ *                   own and the flat 42% multiply would just crush them.
+ *
+ *   HIDDEN GROUND   `ground_plane` was set invisible because <Terrain /> drew
+ *                   procedural karst in its place. It is now 18,432 triangles
+ *                   of authored terrain spanning +/-120m, and <Terrain /> has
+ *                   been unmounted. Hiding it would leave the mansion standing
+ *                   on nothing.
+ *
+ * What survives is EMISSIVE above — a grade, not a repair. Nothing in the GLB
+ * makes the windows read as a house with people in it, and that is a lighting
+ * decision to make against a rendered frame rather than in Blender.
  */
-const PBR: Record<string, { dir: string; repeat: number; normalScale?: number }> = {
-  // The elevation. Everything the eye spends its time on.
-  MAT_Stone_Cream: { dir: 'limestone', repeat: 3.5, normalScale: 0.85 },
-  MAT_Roof: { dir: 'roof', repeat: 6, normalScale: 1.0 },
-  MAT_Gold: { dir: 'gold', repeat: 2, normalScale: 0.6 },
-  MAT_Wood_Dark: { dir: 'wood', repeat: 2, normalScale: 0.7 },
-};
-
-/** One loader and one cache for the whole app: these materials are shared
- *  across dozens of meshes and must not each fetch their own copy. */
-const texLoader = new THREE.TextureLoader();
-const TEX_CACHE = new Map<string, THREE.Texture>();
-
-function loadTex(path: string, srgb: boolean, repeat: number): THREE.Texture {
-  const hit = TEX_CACHE.get(path);
-  if (hit) return hit;
-  const t = texLoader.load(path);
-  t.wrapS = THREE.RepeatWrapping;
-  t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(repeat, repeat);
-  // Colour maps are authored in sRGB; normal and roughness are DATA and must
-  // stay linear. Getting this backwards is the classic way a PBR set arrives
-  // looking washed out and lit wrong.
-  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  TEX_CACHE.set(path, t);
-  return t;
-}
 
 function applyGrade(root: THREE.Object3D): string[] {
   const touched: string[] = [];
+
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -168,76 +183,53 @@ function applyGrade(root: THREE.Object3D): string[] {
     // flags to false and a shadow-casting light over a scene that casts nothing
     // just costs a depth pass for no image.
     //
-    // The ground RECEIVES but does not CAST: it is a 450m plane, so including
-    // it in the shadow camera's render would stretch the depth range across the
+    // The ground RECEIVES but does not CAST. It is 240m across, so including it
+    // in the shadow camera's render would stretch the depth range over the
     // whole world and quantise the building's own shadows into steps.
-    const isGround = mesh.name.startsWith('ground_plane');
+    const isGround = mesh.name === 'ground_plane';
     mesh.castShadow = !isGround;
     mesh.receiveShadow = true;
 
-    // The flat exported plane is superseded by <Terrain />, which displaces
-    // karst relief on the GPU. Hidden rather than deleted so the GLB stays the
-    // single source of truth and turning the terrain off restores the old
-    // ground by changing one prop.
-    if (isGround) mesh.visible = false;
-
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of mats) {
-      const mat = m as THREE.MeshStandardMaterial & { __graded?: boolean; __pbr?: boolean };
+      const mat = m as THREE.MeshStandardMaterial & { __graded?: boolean };
       if (!mat || mat.__graded) continue;
 
-      // Emissive first, and on its own flag — a material can be emissive
-      // without being colour-graded, and MAT_Gold is exactly that case: it has
-      // a real texture, so the GRADE pass below skips it.
       const e = EMISSIVE[mat.name];
-      if (e && mat.emissive) {
-        mat.emissive.set(e.color);
-        mat.emissiveIntensity = e.intensity;
-        mat.needsUpdate = true;
-        if (!touched.includes(mat.name + ':emit')) touched.push(mat.name + ':emit');
-      }
-
-      // Real PBR. Basecolor is only replaced where the GLB shipped none — the
-      // stone already carries its own baked albedo and overriding it would
-      // throw away the cornice and frieze detail that was modelled into it.
-      // Normal and roughness are always applied: those are the maps the GLB
-      // never had, and their absence is why the surfaces read as plastic.
-      const pbr = PBR[mat.name];
-      if (pbr && !mat.__pbr) {
-        const base = '/textures/' + pbr.dir + '/';
-        if (!mat.map) mat.map = loadTex(base + 'basecolor.jpg', true, pbr.repeat);
-        if (!mat.normalMap) {
-          mat.normalMap = loadTex(base + 'normal.jpg', false, pbr.repeat);
-          const n = pbr.normalScale ?? 1;
-          mat.normalScale = new THREE.Vector2(n, n);
-        }
-        if (!mat.roughnessMap) {
-          mat.roughnessMap = loadTex(base + 'roughness.jpg', false, pbr.repeat);
-          // roughnessMap MULTIPLIES roughnessFactor, so a low factor would
-          // cancel the map entirely. Lifted to 1.0 so the map reads straight.
-          mat.roughness = 1.0;
-        }
-        mat.__pbr = true;
-        mat.needsUpdate = true;
-        if (!touched.includes(mat.name + ':pbr')) touched.push(mat.name + ':pbr');
-      }
-
-      const g = GRADE[mat.name];
-      if (!g) continue;
-      // Never override a real texture — a map means the export succeeded and
-      // this workaround should stay out of the way.
-      if (mat.map) continue;
-
-      mat.color.set(g.color);
-      if (g.roughness !== undefined) mat.roughness = g.roughness;
+      if (!e || !mat.emissive) continue;
+      mat.emissive.set(e.color);
+      mat.emissiveIntensity = e.intensity;
       mat.__graded = true;
       mat.needsUpdate = true;
       touched.push(mat.name);
     }
   });
+
+  // SECOND PASS for the paving. Separate from the traversal above because it
+  // works on MESHES, not materials: the terrace and the walls are the same
+  // material, so the only handle on them is the node name the export gives.
+  //
+  // One shared clone across all 107 meshes, so they stay on one shader program
+  // and one uniform block. Cloning per mesh would turn a batched draw into a
+  // hundred.
+  let paving: THREE.MeshStandardMaterial | null = null;
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !PAVING_RE.test(mesh.name)) return;
+    const current = mesh.material as THREE.MeshStandardMaterial;
+    if (!current || Array.isArray(current)) return;
+    if (!paving) {
+      paving = current.clone();
+      paving.name = 'MAT_Stone_Cream_paving';
+      paving.color.multiplyScalar(PAVING_TINT);
+      paving.needsUpdate = true;
+      touched.push('paving');
+    }
+    mesh.material = paving;
+  });
+
   return touched;
 }
-
 export function ExteriorModel({
   onReady,
 }: {
@@ -257,6 +249,10 @@ export function ExteriorModel({
   const root = useMemo(() => scene.clone(true), [scene]);
 
   useEffect(() => {
+    // BEFORE the grade, and before anything reads the frame: an anisotropic
+    // material with no tangents writes NaN, and one NaN fragment takes the
+    // whole bloom chain — and therefore the whole screen — to black.
+    const disarmed = guardAnisotropy(root);
     const graded = applyGrade(root);
     let meshes = 0;
     let tris = 0;
@@ -274,10 +270,11 @@ export function ExteriorModel({
     const size = box.getSize(new THREE.Vector3());
     // eslint-disable-next-line no-console
     console.info(
-      '[exterior_ready] meshes=%d tris=%d graded=[%s] | size %sx%sx%s | y %s..%s',
+      '[exterior_ready] meshes=%d tris=%d graded=[%s] anisotropyDisarmed=[%s] | size %sx%sx%s | y %s..%s',
       meshes,
       Math.round(tris),
       graded.join(','),
+      disarmed.join(','),
       size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2),
       box.min.y.toFixed(2), box.max.y.toFixed(2),
     );

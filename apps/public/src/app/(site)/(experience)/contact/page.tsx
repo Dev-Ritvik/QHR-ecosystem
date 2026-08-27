@@ -43,7 +43,7 @@ export default function ContactPage() {
             return (
               <div key={b.id}>
                 <p className="font-serif text-lg text-[#F2EDE4]">{b.name}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/40">
+                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
                   {b.role === 'head_office' ? 'Head office' : 'Branch'}
                 </p>
                 <address className="mt-3 not-italic text-sm leading-relaxed text-[#F2EDE4]/70">

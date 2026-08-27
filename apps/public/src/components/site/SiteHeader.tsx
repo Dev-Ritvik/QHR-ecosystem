@@ -24,7 +24,7 @@
 // navigation inside the experience segment, which is the whole point of that
 // segment.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from './Logo';
@@ -66,16 +66,57 @@ export function SiteHeader() {
   // over the page the visitor just asked for.
   useEffect(() => setOpen(false), [pathname]);
 
-  // Escape closes, and the page underneath must not scroll while it is open.
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * While the panel is open it is the only thing on screen, so it has to be the
+   * only thing reachable.
+   *
+   * It already closed on Escape and locked body scroll, but Tab walked straight
+   * out of it into the page underneath — which is still rendered, still
+   * focusable, and completely obscured. A keyboard or screen-reader user ended
+   * up driving a page they could not see. Focus now enters the panel on open,
+   * cycles inside it, and returns to the button that opened it on close.
+   */
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const panel = panelRef.current;
+    const returnTo = document.activeElement as HTMLElement | null;
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
+    const focusable = () =>
+      Array.from(
+        panel?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [],
+      );
+
+    focusable()[0]?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const items = focusable();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
+      returnTo?.focus?.();
     };
   }, [open]);
 
@@ -95,7 +136,10 @@ export function SiteHeader() {
                       href={l.href}
                       aria-current={active ? 'page' : undefined}
                       className={
-                        'text-[13px] tracking-[0.04em] transition-colors ' +
+                        // tap-target: these render 18px tall, which is fine for
+                        // a mouse and not for the tablets that also get this
+                        // bar. The hit area grows; the type does not.
+                        'tap-target text-[13px] tracking-[0.04em] transition-colors ' +
                         (active
                           ? 'text-[#F2EDE4]'
                           : 'text-[#F2EDE4]/55 hover:text-[#F2EDE4]')
@@ -120,7 +164,7 @@ export function SiteHeader() {
 
           <Link
             href="/contact"
-            className="ml-auto rounded-[3px] border border-[#C08A5D]/45 px-4 py-2 text-[11px] uppercase tracking-[0.16em] text-[#E8B98A] transition-colors hover:border-[#C08A5D] hover:text-[#F2EDE4] md:ml-0"
+            className="tap-target ml-auto rounded-[3px] border border-[#C08A5D]/45 px-4 py-2 text-[11px] uppercase tracking-[0.16em] text-[#E8B98A] transition-colors hover:border-[#C08A5D] hover:text-[#F2EDE4] md:ml-0"
           >
             Enquire
           </Link>
@@ -130,7 +174,7 @@ export function SiteHeader() {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-controls="site-menu"
-            className="-mr-2 flex h-10 w-10 items-center justify-center text-[#F2EDE4]/70 hover:text-[#F2EDE4] md:hidden"
+            className="tap-target -mr-2 flex h-10 w-10 items-center justify-center text-[#F2EDE4]/70 hover:text-[#F2EDE4] md:hidden"
           >
             <span className="sr-only">{open ? 'Close menu' : 'Open menu'}</span>
             <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true">
@@ -148,12 +192,16 @@ export function SiteHeader() {
       {open ? (
         <div
           id="site-menu"
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Site menu"
           className="fixed inset-0 z-30 overflow-y-auto bg-[#060A14]/97 px-6 pb-16 pt-[78px] backdrop-blur-sm md:hidden"
         >
           <div className="mx-auto max-w-md">
             {ALL.map((g) => (
               <section key={g.group} className="mb-9">
-                <h2 className="text-[10px] uppercase tracking-[0.22em] text-[#F2EDE4]/35">
+                <h2 className="text-[10px] uppercase tracking-[0.22em] text-[#F2EDE4]/50">
                   {g.group}
                 </h2>
                 <ul className="mt-3 space-y-1">
@@ -161,7 +209,11 @@ export function SiteHeader() {
                     <li key={l.href + l.label}>
                       <Link
                         href={l.href}
-                        className="block py-2 font-serif text-lg text-[#F2EDE4]/85 hover:text-[#F2EDE4]"
+                        // Real height rather than a pseudo element here: these
+                        // are stacked, so an invisible overlay would overlap its
+                        // neighbours. 44px of actual row is also just better in
+                        // a full-screen menu.
+                        className="flex min-h-[44px] items-center font-serif text-lg text-[#F2EDE4]/85 hover:text-[#F2EDE4]"
                       >
                         {l.label}
                       </Link>

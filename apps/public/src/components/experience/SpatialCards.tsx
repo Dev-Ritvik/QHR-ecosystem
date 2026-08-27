@@ -202,7 +202,31 @@ function Card({
             {card.locality} &middot; {card.city}
           </p>
 
+          {/*
+            tap-target, and the unit matters here.
+
+            This link measures 102x20 in the card's own coordinate space, which
+            is the space the card is authored in: 420px wide, then scaled onto
+            the screen by the CSS3D matrix drei writes each frame from
+            distanceFactor and the camera distance. So its on-screen size is not
+            a fixed number — it grows and shrinks as the camera moves, and it
+            cannot be measured from a non-compositing context at all.
+
+            That makes "is it 44 screen pixels" the wrong question. The right
+            one is whether the target is comfortable at the scale the card is
+            legible, and the card only becomes interactive inside its own
+            legibility band (pointerEvents flips to auto above 0.5 opacity,
+            which is the NEAR_FULL..FAR_FULL distance window above). At that
+            scale a 420px card reads at roughly phone width, so 44px in card
+            space is the same proportion as 44px on a 430px viewport — the worst
+            case we design for.
+
+            The utility carries it on an invisible ::after, so the hairline
+            underline stays tight against the text and nothing about the card's
+            composition moves.
+          */}
           <a
+            className="tap-target"
             href={`/projects/${card.slug}`}
             style={{
               display: 'inline-block',

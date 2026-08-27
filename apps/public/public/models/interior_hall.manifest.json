@@ -1,6 +1,6 @@
 {
   "model": "interior_hall.glb",
-  "size_mb": 14.38,
+  "size_mb": 16.14,
   "loaders_required": {
     "KTX2Loader": "all 28 textures are KTX2/Basis (KHR_texture_basisu is in extensionsRequired). setTranscoderPath('/basis/') and detectSupport(renderer) before loading; the transcoder is served from apps/public/public/basis/.",
     "DRACOLoader": "geometry is Draco compressed. setDecoderPath('/draco/'); the decoder is served from apps/public/public/draco/."
@@ -12,16 +12,18 @@
     "codec": "ETC1S (basis-lz, qlevel 255)",
     "intensity": 4.6597,
     "encoding": "sRGB",
-    "note": "glTF has no lightmap slot, so baked GI rides in occlusion. On load promote aoMap -> lightMap and set colorSpace = SRGBColorSpace: the atlas is normalised then sRGB-encoded for precision, because linear 8-bit puts the room near value 13 and bands."
+    "note": "glTF has no lightmap slot, so baked GI rides in occlusion. On load promote aoMap -> lightMap and set colorSpace = SRGBColorSpace: the atlas is normalised then sRGB-encoded for precision, because linear 8-bit puts the room near value 13 and bands.",
+    "intensity_note": "4.6597 is carried over from the previous bake and has NOT been re-derived against this rebuild. It has not been shown to be wrong, and it has not been shown to be right."
   },
   "textures": {
-    "count": 28,
+    "count": 37,
     "normal_maps": "UASTC - ETC1S quantises a direction field hard enough to facet across large flat walls",
     "everything_else": "ETC1S - on the 4K atlas it is 1.1MB against 7.1MB for UASTC, on smooth low-frequency light",
-    "pbr_max_px": 1024
+    "pbr_max_px": 1024,
+    "BROKEN_2026_08_26": "FOUR images have non-multiple-of-four dimensions and therefore FAIL their compressed upload at runtime: founder_portrait_graded (766x1024), kartikeya_holo_tex (745x725), lucky_holo_tex (1024x607), gayatri_holo_tex (1024x729). Chrome logs 'THREE.KTX2Loader: ETC1S and UASTC textures should use multiple-of-four dimensions' followed by ~80 glCompressedTexSubImage/glTexStorage GL_INVALID_OPERATION per load. Visible consequence: the founder's portrait and ALL THREE project site plans render with no artwork. Fix in the encode step, not in code - pad or resample each to a multiple of four before ktx2 encoding."
   },
   "geometry": {
-    "drawn_triangles": 480385,
+    "drawn_triangles": 507662,
     "vertices_uploaded": 214328,
     "vertices_rendered_per_pass": 1438890,
     "shell_objects_lightmapped": 147,
@@ -94,5 +96,10 @@
       "UNSUPPORTED_EXTENSION (x3): informational, same cause."
     ],
     "real_but_negligible": "One primitive carries a TEXCOORD_1 its material does not sample - a single unused attribute, left in place rather than hand-editing the buffer."
+  },
+  "station_rig": {
+    "shipped": "STATION_Sn -> { HOLO_Sn, projector_Sn -> projlens_Sn, TURNTABLE_Sn -> { table_base_Sn, table_inlay_Sn, table_top_Sn } }",
+    "stations": 4,
+    "note": "The projector sits OUTSIDE TURNTABLE_Sn deliberately: dragging the table must not swing the projector. ProjectStation.tsx binds to TURNTABLE_Sn by name and rotates only that."
   }
 }

@@ -32,7 +32,7 @@
 //     still be occluded BY the building, or they float in front of the facade
 //     and instantly read as an overlay rather than as air.
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -143,6 +143,14 @@ export function Motes({ count = COUNT }: { count?: number }) {
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 2, 8), 60);
     return g;
   }, [count]);
+
+  // Same ownership rule as Terrain: built with `new` and passed as a prop, so
+  // r3f attaches it but never adopts it, and useMemo has no cleanup. Smaller
+  // than the terrain (2,400 points x 3 attributes) but it leaked on exactly the
+  // same schedule — measured zero dispose events across a full scene round
+  // trip — and `count` changes with device tier, which is a second path that
+  // would have stranded a buffer.
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
   const uniforms = useMemo(
     () => ({

@@ -74,7 +74,7 @@ export function ProjectCard({ project }: { project: Project }) {
             }}
           >
             <div className="qhr-sheen absolute inset-0" />
-            <span className="absolute inset-x-0 bottom-5 text-center text-[10px] uppercase tracking-[0.22em] text-[#F2EDE4]/30">
+            <span className="absolute inset-x-0 bottom-5 text-center text-[10px] uppercase tracking-[0.22em] text-[#F2EDE4]/50">
               Plan image pending
             </span>
           </div>
@@ -106,7 +106,7 @@ export function ProjectCard({ project }: { project: Project }) {
         <h3 className="t-h3 text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A]">
           {project.name}
         </h3>
-        <p className="t-small mt-2 text-[#F2EDE4]/45">
+        <p className="t-small mt-2 text-[#F2EDE4]/60">
           {[project.locality, project.city].filter(Boolean).join(' · ')}
         </p>
       </div>

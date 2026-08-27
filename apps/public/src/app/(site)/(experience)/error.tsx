@@ -56,20 +56,20 @@ export default function ExperienceError({
         </button>
         <Link
           href="/"
-          className="t-eyebrow text-[#F2EDE4]/45 transition-colors hover:text-[#F2EDE4]"
+          className="t-eyebrow text-[#F2EDE4]/60 transition-colors hover:text-[#F2EDE4]"
         >
           Back to the layouts
         </Link>
         <a
           href="tel:+919553513366"
-          className="t-eyebrow text-[#F2EDE4]/45 transition-colors hover:text-[#F2EDE4]"
+          className="t-eyebrow text-[#F2EDE4]/60 transition-colors hover:text-[#F2EDE4]"
         >
           +91 95535 13366
         </a>
       </div>
 
       {error.digest ? (
-        <p className="t-small mt-16 text-[#F2EDE4]/25">
+        <p className="t-small mt-16 text-[#F2EDE4]/50">
           Reference {error.digest}
         </p>
       ) : null}

@@ -67,7 +67,7 @@ export default function StartHerePage() {
         </p>
 
         <section className="mt-12">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">
+          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
             The three layouts
           </h2>
           <ul className="mt-4 space-y-3">
@@ -88,7 +88,7 @@ export default function StartHerePage() {
         </section>
 
         <section className="mt-12">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">
+          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
             Where do you want to go?
           </h2>
           <ul className="mt-4 space-y-3">

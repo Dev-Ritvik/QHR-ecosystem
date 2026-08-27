@@ -141,9 +141,18 @@ for o in bpy.data.objects:
 #     bounds out to +/-240m.
 #   * The KIT_ masters are instancing SOURCES parked at z=-50. They are not
 #     hidden, so they exported as real geometry sitting under the floor.
+# The station rig is EMPTIES (STATION_* / TURNTABLE_* / HOLO_*). The web binds
+# stations by those node names and rotates TURNTABLE_*, so dropping them would
+# flatten the hierarchy and lose the turntable entirely.
+RIG_PREFIXES = ("STATION_", "TURNTABLE_", "HOLO_")
+
 interior = bpy.data.collections["COL_Interior"]
 vis = []
 for o in interior.all_objects:
+    if o.type == 'EMPTY':
+        if o.name.startswith(RIG_PREFIXES):
+            vis.append(o)
+        continue
     if o.type not in {'MESH', 'LIGHT'}:
         continue
     if o.hide_render or not o.visible_get():

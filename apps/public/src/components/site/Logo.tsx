@@ -70,7 +70,9 @@ export function Logo({
     <Link
       href={href}
       aria-label="Quality Homes Reality — home"
-      className="inline-flex items-center rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200/70"
+      // tap-target: the badge is 40x40 at header size, so the hit area is
+      // widened invisibly to 44 rather than enlarging the mark.
+      className="tap-target inline-flex items-center rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200/70"
     >
       {content}
     </Link>

@@ -1,0 +1,178 @@
+- generic [ref=f1e2]:
+  - link "Skip to content" [ref=f1e3] [cursor=pointer]:
+    - /url: "#site-content"
+  - banner [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - link "Quality Homes Reality — home" [ref=f1e6] [cursor=pointer]:
+        - /url: /
+      - link "Enquire" [ref=f1e9] [cursor=pointer]:
+        - /url: /contact
+      - button "Open menu" [ref=f1e10] [cursor=pointer]
+  - main [ref=f1e18]:
+    - generic [ref=f1e21]:
+      - generic [ref=f1e22]:
+        - paragraph [ref=f1e23]: Vizianagaram · Srikakulam
+        - heading [level=1] [ref=f1e24]:
+          - text: Land, in thedistricts
+          - emphasis [ref=f1e25]: we come from
+        - paragraph [ref=f1e26]: Approved layouts, sold direct by the developer. Every sanctioned plan published in full.
+        - paragraph [ref=f1e27]:
+          - link "In a hurry? Start here" [ref=f1e28] [cursor=pointer]:
+            - /url: /start-here
+            - text: In a hurry? Start here
+            - generic [ref=f1e29]: →
+          - link "See the layouts raised" [ref=f1e30] [cursor=pointer]:
+            - /url: /hall
+            - text: See the layouts raised
+            - generic [ref=f1e31]: →
+      - generic [ref=f1e32]: Scroll
+    - generic [ref=f1e38]:
+      - paragraph [ref=f1e39]: Twenty years, one district
+      - paragraph [ref=f1e40]: We do not broker land.We develop it, and we are still here when the last plot sells.
+    - generic [ref=f1e43]:
+      - paragraph [ref=f1e44]: Every plot, plotted
+      - heading [level=2] [ref=f1e45]:
+        - text: One point for
+        - emphasis [ref=f1e46]: every plot we hold
+      - separator [ref=f1e47]
+      - generic [ref=f1e48]:
+        - generic [ref=f1e49]:
+          - term [ref=f1e50]: Layouts
+          - definition [ref=f1e51]: "3"
+        - generic [ref=f1e52]:
+          - term [ref=f1e53]: Plots
+          - definition [ref=f1e54]: "407"
+        - generic [ref=f1e55]:
+          - term [ref=f1e56]: Open
+          - definition [ref=f1e57]: "344"
+      - paragraph [ref=f1e58]: Counted from the sanctioned layout plans, not from a brochure. The hall below holds one table for each.
+    - generic [ref=f1e61]:
+      - paragraph [ref=f1e62]: Inside
+      - paragraph [ref=f1e63]: Each layout stands on its own table. Turn one to read it from another side; open it to see every plot.
+    - generic [ref=f1e66]:
+      - paragraph [ref=f1e67]: 01 / 03
+      - link "Kartikeya Water Front 113 available Plotted development Kartikeya Water Front Poosapatirega · Vizianagaram" [ref=f1e68] [cursor=pointer]:
+        - /url: /projects/kartikeya-water-front
+        - generic [ref=f1e69]:
+          - img "Kartikeya Water Front" [ref=f1e70]
+          - generic [ref=f1e71]: 113 available
+          - generic [ref=f1e73]: Plotted development
+        - generic [ref=f1e74]:
+          - heading "Kartikeya Water Front" [level=3] [ref=f1e75]
+          - paragraph [ref=f1e76]: Poosapatirega · Vizianagaram
+    - generic [ref=f1e79]:
+      - paragraph [ref=f1e80]: 02 / 03
+      - link "Lucky Garden 118 available Plotted development Lucky Garden Kumaram Village, Garividi · Vizianagaram" [ref=f1e81] [cursor=pointer]:
+        - /url: /projects/lucky-garden
+        - generic [ref=f1e82]:
+          - img "Lucky Garden" [ref=f1e83]
+          - generic [ref=f1e84]: 118 available
+          - generic [ref=f1e86]: Plotted development
+        - generic [ref=f1e87]:
+          - heading "Lucky Garden" [level=3] [ref=f1e88]
+          - paragraph [ref=f1e89]: Kumaram Village, Garividi · Vizianagaram
+    - generic [ref=f1e92]:
+      - paragraph [ref=f1e93]: 03 / 03
+      - link "VSR Gayatri Township 113 available Plotted development VSR Gayatri Township Bayyannapeta, near Allinagaram · Srikakulam" [ref=f1e94] [cursor=pointer]:
+        - /url: /projects/vsr-gayatri-township
+        - generic [ref=f1e95]:
+          - img "VSR Gayatri Township" [ref=f1e96]
+          - generic [ref=f1e97]: 113 available
+          - generic [ref=f1e99]: Plotted development
+        - generic [ref=f1e100]:
+          - heading "VSR Gayatri Township" [level=3] [ref=f1e101]
+          - paragraph [ref=f1e102]: Bayyannapeta, near Allinagaram · Srikakulam
+    - generic [ref=f1e105]:
+      - paragraph [ref=f1e106]: At the top of the stairs
+      - paragraph [ref=f1e107]: The name on the sanction letters has been the same for twenty years.
+      - paragraph [ref=f1e108]:
+        - link "Who we are" [ref=f1e109] [cursor=pointer]:
+          - /url: /about
+          - text: Who we are
+          - generic [ref=f1e110]: →
+  - contentinfo [ref=f1e112]:
+    - generic [ref=f1e113]:
+      - generic [ref=f1e114]:
+        - generic [ref=f1e115]:
+          - paragraph [ref=f1e118]: Approved plotted layouts in the northern coastal districts of Andhra Pradesh, developed and sold directly.
+          - paragraph [ref=f1e119]:
+            - link "+91 95535 13366" [ref=f1e120] [cursor=pointer]:
+              - /url: tel:+919553513366
+            - text: ·
+            - link "qualityhomesreality@gmail.com" [ref=f1e121] [cursor=pointer]:
+              - /url: mailto:qualityhomesreality@gmail.com
+        - generic [ref=f1e122]:
+          - generic [ref=f1e123]:
+            - heading "The land" [level=2] [ref=f1e124]
+            - list [ref=f1e125]:
+              - listitem [ref=f1e126]:
+                - link "Plots and sizes" [ref=f1e127] [cursor=pointer]:
+                  - /url: /properties
+              - listitem [ref=f1e128]:
+                - link "Layout plans" [ref=f1e129] [cursor=pointer]:
+                  - /url: /downloads
+              - listitem [ref=f1e130]:
+                - link "Locations" [ref=f1e131] [cursor=pointer]:
+                  - /url: /locations
+              - listitem [ref=f1e132]:
+                - link "Gallery" [ref=f1e133] [cursor=pointer]:
+                  - /url: /gallery
+          - generic [ref=f1e134]:
+            - heading "The company" [level=2] [ref=f1e135]
+            - list [ref=f1e136]:
+              - listitem [ref=f1e137]:
+                - link "About" [ref=f1e138] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f1e139]:
+                - link "How we work" [ref=f1e140] [cursor=pointer]:
+                  - /url: /why-us
+              - listitem [ref=f1e141]:
+                - link "Testimonials" [ref=f1e142] [cursor=pointer]:
+                  - /url: /testimonials
+              - listitem [ref=f1e143]:
+                - link "Careers" [ref=f1e144] [cursor=pointer]:
+                  - /url: /careers
+          - generic [ref=f1e145]:
+            - heading "Before you buy" [level=2] [ref=f1e146]
+            - list [ref=f1e147]:
+              - listitem [ref=f1e148]:
+                - link "Investment guide" [ref=f1e149] [cursor=pointer]:
+                  - /url: /investment-guide
+              - listitem [ref=f1e150]:
+                - link "Knowledge" [ref=f1e151] [cursor=pointer]:
+                  - /url: /knowledge
+              - listitem [ref=f1e152]:
+                - link "Questions" [ref=f1e153] [cursor=pointer]:
+                  - /url: /faqs
+              - listitem [ref=f1e154]:
+                - link "Start here" [ref=f1e155] [cursor=pointer]:
+                  - /url: /start-here
+      - generic [ref=f1e156]:
+        - generic [ref=f1e157]:
+          - paragraph [ref=f1e158]: Visakhapatnam
+          - paragraph [ref=f1e159]: Head office
+          - generic [ref=f1e160]: D.No. 50-92-36, 2nd Floor, Opp. Canara Bank, Shantipuram, Shankara Matam Road, Visakhapatnam – 530016
+        - generic [ref=f1e161]:
+          - paragraph [ref=f1e162]: Vizianagaram
+          - paragraph [ref=f1e163]: Branch
+          - generic [ref=f1e164]: Lakshmi Nilayam, 3rd Floor, Flat No. 401, Beside Pizza Hut, Ring Road, Vizianagaram – 535002
+        - generic [ref=f1e165]:
+          - paragraph [ref=f1e166]: Srikakulam
+          - paragraph [ref=f1e167]: Branch
+          - generic [ref=f1e168]: 1st Floor, Near Simhadwaram, Above Tiles Mart, Bridge Road, Srikakulam – 532001
+      - generic [ref=f1e169]:
+        - paragraph [ref=f1e170]: © 2026 Quality Homes Reality
+        - list [ref=f1e171]:
+          - listitem [ref=f1e172]:
+            - link "Privacy" [ref=f1e173] [cursor=pointer]:
+              - /url: /privacy
+          - listitem [ref=f1e174]:
+            - link "Terms" [ref=f1e175] [cursor=pointer]:
+              - /url: /terms
+          - listitem [ref=f1e176]:
+            - link "Refunds" [ref=f1e177] [cursor=pointer]:
+              - /url: /refund-policy
+          - listitem [ref=f1e178]:
+            - link "Cookies" [ref=f1e179] [cursor=pointer]:
+              - /url: /cookie-policy
+        - button "Privacy & data choices" [ref=f1e181] [cursor=pointer]

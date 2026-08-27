@@ -16,18 +16,19 @@ export function ApprovalBadges({ badges }: { badges: unknown }) {
   return (
     <div className="flex flex-wrap gap-4 mt-6">
       {typedBadges.map((badge, idx) => (
-        <div 
-          key={idx} 
-          className="inline-flex items-center space-x-2 bg-gray-50 border border-gray-200 px-3 py-2 rounded-sm"
+        // An approval is the highest-trust fact on a property page, so it is
+        // given the accent rather than the grey it used to sit in — and the
+        // dark palette the rest of the site uses, which this predated.
+        <div
+          key={idx}
+          className="inline-flex items-center gap-2.5 rounded-sm border border-[#C08A5D]/25 bg-[#C08A5D]/[0.07] px-3.5 py-2.5"
         >
-          <ShieldCheck className="w-4 h-4 text-gray-400" />
+          <ShieldCheck className="h-4 w-4 shrink-0 text-[#C08A5D]" strokeWidth={1.5} />
           <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium leading-none mb-1">
+            <span className="t-eyebrow mb-1 leading-none text-[#F2EDE4]/50">
               {badge.label}
             </span>
-            <span className="text-sm font-medium text-gray-900 leading-none">
-              {badge.value}
-            </span>
+            <span className="text-sm leading-none text-[#F2EDE4]">{badge.value}</span>
           </div>
         </div>
       ))}

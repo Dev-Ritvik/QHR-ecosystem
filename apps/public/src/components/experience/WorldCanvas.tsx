@@ -20,6 +20,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -36,16 +37,32 @@ import { HallModel } from './HallModel';
 import { ExteriorModel } from './ExteriorModel';
 import { useDeviceTier } from './useDeviceTier';
 import { poseFor, setFor, type SceneSet } from './poses';
-import { POSITION_CURVE, TARGET_CURVE, curveT, atmosphereAt, lensAt } from './cameraPath';
+import {
+  POSITION_CURVE,
+  TARGET_CURVE,
+  curveT,
+  atmosphereAt,
+  lensAt,
+  CONSTELLATION,
+  CONSTELLATION_RADIUS,
+} from './cameraPath';
 import gsap from 'gsap';
-import { useScrollProgress } from './useScrollProgress';
+import { ScrollProgressDriver, useScrollProgress } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { PostFX } from './PostFX';
 import { Motes } from './Motes';
-import { Terrain } from './Terrain';
-import { SpatialCards } from './SpatialCards';
 import { useSceneCards } from './useSceneCards';
 import { telemetry } from '@/lib/telemetry/collector';
+import {
+  buildInteriorBeats,
+  interiorCurves,
+  interiorCurveT,
+  interiorLensAt,
+} from './interiorPath';
+import { CROSSOVER, journeyState, readJourney } from './journey';
+import { Constellation } from './Constellation';
+import { InteriorStage } from './InteriorStage';
+import { useRouter } from 'next/navigation';
 
 /**
  * Scrub, in seconds per unit of a pose's `ease` — the lag between where scroll
@@ -104,7 +121,33 @@ RectAreaLightUniformsLib.init();
 // much of the range near zero velocity that the middle beats blur past in a
 // fraction of the scroll and never read; power2 accelerates and decelerates
 // over the whole journey while still crossing the centre at a real clip.
-const SWING = gsap.parseEase('power2.inOut');
+//
+// PLUS A LINEAR PEDESTAL, because an inOut ease has zero derivative at zero and
+// the head of the exterior leg is the first thing anyone touches.
+//
+// MEASURED at 1440x900 against a 14,014px track, camera travel from rest:
+//
+//                        power2.inOut     +0.20 pedestal
+//   quarter viewport        0.01 m           0.54 m
+//   half viewport           0.10 m           1.15 m
+//   one full viewport       0.83 m           2.82 m
+//
+// One centimetre. A visitor could scroll a quarter of a screen — the first
+// flick of a wheel — and the image was pixel-identical, which is the one thing
+// a camera on a scroll track must never do. It is not a pacing preference; at
+// 34m from the subject a 1cm dolly is 0.03% of the frame.
+//
+// The pedestal is a weighted sum rather than a different ease because it fixes
+// the derivative at the ends without changing the shape in between: E'(0) is
+// now LEAD instead of 0, and the mid-leg whip actually calms slightly (peak
+// 24.8 -> 22.9 m per viewport) because the linear term carries some of the
+// distance the eased term was cramming into the centre.
+//
+// The non-zero derivative at s = 1 costs nothing: the end of the exterior leg
+// IS the crossover, where the veil is fully closed.
+const SWING_EASE = gsap.parseEase('power2.inOut');
+const SWING_LEAD = 0.2;
+const SWING = (s: number) => SWING_LEAD * s + (1 - SWING_LEAD) * SWING_EASE(s);
 
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -171,8 +214,17 @@ function FreeCamera() {
   return null;
 }
 
-function CameraRig({ place }: { place: PlaceId }) {
+function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: number }) {
   const { camera, gl } = useThree();
+
+  // The interior half of the journey. Rebuilt only when the number of published
+  // projects changes, which in practice is never during a session — but the
+  // beat list is derived from data and pretending otherwise is how a path ends
+  // up hardcoded to whatever was in the database the day it was written.
+  const interior = useMemo(() => {
+    const beats = buildInteriorBeats(stationCount);
+    return { beats, ...interiorCurves(beats) };
+  }, [stationCount]);
   const target = useRef(new THREE.Vector3());
   const desired = useRef(new THREE.Vector3());
   const look = useRef(new THREE.Vector3());
@@ -249,23 +301,49 @@ function CameraRig({ place }: { place: PlaceId }) {
 
     // Where scroll says the camera should be, this instant.
     const t = scroll.current;
+    // How far the aim is pushed left of the subject at this instant. Read from
+    // the active leg rather than from a constant — see CameraBeat.frameOffset.
+    let offset = FRAME_OFFSET;
+
     if (p.path) {
-      // Multi-point spline. curveT remaps the beats' uneven `at` values onto
-      // the curve parameter, so scrolling to a beat lands ON the vantage that
-      // was rendered and approved rather than near it.
-      // ONE continuous ease across the whole track.
+      // TWO LEGS, ONE TRACK.
       //
-      // This was applied per leg, which was wrong for exactly the reason given:
-      // an inOut ease has zero derivative at both ends, so easing each segment
-      // drove the velocity to zero at EVERY waypoint. The camera braked at all
-      // five beats. That is stop-and-go, not a sweep.
+      // The journey crosses two models with separate origins, so there is no
+      // single curve that spans it. `journeyState` says which leg is live and
+      // how far into it; each leg then runs exactly the same machinery it ran
+      // when it was the only one.
       //
-      // Applying it once across 0..1 leaves the velocity continuous everywhere
-      // in between — it only comes to rest at the very start and the very end
-      // of the scroll track, which is where a camera should rest.
-      const u = curveT(SWING(t));
-      POSITION_CURVE.getPoint(u, desired.current);
-      TARGET_CURVE.getPoint(u, look.current);
+      // ONE continuous ease PER LEG.
+      //
+      // The ease was applied per SEGMENT once, which was wrong for the reason
+      // an inOut ease has zero derivative at both ends: easing each segment
+      // drove the velocity to zero at every waypoint and the camera braked at
+      // all five beats. Applying it once across a leg leaves the velocity
+      // continuous everywhere inside it. It now comes to rest at four points
+      // rather than two — the start and end of each leg — and those are
+      // exactly the two moments the veil is closed, so the stop is invisible.
+      if (journeyState.leg === 'interior') {
+        const s = journeyState.legProgress;
+        // RAW leg progress, not SWING(s). The interior eases per SEGMENT inside
+        // interiorCurveT — see the note there — so a second global ease on top
+        // would compound into a curve that arrives at every station late and
+        // leaves it late, and would break the exact correspondence between a
+        // beat and the DOM chapter laid out on the same weight.
+        const u = interiorCurveT(interior.beats, s);
+        interior.position.getPoint(u, desired.current);
+        interior.target.getPoint(u, look.current);
+        // Inside, the copy column is over a wall rather than over sky, and the
+        // subject is a table 2.4m away rather than a building 28m away. A 7.4m
+        // aim offset at that distance would point the camera at the skirting
+        // beside the station. Small and fixed.
+        offset = 0.55;
+      } else {
+        const s = journeyState.legProgress;
+        const u = curveT(SWING(s));
+        POSITION_CURVE.getPoint(u, desired.current);
+        TARGET_CURVE.getPoint(u, look.current);
+        offset = lensAt(s).frameOffset;
+      }
     } else {
       desired.current.lerpVectors(fromPos.current, toPos.current, t);
       look.current.lerpVectors(fromLook.current, toLook.current, t);
@@ -277,7 +355,7 @@ function CameraRig({ place }: { place: PlaceId }) {
     // right vector rotates with the orbit.
     fwd.current.subVectors(look.current, desired.current).normalize();
     right.current.crossVectors(fwd.current, UP).normalize();
-    look.current.addScaledVector(right.current, -FRAME_OFFSET);
+    look.current.addScaledVector(right.current, -offset);
 
     // Cursor parallax. A few centimetres of camera offset across the whole
     // viewport — deliberately tiny. The scene is a backdrop that text sits on,
@@ -310,7 +388,10 @@ function CameraRig({ place }: { place: PlaceId }) {
     camera.lookAt(target.current);
 
     if (p.path) {
-      const lens = lensAt(t);
+      const lens =
+        journeyState.leg === 'interior'
+          ? interiorLensAt(interior.beats, journeyState.legProgress)
+          : lensAt(journeyState.legProgress);
       const cam = camera as THREE.PerspectiveCamera;
 
       // FOV WARP. 50 at the top, 68 through the dive, 44 crossing the fountain.
@@ -345,6 +426,29 @@ function SpatialTelemetry({ place, tier }: { place: PlaceId; tier: DeviceTier })
   const since = useRef(0);
   const focusStation = useRef<string | null>(null);
   const focusSince = useRef(0);
+
+  /**
+   * The only objects this raycast can ever report.
+   *
+   * It used to call intersectObjects(scene.children, true) — the entire scene
+   * root, recursively, with no layer mask and no bounds: 240 nodes outside and
+   * 519 inside, twice a second, on every device including the phones this build
+   * exists to serve. All of that to answer one question the name regex above
+   * already scopes, which is "is the pointer over a hologram station?".
+   *
+   * So the candidates are resolved once and cached. The rescan is keyed on the
+   * scene's top-level child count, which is what actually changes when a model
+   * streams in or a set is swapped — an O(1) check per tick instead of a
+   * traversal, and a traversal only on the frames where the scene really did
+   * change shape.
+   *
+   * The reported value is unchanged: hits outside a station subtree always
+   * resolved to null anyway, so the exterior — where there are no stations at
+   * all — now does no raycasting instead of doing 240 nodes of it for a result
+   * that was always null.
+   */
+  const targets = useRef<THREE.Object3D[]>([]);
+  const lastChildCount = useRef(-1);
 
   // One place_enter/place_exit pair per place, not per route: opening a surface
   // read from the study does not mean you left it and came back.
@@ -389,9 +493,22 @@ function SpatialTelemetry({ place, tier }: { place: PlaceId; tier: DeviceTier })
 
     telemetry.sampleCamera(place, camera.position.x, camera.position.y, camera.position.z);
 
-    ray.current.setFromCamera(pointer.current, camera);
-    const hit = ray.current.intersectObjects(scene.children, true)[0];
-    const station = stationOf(hit?.object ?? null);
+    // Refresh the candidate set only when the scene actually changed shape.
+    if (scene.children.length !== lastChildCount.current) {
+      lastChildCount.current = scene.children.length;
+      const found: THREE.Object3D[] = [];
+      scene.traverse((o) => {
+        if (STATION_RE.test(o.name)) found.push(o);
+      });
+      targets.current = found;
+    }
+
+    let station: string | null = null;
+    if (targets.current.length > 0) {
+      ray.current.setFromCamera(pointer.current, camera);
+      const hit = ray.current.intersectObjects(targets.current, true)[0];
+      station = stationOf(hit?.object ?? null);
+    }
 
     if (station !== focusStation.current) {
       if (focusStation.current) {
@@ -410,19 +527,127 @@ function SpatialTelemetry({ place, tier }: { place: PlaceId; tier: DeviceTier })
 
 function Rig({
   place,
+  stationCount,
   onTier,
 }: {
   place: PlaceId;
+  stationCount: number;
   onTier: (t: DeviceTier) => void;
 }) {
   const { tier } = useDeviceTier();
   useEffect(() => onTier(tier), [tier, onTier]);
   return (
     <>
-      <CameraRig place={place} />
+      <CameraRig place={place} stationCount={stationCount} />
       <SpatialTelemetry place={place} tier={tier} />
     </>
   );
+}
+
+/**
+ * Publishes the journey state once per frame, and tells React when the leg has
+ * actually changed.
+ *
+ * Mounted immediately after <ScrollProgressDriver>, which matters: r3f runs
+ * same-priority subscribers in registration order, so everything downstream
+ * reads a leg computed from a scroll value sampled earlier in the SAME frame
+ * rather than one frame stale. A one-frame lag here would show up as the model
+ * swapping a frame before or after the veil closes, which is the one place in
+ * the sequence where a single frame is visible.
+ *
+ * `onLeg` fires only on a real transition, so crossing the threshold costs one
+ * React render for the whole journey rather than one per frame.
+ */
+function JourneyDriver({
+  active,
+  onLeg,
+  onArmed,
+  reveal,
+  interiorLeg,
+  veil,
+}: {
+  active: boolean;
+  onLeg: (leg: 'exterior' | 'interior') => void;
+  onArmed: () => void;
+  /** Constellation presence, 0..1. */
+  reveal: React.MutableRefObject<number>;
+  /** Interior leg progress, 0..1, for the stage. */
+  interiorLeg: React.MutableRefObject<number>;
+  /** The blackout element. Written directly rather than through state. */
+  veil: React.RefObject<HTMLDivElement>;
+}) {
+  const scroll = useScrollProgress();
+  const lastLeg = useRef(journeyState.leg);
+  const armedOnce = useRef(false);
+  const shownVeil = useRef(0);
+
+  useEffect(() => {
+    if (active) return;
+    // Off the journey (any route that is not a path pose), the state must be
+    // inert rather than stale: a visitor who scrolls the About page should not
+    // leave the interior leg armed behind them.
+    journeyState.leg = 'exterior';
+    journeyState.legProgress = 0;
+    journeyState.veil = 0;
+    journeyState.armed = false;
+    reveal.current = 0;
+    interiorLeg.current = 0;
+    if (veil.current) veil.current.style.opacity = '0';
+  }, [active, reveal, interiorLeg, veil]);
+
+  useFrame(() => {
+    if (!active) return;
+    readJourney(scroll.current, journeyState);
+
+    if (journeyState.armed && !armedOnce.current) {
+      armedOnce.current = true;
+      onArmed();
+    }
+    if (journeyState.leg !== lastLeg.current) {
+      lastLeg.current = journeyState.leg;
+      onLeg(journeyState.leg);
+    }
+
+    // THE CONSTELLATION'S CHAPTER. Dark through the hero and the revolution,
+    // igniting as the camera turns onto it, extinguished by the veil. The
+    // thresholds are the ones journey.chapters() gives the DOM, so the copy
+    // beside the sphere arrives with the sphere rather than near it.
+    const s = journeyState.legProgress;
+    reveal.current =
+      journeyState.leg === 'exterior'
+        ? smooth01((s - 0.6) / 0.32) * (1 - journeyState.veil)
+        : 0;
+
+    interiorLeg.current = journeyState.leg === 'interior' ? s : 0;
+
+    // THE VEIL, written straight to the DOM.
+    //
+    // Not React state, and not a WebGL pass. State would re-render the whole
+    // canvas tree at scroll frequency. A full-screen shader pass would sit
+    // INSIDE the composer, so it would be tone-mapped and bloomed on its way
+    // out — a black rectangle that bloom cannot ignite is still a rectangle
+    // that costs a pass, and the one thing this element must do perfectly is
+    // reach true black at the swap.
+    //
+    // Damped rather than assigned, so a fast scrub through the crossover still
+    // closes and opens the veil over a few frames instead of strobing.
+    shownVeil.current += (journeyState.veil - shownVeil.current) * 0.35;
+    if (veil.current) {
+      const v = shownVeil.current;
+      veil.current.style.opacity = v.toFixed(3);
+      // Nothing behind a closed veil can be clicked. Without this a hologram
+      // the visitor cannot see is still a live target under the cursor.
+      veil.current.style.pointerEvents = v > 0.6 ? 'auto' : 'none';
+    }
+  });
+
+  return null;
+}
+
+/** Clamped smoothstep on an already-normalised input. */
+function smooth01(x: number): number {
+  const t = Math.min(1, Math.max(0, x));
+  return t * t * (3 - 2 * t);
 }
 
 /** A GLB that fails to parse throws inside Suspense, where React swallows it and
@@ -475,23 +700,25 @@ function webglSupported(): boolean {
  */
 const LOOK: Record<SceneSet, { exposure: number; env: number; ambient: number }> = {
   interior: {
-    // 0.6. Two corrections in, and the second overshot.
+    // Unity, same as outside — and the previous 0.6 was treating a symptom.
     //
-    // 1.0 blew the room to white. 0.32 was derived as the reciprocal of the
-    // 4.66x lightmap gain, which is right in isolation and wrong in context: it
-    // was set at the same time as a scrim that darkens the middle of the frame
-    // by another ~54%. Multiplied together the room disappeared, and the home
-    // page looked like it had no 3D in it at all. Two fixes for one symptom,
-    // each reasonable alone, compounding into the opposite failure.
+    // Every earlier value here (1.0, then 0.32, then 0.6) was an attempt to
+    // dim a room that was blowing out, on the theory that the 4.66x lightmap
+    // gain was arriving at the tone mapper too hot. That theory was never
+    // tested, and it was wrong.
     //
-    // The lightmap is multiplied by 4.66 to restore the range the bake was
-    // normalised out of, so the scene arrives at the tone mapper carrying
-    // values around 4-5, not 0-1. ACES then maps ~4.0 to almost pure white.
-    // Exposure is the reciprocal of that gain.
+    // MEASURED at the verified `hall` pose: setting lightMapIntensity to 1.0
+    // changed the frame's mean luminance by nothing at all. So did clamping
+    // every emissive. What actually blew the room out was the ten punctual
+    // lights the GLB carries, at intensities up to 41307 — see
+    // stripBakedLights() in HallModel. With those gone the same frame is 0%
+    // clipped, and 0.6 is simply 40% too dark: it leaves 13.4% of the frame
+    // crushed below luma 8, against 11.2% at unity.
     //
-    // There is no bloom or post-processing in this scene to blame, and ACES was
-    // already configured. It was arithmetic.
-    exposure: 0.6,
+    // So there is nothing left to compensate for. The lightmap gain is the
+    // bake's own normalisation divisor, the scene is otherwise lit by a low
+    // ambient, and the honest exposure for that is 1.0.
+    exposure: 1.0,
     /** scene.environmentIntensity — specular response only, never a light source. */
     env: 0.1,
     /** Lifts the instanced ornament, which carries no lightmap. Nothing more. */
@@ -524,7 +751,11 @@ const LOOK: Record<SceneSet, { exposure: number; env: number; ambient: number }>
  */
 const CLIP: Record<SceneSet, { near: number; far: number }> = {
   interior: { near: 0.1, far: 60 },
-  exterior: { near: 0.5, far: 600 },
+  // far 600 -> 400. The exported ground was a 450m plane and the far plane had
+  // to clear its corners; the delivered terrain spans +/-120m, so the furthest
+  // visible geometry from any point on the camera path is under 200m. A 1200:1
+  // depth range was buying nothing but z-fighting risk on the slate courses.
+  exterior: { near: 0.5, far: 400 },
 };
 
 /**
@@ -686,11 +917,40 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
         shadow-normalBias={0.03}
       />
 
-      {/* Cool counter-key from behind-right, no shadows. This is the rim: it
-          catches the cornice, the balustrade and the spire against the navy and
-          stops the silhouette dissolving into the background. Deliberately
-          cyan-slate against the amber — the contrast IS the effect. */}
-      <directionalLight position={[34, 22, -40]} intensity={0.85} color="#7FB4D6" />
+      {/* Cool counter-key from behind-right, no shadows.
+          ---------------------------------------------------------------------
+          0.85 -> 0.30, because it was not doing the job it was written for.
+
+          This was authored as a RIM — "catches the cornice, the balustrade and
+          the spire against the navy". At the hero camera it catches none of
+          them. Isolated at runtime by sampling the framebuffer at each element
+          with the light at 0.85, 0.30 and 0:
+
+            parapet    163.5 / 163.2 / 163.0     no contribution
+            cornice    139.6 / 139.6 / 139.6     none
+            finial      59.9 /  59.9 /  59.9     none
+            cupola     143.9 / 143.0 / 142.5     1%
+            ROOF DECK  113.7 /  96.1 /  84.4     the whole of it
+
+          The reason is geometric: at 22.6 degrees of elevation this light grazes
+          every vertical face in frame and lands square on the one horizontal
+          one. So its entire effect was to flood the roof — the building's
+          largest continuous surface, and the one with the least detail — with
+          #7FB4D6 until it read [104, 116, 125]: blue by 21 points, and at 113.7
+          nearly as bright as the key-lit facade at 121.3. That is why the roof
+          read as flat blue-grey plastic rather than as slate.
+
+          At 0.30 the roof reads [94, 97, 99] — a warm-neutral slate holding a
+          trace of cool sky, which is what a dusk roof actually does — and the
+          hierarchy resolves: lit facade 121 > shaded facade 98 > roof 96 >
+          lawn 72. Nothing else in the frame moves; facade, spire, cornice and
+          parapet are identical to three significant figures.
+
+          VERIFIED at the revolution beat too, where this light is closest to
+          being a real rim: dropping it to 0.30 moves the back of the building
+          by under 4% and the frame mean by 1.1 (56.6 -> 55.5). It is not
+          carrying that shot either. */}
+      <directionalLight position={[34, 22, -40]} intensity={0.3} color="#7FB4D6" />
 
       {/* PHYSICAL SPILL FROM THE WINDOWS.
 
@@ -747,7 +1007,12 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
 
       {/* Cool sky, warm ground bounce. Keeps the shadowed side from reading as
           black without lifting it toward the key's colour. */}
-      <hemisphereLight args={['#4A6B96', '#1A1512', 0.5]} />
+      {/* 0.5 -> 0.36. The hemisphere fills every upward-facing surface, and the
+          largest upward-facing surface in the scene is now 18,432 triangles of
+          authored terrain rather than a plane graded to near-black in code. At
+          0.5 it lifted the ground to the same value as the lit facade and the
+          architecture stopped separating from its site. */}
+      <hemisphereLight args={['#4A6B96', '#1A1512', 0.36]} />
     </>
   );
 }
@@ -765,20 +1030,74 @@ function CameraClipping({ set }: { set: SceneSet }) {
 }
 
 /**
- * Exposure, applied on every change rather than once at creation.
+ * Transmission buffer resolution, per tier.
  *
- * <Canvas onCreated> fires a single time for the life of the canvas, and this
- * canvas deliberately never unmounts — that is the whole reason the experience
- * is a route group. So an exposure set there is the FIRST route's exposure
- * forever. With two sets that need 1.0 and 0.6, navigating from the lawn to the
- * hall would have carried 1.0 onto a surface already multiplied by 4.66, which
- * is the exact blown-to-white failure this project has been rejected for once.
+ * three renders the whole opaque scene a SECOND time into
+ * `_transmissionRenderTarget` whenever any material has transmission > 0, and
+ * `transmissionResolutionScale` is the supported lever on how big that target
+ * is. Measured on this scene: the transmission pass costs +212 draw calls /
+ * +496k triangles outside and +320 calls / +307k triangles inside — roughly a
+ * doubling of the frame in both sets.
+ *
+ * The draw calls are inherent (the scene genuinely has to be re-rendered), but
+ * the FILL is not, and fill is what a phone actually runs out of. At 0.5 the
+ * buffer is a quarter of the pixels. That is safe here because the buffer is
+ * only ever read back through a refraction lookup that is already blurred by
+ * material roughness — measured mean luminance was identical (250.07 at both
+ * 1.0 and 0.5) with zero GL errors.
+ *
+ * High tier keeps 1.0: it has the headroom, and the chandelier crystal
+ * (transmission 1.0, roughness 0.02) is the one surface where a sharp
+ * refraction is worth paying for.
  */
-function Exposure({ value }: { value: number }) {
+const TRANSMISSION_SCALE: Record<DeviceTier, number> = {
+  high: 1.0,
+  mid: 0.5,
+  low: 0.5,
+};
+
+/**
+ * The renderer's colour pipeline, with exactly ONE writer.
+ *
+ * WHY THIS IS A COMPONENT AND NOT A <Canvas gl={...}> PROP
+ *
+ * It was a prop, and that made tone mapping non-deterministic, because two
+ * things were fighting over `gl.toneMapping`:
+ *
+ *   1. r3f re-applies the `gl` prop on every re-render of <Canvas>. Its
+ *      `configure()` compares the config's VALUES against the live renderer and
+ *      calls applyProps on any mismatch — a stable object identity does not
+ *      help, because the mismatch is what triggers it.
+ *   2. @react-three/postprocessing's <EffectComposer> sets
+ *      `gl.toneMapping = NoToneMapping` in a mount effect with deps [gl], so it
+ *      fires exactly once and never again.
+ *
+ * MEASURED consequence: a cold load rendered with NoToneMapping (the composer
+ * mounts after the renderer is configured, so it wins), and any client-side
+ * navigation flipped it back to ACESFilmic (WorldCanvas re-renders, so r3f
+ * wins). The same URL rendered two different ways depending on how the visitor
+ * arrived. Worse, on the cold path `toneMappingExposure` was inert too: three
+ * only compiles the exposure multiply into a material when
+ * `toneMapping !== NoToneMapping`, so the whole documented exposure budget
+ * below was doing nothing.
+ *
+ * The fix is not to fight harder, it is to end the contest. `toneMapping` is
+ * gone from the `gl` prop, so r3f has no opinion about it, and this is the only
+ * place in the app that assigns it. It is mounted AFTER <PostFX>, so on the
+ * commit where the composer mounts this effect runs last; and `tier` is in the
+ * dep list because changing tier remounts the composer, which would otherwise
+ * re-assert NoToneMapping behind our back.
+ */
+function ColorPipeline({ exposure, tier }: { exposure: number; tier: DeviceTier }) {
   const gl = useThree((s) => s.gl);
   useEffect(() => {
-    gl.toneMappingExposure = value;
-  }, [gl, value]);
+    // Stated rather than inherited. r3f already defaults to sRGB, but the
+    // pipeline should not depend on a library default staying put.
+    gl.outputColorSpace = THREE.SRGBColorSpace;
+    gl.toneMapping = THREE.ACESFilmicToneMapping;
+    gl.toneMappingExposure = exposure;
+    gl.transmissionResolutionScale = TRANSMISSION_SCALE[tier];
+  }, [gl, exposure, tier]);
   return null;
 }
 
@@ -805,16 +1124,48 @@ function RoomEnvironmentMap({ intensity }: { intensity: number }) {
   const scene = useThree((s) => s.scene);
 
   useEffect(() => {
-    const pmrem = new THREE.PMREMGenerator(gl);
-    const room = new RoomEnvironment();
-    const target = pmrem.fromScene(room, 0.04);
-    scene.environment = target.texture;
+    let target: THREE.WebGLRenderTarget | null = null;
 
-    return () => {
-      scene.environment = null;
-      target.dispose();
+    const build = () => {
+      const pmrem = new THREE.PMREMGenerator(gl);
+      const room = new RoomEnvironment();
+      const next = pmrem.fromScene(room, 0.04);
       room.dispose?.();
       pmrem.dispose();
+      target?.dispose();
+      target = next;
+      scene.environment = next.texture;
+    };
+
+    build();
+
+    // REBUILD ON RESTORE. Everything else in this scene survives a lost context
+    // on its own: three calls preventDefault(), no-ops render() while the
+    // context is gone, and rebuilds its GL state in onContextRestore, after
+    // which geometries and textures re-upload lazily from the CPU copies they
+    // still hold. VERIFIED by forcing a loss/restore — the frame came back
+    // byte-identical at 641 draw calls / 628,429 triangles.
+    //
+    // This is the one thing that cannot come back by itself. A PMREM cube is a
+    // render target: `isRenderTargetTexture` with no CPU mipmaps, so there is
+    // nothing to re-upload FROM, and the effect that generated it has deps
+    // [gl, scene] — neither of which changes across a restore, so it would
+    // never re-run. The result was a silent failure rather than a visible one:
+    // the room looked correct while every metal, the glass and the fountain
+    // water quietly lost their specular response and read as flat paint.
+    //
+    // three registers its own restore listener when the renderer is
+    // constructed, so it runs before this one and the GL state is already
+    // rebuilt by the time we generate.
+    const canvas = gl.domElement;
+    const onRestored = () => build();
+    canvas.addEventListener('webglcontextrestored', onRestored);
+
+    return () => {
+      canvas.removeEventListener('webglcontextrestored', onRestored);
+      scene.environment = null;
+      target?.dispose();
+      target = null;
     };
   }, [gl, scene]);
 
@@ -830,12 +1181,63 @@ export function WorldCanvas() {
   const pathname = usePathname() || '/';
   const place = placeForRoute(pathname);
   const sceneCards = useSceneCards((st) => st.cards);
+  const router = useRouter();
   const [tier, setTier] = useState<DeviceTier>('mid');
   const [failed, setFailed] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
-  // Which model this route needs. '/' is 'arrival', which is now OUTSIDE.
-  const set = setFor(place);
+
+  // THE JOURNEY, and the one thing about it that has to live in React state.
+  //
+  // Everywhere else the journey is a mutable module object read inside
+  // useFrame, because it changes every frame and must never re-render. But
+  // WHICH MODEL IS MOUNTED is a tree-shape decision, and that is React's job.
+  // So the leg is mirrored into state by <JourneyDriver>, which fires exactly
+  // twice per visit — once when the interior is armed for loading, once when
+  // the crossover is passed.
+  const onJourney = poseFor(place).path === true;
+  const [leg, setLeg] = useState<SceneSet>('exterior');
+  const [interiorArmed, setInteriorArmed] = useState(false);
+
+  // Which model this route needs.
+  //
+  // For every route except the journey this is what it always was: a pure
+  // function of the place. On the journey it is a function of SCROLL, because
+  // the home page now crosses from the forecourt into the hall partway down
+  // and the route never changes while it does.
+  const set: SceneSet = onJourney ? leg : setFor(place);
   const look = useLook(set);
+
+  // Reset when leaving the journey, so navigating away mid-interior and coming
+  // back does not open the home page standing in the hall.
+  useEffect(() => {
+    if (!onJourney) setLeg('exterior');
+  }, [onJourney]);
+
+  const onLeg = useCallback((l: 'exterior' | 'interior') => setLeg(l), []);
+  const onArmed = useCallback(() => setInteriorArmed(true), []);
+
+  // The loaded hall, handed up so the interaction layer can adopt its
+  // pedestals. State rather than a ref because <InteriorStage> has to re-run
+  // its surgery when it arrives, and a ref would not tell it that it had.
+  const [hallRoot, setHallRoot] = useState<THREE.Object3D | null>(null);
+
+  // Per-frame channels out of the journey. Refs, not state, for the usual
+  // reason — these change 60 times a second and re-rendering the canvas tree on
+  // each one would undo everything the scroll driver exists to avoid.
+  const constellationReveal = useRef(0);
+  const interiorLeg = useRef(0);
+  const veilRef = useRef<HTMLDivElement>(null);
+
+  // Three published projects, three stations. The count drives the interior
+  // camera path, the station components and the DOM chapters, all from the same
+  // number — see the note in interiorPath.buildInteriorBeats about why this is
+  // not four.
+  const stationCount = Math.min(4, sceneCards.length);
+
+  /** Clicking a hologram or the portrait is a real navigation. Routed rather
+   *  than location-assigned so the App Router transition is a client one and
+   *  the canvas — and therefore the camera — survives it. */
+  const openHref = useCallback((href: string) => router.push(href), [router]);
 
   // Probed on mount, not during render, so server and first client render agree.
   useEffect(() => setSupported(webglSupported()), []);
@@ -844,9 +1246,23 @@ export function WorldCanvas() {
 
   if (supported === false || failed) {
     return (
-      <div aria-hidden="true" className="fixed inset-0 z-0">
-        <SceneFallback reason={supported === false ? 'unsupported' : 'error'} />
-      </div>
+      <>
+        {/* The one thing a screen reader should hear about this, said once.
+            The panel below is the BACKDROP — it stands in for the canvas, and
+            the layout renders the real page on top of it at z-10, so it is not
+            a place to repeat navigation that already exists above it. */}
+        <p role="status" className="sr-only">
+          {supported === false
+            ? 'The interactive view is not available on this device. Everything it shows is on this page.'
+            : 'The interactive view could not load. Everything it shows is on this page.'}
+        </p>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 bg-[#0A1120]"
+        >
+          <SceneFallback reason={supported === false ? 'unsupported' : 'error'} />
+        </div>
+      </>
     );
   }
 
@@ -864,17 +1280,14 @@ export function WorldCanvas() {
           // A 3x phone screen renders 9x the pixels for no perceptible gain on
           // a scene this dark, and it is the single biggest mobile cost.
           dpr={[1, tier === 'high' ? 2 : 1.5]}
+          // DELIBERATELY no toneMapping / toneMappingExposure here. r3f
+          // re-applies this object on every re-render, and the postprocessing
+          // composer writes toneMapping once on mount — between them the value
+          // was non-deterministic. <ColorPipeline> below is the single owner;
+          // see the note on that component.
           gl={{
             antialias: tier !== 'low',
             powerPreference: 'high-performance',
-            // Stated rather than left to the default. The room is lit almost
-            // entirely by a baked lightmap at 4.66x, so exposure is the one
-            // knob that moves the whole image, and it should be visible here
-            // next to the rest of the look budget instead of implied.
-            toneMapping: THREE.ACESFilmicToneMapping,
-          }}
-          onCreated={({ gl }) => {
-            gl.toneMappingExposure = look.exposure;
           }}
           // Seeded on the exterior axis, because that is where the site opens.
           // CameraRig takes over on the first frame; this only avoids one frame
@@ -882,8 +1295,22 @@ export function WorldCanvas() {
           camera={{ position: [0, 1.65, 30], fov: 45, ...CLIP.exterior }}
         >
           <color attach="background" args={['#0A1120']} />
+          {/* FIRST, so every reader below samples a value written earlier in
+              the same frame. One driver replaces the three identical
+              scroll/resize/ResizeObserver + useFrame sets that CameraRig,
+              ExteriorLighting and Terrain each used to install. */}
+          <ScrollProgressDriver />
+          {/* SECOND. Reads the value written on the line above, in the same
+              frame, and publishes the leg every consumer below branches on. */}
+          <JourneyDriver
+            active={onJourney}
+            onLeg={onLeg}
+            onArmed={onArmed}
+            reveal={constellationReveal}
+            interiorLeg={interiorLeg}
+            veil={veilRef}
+          />
           <CameraClipping set={set} />
-          <Exposure value={look.exposure} />
           {/* Inside: GI is baked into the lightmap, so a real-time rig would
               double-count it and this only lifts the instanced ornament, which
               carries no lightmap because instancing and per-placement UVs are
@@ -897,31 +1324,96 @@ export function WorldCanvas() {
               {/* Halved on low tier: the field is atmosphere, and a phone
                   should get thinner air rather than no air. */}
               <Motes count={tier === 'low' ? 1100 : 2400} />
-              {/* Karst relief replacing the flat exported plane. Fog is
-                  passed through so the ground dissolves at the same distance
-                  as everything else as the camera travels. */}
-              <Terrain />
-              {/* Layout plans anchored in world space. Only on the path
-                  surface — the interior sets have no forecourt to hang them
-                  in. */}
-              {poseFor(place).path ? <SpatialCards cards={sceneCards} /> : null}
+              {/* <Terrain /> IS DELIBERATELY ABSENT.
+                  It drew procedural karst relief because the exported
+                  ground_plane was a flat, untextured, pure-white 450m square —
+                  840 triangles the review correctly called "a primitive grey
+                  plane". The final delivery replaces it with 18,432 triangles
+                  of authored terrain spanning +/-120m: undulating beyond the
+                  formal garden, flat through it, with a gravel forecourt, a
+                  drive on axis and lawn parterres driven by a baked zone mask.
+                  Drawing a procedural approximation over that would be a worse
+                  landscape rendered twice. The component is kept in the tree
+                  for reference but is no longer mounted. */}
+              {/* THE CONSTELLATION. Mounted with the exterior because it lives
+                  in that model's coordinate space, but faded by its own chapter
+                  rather than by the leg — it has to be dark through the hero
+                  and the revolution and only ignite as the camera turns onto
+                  it. Halved on low tier: a phone gets a thinner constellation,
+                  not a missing one. */}
+              {onJourney ? (
+                <Constellation
+                  position={CONSTELLATION}
+                  radius={CONSTELLATION_RADIUS}
+                  reveal={constellationReveal}
+                  density={tier === 'low' ? 0.45 : 1}
+                />
+              ) : null}
             </>
           )}
           <Suspense fallback={null}>
-            {/* One set at a time. Both are ~2.3MB and 15MB respectively, and
-                holding the hall in memory while standing on the lawn buys
-                nothing — drei caches the parse, so coming back is instant. */}
-            {set === 'exterior' ? <ExteriorModel /> : <HallModel />}
+            {/* BOTH SETS, once the journey has armed the interior.
+
+                This used to be strictly one at a time, and the reasoning was
+                sound while the two were different ROUTES: holding a 15MB model
+                in memory to stand on a lawn you cannot walk off buys nothing.
+                The journey changes the premise. The hall is now four fifths of
+                a scroll away from the forecourt with no navigation in between,
+                so loading it at the crossover would put a multi-second Draco
+                and KTX2 stall exactly where the transition is meant to be a
+                dissolve.
+
+                So it is mounted early and hidden. `visible={false}` on the
+                wrapper skips the whole subtree at render — three.js tests
+                visibility before it culls, so an invisible group costs a
+                traversal and no draw calls — while the parse, the transcode and
+                the GPU upload have all already happened by the time the veil
+                closes over them.
+
+                Off the journey, the old behaviour is unchanged. */}
+            <group visible={set === 'exterior'}>
+              <ExteriorModel />
+            </group>
+            {onJourney ? (
+              interiorArmed ? (
+                <group visible={set === 'interior'}>
+                  <HallModel onRoot={setHallRoot} />
+                </group>
+              ) : null
+            ) : set === 'interior' ? (
+              <HallModel />
+            ) : null}
             {/* Metals need something to reflect or they read as flat paint;
                 outside, the glass and fountain water need it to refract. */}
             <RoomEnvironmentMap intensity={look.env} />
           </Suspense>
-          {look.free ? <FreeCamera /> : <Rig place={place} onTier={onTier} />}
+          {/* The interactive layer inside the hall: the turntables, the
+              holograms and the portrait. Mounted only on the journey — /hall
+              and /projects hold a still frame and have no scroll choreography
+              for a station to take its emphasis from. */}
+          {onJourney && interiorArmed ? (
+            <InteriorStage
+              root={hallRoot}
+              projects={sceneCards}
+              legProgress={interiorLeg}
+              onOpen={openHref}
+            />
+          ) : null}
+          {look.free ? (
+            <FreeCamera />
+          ) : (
+            <Rig place={place} stationCount={stationCount} onTier={onTier} />
+          )}
           {/* LAST child on purpose: r3f's EffectComposer wraps whatever the
               scene rendered, so it has to mount after the content it filters.
               Skipped entirely in free-camera look-dev, where an unfiltered
               frame is the whole point of the mode. */}
           {!look.free && <PostFX tier={tier} />}
+          {/* LAST, and after PostFX on purpose. React runs sibling effects in
+              render order, so mounting the colour pipeline here means it is the
+              final writer on the same commit that mounts the composer — which
+              is the whole reason tone mapping is now deterministic. */}
+          <ColorPipeline exposure={look.exposure} tier={tier} />
         </Canvas>
       </SceneBoundary>
 
@@ -937,6 +1429,40 @@ export function WorldCanvas() {
       <div
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{ background: SCRIM[set].radial }}
+      />
+
+      {/*
+        THE THRESHOLD.
+
+        The last metre of the approach and the first moment inside, as one
+        blackout. This is where the exterior model is exchanged for the interior
+        one, and the only reason that exchange is invisible is that this element
+        is at full opacity while it happens.
+
+        It is NOT a fade to a colour that happens to be dark: #05080F is the
+        same value the fog resolves to at the end of the approach, so the frame
+        does not shift hue as it closes. A slight warm bias at the centre — the
+        light from a door that is still open — keeps it from reading as a
+        browser tab that stopped painting.
+
+        z-[2], above both scrim layers and above the canvas, below the page
+        content at z-10. The page's own copy stays legible through the
+        transition, which is what stops the passage feeling like a stall.
+      */}
+      <div
+        ref={veilRef}
+        className="absolute inset-0 z-[2]"
+        style={{
+          opacity: 0,
+          pointerEvents: 'none',
+          background:
+            'radial-gradient(120% 90% at 50% 56%, #0B1220 0%, #05080F 46%, #04060B 100%)',
+          // No CSS transition: the opacity is written every frame from the
+          // scroll position, and a transition on top of that is a second lag in
+          // series with the damping already applied to it.
+          transition: 'none',
+          willChange: 'opacity',
+        }}
       />
     </div>
   );

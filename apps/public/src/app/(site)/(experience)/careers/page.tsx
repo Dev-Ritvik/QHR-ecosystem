@@ -54,7 +54,7 @@ export default function CareersPage() {
               <h2 className="font-serif text-xl text-[#F2EDE4]">{r.title}</h2>
               <dl className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-3">
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/45">
+                  <dt className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
                     Experience
                   </dt>
                   <dd className="mt-1 text-[15px] text-[#F2EDE4]/80">
@@ -62,7 +62,7 @@ export default function CareersPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/45">
+                  <dt className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
                     Education
                   </dt>
                   <dd className="mt-1 text-[15px] text-[#F2EDE4]/80">
@@ -70,7 +70,7 @@ export default function CareersPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/45">
+                  <dt className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
                     Location
                   </dt>
                   <dd className="mt-1 text-[15px] text-[#F2EDE4]/80">

@@ -64,7 +64,7 @@ export default function AboutPage() {
                   <span className="ml-1.5 text-sm tracking-wide text-[#F2EDE4]/50">{f.unit}</span>
                 ) : null}
               </dt>
-              <dd className="mt-1 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/45">
+              <dd className="mt-1 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
                 {f.label}
               </dd>
             </div>
@@ -86,13 +86,13 @@ export default function AboutPage() {
           <p className="mt-3 text-[15px] leading-relaxed text-[#F2EDE4]/60">
             Invest in land — it will never disappoint you.
           </p>
-          <figcaption className="mt-4 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/40">
+          <figcaption className="mt-4 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
             Managing Director
           </figcaption>
         </figure>
 
         <section className="mt-14">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">Vision</h2>
+          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">Vision</h2>
           <p className="mt-3 text-[15px] leading-relaxed text-[#F2EDE4]/75">
             To be acknowledged as India&rsquo;s leading and most trusted real estate
             enterprise by nurturing a transparent, trustworthy and professional
@@ -102,7 +102,7 @@ export default function AboutPage() {
         </section>
 
         <section className="mt-10">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">Mission</h2>
+          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">Mission</h2>
           <p className="mt-3 text-[15px] leading-relaxed text-[#F2EDE4]/75">
             To be the provider of choice for global-standard residential
             properties by delivering projects enriched with innovative design,
@@ -112,7 +112,7 @@ export default function AboutPage() {
         </section>
 
         <section className="mt-10">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">Values</h2>
+          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">Values</h2>
           <ul className="mt-4 flex flex-wrap gap-x-3 gap-y-2">
             {['Quality', 'On-time possession', 'Integrity', 'Reliability', 'Transparency'].map(
               (v) => (

@@ -61,7 +61,7 @@ export default function KnowledgePage() {
               <p className="mt-2 text-[15px] leading-relaxed text-[#F2EDE4]/70">
                 {a.blurb}
               </p>
-              <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/40">
+              <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
                 {a.minutes} min read
               </p>
             </article>
@@ -69,7 +69,7 @@ export default function KnowledgePage() {
         </div>
 
         <section className="mt-14 border-t border-white/10 pt-6">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/45">
+          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
             Being written
           </h2>
           <ul className="mt-3 space-y-1.5 text-[15px] text-[#F2EDE4]/55">

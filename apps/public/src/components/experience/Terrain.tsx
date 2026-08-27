@@ -33,7 +33,7 @@
 // blends outward, so the relief starts beyond the hedging and never pushes
 // through the entry steps.
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useScrollProgress } from './useScrollProgress';
@@ -49,14 +49,20 @@ const SIZE = 460;
 const SEGMENTS = 320;
 
 /** Radius of the level apron under the building, and the distance over which
- *  the terrain blends up to full height beyond it. */
-// BUG THIS FIXES: 34 + 26 meant full relief only began 60m from the origin,
-// but the camera orbits at radius 13-30 looking AT the origin — so every metre
-// of ground in frame was inside the flat apron. The karst existed and was
-// entirely off screen. Building is +/-9.55, hedges +/-15.9, fountain reaches
-// z 16.3, so the apron only needs to clear ~20m.
-const FLAT_RADIUS = 20;
-const FLAT_FEATHER = 14;
+ *  the terrain blends up to full height beyond it.
+ *
+ * WAS 20 + 14, which put full relief 34m from the origin — six metres beyond
+ * the cypress line. The camera orbits at radius 24-30, so the estate was
+ * ringed at conversational distance by thirty metres of terraced rock, and
+ * every exterior frame read as a limestone quarry with a house at the bottom of
+ * it. The brief names that failure twice: "avoid a visible giant plane edge"
+ * and "avoid Unity demo scene appearance".
+ *
+ * 30 + 55 puts full relief at 85m and leaves 1.7m of undulation at the cypress
+ * line — ground that rolls rather than ground that steps. An estate sits in a
+ * landscape; it does not sit in a pit. */
+const FLAT_RADIUS = 30;
+const FLAT_FEATHER = 55;
 
 const VERT = /* glsl */ `
   uniform float uFlatRadius;
@@ -119,13 +125,46 @@ const VERT = /* glsl */ `
     // so floor(r / steps) only ever returned 0 or 1. The terrain had exactly
     // TWO elevations and rendered as a flat disc. The step has to be small
     // relative to the ridge's range or there are no terraces to see.
+    // TERRACING, ALMOST ENTIRELY DISSOLVED.
+    //
+    // The fractional remainder used to be added back at 0.22, which left 78% of
+    // each band perfectly level — hard bedding planes with sharp risers. That
+    // is a correct karst signature and it is the wrong landform for this site:
+    // rendered, it reads as cut stone benches, and a mansion ringed by cut
+    // stone benches reads as a quarry rather than as an estate.
+    //
+    // At 0.88 the quantisation survives only as a faint stratification in the
+    // distant relief — the suggestion of bedding in ground that is otherwise
+    // continuous. Kept rather than deleted because it is what stops the
+    // ridged fractal reading as generic dunes.
     float steps = 0.11;
-    float terraced = floor(r / steps) * steps + fract(r / steps) * steps * 0.22;
+    float terraced = floor(r / steps) * steps + fract(r / steps) * steps * 0.88;
 
     // Level apron under the building.
-    float flat = smoothstep(uFlatRadius, uFlatRadius + uFlatFeather, d);
+    //
+    // NAMED apron, NOT flat. "flat" is a reserved interpolation qualifier in
+    // GLSL ES 3.00, and three compiles this material as version 300 es on a
+    // WebGL2 context - it auto-upgrades ShaderMaterial source rather than
+    // leaving it at GLSL1. So declaring a float called flat was a syntax
+    // error: ERROR: 0:135: 'flat' : syntax error
+    //
+    // The vertex shader therefore never compiled, the program never linked,
+    // and every frame issued useProgram against an invalid program - a silent
+    // GL_INVALID_OPERATION, twice per frame, because the terrain is drawn in
+    // both the main and the transmission pass.
+    //
+    // Nothing surfaced it. three does not throw for a failed ShaderMaterial
+    // link on this path, the draw call still counts toward renderer.info, and
+    // the geometry is genuinely present at 321x321 - so every previous audit
+    // that asked "does the terrain exist" got a yes. It just never drew.
+    //
+    // The visible consequence was the whole point of this file: ExteriorModel
+    // hides the GLB's own ground_plane because Terrain is meant to replace it,
+    // so the home page was rendering with NO ground at all. Renaming this one
+    // identifier restores 23.5% of the frame.
+    float apron = smoothstep(uFlatRadius, uFlatRadius + uFlatFeather, d);
 
-    float h = terraced * uHeight * flat;
+    float h = terraced * uHeight * apron;
     p.z += h;
 
     vHeight = h;
@@ -214,7 +253,11 @@ const FRAG = /* glsl */ `
 
     // Risers catch a warm edge from the same low sun. This is the line that
     // makes a terrace read as a step rather than as a tonal gradient.
-    col += vec3(0.55, 0.42, 0.30) * slope * lambert * 0.85;
+    // Was 0.85, which drew a bright warm line along every terrace riser. With
+    // the terracing dissolved there are no risers to draw, and at that weight
+    // the term simply outlined the noise. 0.22 keeps a hint of raking light on
+    // the steepest ground and nothing else.
+    col += vec3(0.42, 0.34, 0.26) * slope * lambert * 0.22;
 
     // Fog matched to the scene's own THREE.Fog so the terrain dissolves into
     // the same navy at the same distance. Without this the ground would run to
@@ -234,6 +277,21 @@ export function Terrain({ driveByScroll = true }: { driveByScroll?: boolean }) {
     [],
   );
 
+  // WE own this one, so we have to free it.
+  //
+  // r3f disposes what it CONSTRUCTS from JSX; a geometry built here with `new`
+  // and handed over as a prop is only attached, never adopted. useMemo has no
+  // cleanup either, so unmounting left the buffers allocated and the next mount
+  // built a fresh 321x321 grid beside them.
+  //
+  // MEASURED across / -> /hall -> / : dispose fired on 3 of 222 tracked
+  // geometries and never on this one, while the renderer's geometry count went
+  // 132 -> 349 -> 352 and never came back down. That is ~5.7MB of position,
+  // normal, uv and Uint32 index buffers stranded per exterior->interior->
+  // exterior round trip, which is the ordinary browsing pattern here: 17 of the
+  // Surface routes sit on the interior set.
+  useEffect(() => () => geometry.dispose(), [geometry]);
+
   const uniforms = useMemo(
     () => ({
       uFlatRadius: { value: FLAT_RADIUS },
@@ -243,13 +301,23 @@ export function Terrain({ driveByScroll = true }: { driveByScroll?: boolean }) {
       // visible annulus) — it was invisible because the SHADING crushed it to
       // ~3% luminance. Both are addressed: more relief, and enough light on it
       // to see the relief that was always there.
-      uHeight: { value: 30.0 },
+      // 30m of relief beginning 34m from a 6.8m building was four times the height
+      // of the thing it was supposed to frame. 11m at 85m out is a horizon ridge
+      // subtending about four degrees — depth, not drama. The environment
+      // supports the mansion; it must never overpower it.
+      uHeight: { value: 11.0 },
       // Was #141A22 / #3A3B33 — around 0.10 luminance. Multiplied by the
       // lighting term below that landed at 0.027, i.e. black. Limestone is a
       // PALE rock; these are lifted to where the terraces can actually read
       // against the #0A1120 sky.
-      uLow: { value: new THREE.Color('#2E3440') },
-      uHigh: { value: new THREE.Color('#8A8778') },
+      // Planted ground at dusk, not exposed limestone. uHigh was #8A8778 — a
+      // pale warm grey that lit the ridge tops brighter than the mansion's own
+      // cream stone, so the eye went to the landscape instead of to the
+      // building. Both values now sit below the facade in value, and the
+      // difference between them is a shift from damp hollow to dry crest
+      // rather than from rock to rock.
+      uLow: { value: new THREE.Color('#141B1C') },
+      uHigh: { value: new THREE.Color('#39412F') },
       uFog: { value: new THREE.Color('#0A1120') },
       // Normalised direction TO the key light at (30, 15, -80). Must be kept
       // in step with the directionalLight in WorldCanvas.

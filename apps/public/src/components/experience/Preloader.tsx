@@ -121,7 +121,7 @@ export function Preloader() {
 
       <span
         aria-hidden
-        className="t-eyebrow text-[#F2EDE4]/40"
+        className="t-eyebrow text-[#F2EDE4]/60"
         style={{ letterSpacing: '0.18em' }}
       >
         Quality Homes Reality

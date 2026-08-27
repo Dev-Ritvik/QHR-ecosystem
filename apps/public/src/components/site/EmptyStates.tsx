@@ -10,10 +10,16 @@ type EmptyStateProps = {
 
 export function EmptyState({ title, description, icon: Icon = ComponentIcon }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-6 border border-dashed border-gray-200 bg-gray-50/50 rounded-sm text-center">
-      <Icon className="w-10 h-10 text-gray-300 mb-4" strokeWidth={1.5} />
-      <h4 className="text-sm font-semibold text-gray-900 tracking-wide mb-1">{title}</h4>
-      <p className="text-sm text-gray-500 max-w-sm">{description}</p>
+    // Dark palette, matching every other surface. These carried gray-50/gray-900
+    // from when the site had a white background — the same migration
+    // ProjectCard documents having gone through — which left near-black type on
+    // a near-black page wherever a section had no data. Since geometry_pub and
+    // the gallery manifests are both empty today, these are not a rare state:
+    // they are what the project page mostly shows.
+    <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-white/10 bg-white/[0.02] px-6 py-16 text-center">
+      <Icon className="mb-4 h-8 w-8 text-[#F2EDE4]/30" strokeWidth={1.25} />
+      <h4 className="t-eyebrow mb-2 text-[#F2EDE4]/70">{title}</h4>
+      <p className="t-small max-w-sm text-[#F2EDE4]/50">{description}</p>
     </div>
   );
 }
