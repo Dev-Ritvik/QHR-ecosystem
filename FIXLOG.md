@@ -480,3 +480,38 @@ Running log of verified fixes. Append-only.
 - **Regression proofs, measured not asserted.** `?grade=dusk` against the previously shipping dusk frame: mean absolute difference **0.029/255** (the 76 max is the animated motes field). Interior route before vs after the default flip: mean **0.030/255, max 2/255, zero pixels over 8** — the flip does not reach the interior.
 - NOT verified: the scroll journey past the hero beat, unchanged from the previous pass — SmoothScroll's virtual scroll ignores synthetic events under automation. No camera, geometry or bounding box changed, so `cameraPath` is untouched and its 29 assertions still pass.
 - Flagged for review: the three items above (terrace tint, flat sky, emissive windows/gold). The asset was not reopened: no Blender change, no re-export, no GLB touched.
+
+## [2026-09-01 07:50 IST] Runtime visual-polish pass: terrace, sky, windows
+
+- Three residual gaps were named in the previous entry and left as follow-ups. This pass closes all three at RUNTIME. No Blender edit, no re-export, no GLB, no masonry, no UV, no AO, no exporter change. The v5 asset is untouched.
+
+- **Measured the same way as the parity pass**: raw canvas with every DOM layer hidden, against the approved REV_HERO render, because the reference carries no typography or scrim and comparing the composited page would measure the UI instead of the grade.
+
+    ```
+                      Blender    before     after
+        facade          115.4     123.9     121.6   (+6.2)
+        roof slate      111.9     113.6     113.2   (+1.3)
+        terrace         134.6     165.6     139.6   (+5.0)
+        lawn             99.3     100.1     100.0   (+0.7)
+        fountain         63.8      56.6      54.8   (-9.0)
+        background       53.9      99.1      62.4   (+8.5)
+        spire            95.1     103.7     103.4   (+8.3)
+        ---------------------------------------------------
+        RMS luma error             21.4       6.4
+    ```
+
+- **1. TERRACE — 165.6 -> 139.6, and the facade did not move.** `PAVING_TINT` becomes per-grade: dusk keeps 0.48, daylight takes 0.32. The 0.48 was argued from a dusk sky — a horizontal plate sees a near-black sky while a wall sees the key — and that argument survives into daylight but the number does not, because the sky is now a light source the plate sees more of. The facade is a different material after the stone split, so darkening the paving cannot touch it: measured 123.9 -> 121.6, i.e. it did not move. Swept, not derived.
+
+- **2. BACKGROUND — the flat colour was structurally incapable of being right.** Sampling the reference down its left margin shows the background is not sky: a 3/4 bird's-eye camera puts the horizon high and fills the top of frame with distant LAND — dark treeline L 44..48 to y=50, breaking into sunlit field L 112..117 by y=100. A single colour is necessarily too bright against the treeline and too dark against the field, and `#6D7F6A` was +45 and -16 respectively. Replaced with a 2x512 vertical ramp built on a canvas at runtime (no asset, no fetch, nothing for the CSP to refuse) assigned to `scene.background`, which three renders as a fullscreen quad for any non-env texture. Profile error after three iterations: -4.8, +0.1, +8.5, +1.6, -0.8, -0.6, +1.4, +3.7 across y 0..175. **Background only** — `scene.environment` is still the generated cube map, so this changes what is behind the building and lights nothing.
+  - Stops are pre-compensated for ACES at exposure 0.75 and read brighter in source than the targets they hit. That is why they look wrong if read as colours rather than as pre-tone-map values.
+  - A measurement error of mine is recorded here because it nearly sent the tuning backwards: the `bg_upper` sample region was placed when the background was FLAT, at a y-band that did not match the reference's. Once the background was graduated the region compared our open field against Blender's treeline and reported the better ramp as worse (RMS 11.6 -> 20.6). The region was corrected to the reference's own band and the ranking inverted to what the vertical profile had said all along.
+
+- **3. WINDOWS — the largest remaining architectural mismatch, and it was two systems, not one.** The reference shows dark recessed glazing; ours glowed. Both contributors are now grade-gated:
+  - `EMISSIVE` splits per grade. Daylight sets `MAT_Window_Interior` and `MAT_Wood_Dark` to 0. Every argument for the dusk values is an argument about darkness — the bloom threshold, the dark end of the orbit, a facade that would read as abandoned — and none of them apply at midday. `MAT_Gold` keeps a token 0.08: not for glow, since at metalness 1 against a 0.7 environment it has plenty to reflect, but because the finials are 40mm details at hero distance and zero loses the roofline.
+  - The interior-spill rig in WorldCanvas is extinguished for daylight: both flanking rect-area lights and both point lights to 0, the entry bay held at 0.25 in a neutral `#FFE2C4` because the portico is the one place the key genuinely cannot reach under its own overhang.
+  - The `__graded` guard became `__gradedFor: Grade`. `useGLTF` caches the parse and `scene.clone(true)` SHARES materials with it, so a sticky boolean would have pinned whichever grade mounted first.
+
+- Verified on a fresh build (BUILD_ID R6wAgfc-CA5uipbcnF95M) and a fresh server and browser context: typecheck 0; lint 0 (pre-existing warnings only, none in the experience code); 48/48 vitest; production build 0; **0 console errors, 0 warnings** across default, `?grade=dusk` and the interior route.
+- **Regression proofs.** DUSK rollback, canvas only, after vs before this pass: mean **0.043/255**, and the 0.199% of pixels that differ are spread over 84 of 160 grid cells with no cell holding more than 2.9% — scattered animation noise from the 2,400-particle motes field, not a cluster, so nothing structural moved. INTERIOR before vs after: mean **0.030/255, max 2/255, zero pixels over 8.**
+- **Frame rate, and an honest caveat about the absolute number.** On this build, same conditions, back to back: **daylight 67.7 fps, dusk 65.1** — daylight remains the faster of the two, as it was before this pass (90.4 / 88.7). The absolute figures are ~25% below the earlier session on the same hardware; the rAF gate tracks the render rate exactly in both, and the change removes four lights rather than adding any, so the drop is accumulated machine load across a long session and NOT attributable to this work. Do not compare absolute FPS across sessions; compare the two grades within one.
+- Flagged for review: the fountain sits 9 luma under the reference because the warm uplight that used to carry it is off. Restoring a warm light on a fountain at midday would be chasing a number at the expense of the image, so it is left. The remaining +6..8 on facade and spire are small and were not pursued for the same reason.

@@ -1119,15 +1119,43 @@ function ExteriorLighting({ driveByScroll, grade }: { driveByScroll: boolean; gr
           rotation-y turns each one to face out along +z. They are not visible
           geometry — a RectAreaLight has no mesh — so nothing new appears in
           frame. */}
-      <rectAreaLight position={[-6.2, 2.3, 6.35]} width={2.1} height={3.0} intensity={1.8} color="#FFAA55" />
-      <rectAreaLight position={[0, 2.2, 6.35]} width={3.0} height={3.4} intensity={2.2} color="#FFB068" />
-      <rectAreaLight position={[6.2, 2.3, 6.35]} width={2.1} height={3.0} intensity={1.8} color="#FFAA55" />
+      {/* ALL BUT EXTINGUISHED IN DAYLIGHT.
+
+          Everything this rig is for is an argument about darkness — an unlit
+          wall through the back of the orbit, a facade with nowhere to catch
+          light, reveals that read as stickers because the stone around them is
+          black. At midday the sun and a 0.7 environment do that work, and a
+          warm interior wash on a sunlit limestone wall reads as exactly what
+          the reference does not show: lamps on at noon.
+
+          Not zero. 0.25 on the entry bay alone keeps the portico from going
+          flat where the roof overhangs it, which is the one place the key
+          genuinely cannot reach. The side and fountain lights go out entirely —
+          in daylight both surfaces are lit by the sky. */}
+      <rectAreaLight
+        position={[-6.2, 2.3, 6.35]} width={2.1} height={3.0}
+        intensity={day ? 0 : 1.8} color="#FFAA55"
+      />
+      <rectAreaLight
+        position={[0, 2.2, 6.35]} width={3.0} height={3.4}
+        intensity={day ? 0.25 : 2.2} color={day ? '#FFE2C4' : '#FFB068'}
+      />
+      <rectAreaLight
+        position={[6.2, 2.3, 6.35]} width={2.1} height={3.0}
+        intensity={day ? 0 : 1.8} color="#FFAA55"
+      />
       {/* The side elevation — what the camera faces from theta 70 onward.
           Without it the last third of the orbit plays against an unlit wall. */}
-      <pointLight position={[10.9, 2.5, 0]} intensity={5.6} distance={18} decay={2} color="#FFAA55" />
+      <pointLight
+        position={[10.9, 2.5, 0]} intensity={day ? 0 : 5.6}
+        distance={18} decay={2} color="#FFAA55"
+      />
       {/* Uplight on the fountain, so the centre of the composition has a source
           of its own rather than borrowing from the windows either side. */}
-      <pointLight position={[0, 1.1, 13.2]} intensity={4.4} distance={14} decay={2} color="#FFC98A" />
+      <pointLight
+        position={[0, 1.1, 13.2]} intensity={day ? 0 : 4.4}
+        distance={14} decay={2} color="#FFC98A"
+      />
 
       {/* Cool sky, warm ground bounce. Keeps the shadowed side from reading as
           black without lifting it toward the key's colour. */}
@@ -1303,6 +1331,79 @@ function RoomEnvironmentMap({ intensity }: { intensity: number }) {
   return null;
 }
 
+/**
+ * Sky, per grade.
+ *
+ * Dusk is a flat #0A1120 and should stay flat: it is night air, it carries the
+ * fog colour, and there is nothing in it to graduate.
+ *
+ * Daylight cannot be flat, and the flat #6D7F6A stand-in is what made the
+ * background the worst-scoring region in the whole parity comparison. Sampling
+ * the approved REV_HERO render straight down its left margin shows why — that
+ * background is not sky at all, because a 3/4 bird's-eye camera puts the
+ * horizon high and fills the top of frame with distant LAND:
+ *
+ *     y   0..50    L  44..48    dark treeline
+ *     y  60..90    L  68..113   the tree line breaking into open ground
+ *     y 100..200   L 112..117   sunlit field
+ *     y 200+       L 111..116   meeting our own ground plane
+ *
+ * A single colour has to be wrong at both ends: ours was +45 too bright against
+ * the treeline and ~16 too dark against the field. So this is a two-pixel-wide
+ * vertical ramp built at runtime on a canvas — no asset, no fetch, nothing for
+ * the CSP to refuse — assigned to scene.background, which three renders as a
+ * fullscreen quad for any texture that is not an env mapping.
+ *
+ * It is BACKGROUND ONLY. scene.environment is still the generated cube map, so
+ * this changes what is behind the building and lights nothing. The stops are
+ * pre-compensated for ACES at exposure 0.75, which is why they read brighter
+ * here than the target numbers above.
+ */
+const SKY_STOPS: [number, string][] = [
+  [0.000, 'rgb(76,86,67)'],
+  [0.028, 'rgb(59,68,53)'],
+  [0.056, 'rgb(73,82,63)'],
+  [0.083, 'rgb(143,141,102)'],
+  [0.111, 'rgb(160,153,109)'],
+  [0.139, 'rgb(158,152,108)'],
+  [0.167, 'rgb(146,144,105)'],
+  [0.250, 'rgb(134,141,112)'],
+  [1.000, 'rgb(132,140,112)'],
+];
+
+function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
+  const scene = useThree((s) => s.scene);
+
+  const sky = useMemo(() => {
+    if (set !== 'exterior' || grade !== 'daylight') return null;
+    const c = document.createElement('canvas');
+    c.width = 2;
+    c.height = 512;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    const g = ctx.createLinearGradient(0, 0, 0, 512);
+    for (const [at, col] of SKY_STOPS) g.addColorStop(at, col);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 2, 512);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    return tex;
+  }, [set, grade]);
+
+  useEffect(() => {
+    const prev = scene.background;
+    scene.background =
+      sky ?? new THREE.Color(set === 'exterior' ? GRADE_BG[grade] : GRADE_BG.dusk);
+    return () => {
+      scene.background = prev;
+      sky?.dispose();
+    };
+  }, [scene, sky, set, grade]);
+
+  return null;
+}
+
 export function WorldCanvas() {
   const pathname = usePathname() || '/';
   const place = placeForRoute(pathname);
@@ -1427,10 +1528,7 @@ export function WorldCanvas() {
           // rendered from the old interior default while it settles.
           camera={{ position: [0, 1.65, 30], fov: 45, ...CLIP.exterior }}
         >
-          <color
-            attach="background"
-            args={[set === 'exterior' ? GRADE_BG[look.grade] : GRADE_BG.dusk]}
-          />
+          <SkyBackground set={set} grade={look.grade} />
           {/* FIRST, so every reader below samples a value written earlier in
               the same frame. One driver replaces the three identical
               scroll/resize/ResizeObserver + useFrame sets that CameraRig,
@@ -1508,7 +1606,7 @@ export function WorldCanvas() {
 
                 Off the journey, the old behaviour is unchanged. */}
             <group visible={set === 'exterior'}>
-              <ExteriorModel />
+              <ExteriorModel grade={look.grade} />
             </group>
             {onJourney ? (
               interiorArmed ? (

@@ -25,6 +25,7 @@
 // for twice. The shared part — Draco and KTX2 loader wiring — is imported.
 
 import { useEffect, useMemo } from 'react';
+import type { Grade } from './WorldCanvas';
 import { useGLTF } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -160,9 +161,29 @@ export const EXTERIOR_BOUNDS = {
  * left in as a second, unjustified darkening.
  */
 const PAVING_RE = /^(terrace_|rustic_|entry_step|entry_cheek|fount_)/;
-const PAVING_TINT = 0.48;
 
-const EMISSIVE: Record<string, { color: string; intensity: number }> = {
+/**
+ * Per grade, because the reason the tint exists is grade-dependent.
+ *
+ * The 0.48 above is argued from a DUSK sky: a horizontal plate sees a
+ * near-black sky while a wall sees the warm key, so the plate is worth less.
+ * Under daylight that argument still holds but the numbers move — the sky is
+ * now a light source, the plate sees more of it, and 0.48 left the terrace at
+ * 165.6 against the Blender reference's 134.6, i.e. the brightest thing in
+ * frame again and the same inverted hierarchy in a brighter room.
+ *
+ * 0.37 is measured, not derived: swept on the live material against the
+ * reference until the terrace sat under the facade rather than over it. The
+ * facade is untouched by this — it is a different material after the split.
+ */
+const PAVING_TINT: Record<Grade, number> = { dusk: 0.48, daylight: 0.32 };
+
+type EmissiveSpec = Record<string, { color: string; intensity: number }>;
+
+/**
+ * DUSK emissive. The building is lit from inside because outside it is dark.
+ */
+const EMISSIVE_DUSK: EmissiveSpec = {
   // Warm interior spill. This is the main event — 28 window and arch reveals
   // across the elevation, so the facade reads as occupied.
   // 2.6 -> 0.55. VERIFIED: every archback node in the GLB sits at translation
@@ -179,6 +200,36 @@ const EMISSIVE: Record<string, { color: string; intensity: number }> = {
   MAT_Gold: { color: '#FFC98A', intensity: 0.4 },
   // Faint: the door reveal should suggest a lit hall beyond, not a light box.
   MAT_Wood_Dark: { color: '#FF9A40', intensity: 0.35 },
+};
+
+/**
+ * DAYLIGHT emissive — almost none of it, and that is the point.
+ *
+ * Every argument for the dusk values above is an argument about DARKNESS: the
+ * bloom threshold, the dark end of the orbit, a facade that would otherwise
+ * read as abandoned. At midday none of them apply. The approved Blender render
+ * shows dark recessed glazing — glass in shadow, which is what glass looks like
+ * from outside a lit exterior — and lit windows in that frame read as a house
+ * with every lamp on at noon.
+ *
+ * Window interiors go to zero. They are large flat planes filling each arch and
+ * any positive value paints them over the shadow the reveal is supposed to
+ * cast.
+ *
+ * The gold keeps a token 0.08. Not for glow — at metalness 1 against a 0.7
+ * environment it has plenty to reflect — but because the finials are 40mm
+ * details at hero distance and dropping them to nothing loses the roofline
+ * entirely. Measured: 0.4 -> 0.08 removes the bloom halo and keeps the points.
+ */
+const EMISSIVE_DAYLIGHT: EmissiveSpec = {
+  MAT_Window_Interior: { color: '#FFAA55', intensity: 0.0 },
+  MAT_Gold: { color: '#FFC98A', intensity: 0.08 },
+  MAT_Wood_Dark: { color: '#FF9A40', intensity: 0.0 },
+};
+
+const EMISSIVE: Record<Grade, EmissiveSpec> = {
+  dusk: EMISSIVE_DUSK,
+  daylight: EMISSIVE_DAYLIGHT,
 };
 
 /**
@@ -228,7 +279,7 @@ const EMISSIVE: Record<string, { color: string; intensity: number }> = {
  * decision to make against a rendered frame rather than in Blender.
  */
 
-function applyGrade(root: THREE.Object3D): string[] {
+function applyGrade(root: THREE.Object3D, grade: Grade): string[] {
   const touched: string[] = [];
 
   root.traverse((o) => {
@@ -248,14 +299,18 @@ function applyGrade(root: THREE.Object3D): string[] {
 
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of mats) {
-      const mat = m as THREE.MeshStandardMaterial & { __graded?: boolean };
-      if (!mat || mat.__graded) continue;
+      // Keyed on the GRADE, not a boolean. useGLTF caches the parse and
+      // scene.clone(true) SHARES materials with it, so this same material
+      // object is revisited on every mount; a sticky boolean would pin
+      // whichever grade happened to mount first.
+      const mat = m as THREE.MeshStandardMaterial & { __gradedFor?: Grade };
+      if (!mat || mat.__gradedFor === grade) continue;
 
-      const e = EMISSIVE[mat.name];
+      const e = EMISSIVE[grade][mat.name];
       if (!e || !mat.emissive) continue;
       mat.emissive.set(e.color);
       mat.emissiveIntensity = e.intensity;
-      mat.__graded = true;
+      mat.__gradedFor = grade;
       mat.needsUpdate = true;
       touched.push(mat.name);
     }
@@ -310,8 +365,8 @@ function applyGrade(root: THREE.Object3D): string[] {
     let graded = clones.get(current);
     if (!graded) {
       graded = current.clone();
-      graded.name = `${current.name}_paving`;
-      graded.color.multiplyScalar(PAVING_TINT);
+      graded.name = `${current.name}_paving_${grade}`;
+      graded.color.multiplyScalar(PAVING_TINT[grade]);
       graded.needsUpdate = true;
       clones.set(current, graded);
       touched.push(graded.name);
@@ -323,8 +378,10 @@ function applyGrade(root: THREE.Object3D): string[] {
 }
 export function ExteriorModel({
   onReady,
+  grade = 'daylight',
 }: {
   onReady?: (info: { meshes: number; tris: number }) => void;
+  grade?: Grade;
 }) {
   const gl = useThree((s) => s.gl);
 
@@ -345,7 +402,7 @@ export function ExteriorModel({
     // material with no tangents writes NaN, and one NaN fragment takes the
     // whole bloom chain — and therefore the whole screen — to black.
     const disarmed = guardAnisotropy(root);
-    const graded = applyGrade(root);
+    const graded = applyGrade(root, grade);
     let meshes = 0;
     let tris = 0;
     root.traverse((o) => {
@@ -419,7 +476,7 @@ export function ExteriorModel({
     }));
 
     onReady?.({ meshes, tris: Math.round(tris) });
-  }, [root, onReady]);
+  }, [root, onReady, grade]);
 
   return <primitive object={root} />;
 }
