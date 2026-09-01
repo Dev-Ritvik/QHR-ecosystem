@@ -438,3 +438,45 @@ Running log of verified fixes. Append-only.
 - Verified: typecheck exit 0; lint exit 0 (pre-existing warnings only, none in WorldCanvas); 48/48 vitest including the 29 cameraPath assertions; production build exit 0; 0 console errors and 0 warnings on both grades; default route still serves `exterior_mansion_v5.glb` (9433 KB, 360 ms) with no query parameter. Frame rate, rAF gated against setTimeout first (rAF 87-90/s, not throttled): **dusk 88.4 fps, daylight 89.9 fps** at 1424x900 — daylight is marginally FASTER, having no fog and one fewer contributing light.
 - NOT verified: the scroll-driven journey past the hero beat. SmoothScroll's virtual scroll does not respond to synthetic wheel/scrollTo under automation, unchanged from the previous pass. The daylight grade alters no camera, no geometry and no bounding box, so `cameraPath` is untouched.
 - Flagged for review: **yes — one art-direction decision, deliberately not taken unilaterally.** Daylight matches the approved Blender render and reveals the masonry, the slate roof and the site that dusk hides; dusk is what every lighting comment in WorldCanvas is written against and what the scrims were tuned for. The default remains dusk. Flipping it is one line in `GRADE_LOOK` plus making `'daylight'` the `useState` seed.
+
+## [2026-09-01 07:20 IST] DAYLIGHT becomes the default exterior grade — decided on rendered images
+
+- The previous entry shipped `?grade=daylight` as an addressable option with dusk still the default, and flagged the choice for review. This entry records the decision and the evidence. **Daylight is now the default; dusk is the rollback at `?grade=dusk`.** Neither grade was deleted.
+
+- **Reconciliation first, because the premise was that this work was missing from GitHub.** It was not missing. `git fetch origin main` -> HEAD == origin/main == FETCH_HEAD == `dffcf2e`, 0 ahead / 0 behind, working tree clean. The daylight implementation and the parity FIXLOG entry were both already in that commit and already pushed. What made it invisible is the commit MESSAGE — "Add exterior model v5, stone material tools, QA screenshots, and blender scripts" — which names none of it, in a 123-file commit that is 93 PNGs. The source change was 1 of 2 `.tsx` files buried in it. Lesson recorded, not repeated: this commit contains only the grade work.
+
+- **Judged on the rendered image, not on asset values.** The comparison was run on the RAW CANVAS with every DOM layer hidden, because Blender's render carries no typography and no scrim; comparing the composited page against it would have measured the UI, not the grade. Mean luma per region against the REV_HERO ground truth:
+
+    ```
+                      Blender      dusk            daylight
+        facade          115.4      95.2  (-20.2)    123.9  (+8.5)
+        roof slate      111.9      81.8  (-30.1)    113.6  (+1.7)
+        terrace         134.6     120.1  (-14.5)    165.6 (+31.0)
+        lawn             99.3      73.6  (-25.7)    100.1  (+0.8)
+        fountain         63.8      40.5  (-23.3)     56.6  (-7.2)
+        background       53.9      12.8  (-41.1)     99.1 (+45.2)
+        spire            95.1      63.2  (-31.9)    103.7  (+8.6)
+        -------------------------------------------------------
+        RMS luma error             27.9              21.4
+    ```
+
+    And the limestone, which is the asset the whole sweep was about:
+
+    ```
+        Blender   H 36.1  S 0.133  L 0.436
+        dusk      H 32.4  S 0.160  L 0.362    darker, more saturated
+        daylight  H 34.1  S 0.150  L 0.469    closest on all three
+    ```
+
+    Daylight wins five regions of seven and EVERY architectural surface. Dusk is darker than the reference on all seven — it is not a different reading of the asset, it is uniformly under it.
+
+- **Two residual gaps in daylight, named rather than buried.** The terrace runs +31 hot: its `PAVING_TINT` was fitted under dusk and is now doing the wrong amount of work. The sky runs +45 hot where Blender has a dark HDRI treeline and the site has a flat `#6D7F6A`. Both are real, both are follow-ups, neither blocks the default.
+
+- **A third difference that NO grade fixes, and it is the largest remaining visual gap.** In the Blender reference the windows are DARK — recessed glass in shadow — and the gold finials are small and matte. On the site the windows carry emissive spill and the finials glow, in both grades. That is the authored `PHYSICAL SPILL FROM THE WINDOWS` rig plus the gold's emissive, not a tone-mapping or environment property. It reads as evening-interior-lit in a daylight frame. Flagged, not touched.
+
+- **The canvas wrapper had to follow the grade too.** `<div className="bg-[#0A1120]">` sits directly behind the Canvas; left alone it showed navy under a daylight scene for any frame the GLB had not painted. It now uses the same expression as `<color attach="background">`. The Preloader and the `Surface` gradients are still brand navy and were NOT changed — that is a site-wide colour decision, not part of this pass.
+
+- Verified on a FRESH production build (BUILD_ID cfH5kNmtej4Px7efI8w9M) and a fresh server and browser context: typecheck 0; lint 0 (pre-existing warnings only, none in WorldCanvas); 48/48 vitest incl. the 29 cameraPath assertions; production build 0; **0 console errors, 0 warnings** across default, `?grade=dusk` and the interior route. Default route with NO query parameter renders daylight and requests `exterior_mansion_v5.glb` (9433 KB). FPS with rAF gated against setTimeout first (rAF 181-183 per 2 s): **default/daylight 90.4, rollback/dusk 88.7.**
+- **Regression proofs, measured not asserted.** `?grade=dusk` against the previously shipping dusk frame: mean absolute difference **0.029/255** (the 76 max is the animated motes field). Interior route before vs after the default flip: mean **0.030/255, max 2/255, zero pixels over 8** — the flip does not reach the interior.
+- NOT verified: the scroll journey past the hero beat, unchanged from the previous pass — SmoothScroll's virtual scroll ignores synthetic events under automation. No camera, geometry or bounding box changed, so `cameraPath` is untouched and its 29 assertions still pass.
+- Flagged for review: the three items above (terrace tint, flat sky, emissive windows/gold). The asset was not reopened: no Blender change, no re-export, no GLB touched.

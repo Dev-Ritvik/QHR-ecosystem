@@ -762,12 +762,18 @@ const CLIP: Record<SceneSet, { near: number; far: number }> = {
  * Legibility scrim, per set — and much lighter outside than it used to be.
  *
  * The review was right that a heavy DOM gradient is a band-aid, and the fix it
- * asked for is the one applied here: the contrast is now made in WebGL. The
- * exterior renders at dusk against a #0A1120 sky, with fog from 34m matched to
- * that same colour. The top of the frame is therefore GENUINELY dark — it is
- * sky, not an overlay — and the distance behind the building falls away on its
- * own. So the exterior's top stop drops from 0.80 to 0.28 and the radial pass
- * is nearly gone.
+ * asked for is the one applied here: the contrast is now made in WebGL. These
+ * exterior stops were tuned against the DUSK grade, which renders on a #0A1120
+ * sky with fog from 34m matched to that same colour — the top of the frame is
+ * genuinely dark there because it is sky, not an overlay. So the exterior's
+ * top stop drops from 0.80 to 0.28 and the radial pass is nearly gone.
+ *
+ * Daylight is now the default and does NOT have that dark sky, so this pass
+ * alone is not enough for it. It is topped up by DAYLIGHT_COLUMN_SCRIM below,
+ * which is scoped to the left column so the building is never dimmed. These
+ * stops are deliberately left as they are: they still serve the dusk rollback,
+ * and widening them would darken a frame that the daylight grade exists to
+ * open up.
  *
  * It is not deleted, and claiming otherwise would be dishonest. The bottom
  * eighth still darkens, because the lawn in the near field is a mid-value
@@ -841,19 +847,44 @@ const DAYLIGHT_COLUMN_SCRIM =
   'linear-gradient(to right, rgba(6,10,20,0.38) 0%, rgba(6,10,20,0.34) 30%, rgba(6,10,20,0) 52%, rgba(6,10,20,0) 100%)';
 
 /**
- * EXTERIOR GRADE — dusk (ships) or daylight (?grade=daylight).
+ * EXTERIOR GRADE — daylight (ships) or dusk (?grade=dusk).
  *
  * The exterior has two defensible art directions and the brief names both:
  * masterprompt.md:428 asks for "premium dusk/evening or editorial daylight
- * grade depending on what works best with the actual asset". Dusk is what
- * shipped and what every comment in this file is written against. Daylight is
- * what the approved Blender render actually shows, and it is reachable here
- * so the two can be compared in the real application rather than argued about.
+ * grade depending on what works best with the actual asset". Dusk shipped
+ * first and most lighting comments in this file were written against it.
+ * DAYLIGHT IS NOW THE DEFAULT, because it is measurably closer to the
+ * approved Blender render of the asset we actually ship.
+ *
+ * The decision was made on rendered images, not on asset values. Raw canvas
+ * (DOM scrims hidden, so the comparison is lighting only) against the
+ * REV_HERO ground truth, mean luma per region:
+ *
+ *                  Blender      dusk           daylight
+ *     facade         115.4      95.2  (-20.2)   123.9  (+8.5)
+ *     roof slate     111.9      81.8  (-30.1)   113.6  (+1.7)
+ *     terrace        134.6     120.1  (-14.5)   165.6 (+31.0)
+ *     lawn            99.3      73.6  (-25.7)   100.1  (+0.8)
+ *     fountain        63.8      40.5  (-23.3)    56.6  (-7.2)
+ *     background      53.9      12.8  (-41.1)    99.1 (+45.2)
+ *     spire           95.1      63.2  (-31.9)   103.7  (+8.6)
+ *     ----------------------------------------------------------
+ *     RMS luma error            27.9             21.4
+ *
+ * and the limestone itself, which is the whole point of the asset:
+ *
+ *     Blender  H 36.1  S 0.133  L 0.436
+ *     dusk     H 32.4  S 0.160  L 0.362   darker, more saturated
+ *     daylight H 34.1  S 0.150  L 0.469   closest on all three
+ *
+ * Daylight wins five regions of seven and every architectural surface. Two
+ * residual gaps are KNOWN and are not fixed here: the terrace runs +31 hot
+ * (its paving tint was tuned under dusk) and the flat sky runs +45 hot where
+ * Blender has a dark HDRI treeline. Both are follow-ups, not blockers.
  *
  * DERIVED, NOT INVENTED. Every value below was fitted by measuring the live
  * framebuffer against a 1424x900 render from Blender's REV_HERO camera — the
- * same camera as the site hero, proven by matching loc/lens/fov — and
- * minimising RMS error across nine sampled regions. Best fit: RMS 16.9.
+ * same camera as the site hero, proven by matching loc/lens/fov.
  *
  *   sun azimuth/elevation   read from SUN_KEY's own rotation (55.1, 0, 63.9),
  *                           i.e. 34.9 degrees elevation, converted Blender
@@ -872,14 +903,14 @@ export type Grade = 'dusk' | 'daylight';
 /** Sky/clear colour per grade. Dusk's is also the fog colour. */
 const GRADE_BG: Record<Grade, string> = { dusk: '#0A1120', daylight: '#6D7F6A' };
 
-/** Exterior LOOK deltas for daylight. Dusk is LOOK.exterior unmodified. */
+/** Exterior LOOK deltas for daylight. Dusk (the rollback) is LOOK.exterior unmodified. */
 const GRADE_LOOK: Record<Grade, Partial<(typeof LOOK)['exterior']>> = {
   dusk: {},
   daylight: { exposure: 0.75, env: 0.7, ambient: 0.2 },
 };
 
 function useLook(set: SceneSet) {
-  const [grade, setGrade] = useState<Grade>('dusk');
+  const [grade, setGrade] = useState<Grade>('daylight');
   const base = { ...LOOK[set], ...(set === 'exterior' ? GRADE_LOOK[grade] : {}) };
   const [override, setOverride] = useState<Partial<typeof base>>({});
   const [free, setFree] = useState(false);
@@ -891,7 +922,8 @@ function useLook(set: SceneSet) {
       return Number.isFinite(v) ? v : undefined;
     };
     setFree(q.get('free') === '1');
-    setGrade(q.get('grade') === 'daylight' ? 'daylight' : 'dusk');
+    // Daylight ships; ?grade=dusk is the rollback and the look-dev A/B.
+    setGrade(q.get('grade') === 'dusk' ? 'dusk' : 'daylight');
     // Only keys actually present in the query string override, so switching
     // sets still picks up that set's defaults for everything untouched.
     const next: Partial<typeof base> = {};
@@ -1363,7 +1395,14 @@ export function WorldCanvas() {
   return (
     // aria-hidden and non-interactive: the world is the backdrop, and every
     // word a screen reader needs is in the DOM layer above it.
-    <div aria-hidden="true" className="fixed inset-0 z-0 bg-[#0A1120]">
+    // Behind the canvas, and it must agree with <color attach="background">
+    // below — otherwise the frame the GLB has not painted yet shows navy under
+    // a daylight scene. Same rule, same source of truth.
+    <div
+      aria-hidden="true"
+      className="fixed inset-0 z-0"
+      style={{ background: set === 'exterior' ? GRADE_BG[look.grade] : GRADE_BG.dusk }}
+    >
       <SceneBoundary onError={onError}>
         <Canvas
           // Soft shadow maps, and only on tiers that can afford the extra
