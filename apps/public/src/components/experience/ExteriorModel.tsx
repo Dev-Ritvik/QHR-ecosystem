@@ -32,7 +32,63 @@ import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { attachLoaders } from './HallModel';
 import { guardAnisotropy } from './materialGuards';
 
-export const EXTERIOR_MODEL_URL = '/models/exterior_mansion.glb';
+/**
+ * The shipped exterior.
+ *
+ * v5 is the first delivery that carries the Phase-2 masonry. The file it
+ * replaces has 212 nodes against v5's 479 — a difference of exactly the 267
+ * ashlar blocks — so everything shipped before this was the pre-masonry
+ * building. Swapped after runtime QA through this page, not after a Blender
+ * render: 267 blocks present, 408 vertex-coloured meshes carrying StoneAO,
+ * wall colour #e7e3da, normalScale 1.2, bbox identical to the file it
+ * replaces, zero console errors.
+ *
+ * The previous asset is deliberately still on disk and still addressable as
+ * `?model=prod`. It is the rollback.
+ */
+export const EXTERIOR_MODEL_URL = '/models/exterior_mansion_v5.glb';
+const EXTERIOR_MODEL_PREVIOUS = '/models/exterior_mansion.glb';
+
+/**
+ * Candidate assets, addressable by query string: `?model=v5`.
+ *
+ * A new exterior delivery has to be judged through THIS page — its camera, its
+ * key light, its grade, its post chain — not through a Blender viewport and not
+ * through a bare glTF viewer. Both of those have signed off assets that then
+ * failed here. So the candidate is loadable alongside production rather than
+ * instead of it, and the default stays on the shipped file until the swap.
+ *
+ * The canvas is mounted `ssr: false` (ExperienceCanvasHost), so reading
+ * location here cannot desynchronise a server render.
+ */
+const MODEL_CANDIDATES: Record<string, string> = {
+  v5: EXTERIOR_MODEL_URL,
+  /**
+   * Same geometry and the same maps, normals re-encoded ETC1S rather than
+   * UASTC. 3.63 MB against 9.72 MB — and NOT shipped, on measurement.
+   *
+   * Across the stone at REV_WEST6 the two are indistinguishable: mean absolute
+   * difference 0.425/255. But the pixels that DO differ are not scattered, they
+   * sit in one horizontal band at the bottom of the frame — the terrace paving,
+   * the only large flat surface in shot. That is exactly the failure encode_ktx2
+   * documents when it picks the codec: "ETC1S quantises the endpoints hard
+   * enough to produce visible faceting across large flat walls."
+   *
+   * So the 6 MB is real and so is the reason not to take it. The saving worth
+   * having is a MIXED policy — UASTC for paving_normal, ETC1S for the rest,
+   * which is ~6.7 MB of normal maps down to well under 1 MB with the faceting
+   * confined to a map that has no large flat surface to facet across. That is a
+   * pipeline change, not a swap, so it is left as a measured recommendation.
+   */
+  v5etc1s: '/models/exterior_mansion_v5_etc1s.glb',
+  prod: EXTERIOR_MODEL_PREVIOUS,
+};
+
+export function resolveExteriorModelUrl(search?: string): string {
+  const s = search ?? (typeof window === 'undefined' ? '' : window.location.search);
+  const key = new URLSearchParams(s).get('model');
+  return (key && MODEL_CANDIDATES[key]) || EXTERIOR_MODEL_URL;
+}
 
 /**
  * Measured from the delivered GLB: mansion x -9.55..9.55, z -5.55..6.10, roof
@@ -212,20 +268,55 @@ function applyGrade(root: THREE.Object3D): string[] {
   // One shared clone across all 107 meshes, so they stay on one shader program
   // and one uniform block. Cloning per mesh would turn a batched draw into a
   // hundred.
-  let paving: THREE.MeshStandardMaterial | null = null;
+  //
+  // ONE CLONE PER SOURCE MATERIAL, not one clone for all of them.
+  //
+  // The original wrote a single clone across every matched mesh, which was
+  // right when there was a single stone material to clone and wrong the moment
+  // there was more than one. A delivery that splits the stone puts
+  // MAT_Stone_Paving on the terrace, MAT_Stone_Rustic on the 96 base blocks,
+  // MAT_Stone_Steps on the entry and MAT_Stone_Trim on the fountain wall, and
+  // the old loop took whichever it met first and painted all of them with it —
+  // rustication wearing the paving texture.
+  //
+  // Keying the clone by source material fixes that and keeps the grade doing
+  // the job it was measured into existence for. MEASURED on the hero frame at
+  // the same world points, before and after:
+  //
+  //                        production      v5 ungraded     v5 graded
+  //     facade_west            87              94             94
+  //     terrace_left           69             110             83
+  //     terrace_front          56              83             64
+  //
+  // Ungraded, the terrace climbs ABOVE the west elevation — the same inverted
+  // hierarchy the tint was written to correct, just with a different asset
+  // underneath it. The baked AO in COLOR_0 darkens the terrace but not nearly
+  // enough on its own: AO answers "how enclosed is this surface", and the
+  // question here is "what is a horizontal plate worth against a lit wall at
+  // dusk", which no amount of occlusion can answer.
+  //
+  // Still one clone per material rather than per mesh, so 107 meshes stay on
+  // four shader programs instead of a hundred.
+  const clones = new Map<THREE.Material, THREE.MeshStandardMaterial>();
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh || !PAVING_RE.test(mesh.name)) return;
     const current = mesh.material as THREE.MeshStandardMaterial;
     if (!current || Array.isArray(current)) return;
-    if (!paving) {
-      paving = current.clone();
-      paving.name = 'MAT_Stone_Cream_paving';
-      paving.color.multiplyScalar(PAVING_TINT);
-      paving.needsUpdate = true;
-      touched.push('paving');
+    // The name pattern predates the split and catches `fount_water`, which is
+    // MAT_Water — transmissive, and not a horizontal stone plate. Grading it
+    // darkened the fountain. The grade is about STONE paving, so say so.
+    if (!current.name.startsWith('MAT_Stone')) return;
+    let graded = clones.get(current);
+    if (!graded) {
+      graded = current.clone();
+      graded.name = `${current.name}_paving`;
+      graded.color.multiplyScalar(PAVING_TINT);
+      graded.needsUpdate = true;
+      clones.set(current, graded);
+      touched.push(graded.name);
     }
-    mesh.material = paving;
+    mesh.material = graded;
   });
 
   return touched;
@@ -242,7 +333,8 @@ export function ExteriorModel({
   // the extendLoader callback runs, which our CSP blocks. This GLB lists
   // KHR_draco_mesh_compression in extensionsRequired, so that silently prevents
   // it from parsing at all. The path must be passed explicitly.
-  const { scene } = useGLTF(EXTERIOR_MODEL_URL, '/draco/', undefined, (loader) => {
+  const url = useMemo(() => resolveExteriorModelUrl(), []);
+  const { scene } = useGLTF(url, '/draco/', undefined, (loader) => {
     attachLoaders(loader as unknown as GLTFLoader, gl);
   });
 
@@ -268,16 +360,63 @@ export function ExteriorModel({
 
     const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());
+
+    // Runtime census. Everything a swap can silently break is counted HERE, in
+    // the browser, against the object graph three actually built — not against
+    // the Blender scene and not against the glTF JSON. A masonry block that
+    // failed to decode, a material the grade replaced, a COLOR_0 three declined
+    // to bind: all of them are invisible upstream and all of them show up here.
+    const census = {
+      ashlar: 0, rustic: 0, vertexColored: 0, withMaps: 0, textures: new Set<string>(),
+    };
+    const mats = new Map<string, number>();
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      if (m.name.startsWith('ashlar_')) census.ashlar += 1;
+      if (m.name.startsWith('rustic_')) census.rustic += 1;
+      const mat = m.material as THREE.MeshStandardMaterial;
+      if (!mat || Array.isArray(mat)) return;
+      mats.set(mat.name, (mats.get(mat.name) ?? 0) + 1);
+      if (mat.vertexColors) census.vertexColored += 1;
+      if (mat.map) { census.withMaps += 1; census.textures.add(mat.map.name || mat.name); }
+    });
+    const wall = [...mats.keys()].includes('MAT_Stone_Wall')
+      ? (root.getObjectByName('mansion_walls') as THREE.Mesh | undefined)
+      : undefined;
+    const wallMatInfo = wall && !Array.isArray(wall.material)
+      ? (() => {
+          const w = wall.material as THREE.MeshStandardMaterial;
+          const g = wall.geometry as THREE.BufferGeometry;
+          return {
+            color: '#' + w.color.getHexString(),
+            roughness: w.roughness, metalness: w.metalness,
+            normalScale: w.normalMap ? w.normalScale.x : null,
+            vertexColors: w.vertexColors,
+            hasColorAttr: !!g.attributes.color,
+            colorItemSize: g.attributes.color ? g.attributes.color.itemSize : null,
+          };
+        })()
+      : null;
+
     // eslint-disable-next-line no-console
     console.info(
-      '[exterior_ready] meshes=%d tris=%d graded=[%s] anisotropyDisarmed=[%s] | size %sx%sx%s | y %s..%s',
-      meshes,
-      Math.round(tris),
-      graded.join(','),
-      disarmed.join(','),
+      '[exterior_ready] url=%s meshes=%d tris=%d graded=[%s] anisotropyDisarmed=[%s] | size %sx%sx%s | y %s..%s',
+      url, meshes, Math.round(tris), graded.join(','), disarmed.join(','),
       size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2),
       box.min.y.toFixed(2), box.max.y.toFixed(2),
     );
+    // eslint-disable-next-line no-console
+    console.info('[exterior_census]', JSON.stringify({
+      url,
+      ashlar: census.ashlar, rustic: census.rustic,
+      vertexColoredMeshes: census.vertexColored,
+      meshesWithBaseMap: census.withMaps,
+      materials: Object.fromEntries([...mats.entries()].sort()),
+      wall: wallMatInfo,
+      bbox: { min: box.min.toArray().map((v) => +v.toFixed(3)),
+              max: box.max.toArray().map((v) => +v.toFixed(3)) },
+    }));
 
     onReady?.({ meshes, tris: Math.round(tris) });
   }, [root, onReady]);

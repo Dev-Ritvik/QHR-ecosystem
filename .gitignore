@@ -51,3 +51,6 @@ __pycache__/
 
 # Raw web exports too large for GitHub (>100MB)
 out/web_raw/
+
+# Playwright MCP logs
+.playwright-mcp/

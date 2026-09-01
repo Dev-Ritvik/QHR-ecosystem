@@ -12,13 +12,28 @@ live MCP bridge:
 """
 import bpy, sys, os
 
-OUT = sys.argv[sys.argv.index("--") + 1:][0]
+_args = sys.argv[sys.argv.index("--") + 1:]
+OUT = _args[0]
+ONLY = set(_args[1:])          # optional: export only these set tags
 RAW = os.environ.get("GLTF_RAW") == "1"
 os.makedirs(OUT, exist_ok=True)
 
+# A SET IS A LIST OF COLLECTIONS, not one collection.
+#
+# The 267 ashlar blocks live in COL_Ashlar_<FACADE>, which are SIBLINGS of
+# COL_Exterior at scene level - that is how the generator builds and rebuilds
+# them, and how survey_facades.py hides them without touching the exterior. The
+# previous single-name form gathered COL_Exterior.objects only, so the export
+# shipped the mansion with every block missing and nobody would have seen it
+# until the GLB was in the browser.
+#
+# COL_Ashlar_<FACADE>_KIT is a CHILD of each of those and holds the 78 shared
+# master meshes parked at z -50. all_objects would sweep them in, so they are
+# filtered out below by name and by depth.
 SETS = {
-    "exterior_mansion_v4": "COL_Exterior",
-    "interior_hall_v6":    "COL_Interior",
+    "exterior_mansion_v4": ["COL_Exterior", "COL_Ashlar_West", "COL_Ashlar_East",
+                            "COL_Ashlar_North", "COL_Ashlar_South"],
+    "interior_hall_v6":    ["COL_Interior"],
 }
 
 vl = bpy.context.view_layer
@@ -31,10 +46,16 @@ lc = {c.name: c for c in vl.layer_collection.children}
 RIG_PREFIXES = ("STATION_", "TURNTABLE_", "HOLO_")
 
 
-def visible_meshes(colname):
-    col = bpy.data.collections[colname]
+def visible_meshes(colnames):
+    seen = set()
+    objs = []
+    for cn in colnames:
+        for o in bpy.data.collections[cn].all_objects:
+            if o.name not in seen:
+                seen.add(o.name)
+                objs.append(o)
     out = []
-    for o in col.objects:
+    for o in objs:
         if o.type == 'EMPTY':
             if o.name.startswith(RIG_PREFIXES):
                 out.append(o)
@@ -51,12 +72,15 @@ def visible_meshes(colname):
         out.append(o)
     return out
 
-for tag, colname in SETS.items():
+for tag, colnames in SETS.items():
+    if ONLY and tag not in ONLY:
+        continue
+    keep = set(colnames)
     for n, c in lc.items():
-        c.exclude = (n != colname)
+        c.exclude = (n not in keep)
     vl.update()
 
-    objs = visible_meshes(colname)
+    objs = visible_meshes(colnames)
     bpy.ops.object.select_all(action='DESELECT')
     for o in objs:
         o.select_set(True)
@@ -64,6 +88,7 @@ for tag, colname in SETS.items():
 
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons)
                for o in objs if o.type == 'MESH')
+    meshes = len({o.data.name for o in objs if o.type == 'MESH'})
     dst = os.path.join(OUT, tag + ".glb")
     bpy.ops.export_scene.gltf(
         filepath=dst,
@@ -79,8 +104,8 @@ for tag, colname in SETS.items():
         export_image_format=('AUTO' if RAW else 'JPEG'),
         export_jpeg_quality=82,
     )
-    print("EXPORT|%s|objs=%d|tris=%d|mb=%.2f" % (
-        tag, len(objs), tris, os.path.getsize(dst) / 1048576.0))
+    print("EXPORT|%s|objs=%d|meshes=%d|tris=%d|mb=%.2f" % (
+        tag, len(objs), meshes, tris, os.path.getsize(dst) / 1048576.0))
 
 for n, c in lc.items():
     c.exclude = False

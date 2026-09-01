@@ -798,8 +798,89 @@ const SCRIM: Record<SceneSet, { linear: string; radial: string }> = {
   },
 };
 
+/**
+ * The extra pass the DAYLIGHT grade needs, and only that grade.
+ *
+ * Daylight lights the band the hero copy sits in, so the vertical SCRIM above
+ * — authored against a navy dusk sky — stops being enough on its own. This
+ * buys the contrast back.
+ *
+ * It is paid on the LEFT COLUMN rather than the whole frame, because the copy
+ * occupies x 160..606 of 1440 and the mansion sits from roughly x 700 — a
+ * full-width band would buy contrast by dimming the very building the grade
+ * exists to reveal. Fading out by 52% keeps the architecture untouched.
+ *
+ * MEASURED, production build, 1440x900 hero, against a BACKDROP PLATE: the
+ * same frame re-rendered with the glyphs set transparent, so the background is
+ * read rather than estimated from between the letterforms. Ratios are computed
+ * on the alpha-composited text colour. "typical" is the median backdrop under
+ * the run of copy, "worst" its 95th percentile.
+ *
+ *                        DUSK typ/worst    DAYLIGHT typ/worst   AA needs
+ *   H1 (66px)             12.87 / 7.26       7.53 / 5.62          3.0
+ *   body copy (16.8px)     4.29 / 3.89       4.69 / 3.86          4.5
+ *   gold link (13.4px)     5.33 / 4.21       5.35 / 4.81          4.5
+ *   secondary link         3.55 / 3.23       3.72 / 3.37          4.5
+ *   eyebrow                5.49 / 5.47       3.69 / 2.93          4.5
+ *
+ * Read that honestly, because an earlier revision of this comment did not:
+ * DUSK IS NOT CLEAN EITHER. Body copy at 4.29 and the secondary link at 3.55
+ * already miss AA on the shipping grade; that is a pre-existing defect of the
+ * 0.55/0.70 alpha type over a lit lawn, not something daylight introduced.
+ *
+ * With this scrim, daylight is BETTER than dusk on body copy, gold and the
+ * secondary link, and materially worse on exactly one element: the eyebrow,
+ * 5.49 -> 3.69, which sits high in the frame where the column scrim has
+ * already faded and the dusk sky used to be near-black.
+ *
+ * So the grade fork does not turn an accessible page into an inaccessible one.
+ * Both grades owe the same fix — the alpha-dimmed small type needs opacity,
+ * not more scrim — and that is a typography change outside this pass.
+ */
+const DAYLIGHT_COLUMN_SCRIM =
+  'linear-gradient(to right, rgba(6,10,20,0.38) 0%, rgba(6,10,20,0.34) 30%, rgba(6,10,20,0) 52%, rgba(6,10,20,0) 100%)';
+
+/**
+ * EXTERIOR GRADE — dusk (ships) or daylight (?grade=daylight).
+ *
+ * The exterior has two defensible art directions and the brief names both:
+ * masterprompt.md:428 asks for "premium dusk/evening or editorial daylight
+ * grade depending on what works best with the actual asset". Dusk is what
+ * shipped and what every comment in this file is written against. Daylight is
+ * what the approved Blender render actually shows, and it is reachable here
+ * so the two can be compared in the real application rather than argued about.
+ *
+ * DERIVED, NOT INVENTED. Every value below was fitted by measuring the live
+ * framebuffer against a 1424x900 render from Blender's REV_HERO camera — the
+ * same camera as the site hero, proven by matching loc/lens/fov — and
+ * minimising RMS error across nine sampled regions. Best fit: RMS 16.9.
+ *
+ *   sun azimuth/elevation   read from SUN_KEY's own rotation (55.1, 0, 63.9),
+ *                           i.e. 34.9 degrees elevation, converted Blender
+ *                           (x,y,z) -> three (x,z,-y).
+ *   tone mapping            UNCHANGED. ACES beat AgX in every row of the grid;
+ *                           swapping the view transform alone moves the frame
+ *                           only 63.9 -> 69.2 (+8%) and is not the cause.
+ *   environment + sky       the dominant lever, worth +128% on frame mean.
+ *
+ * Scoped to the exterior by construction, not by a flag: <ExteriorLighting>
+ * and this background only mount for set === 'exterior', and LOOK is already
+ * per-set, so the interior cannot see any of it.
+ */
+export type Grade = 'dusk' | 'daylight';
+
+/** Sky/clear colour per grade. Dusk's is also the fog colour. */
+const GRADE_BG: Record<Grade, string> = { dusk: '#0A1120', daylight: '#6D7F6A' };
+
+/** Exterior LOOK deltas for daylight. Dusk is LOOK.exterior unmodified. */
+const GRADE_LOOK: Record<Grade, Partial<(typeof LOOK)['exterior']>> = {
+  dusk: {},
+  daylight: { exposure: 0.75, env: 0.7, ambient: 0.2 },
+};
+
 function useLook(set: SceneSet) {
-  const base = LOOK[set];
+  const [grade, setGrade] = useState<Grade>('dusk');
+  const base = { ...LOOK[set], ...(set === 'exterior' ? GRADE_LOOK[grade] : {}) };
   const [override, setOverride] = useState<Partial<typeof base>>({});
   const [free, setFree] = useState(false);
 
@@ -810,6 +891,7 @@ function useLook(set: SceneSet) {
       return Number.isFinite(v) ? v : undefined;
     };
     setFree(q.get('free') === '1');
+    setGrade(q.get('grade') === 'daylight' ? 'daylight' : 'dusk');
     // Only keys actually present in the query string override, so switching
     // sets still picks up that set's defaults for everything untouched.
     const next: Partial<typeof base> = {};
@@ -819,7 +901,7 @@ function useLook(set: SceneSet) {
     setOverride(next);
   }, []);
 
-  return { ...base, ...override, free };
+  return { ...base, ...override, free, grade };
 }
 
 /**
@@ -836,18 +918,22 @@ function useLook(set: SceneSet) {
  * everything past the building — which is exactly the part of the frame the
  * headings sit over.
  */
-function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
+function ExteriorLighting({ driveByScroll, grade }: { driveByScroll: boolean; grade: Grade }) {
+  const day = grade === 'daylight';
   const scene = useThree((s) => s.scene);
   const scroll = useScrollProgress();
   const key = useRef<THREE.DirectionalLight>(null);
 
   useEffect(() => {
     const prev = scene.fog;
-    scene.fog = new THREE.Fog('#0A1120', 34, 190);
+    // No fog in daylight. The dusk fog exists to fade a 450m ground plane into
+    // a navy sky and to darken the frame behind the headings; against a lit
+    // sky it only greys the building, and it measured as pure loss.
+    scene.fog = day ? null : new THREE.Fog(GRADE_BG.dusk, 34, 190);
     return () => {
       scene.fog = prev;
     };
-  }, [scene]);
+  }, [scene, day]);
 
   // Atmosphere travels with the camera. The path drops from 30m out to 9m and
   // rises to 6.8m on the way, and a fixed fog band tuned for the wide
@@ -856,7 +942,7 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
   // most present. Fog closes from 34..190 to 14..95 and the key lifts as the
   // camera arrives.
   useFrame(() => {
-    if (!driveByScroll) return;
+    if (!driveByScroll || day) return;
     const a = atmosphereAt(scroll.current);
     const fog = scene.fog as THREE.Fog | null;
     if (fog && (fog as THREE.Fog).isFog) {
@@ -899,9 +985,13 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           position would now be pointing at nothing. */}
       <directionalLight
         ref={key}
-        position={[30, 15, -80]}
-        intensity={2.3}
-        color="#FFB264"
+        // Daylight puts the sun where Blender's SUN_KEY actually is: rotation
+        // (55.1, 0, 63.9) resolves to 34.9 degrees elevation, which converts to
+        // three-space (0.737, 0.572, 0.361) and out to 89m. Its colour is
+        // SUN_KEY's own (1, 0.93, 0.84).
+        position={day ? [66, 51, 32] : [30, 15, -80]}
+        intensity={day ? 3.0 : 2.3}
+        color={day ? '#FFEDD6' : '#FFB264'}
         castShadow
         shadow-mapSize={[2048, 2048]}
         // Tight ortho box around the building. The default frustum spans the
@@ -950,7 +1040,9 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           being a real rim: dropping it to 0.30 moves the back of the building
           by under 4% and the frame mean by 1.1 (56.6 -> 55.5). It is not
           carrying that shot either. */}
-      <directionalLight position={[34, 22, -40]} intensity={0.3} color="#7FB4D6" />
+      {/* Off in daylight: it exists to keep a dusk silhouette off the navy,
+          and with a lit sky and a 0.8 hemisphere it only flattens the roof. */}
+      <directionalLight position={[34, 22, -40]} intensity={day ? 0 : 0.3} color="#7FB4D6" />
 
       {/* PHYSICAL SPILL FROM THE WINDOWS.
 
@@ -1012,7 +1104,9 @@ function ExteriorLighting({ driveByScroll }: { driveByScroll: boolean }) {
           authored terrain rather than a plane graded to near-black in code. At
           0.5 it lifted the ground to the same value as the lit facade and the
           architecture stopped separating from its site. */}
-      <hemisphereLight args={['#4A6B96', '#1A1512', 0.36]} />
+      <hemisphereLight
+        args={day ? ['#BBD2E8', '#5C5A48', 0.8] : ['#4A6B96', '#1A1512', 0.36]}
+      />
     </>
   );
 }
@@ -1294,7 +1388,10 @@ export function WorldCanvas() {
           // rendered from the old interior default while it settles.
           camera={{ position: [0, 1.65, 30], fov: 45, ...CLIP.exterior }}
         >
-          <color attach="background" args={['#0A1120']} />
+          <color
+            attach="background"
+            args={[set === 'exterior' ? GRADE_BG[look.grade] : GRADE_BG.dusk]}
+          />
           {/* FIRST, so every reader below samples a value written earlier in
               the same frame. One driver replaces the three identical
               scroll/resize/ResizeObserver + useFrame sets that CameraRig,
@@ -1320,7 +1417,7 @@ export function WorldCanvas() {
           <ambientLight intensity={look.ambient} />
           {set === 'exterior' && (
             <>
-              <ExteriorLighting driveByScroll={poseFor(place).path === true} />
+              <ExteriorLighting driveByScroll={poseFor(place).path === true} grade={look.grade} />
               {/* Halved on low tier: the field is atmosphere, and a phone
                   should get thinner air rather than no air. */}
               <Motes count={tier === 'low' ? 1100 : 2400} />
@@ -1430,6 +1527,12 @@ export function WorldCanvas() {
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{ background: SCRIM[set].radial }}
       />
+      {set === 'exterior' && look.grade === 'daylight' && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[1]"
+          style={{ background: DAYLIGHT_COLUMN_SCRIM }}
+        />
+      )}
 
       {/*
         THE THRESHOLD.
