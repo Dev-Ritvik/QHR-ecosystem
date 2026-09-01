@@ -157,6 +157,34 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * entablature rather than running past it.
    */
   p33: '/models/exterior_mansion_v6_p33.glb',
+  /**
+   * P3.4 CANDIDATE - corrects P3.1. Not shipped.
+   *
+   * P3.1 measured mansion_walls ALONE, found the column shafts topping at
+   * z 3.05 against an architrave underside at 3.38, and concluded the columns
+   * stopped 330mm short of the entablature. That was WRONG. mansion_gold
+   * carries a complete gilded Tuscan capital on each column - necking r 0.280
+   * at z 3.050, echinus r 0.340 at 3.140, a 0.80 square abacus at 3.240
+   * landing on the architrave at 3.380. The gap was never a gap.
+   *
+   * Same failure twice on one feature: first "no columns" (they live in
+   * mansion_walls), then "no capitals" (they live in mansion_gold).
+   *
+   * Removed, all confirmed by volumetric test:
+   *   P3_col_capital_L/R, P3_col_abacus_L/R - the gold capital is larger at
+   *     every level, so these sat entirely inside it: invisible geometry and a
+   *     z-fighting risk.
+   *   P3_doorhead - there is a gilded keystone above the door at x +/-0.34,
+   *     z 3.862..4.038, and the doorhead sat 130mm in front of it, hiding it.
+   *
+   * Kept, because the audit proves they are not duplicates: the base torus
+   * (mansion_gold has ZERO vertices at the column base), the door jambs (clear
+   * of the keystone and handles), the third tread, all of P3.2, and the 48
+   * P3.3 quoins.
+   *
+   * Net: -892 triangles of dead geometry. Phase 3 is 1,270 tris / 0.73%.
+   */
+  p34: '/models/exterior_mansion_v6_p34.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
