@@ -906,12 +906,56 @@ const GRADE_BG: Record<Grade, string> = { dusk: '#0A1120', daylight: '#6D7F6A' }
 /** Exterior LOOK deltas for daylight. Dusk (the rollback) is LOOK.exterior unmodified. */
 const GRADE_LOOK: Record<Grade, Partial<(typeof LOOK)['exterior']>> = {
   dusk: {},
-  daylight: { exposure: 0.75, env: 0.7, ambient: 0.2 },
+  // env 0.7 -> 0.25, ambient 0.2 -> 0.02. See GRADE_RIG: these two plus the
+  // hemisphere are the FILL, and the fill was the whole reason the frame read
+  // as game-engine lighting.
+  daylight: { exposure: 0.75, env: 0.25, ambient: 0.02 },
+};
+
+/**
+ * Key and hemisphere, per grade, and swept from the query string like the rest.
+ *
+ * These were hard-coded inside <ExteriorLighting> until the parity audit needed
+ * to sweep the FILL independently of the KEY. They live here for the same
+ * reason exposure/env/ambient do — a look can only honestly be judged on the
+ * real page, and a rebuild per guess is a bad loop.
+ */
+const GRADE_RIG: Record<Grade, { key: number; hemi: number }> = {
+  dusk: { key: 2.3, hemi: 0.36 },
+  // KEY UP, FILL DOWN. The first daylight grade matched the reference's
+  // AVERAGE brightness and still read as a game engine, because average
+  // brightness is not what makes a render look lit — structure is.
+  //
+  // Measured over the building region only (sky, lawn and terrace excluded),
+  // the shipped daylight grade against the approved render:
+  //
+  //                        Blender    before     after
+  //     mean                 104.1     126.4      99.9
+  //     p05  (shadow)         46.9      73.1      49.3
+  //     p95  (lit)           159.7     193.4     159.2
+  //     p95/p05 contrast      3.36      2.62      3.19
+  //     share below L40        2.5%      0.0%      2.7%
+  //     share below L70       16.7%      4.0%     15.8%
+  //
+  // The line that mattered is "share below L40: 0.0%". NOT ONE PIXEL of the
+  // building was genuinely dark. hemi 0.8 + ambient 0.2 + env 0.7 put a floor
+  // under every shadow in the scene, so recesses, reveals and the shaded
+  // elevation all bottomed out at the same lifted value and the architecture
+  // lost its planes. That is what "uniformly illuminated" is, numerically.
+  //
+  // Dropping the fill roughly 4x and taking the key from 3.0 to 5.9 keeps the
+  // lit facade at the same place it already matched (p95 159.2 against 159.7)
+  // while letting the shadows fall to where the reference puts them.
+  daylight: { key: 5.9, hemi: 0.18 },
 };
 
 function useLook(set: SceneSet) {
   const [grade, setGrade] = useState<Grade>('daylight');
-  const base = { ...LOOK[set], ...(set === 'exterior' ? GRADE_LOOK[grade] : {}) };
+  const base = {
+    ...LOOK[set],
+    ...(set === 'exterior' ? GRADE_LOOK[grade] : {}),
+    ...GRADE_RIG[grade],
+  };
   const [override, setOverride] = useState<Partial<typeof base>>({});
   const [free, setFree] = useState(false);
 
@@ -930,6 +974,8 @@ function useLook(set: SceneSet) {
     const e = num('exposure'); if (e !== undefined) next.exposure = e;
     const v = num('env'); if (v !== undefined) next.env = v;
     const a = num('ambient'); if (a !== undefined) next.ambient = a;
+    const k = num('key'); if (k !== undefined) next.key = k;
+    const hm = num('hemi'); if (hm !== undefined) next.hemi = hm;
     setOverride(next);
   }, []);
 
@@ -950,7 +996,17 @@ function useLook(set: SceneSet) {
  * everything past the building — which is exactly the part of the frame the
  * headings sit over.
  */
-function ExteriorLighting({ driveByScroll, grade }: { driveByScroll: boolean; grade: Grade }) {
+function ExteriorLighting({
+  driveByScroll,
+  grade,
+  keyIntensity,
+  hemiIntensity,
+}: {
+  driveByScroll: boolean;
+  grade: Grade;
+  keyIntensity: number;
+  hemiIntensity: number;
+}) {
   const day = grade === 'daylight';
   const scene = useThree((s) => s.scene);
   const scroll = useScrollProgress();
@@ -958,10 +1014,27 @@ function ExteriorLighting({ driveByScroll, grade }: { driveByScroll: boolean; gr
 
   useEffect(() => {
     const prev = scene.fog;
-    // No fog in daylight. The dusk fog exists to fade a 450m ground plane into
-    // a navy sky and to darken the frame behind the headings; against a lit
-    // sky it only greys the building, and it measured as pure loss.
-    scene.fog = day ? null : new THREE.Fog(GRADE_BG.dusk, 34, 190);
+    // Dusk: the original band, matched to the navy sky.
+    //
+    // Daylight: FOG IS BACK, for a different reason than dusk's. Dusk uses it
+    // to darken the frame behind the headings. Daylight needs it because the
+    // ground plane is finite and ends in a dead-straight edge against the
+    // environment behind it — the single thing that most gave the frame away
+    // as a diorama once the background became real landscape. The reference
+    // has aerial perspective doing that job.
+    //
+    // #5E6147 is not chosen, it is SAMPLED: the mean of the approved render
+    // across the band just above its own horizon (y 150..190, full width).
+    //
+    // 60..220 is set so the BUILDING IS NEVER TOUCHED. Its front face is 28m
+    // from the hero camera and its far corner ~50m, both inside the near
+    // plane, so the architecture renders completely unfogged and only ground
+    // beyond it carries haze. 90..300 was tried first and was measurably
+    // pointless: the plane's far edge sits ~130m out, which that band fogged
+    // by 19%, and the edge stayed as hard as it was.
+    scene.fog = day
+      ? new THREE.Fog(DAYLIGHT_HAZE, 60, 220)
+      : new THREE.Fog(GRADE_BG.dusk, 34, 190);
     return () => {
       scene.fog = prev;
     };
@@ -1021,9 +1094,17 @@ function ExteriorLighting({ driveByScroll, grade }: { driveByScroll: boolean; gr
         // (55.1, 0, 63.9) resolves to 34.9 degrees elevation, which converts to
         // three-space (0.737, 0.572, 0.361) and out to 89m. Its colour is
         // SUN_KEY's own (1, 0.93, 0.84).
-        position={day ? [66, 51, 32] : [30, 15, -80]}
-        intensity={day ? 3.0 : 2.3}
-        color={day ? '#FFEDD6' : '#FFB264'}
+        // RECOVERED FROM SOURCE, not fitted. mansion_exterior_AO-MATERIAL
+        // (the locked state, 267 ashlar, the one v5 was exported from) has
+        // SUN_KEY at rotation (76, 0, -118) with energy 4.0 and colour
+        // (1, 0.94, 0.86). Resolving local -Z through Rz*Rx gives a travel
+        // direction of (+0.857, -0.456, -0.242), so the direction TO the sun
+        // is (-0.857, +0.456, +0.242) - an elevation of 14 degrees, not the
+        // 34.9 a previous pass used. Converted (x,y,z)->(x,z,-y) and taken out
+        // to 89m that is [-76.2, 21.5, -40.5].
+        position={day ? [-76.2, 21.5, -40.5] : [30, 15, -80]}
+        intensity={keyIntensity}
+        color={day ? '#FFF0DB' : '#FFB264'}
         castShadow
         shadow-mapSize={[2048, 2048]}
         // Tight ortho box around the building. The default frustum spans the
@@ -1165,7 +1246,11 @@ function ExteriorLighting({ driveByScroll, grade }: { driveByScroll: boolean; gr
           0.5 it lifted the ground to the same value as the lit facade and the
           architecture stopped separating from its site. */}
       <hemisphereLight
-        args={day ? ['#BBD2E8', '#5C5A48', 0.8] : ['#4A6B96', '#1A1512', 0.36]}
+        args={
+          day
+            ? ['#BBD2E8', '#5C5A48', hemiIntensity]
+            : ['#4A6B96', '#1A1512', hemiIntensity]
+        }
       />
     </>
   );
@@ -1334,72 +1419,85 @@ function RoomEnvironmentMap({ intensity }: { intensity: number }) {
 /**
  * Sky, per grade.
  *
- * Dusk is a flat #0A1120 and should stay flat: it is night air, it carries the
- * fog colour, and there is nothing in it to graduate.
+ * Dusk is a flat #0A1120 and stays flat: it is night air, it carries the fog
+ * colour, and there is nothing in it to graduate.
  *
- * Daylight cannot be flat, and the flat #6D7F6A stand-in is what made the
- * background the worst-scoring region in the whole parity comparison. Sampling
- * the approved REV_HERO render straight down its left margin shows why — that
- * background is not sky at all, because a 3/4 bird's-eye camera puts the
- * horizon high and fills the top of frame with distant LAND:
+ * Daylight uses THE ACTUAL REFERENCE ENVIRONMENT — assets/hdri/
+ * 199_hdrmaps_com_free_2K.exr, the same file Blender's W_HDRI world is built
+ * on — baked to an equirectangular JPEG and assigned to scene.background.
  *
- *     y   0..50    L  44..48    dark treeline
- *     y  60..90    L  68..113   the tree line breaking into open ground
- *     y 100..200   L 112..117   sunlit field
- *     y 200+       L 111..116   meeting our own ground plane
+ * WHY THIS REPLACED A RUNTIME GRADIENT. The gradient before it was fitted to
+ * the reference's vertical luma profile and matched it well, but it was still
+ * a smooth ramp and read as one. Two things a ramp cannot do:
  *
- * A single colour has to be wrong at both ends: ours was +45 too bright against
- * the treeline and ~16 too dark against the field. So this is a two-pixel-wide
- * vertical ramp built at runtime on a canvas — no asset, no fetch, nothing for
- * the CSP to refuse — assigned to scene.background, which three renders as a
- * fullscreen quad for any texture that is not an env mapping.
+ *   1. There is NO SKY IN THIS SHOT. The hero is a 3/4 bird's eye and the
+ *      whole 41-degree frame sits below the horizon, so what reads as a dark
+ *      band at the top is the HDRI's forested hills, with sunlit meadow below.
+ *      That is landscape, and it has silhouette. A ramp has none.
+ *   2. A 2D background is a fullscreen quad and does not move with the camera.
+ *      The journey ORBITS the building, so a painted ramp sits frozen behind a
+ *      turning scene. An equirect background parallaxes correctly, which is
+ *      also what Blender is doing.
  *
- * It is BACKGROUND ONLY. scene.environment is still the generated cube map, so
- * this changes what is behind the building and lights nothing. The stops are
- * pre-compensated for ACES at exposure 0.75, which is why they read brighter
- * here than the target numbers above.
+ * ORIENTATION NEEDS NO OFFSET, and that is derived, not dialled in. Blender
+ * maps an equirect world with u = -atan2(y, x)/2pi + 0.5, v = asin(z)/pi + 0.5;
+ * three uses u = atan2(z, x)/2pi + 0.5, v = asin(y)/pi + 0.5. Under this
+ * project's Blender->three axis convention (x, y, z) -> (x, z, -y), three's u
+ * becomes atan2(-y, x)/2pi + 0.5, and atan2(-y, x) == -atan2(y, x). Identical
+ * mapping, so the environment lands in the same place in both renderers.
+ *
+ * BACKGROUND ONLY. scene.environment remains the separately generated cube
+ * map, so this changes what is BEHIND the building and contributes nothing to
+ * how it is lit. The two are deliberately different objects: the lighting
+ * environment is tuned for the metals and the glass, and binding this to it
+ * would silently re-light every material in the scene.
  */
-const SKY_STOPS: [number, string][] = [
-  [0.000, 'rgb(76,86,67)'],
-  [0.028, 'rgb(59,68,53)'],
-  [0.056, 'rgb(73,82,63)'],
-  [0.083, 'rgb(143,141,102)'],
-  [0.111, 'rgb(160,153,109)'],
-  [0.139, 'rgb(158,152,108)'],
-  [0.167, 'rgb(146,144,105)'],
-  [0.250, 'rgb(134,141,112)'],
-  [1.000, 'rgb(132,140,112)'],
-];
+const SKY_EQUIRECT_URL = '/textures/env_meadow_bg_2k.jpg';
+
+/** Aerial-perspective colour, sampled from the approved render's own horizon band. */
+const DAYLIGHT_HAZE = '#5E6147';
 
 function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
   const scene = useThree((s) => s.scene);
+  const [env, setEnv] = useState<THREE.Texture | null>(null);
+  const wants = set === 'exterior' && grade === 'daylight';
 
-  const sky = useMemo(() => {
-    if (set !== 'exterior' || grade !== 'daylight') return null;
-    const c = document.createElement('canvas');
-    c.width = 2;
-    c.height = 512;
-    const ctx = c.getContext('2d');
-    if (!ctx) return null;
-    const g = ctx.createLinearGradient(0, 0, 0, 512);
-    for (const [at, col] of SKY_STOPS) g.addColorStop(at, col);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 2, 512);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.needsUpdate = true;
-    return tex;
-  }, [set, grade]);
+  useEffect(() => {
+    if (!wants) return;
+    let dead = false;
+    new THREE.TextureLoader().load(
+      SKY_EQUIRECT_URL,
+      (tex) => {
+        if (dead) {
+          tex.dispose();
+          return;
+        }
+        tex.mapping = THREE.EquirectangularReflectionMapping;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        setEnv(tex);
+      },
+      undefined,
+      // A missing or refused background must not take the scene down: the flat
+      // colour below is a complete fallback, not a placeholder.
+      () => {},
+    );
+    return () => {
+      dead = true;
+    };
+  }, [wants]);
 
   useEffect(() => {
     const prev = scene.background;
     scene.background =
-      sky ?? new THREE.Color(set === 'exterior' ? GRADE_BG[grade] : GRADE_BG.dusk);
+      wants && env
+        ? env
+        : new THREE.Color(set === 'exterior' ? GRADE_BG[grade] : GRADE_BG.dusk);
     return () => {
       scene.background = prev;
-      sky?.dispose();
     };
-  }, [scene, sky, set, grade]);
+  }, [scene, env, wants, set, grade]);
+
+  useEffect(() => () => env?.dispose(), [env]);
 
   return null;
 }
@@ -1554,7 +1652,12 @@ export function WorldCanvas() {
           <ambientLight intensity={look.ambient} />
           {set === 'exterior' && (
             <>
-              <ExteriorLighting driveByScroll={poseFor(place).path === true} grade={look.grade} />
+              <ExteriorLighting
+                driveByScroll={poseFor(place).path === true}
+                grade={look.grade}
+                keyIntensity={look.key}
+                hemiIntensity={look.hemi}
+              />
               {/* Halved on low tier: the field is atmosphere, and a phone
                   should get thinner air rather than no air. */}
               <Motes count={tier === 'low' ? 1100 : 2400} />

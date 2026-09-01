@@ -83,6 +83,57 @@ const MODEL_CANDIDATES: Record<string, string> = {
    */
   v5etc1s: '/models/exterior_mansion_v5_etc1s.glb',
   prod: EXTERIOR_MODEL_PREVIOUS,
+  /**
+   * P3.1 CANDIDATE - hero entrance architecture. Not shipped; production stays
+   * on v5 until this is reviewed.
+   *
+   * Adds 10 objects / 1,496 triangles at the entrance, all additive:
+   * mansion_walls is not touched. The portico columns live INSIDE that merged
+   * mesh, which is why no node in v5 carries a column name - and why a
+   * name-based audit first concluded, wrongly, that the entablature was
+   * unsupported. Measured off the actual vertices, the order is a square
+   * plinth (z 0.54..0.70), a shaft tapering r 0.300 -> 0.245, and a capital
+   * band topping out at z 3.05 - against an architrave underside at z 3.38.
+   * The columns stop 330mm SHORT of the entablature they carry. The hero
+   * angle hides it behind the projecting architrave; the journey orbits, so
+   * it does not stay hidden.
+   *
+   * This closes that gap with a real capital (necking, astragal, echinus,
+   * abacus), gives the shaft a base torus where it currently meets its plinth
+   * on a bare cut, puts an architrave on a door that meets raw wall, and adds
+   * a third tread so the approach reads as steps rather than two kerbs.
+   *
+   * Textures are JPEG, not KTX2 - this is a geometry candidate and has not
+   * been through the ktx2 chain, so 6.4 MB here is not comparable to v5's
+   * 9.7 MB and says nothing about shipping size.
+   */
+  p31: '/models/exterior_mansion_v6_p31.glb',
+  /**
+   * P3.2 CANDIDATE - P3.1 plus the classical moulding system. Not shipped.
+   *
+   * The facade already had a vocabulary and it is NOT duplicated: a 5-step
+   * sill course (z 0.880..1.105) reused verbatim as the upper string course
+   * (z 3.450..3.805), archivolts over the arched heads, and a 4-step band at
+   * z 4.995..5.175. P3.2 adds 90 triangles in three places where the audit
+   * found a real gap:
+   *
+   *   crowning cornice   the elevation had no readable crown. At cornice
+   *                      height the wall core is x 7.575 and that 4-step band
+   *                      reaches 7.600 - it projects 0.025, while the ashlar
+   *                      cladding in front of it projects to 7.625. The
+   *                      cornice was buried behind its own masonry. The new
+   *                      corona sits ABOVE mansion_gold (z 4.95..5.29) rather
+   *                      than in front of it, so that gilded band now reads as
+   *                      the frieze and this as the cornice.
+   *   portico bed mould  the frieze face (y -5.9592) met the portico cornice
+   *                      (y -6.0600) on a bare step.
+   *   architrave fascia  a single flat 0.22 slab, now divided by one fillet.
+   *
+   * No ashlar is entered: the corona spans z 5.30..5.51 outboard of the
+   * masonry face. The vertical wallmould strips (top z 5.400) do run up into
+   * it - a pilaster strip dying into the cornice bed is correct, not a defect.
+   */
+  p32: '/models/exterior_mansion_v6_p32.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
