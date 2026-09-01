@@ -134,6 +134,29 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * it - a pilaster strip dying into the cornice bed is correct, not a defect.
    */
   p32: '/models/exterior_mansion_v6_p32.glb',
+  /**
+   * P3.3 CANDIDATE - corner quoins on the ashlar wall. Not shipped.
+   *
+   * MEASURED: 96 rustic blocks use the KIT_quoin meshes and every one sits at
+   * z 0.14 - the rusticated base. ZERO ashlar blocks use a quoin mesh, so the
+   * building was quoined on its 0.34m plinth and then ran 5.07m of wall to the
+   * cornice with no corner articulation at all.
+   *
+   * The ashlar layout already RESERVED the space and never filled it: the
+   * west/east runs stop at y -4.970/4.920 and the north/south runs at
+   * x +/-6.960, leaving a 0.665m strip of bare wall at every corner over all
+   * 12 courses. 48 blocks fill it, 40mm proud, with a 20mm joint to the
+   * adjacent run - the same joint the locked masonry uses.
+   *
+   * Conventions come from the ASHLAR, not from P3.1/P3.2: MAT_Stone_Wall with
+   * StoneAO 1.0. The portico trim those phases matched is MAT_Stone_Trim at
+   * 0.55-0.76, and using that here would have made the quoins read as dirty.
+   *
+   * The 13th course is deliberately unquoined - it collides with mansion_gold
+   * (band top z 5.29) and is where the P3.2 cornice sits; quoins die into the
+   * entablature rather than running past it.
+   */
+  p33: '/models/exterior_mansion_v6_p33.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
