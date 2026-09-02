@@ -185,6 +185,44 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * Net: -892 triangles of dead geometry. Phase 3 is 1,270 tris / 0.73%.
    */
   p34: '/models/exterior_mansion_v6_p34.glb',
+  /**
+   * P2.5B CANDIDATE - the roof's lost base-colour multipliers. Not shipped.
+   *
+   * Built FROM v5 by substituting one texture, not by re-exporting: all 479
+   * nodes, 1,785 accessors and the first 9,863,656 bytes of the buffer are
+   * byte-identical, and MAT_Roof_Slate is the only material that differs.
+   *
+   * What was lost. In Blender the slate base colour is
+   *
+   *     texture x (0.82, 0.86, 0.94) x (0.5 + 0.5 x AO)
+   *
+   * written as two legacy ShaderNodeMixRGB nodes. The glTF exporter reads a
+   * base-colour chain only through the newer ShaderNodeMix, so it walked past
+   * both, took the raw texture and wrote baseColorFactor [1,1,1,1]. glTF has
+   * nowhere to put the second one anyway: occlusionTexture is indirect light
+   * only, not a base-colour multiply. So the roof shipped 1.31x too bright in
+   * linear light. fix_stone_material_export.py had already converted the five
+   * MAT_Stone_* materials for exactly this reason; the roof was not in its
+   * hardcoded list.
+   *
+   * MEASURED at HERO, against a Cycles render framed by reproducing this
+   * page's own camera maths and sampled through a per-pixel material-index
+   * pass rather than hand-placed boxes: Blender 50.8 luma, v5 74.5. MAT_Roof
+   * is the control - same slate texture, no multipliers in its graph, so its
+   * export was already faithful - and at the lit end it matches Blender to
+   * 1.02x, which is what says the remaining spread is lighting and not albedo.
+   *
+   * Fixed by baking both multipliers into a derived base colour, in linear
+   * light, re-encoded through the same resize and `ktx create` the pipeline
+   * uses. Re-encoding the ORIGINAL texture that way reproduces the bytes v5
+   * ships exactly, sha256 and all, which is what makes this a like-for-like
+   * substitution rather than a second opinion about the encoder.
+   *
+   * MAT_Roof deliberately keeps the original image, which is why a new one is
+   * added rather than the shared one overwritten: its graph has neither
+   * multiplier, so darkening it would introduce the error being removed.
+   */
+  p25b: '/models/exterior_mansion_v6_p25b.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
