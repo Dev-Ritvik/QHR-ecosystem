@@ -358,6 +358,19 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * that its +28 over reference is contact occlusion, not albedo.
    */
   p4c: '/models/exterior_mansion_v6_p4c.glb',
+  /**
+   * P4D CANDIDATE - restraint on the accents. Factors only, no textures, so
+   * the buffer is byte-identical to p4c. Not shipped.
+   *
+   * MAT_Gold ran gilt_aged/roughness (mean 0.28) through a 0.55 scalar - an
+   * effective ~0.15, a mirror - and was the brightest surface in the daylight
+   * frame at 138.7 against Blender's 83.5. roughnessFactor 0.55 -> 0.90, and an
+   * aged-gilt tint (0.85, 0.80, 0.70) as baseColorFactor. MAT_Water roughness
+   * 0.02 -> 0.07 so the fountain stops being a mirror; ior and transmission
+   * untouched. Glass deliberately left alone. Mirrored in Blender by
+   * tools/blender/p4d_accents_material.py through nodes the exporter reads.
+   */
+  p4d: '/models/exterior_mansion_v6_p4d.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
