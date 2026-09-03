@@ -371,6 +371,18 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * tools/blender/p4d_accents_material.py through nodes the exporter reads.
    */
   p4d: '/models/exterior_mansion_v6_p4d.glb',
+  /**
+   * P4E - the assembled Phase 4 surface system. Not shipped.
+   *
+   * p4d with the superseded images pruned (tools/gltf/prune_orphan_images.py):
+   * the four milestone patches appended a new image and repointed the
+   * material each time, leaving the old one in place so every candidate's
+   * diff stayed attributable. This is the same materials, the same geometry
+   * and the same bindings - verified material-by-material and slot-by-slot
+   * before writing - with the dead payload removed. It is the candidate to
+   * judge against v5.
+   */
+  p4e: '/models/exterior_mansion_v6_p4e.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
