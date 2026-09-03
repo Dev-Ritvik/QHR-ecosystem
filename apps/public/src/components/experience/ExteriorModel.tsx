@@ -289,6 +289,30 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * primitives keep their original Draco payload byte for byte.
    */
   p25b3: '/models/exterior_mansion_v6_p25b3.glb',
+  /**
+   * P4A CANDIDATE - primary limestone. Not shipped.
+   *
+   * MAT_Stone_Wall sampled the marble026 scan tinted #E7E3DA: effective albedo
+   * R/B 2.50 (an orange), roughness mean 0.33 with a 0.11 floor (polished),
+   * and 69% of its tonal energy above 1/64 of the tile - pure micro, no meso.
+   * Replaced by an authored limestone SURFACE (tools/gltf/make_limestone_wall.py):
+   * bed mottle at 0.4-1.2 m, faint 80-110 mm bedding, sparse pores, roughness
+   * 0.55-0.81, authored pale so the kept tint lands it on (0.54, 0.51, 0.44),
+   * R/B 1.23. No printed coursing - each ashlar block is one physical stone
+   * with world UVs, so a coursed tile would print sub-courses across it and its
+   * 405 mm pitch would beat against the 360 mm geometry.
+   *
+   * The MESO layer rides COLOR_0 instead: tools/blender/blocktone_stoneao.py
+   * multiplies each block's StoneAO by a seeded per-object tone (0.90-1.08,
+   * darker blocks 1.5% warmer). Zero texture cost, exportable as-is. The 267
+   * block primitives are therefore re-shipped Draco-compressed via
+   * tools/gltf/transplant_draco_nodes.py; every other primitive is byte-identical.
+   *
+   * Textures via tools/gltf/patch_material_textures.py, whose per-slot control
+   * re-encodes the marble sources and reproduces img0/1/2 of the shipped file
+   * exactly. Normal strength 1.2 -> 0.85: the relief is geometry.
+   */
+  p4a: '/models/exterior_mansion_v6_p4a.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
