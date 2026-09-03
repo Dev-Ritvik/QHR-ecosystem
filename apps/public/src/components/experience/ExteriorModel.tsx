@@ -335,6 +335,29 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * rustic +55 over reference - steps and rustic are contact/GI-dominated.
    */
   p4b: '/models/exterior_mansion_v6_p4b.glb',
+  /**
+   * P4C CANDIDATE - roof slate readability and the dark-oak entrance. Not
+   * shipped. Built on p4b.
+   *
+   * ROOF: the P2.5B bake (tint x half-AO, roughness remap) is re-derived from
+   * the same sources with the AO weight at 0.72 so the courses survive the
+   * 1024/ETC1S/mip chain at hero distance, a per-slate tone and roughness
+   * offset keyed off the 16-bit height plateaus (7,535 slates), and a 3%
+   * graphite shift. Mean linear luma is 0.944x the P2.5B bake - darker, not
+   * black. Roughness now ships ABSOLUTE with roughnessFactor 1.0, and the
+   * Blender graph reads the same two maps with no MapRange or MixRGB left in
+   * the chain (tools/gltf/make_p4c_roof_wood.py, tools/blender/p4c_roof_wood_material.py).
+   *
+   * WOOD: the parquet scan, object-space mapping and legacy MIX are replaced by
+   * an authored dark stained oak sampled through UV in both renderers: linear
+   * albedo ~(0.078, 0.052, 0.034), roughness 0.36-0.56 following the grain
+   * (the flat 0.33 was the plastic read), subtle open-grain normal at 0.60.
+   * Blender's authored mix was 0.072 luma; this is 0.055; the shipped raw
+   * texture was 0.022. The runtime door will read brighter than v5 as a
+   * consequence and that is reported, not hidden - the P2.5B finding stands
+   * that its +28 over reference is contact occlusion, not albedo.
+   */
+  p4c: '/models/exterior_mansion_v6_p4c.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
