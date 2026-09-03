@@ -256,6 +256,39 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * the control this whole comparison leans on.
    */
   p25b2: '/models/exterior_mansion_v6_p25b2.glb',
+  /**
+   * P2.5B.3 CANDIDATE - p25b2 plus corrected roof face orientation. Not shipped.
+   *
+   * MEASURED, not inferred: an unlit-magenta probe of MAT_Roof_Slate showed the
+   * runtime drawing that material over only 42,762 px of the 51,352 px Blender
+   * assigns it at HERO. 8,684 px - 16.9% of the roof - were something else, and
+   * a full material-ID probe identified 96.6% of them as MAT_Stone_Wall. The
+   * viewer was seeing THROUGH the roof to the wall behind it.
+   *
+   * Not z-fighting: ray-casting those pixels in Blender puts the slate in front
+   * by a median 4.83 m, and only 0.4% of the samples have a second surface
+   * within a millimetre. 246 of 250 rays hit mansion_roof on a BACK-facing
+   * polygon - which for a first intersection from outside a closed surface is
+   * impossible unless the winding is wrong. Recalculate-outside flips 936 of
+   * its 1873 faces, and the mesh carries 356 non-manifold edges.
+   *
+   * Cycles shades whichever side a ray lands on, so the Blender reference never
+   * showed this. glTF carries `doubleSided`, and MAT_Roof_Slate's is false
+   * because the Blender material has Backface Culling ON - so the exporter was
+   * FAITHFUL and three.js was right to cull. The defect is in the mesh.
+   *
+   * Fixed in the source working copy, not by setting doubleSided: that would
+   * hide the symptom and leave the tangent basis the normal map is sampled in
+   * still mirrored across half the roof. It is not a no-op in Blender either -
+   * the reference roof moves 50.80 -> 49.21 luma because tangent space follows
+   * winding - and every other material moves by 0.000.
+   *
+   * Transplanted rather than re-exported: the shipped file is Draco-compressed
+   * and gltf-transform warns a decode/re-encode round trip is lossy, so a full
+   * re-export would perturb all 381 meshes to fix one. Here 380 of 381
+   * primitives keep their original Draco payload byte for byte.
+   */
+  p25b3: '/models/exterior_mansion_v6_p25b3.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
