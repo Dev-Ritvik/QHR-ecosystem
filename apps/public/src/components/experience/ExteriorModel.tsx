@@ -223,6 +223,39 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * multiplier, so darkening it would introduce the error being removed.
    */
   p25b: '/models/exterior_mansion_v6_p25b.glb',
+  /**
+   * P2.5B.2 CANDIDATE - p25b plus the roof's lost ROUGHNESS remap. Not shipped.
+   * Kept alongside p25b rather than replacing it so the two export losses stay
+   * separately attributable.
+   *
+   * Blender feeds the slate roughness map through a Map Range, 0..1 ->
+   * 0.42..0.82, LINEAR and clamped. Map Range is no more exportable than the
+   * legacy MixRGB nodes were, so v5 shipped the raw map with the default
+   * factor: 85.2% of the roof renders glossier than authored, floor 0.188
+   * against 0.489, ceiling 1.000 against an authored hard limit of 0.82.
+   *
+   * A roughnessFactor alone is NOT the fix, and assuming it was would have been
+   * the easy mistake here. glTF roughness is factor x texture.G, a pure
+   * multiply; Blender's remap is affine. No factor produces the 0.42 floor, so
+   * the offset has to be baked into the texture. That leaves where to put the
+   * CEILING, and it is settled by measurement: baking the whole span with
+   * factor 1.0 lets ETC1S noise reach 0.847, above a ceiling Map Range's clamp
+   * makes hard, while normalising the texture and putting 0.82 in the factor
+   * caps it by construction and keeps 104 levels of 8-bit instead of 85.
+   * Against the float ideal, per texel: v5 mean |err| 0.11218 / max 0.309;
+   * factor 1.0 0.00869 / 0.135; factor 0.82 0.00815 / 0.131.
+   *
+   * The remap is applied AFTER the pipeline's resize. It is affine and LANCZOS
+   * is linear with unit-sum weights, so the orders agree in float - but
+   * resizing first carries the full 8-bit range through the filter and only
+   * then compresses it.
+   *
+   * MAT_Roof shares BOTH slate images and keeps both: its base colour has
+   * neither multiplier and its roughness Math node is MULTIPLY by 1.0, an
+   * identity, so it was already faithful in both slots. That is what makes it
+   * the control this whole comparison leans on.
+   */
+  p25b2: '/models/exterior_mansion_v6_p25b2.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
