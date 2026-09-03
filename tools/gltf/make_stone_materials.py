@@ -240,61 +240,68 @@ CREAM_LO = (0.452, 0.374, 0.258)
 CREAM_HI = (0.668, 0.578, 0.404)
 JOINT_C = (0.300, 0.262, 0.198)
 
-report = []
+def main():
+    """Build every set. Guarded so P4B can IMPORT the machinery above without
+    re-running (and overwriting) the shipped v5 stone sources."""
+    report = []
 
-# 1. MAIN WALL - 8 courses of 405mm over a 3.24m tile, 16mm joints
-report.append(build_set(
-    "wall", tile_m=3.24, courses=8, joint_px=7,
-    choices=[256, 320, 384, 448], seed=7,
-    col_lo=CREAM_LO, col_hi=CREAM_HI, joint_col=JOINT_C, joint_mul=0.88,
-    rough_lo=0.54, rough_hi=0.78, recess=0.44, chamfer=4,
-    normal_strength=1.05, wear=0.050,
-    grain_amp=0.105, grain_freq=120, mottle_amp=0.135, mottle_freq=7))
+    # 1. MAIN WALL - 8 courses of 405mm over a 3.24m tile, 16mm joints
+    report.append(build_set(
+        "wall", tile_m=3.24, courses=8, joint_px=7,
+        choices=[256, 320, 384, 448], seed=7,
+        col_lo=CREAM_LO, col_hi=CREAM_HI, joint_col=JOINT_C, joint_mul=0.88,
+        rough_lo=0.54, rough_hi=0.78, recess=0.44, chamfer=4,
+        normal_strength=1.05, wear=0.050,
+        grain_amp=0.105, grain_freq=120, mottle_amp=0.135, mottle_freq=7))
 
-# 2. RUSTICATED BASE - the 96 rustic_* blocks are each ONE physical block
-#    (~0.7 x 0.34m), so the coursing is already geometric. Printing a coursed
-#    pattern on top would give every block its own sub-courses, which is the
-#    classic tell of a wall texture dragged onto masonry. This is therefore a
-#    stone SURFACE: darker than the wall, rougher, more weathered, with the
-#    joint definition coming from the geometry gaps and the baked contact AO.
-report.append(build_set(
-    "rustic", tile_m=1.10, courses=1, joint_px=0, choices=[1024], seed=23,
-    col_lo=(0.322, 0.266, 0.184), col_hi=(0.486, 0.414, 0.288),
-    joint_col=JOINT_C, joint_mul=1.0,
-    grain_amp=0.115, grain_freq=105, mottle_amp=0.105, mottle_freq=6,
-    rough_lo=0.66, rough_hi=0.90, recess=0.0, chamfer=1,
-    normal_strength=1.10, wear=0.0,
-    weather_amp=0.15, weather_freq=6, coursed=False))
+    # 2. RUSTICATED BASE - the 96 rustic_* blocks are each ONE physical block
+    #    (~0.7 x 0.34m), so the coursing is already geometric. Printing a coursed
+    #    pattern on top would give every block its own sub-courses, which is the
+    #    classic tell of a wall texture dragged onto masonry. This is therefore a
+    #    stone SURFACE: darker than the wall, rougher, more weathered, with the
+    #    joint definition coming from the geometry gaps and the baked contact AO.
+    report.append(build_set(
+        "rustic", tile_m=1.10, courses=1, joint_px=0, choices=[1024], seed=23,
+        col_lo=(0.322, 0.266, 0.184), col_hi=(0.486, 0.414, 0.288),
+        joint_col=JOINT_C, joint_mul=1.0,
+        grain_amp=0.115, grain_freq=105, mottle_amp=0.105, mottle_freq=6,
+        rough_lo=0.66, rough_hi=0.90, recess=0.0, chamfer=1,
+        normal_strength=1.10, wear=0.0,
+        weather_amp=0.15, weather_freq=6, coursed=False))
 
-# 3. ARCHITECTURAL TRIM - dressed and carved, NOT coursed. A cornice is not the
-#    wall extruded, so it gets no block pattern at all: finer, cleaner, smoother.
-report.append(build_set(
-    "trim", tile_m=1.20, courses=1, joint_px=0, choices=[1024], seed=41,
-    col_lo=(0.528, 0.452, 0.330), col_hi=(0.690, 0.602, 0.446),
-    joint_col=JOINT_C, joint_mul=1.0,
-    grain_amp=0.052, grain_freq=150, mottle_amp=0.075, mottle_freq=9,
-    rough_lo=0.40, rough_hi=0.58, recess=0.0, chamfer=1,
-    normal_strength=0.55, wear=0.0, coursed=False))
+    # 3. ARCHITECTURAL TRIM - dressed and carved, NOT coursed. A cornice is not the
+    #    wall extruded, so it gets no block pattern at all: finer, cleaner, smoother.
+    report.append(build_set(
+        "trim", tile_m=1.20, courses=1, joint_px=0, choices=[1024], seed=41,
+        col_lo=(0.528, 0.452, 0.330), col_hi=(0.690, 0.602, 0.446),
+        joint_col=JOINT_C, joint_mul=1.0,
+        grain_amp=0.052, grain_freq=150, mottle_amp=0.075, mottle_freq=9,
+        rough_lo=0.40, rough_hi=0.58, recess=0.0, chamfer=1,
+        normal_strength=0.55, wear=0.0, coursed=False))
 
-# 4. PAVING - large-format slabs, 900mm, restrained joints, flatter
-report.append(build_set(
-    "paving", tile_m=3.60, courses=4, joint_px=4,
-    choices=[256, 341, 427], seed=59,
-    col_lo=(0.402, 0.362, 0.290), col_hi=(0.570, 0.520, 0.418),
-    joint_col=(0.190, 0.186, 0.176), joint_mul=0.88,
-    grain_amp=0.075, grain_freq=95, mottle_amp=0.10,
-    rough_lo=0.48, rough_hi=0.70, recess=0.26, chamfer=3,
-    normal_strength=0.75, wear=0.030, weather_amp=0.10, weather_freq=3))
+    # 4. PAVING - large-format slabs, 900mm, restrained joints, flatter
+    report.append(build_set(
+        "paving", tile_m=3.60, courses=4, joint_px=4,
+        choices=[256, 341, 427], seed=59,
+        col_lo=(0.402, 0.362, 0.290), col_hi=(0.570, 0.520, 0.418),
+        joint_col=(0.190, 0.186, 0.176), joint_mul=0.88,
+        grain_amp=0.075, grain_freq=95, mottle_amp=0.10,
+        rough_lo=0.48, rough_hi=0.70, recess=0.26, chamfer=3,
+        normal_strength=0.75, wear=0.030, weather_amp=0.10, weather_freq=3))
 
-# 5. STEPS / ENTRANCE - cleanest stone, tread wear, darker contact at arrises
-report.append(build_set(
-    "steps", tile_m=2.40, courses=4, joint_px=4,
-    choices=[341, 512], seed=83,
-    col_lo=(0.492, 0.432, 0.328), col_hi=(0.662, 0.590, 0.448),
-    joint_col=(0.200, 0.194, 0.180), joint_mul=0.86,
-    grain_amp=0.062, grain_freq=125, mottle_amp=0.085,
-    rough_lo=0.36, rough_hi=0.56, recess=0.24, chamfer=3,
-    normal_strength=0.70, wear=0.055, weather_amp=0.06, weather_freq=4))
+    # 5. STEPS / ENTRANCE - cleanest stone, tread wear, darker contact at arrises
+    report.append(build_set(
+        "steps", tile_m=2.40, courses=4, joint_px=4,
+        choices=[341, 512], seed=83,
+        col_lo=(0.492, 0.432, 0.328), col_hi=(0.662, 0.590, 0.448),
+        joint_col=(0.200, 0.194, 0.180), joint_mul=0.86,
+        grain_amp=0.062, grain_freq=125, mottle_amp=0.085,
+        rough_lo=0.36, rough_hi=0.56, recess=0.24, chamfer=3,
+        normal_strength=0.70, wear=0.055, weather_amp=0.06, weather_freq=4))
 
-print("###STONE###")
-print(json.dumps(report, indent=1))
+    print("###STONE###")
+    print(json.dumps(report, indent=1))
+
+
+if __name__ == "__main__":
+    main()

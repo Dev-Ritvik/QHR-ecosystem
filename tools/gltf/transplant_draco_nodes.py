@@ -74,8 +74,14 @@ def copy_accessor(src):
     bjs['accessors'].append(a); return len(bjs['accessors']) - 1
 
 
-done = 0; bytes_in = 0
+done = 0; bytes_in = 0; done_meshes = set()
 for name in targets:
+    # Instanced blocks (the 96 rustic_* share two meshes) point many nodes at
+    # one mesh; patch each MESH once, or the same primitive gets rewritten and
+    # a payload appended per node.
+    bmesh_i = bjs['nodes'][bnodes[name]]['mesh']
+    if bmesh_i in done_meshes: continue
+    done_meshes.add(bmesh_i)
     # Placed blocks carry a node translation; the donor is the same object
     # re-exported, so the transforms must MATCH - not be identity.
     if xform(bjs['nodes'][bnodes[name]]) != xform(djs['nodes'][dnodes[name]]):
@@ -84,8 +90,15 @@ for name in targets:
     bp = prim_of(bjs, bnodes[name]); dp = prim_of(djs, dnodes[name])
     dext = dp.get('extensions', {}).get('KHR_draco_mesh_compression')
     if not dext: raise SystemExit('donor primitive %s is not Draco-compressed' % name)
-    if sorted(bp['attributes']) != sorted(dp['attributes']):
-        raise SystemExit('%s attribute sets differ: %s vs %s' % (name, sorted(bp['attributes']), sorted(dp['attributes'])))
+    # The donor may carry MORE attributes than shipped (Blender exports every
+    # UV layer; the pipeline pruned the rustic blocks' unused TEXCOORD_1). The
+    # base's attribute set is what the material binds, so that is what gets
+    # declared; extra Draco attributes are simply not listed, and the decoder
+    # ignores what is not mapped. A donor MISSING a base attribute is an error.
+    missing_attr = sorted(set(bp['attributes']) - set(dp['attributes']))
+    if missing_attr:
+        raise SystemExit('%s donor lacks attributes %s' % (name, missing_attr))
+    extra_attr = sorted(set(dp['attributes']) - set(bp['attributes']))
     bpos = bjs['accessors'][bp['attributes']['POSITION']]; dpos = djs['accessors'][dp['attributes']['POSITION']]
     if bpos['count'] != dpos['count']:
         raise SystemExit('%s vertex count %d -> %d' % (name, bpos['count'], dpos['count']))
@@ -97,10 +110,13 @@ for name in targets:
     dbv = djs['bufferViews'][dext['bufferView']]
     payload = bytes(dbin[dbv.get('byteOffset', 0): dbv.get('byteOffset', 0) + dbv['byteLength']])
     nbv = append_bv(payload); bytes_in += len(payload)
-    new_attrs = {k: copy_accessor(djs['accessors'][ai]) for k, ai in dp['attributes'].items()}
+    keep = sorted(bp['attributes'])
+    new_attrs = {k: copy_accessor(djs['accessors'][dp['attributes'][k]]) for k in keep}
     bp['attributes'] = new_attrs
     bp['indices'] = copy_accessor(djs['accessors'][dp['indices']])
-    bp.setdefault('extensions', {})['KHR_draco_mesh_compression'] = {'bufferView': nbv, 'attributes': dict(dext['attributes'])}
+    bp.setdefault('extensions', {})['KHR_draco_mesh_compression'] = {
+        'bufferView': nbv, 'attributes': {k: dext['attributes'][k] for k in keep}}
+    if extra_attr: print('NOTE|%s|donor attributes not declared: %s' % (name, extra_attr))
     done += 1
 
 jsb = json.dumps(bjs, separators=(',', ':')).encode('utf-8'); jsb += b' ' * ((-len(jsb)) % 4)

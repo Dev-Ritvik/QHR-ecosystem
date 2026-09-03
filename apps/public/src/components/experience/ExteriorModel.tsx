@@ -313,6 +313,28 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * exactly. Normal strength 1.2 -> 0.85: the relief is geometry.
    */
   p4a: '/models/exterior_mansion_v6_p4a.glb',
+  /**
+   * P4B CANDIDATE - the stone family around P4A's limestone. Not shipped.
+   *
+   * Built on p4a. Trim keeps its colour (it matched Blender to +0.9) and gets
+   * a FINISH: roughness 0.38-0.54 against the wall's 0.55-0.81, fine tooling in
+   * the micro. Paving albedo x0.86 with darker, dirtier joints; steps x0.82
+   * with tread wear; rustic x0.82, roughness 0.72-0.92, weathered. All from
+   * tools/gltf/make_stone_family_p4b.py, written as p4b_* beside the untouched
+   * v5 sources, same tiles, so the shipped KHR_texture_transforms stay valid.
+   *
+   * The rustic base had COLOR_0 = 1.0 flat because its 96 blocks share two
+   * meshes and a positional bake would be wrong for 95 of them.
+   * tools/blender/rustic_contact_ao.py writes a block-local contact term (bed,
+   * top joint, side joints) into StoneAO instead - correct for every instance
+   * - and the two meshes are re-shipped Draco-compressed.
+   *
+   * This is also the candidate where the runtime paving grade (PAVING_TINT
+   * 0.32) is retired to 1.0, so the family is measured against Blender for
+   * the first time. Ungraded at HERO before P4B: paving +20.6, steps +87,
+   * rustic +55 over reference - steps and rustic are contact/GI-dominated.
+   */
+  p4b: '/models/exterior_mansion_v6_p4b.glb',
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
@@ -406,7 +428,17 @@ const PAVING_RE = /^(terrace_|rustic_|entry_step|entry_cheek|fount_)/;
  * reference until the terrace sat under the facade rather than over it. The
  * facade is untouched by this — it is a different material after the split.
  */
-const PAVING_TINT: Record<Grade, number> = { dusk: 0.48, daylight: 0.32 };
+/**
+ * PHASE 4 (P4B): RETIRED TO 1.0. The multiply above was a runtime grade on
+ * top of a Blender material that never had it, so paving, steps, the 96
+ * rustic blocks and the fountain trim could not be measured against the
+ * reference at all (P4 audit §1.5, §5). The owner's decision is that the GLB
+ * is the material: the intended darkening is authored into the P4B materials
+ * (albedo, roughness, COLOR_0 contact) and this stays at 1.0, which also
+ * returns the runtime from 16 materials to the GLB's 15. The machinery is
+ * kept, inert, so the rollback is a number and not a revert.
+ */
+const PAVING_TINT: Record<Grade, number> = { dusk: 1.0, daylight: 1.0 };
 
 type EmissiveSpec = Record<string, { color: string; intensity: number }>;
 
@@ -582,6 +614,10 @@ function applyGrade(root: THREE.Object3D, grade: Grade): string[] {
   //
   // Still one clone per material rather than per mesh, so 107 meshes stay on
   // four shader programs instead of a hundred.
+  // P4B: at a tint of 1.0 the clone would be an identity, so skip the pass
+  // entirely and leave the meshes on the GLB's own materials.
+  if (PAVING_TINT[grade] === 1.0) return touched;
+
   const clones = new Map<THREE.Material, THREE.MeshStandardMaterial>();
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
