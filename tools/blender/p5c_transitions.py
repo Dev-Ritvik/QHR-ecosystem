@@ -3,6 +3,28 @@ P5C - the transitions: a flush stone edging where hardscape meets lawn.
 
     blender --background mansion_exterior_P5C.blend --python p5c_transitions.py -- --save
 
+CORRECTED AFTER SHIPPING, AND THE ORIGINAL DEFECT IS ON THE RECORD BECAUSE THE
+CANDIDATES THAT CARRY IT ARE IMMUTABLE.
+
+The version of this script that produced p5c, p5d, p5e, p5g and p5h wound its
+ribbon quads from the caller's traverse direction, which is not a fixed sense.
+229 of the 249 polygons came out facing the ground against a single-sided
+material, so `edging_hardscape` was backface-culled and rendered ONE pixel at
+HERO and none at WEST or NW - measured against a working control in the same
+isolated pass, and confirmed by a depth-test-off render that returned the same
+zero, which is what ruled out an occlusion or z-fighting explanation.
+
+Three things are different now, and only three:
+  * every quad is oriented from its own XY shoelace area rather than from the
+    direction of travel, and the resulting normals are ASSERTED (see strip);
+  * StoneAO / COLOR_0 is baked, so the object stops forking MAT_Stone_Trim;
+  * the script is re-runnable - it removes a previous `edging_hardscape` first.
+
+The 30 mm lift is deliberately NOT changed; the constant carries the ray-cast
+measurement that justifies leaving it. Geometry, width, footprint, segment
+length and material are all untouched, so a re-run reproduces the shipped
+positions exactly.
+
 THE DEFECT. The terrace meets grass on a hard line with nothing between them -
 no kerb, no margin, no verge - and P5A's gravel forecourt now meets grass the
 same way. Zoomed at HERO the paving's beaded outer edge is good work sitting on
@@ -37,9 +59,34 @@ Every other material and every other object is asserted bit-identical.
 import bpy, bmesh, json, math, os, sys
 from mathutils import Vector
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Constants and function definitions only - no module-level execution. Checked
+# before importing, because P4A lost a locked source to a generator that
+# regenerated its textures on import.
+import bake_ao_raycast as AO
+
 args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 W = 0.28                      # edging width, metres
-LIFT = 0.030                  # above the sampled ground
+# LIFT IS UNCHANGED AT 30 mm, AND THAT IS A MEASUREMENT RATHER THAN INERTIA.
+#
+# The tempting correction was to raise it: the ground plane spans 520 m, so
+# Draco's 14-bit position quantisation gives a 31.74 mm step - confirmed on the
+# DECODED mesh in the browser, where ground_plane's 15,455 vertices carry only
+# 218 distinct Y values exactly 31.74 mm apart - and 30 mm of lift is less than
+# one of those steps. That sounds fatal and is not.
+#
+# What matters is the CLEARANCE THAT SURVIVES, and it was measured rather than
+# assumed: every one of the shipped edging's 568 vertices was ray-cast against
+# the shipped post-Draco ground surface. Minimum 17.71 mm, median 18.98,
+# maximum 50.72, mean 23.56 - and ZERO vertices at or below the ground, zero
+# under 5 mm. Depth precision at the 30 m the HERO camera works at is about
+# 0.54 mm, so the thinnest clearance is roughly 33 depth units. It survives.
+#
+# Raising it would also cost something real. This ribbon has no side wall: it is
+# a flat strip that follows the terrain. Lifting it further does not make a
+# taller kerb, it makes a plane floating over the grass with a shadow gap under
+# it. Flush is the design, and flush is what the measurement supports.
+LIFT = 0.030                  # above the sampled ground; see the note above
 SEG = 0.55                    # nominal segment length
 FOUNT = (0.0, -13.2)
 R_OUT = 10.6
@@ -72,7 +119,12 @@ def snap_obj(o):
 
 
 before_mats = {m.name: snap_mat(m) for m in bpy.data.materials if m.use_nodes}
-before_objs = {o.name: snap_obj(o) for o in bpy.data.objects if o.type == 'MESH'}
+# The subject is excluded from BOTH snapshots. It was only excluded from the
+# `after` one originally, which was correct while this script could only ever
+# create the object; now that it also replaces one, leaving it in `before` makes
+# the control fire on the very change the script exists to make.
+before_objs = {o.name: snap_obj(o) for o in bpy.data.objects
+               if o.type == 'MESH' and o.name != 'edging_hardscape'}
 
 ground = bpy.data.objects['ground_plane']
 gme = ground.data
@@ -115,7 +167,40 @@ def strip(points, inward):
         p1 = (bx - nx1 * 0.0, by - ny1 * 0.0)
         q0 = (ax - nx0 * W, ay - ny0 * W)
         q1 = (bx - nx1 * W, by - ny1 * W)
-        vs = [bm.verts.new((px, py, gz(px, py) + LIFT)) for (px, py) in (p0, p1, q1, q0)]
+        # ORIENT EVERY QUAD UPWARD, AND DO IT FROM THE GEOMETRY RATHER THAN
+        # FROM THE CALLER'S TRAVERSE DIRECTION. THIS IS THE BUG THAT SHIPPED.
+        #
+        # The original built the quad as (p0, p1, q1, q0) - along the polyline,
+        # then across the ribbon - so the winding depended on the SIGN
+        # relationship between the direction of travel and the offset direction.
+        # Work it through and the answer is not uniform: rect_run's four sides,
+        # the forecourt arc and the side=-1 approach flank all come out normal
+        # -Z, while the side=+1 flank alone comes out +Z, because its offset is
+        # mirrored. That is exactly what the shipped mesh measured - 229 of 249
+        # polygons facing the ground and 20 facing the sky, and 132 rect + 77 arc
+        # + 40 flank = 249 accounts for every one of them.
+        #
+        # MAT_Stone_Trim is doubleSided:false, so nine tenths of the object was
+        # backface-culled and `edging_hardscape` rendered ONE pixel at HERO and
+        # none at WEST or NW. Nothing caught it because the only assertion here
+        # checked vertex Z against the sampled ground - a POSITION test, which
+        # was true, and which says nothing whatever about winding.
+        #
+        # The fix is not a post-hoc recalc_face_normals. These ribbons are an
+        # OPEN surface, and recalc only makes a connected component mutually
+        # consistent - for an open sheet the global sense it settles on is
+        # arbitrary, so it would trade a reproducible bug for a coin toss. Every
+        # quad here is a near-horizontal strip whose visible face is its top, so
+        # the correct orientation is knowable outright: take the shoelace area of
+        # the quad in XY, which is positive exactly when the vertex order is
+        # counter-clockwise seen from +Z, and reverse the order when it is not.
+        # Direction-independent, deterministic, and asserted below.
+        quad = [p0, p1, q1, q0]
+        area2 = sum(quad[i][0] * quad[(i + 1) % 4][1] - quad[(i + 1) % 4][0] * quad[i][1]
+                    for i in range(4))
+        if area2 < 0.0:
+            quad.reverse()
+        vs = [bm.verts.new((px, py, gz(px, py) + LIFT)) for (px, py) in quad]
         f = bm.faces.new(vs)
         for l in f.loops:
             l[uvl].uv = (l.vert.co.x / 1.2, l.vert.co.y / 1.2)
@@ -173,6 +258,21 @@ for side in (-1, 1):
 log['approach_flanks'] = {'quads': made['quads'] - q0}
 
 bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+
+# RE-RUNNABLE. A previous run's object has to go before a new one takes its
+# name, or Blender silently makes `edging_hardscape.001` and the graft would
+# then replace nothing. The old mesh datablock goes with it.
+old = bpy.data.objects.get('edging_hardscape')
+if old is not None:
+    old_me = old.data
+    prev_polys = len(old_me.polygons)
+    prev_down = sum(1 for p in old_me.polygons
+                    if (old.matrix_world.to_3x3() @ p.normal).z < -0.5)
+    log['replaced_previous'] = {'polys': prev_polys, 'faces_pointing_down': prev_down}
+    bpy.data.objects.remove(old, do_unlink=True)
+    if old_me.users == 0:
+        bpy.data.meshes.remove(old_me)
+
 me = bpy.data.meshes.new('edging_hardscape')
 bm.to_mesh(me); bm.free()
 trim = bpy.data.materials['MAT_Stone_Trim']
@@ -180,6 +280,22 @@ me.materials.append(trim)
 ob = bpy.data.objects.new('edging_hardscape', me)
 for c in ground.users_collection: c.objects.link(ob)
 ob.matrix_world = ground.matrix_world.copy()
+
+# THE ORIENTATION IS ASSERTED, NOT ASSUMED. The whole defect was an assertion
+# that tested the wrong property, so this one tests the property that failed.
+# The ground's world matrix must also preserve +Z, or "up" in local space is not
+# up in the scene and the shoelace test above is measuring the wrong plane.
+zax = ob.matrix_world.to_3x3() @ Vector((0.0, 0.0, 1.0))
+assert zax.z > 0.999, 'edging local +Z is not world up (%.4f)' % zax.z
+nz = [(ob.matrix_world.to_3x3() @ p.normal).z for p in me.polygons]
+n_down = sum(1 for z in nz if z < 0.5)
+log['normals'] = {
+    'polys': len(nz), 'faces_up_gt_0.5': sum(1 for z in nz if z > 0.5),
+    'faces_not_up': n_down,
+    'min_nz': round(min(nz), 5), 'mean_nz': round(sum(nz) / len(nz), 5),
+    'max_nz': round(max(nz), 5),
+}
+assert n_down == 0, '%d of %d faces do not face up' % (n_down, len(nz))
 
 resid = max(abs((v.co.z - gz(v.co.x, v.co.y)) - LIFT) for v in me.vertices)
 log['edging_hardscape'] = {
@@ -192,6 +308,28 @@ log['edging_hardscape'] = {
     'terrace_top_z': 0.14, 'edging_top_z_above_ground_mm': LIFT * 1000,
 }
 assert resid < 1e-4, 'edging drifts %.5f m from the sampled ground' % resid
+
+# ---- StoneAO / COLOR_0, so this stops forking MAT_Stone_Trim -----------------
+# MAT_Stone_Trim multiplies base colour by the StoneAO attribute through a
+# ShaderNodeMix (RGBA / MULTIPLY / Factor 1), and three's GLTFLoader carries
+# `vertex-colors:` in its material cache key. This object was the ONLY one of 37
+# trim primitives without the attribute, so it both rendered unmultiplied and
+# made the loader cache a second MeshStandardMaterial for the same glTF
+# material - measured live as 16 material names resolving to 17 instances.
+# Baked with the same instrument and the same 0.40 floor as the rest of the
+# stone, so it joins the family instead of forking it.
+AO.build()
+log['ao'] = AO.run(['edging_hardscape'])
+ca = me.color_attributes.get('StoneAO')
+assert ca is not None, 'StoneAO was not created on edging_hardscape'
+vals = [float(ca.data[i].color[0]) for i in range(len(ca.data))]
+log['stoneao'] = {
+    'domain': ca.domain, 'data_type': ca.data_type, 'loops': len(vals),
+    'min': round(min(vals), 4), 'mean': round(sum(vals) / len(vals), 4),
+    'max': round(max(vals), 4),
+}
+assert min(vals) >= 0.39, 'StoneAO fell below the 0.40 floor (%.4f)' % min(vals)
+assert max(vals) <= 1.0001, 'StoneAO exceeded 1.0 (%.4f)' % max(vals)
 
 after_mats = {m.name: snap_mat(m) for m in bpy.data.materials if m.use_nodes}
 after_objs = {o.name: snap_obj(o) for o in bpy.data.objects
