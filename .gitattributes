@@ -1,1 +1,2 @@
 apps/public/public/models/exterior_mansion_v6_p5*.glb filter=lfs diff=lfs merge=lfs -text
+tools/capture/out/*.png filter=lfs diff=lfs merge=lfs -text
