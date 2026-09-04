@@ -46,8 +46,30 @@ import { guardAnisotropy } from './materialGuards';
  *
  * The previous asset is deliberately still on disk and still addressable as
  * `?model=prod`. It is the rollback.
+ *
+ * ---------------------------------------------------------------------------
+ * PROMOTED 2026-09-04, at the close of Phase 5: v5 -> p5m.
+ *
+ * This is ONE cumulative decision, not a stack of small ones. p5m carries the
+ * whole Phase 4 surface system (p4e, which had never been promoted) plus every
+ * accepted Phase 5 change, so promoting it promotes P4A-P4E and P5A-P5K
+ * together. What it does NOT carry is the three things measurement rejected:
+ * P5A's first lawn albedo, P5J's ETC1S foliage normals, and P5H's dusk lamps.
+ *
+ * Against the v5 it replaces: correctly sampled ground at every camera instead
+ * of a 12-15x magnified single map, an arrival, a materialised hedge and
+ * cypress, water that shows its basin, two entrance urns, and a stone edging
+ * that renders. 186,007 triangles against 179,397, 61.65 MB of GPU texture
+ * residency, 955 HERO draw calls, 9 lights and 1 shadow caster.
+ *
+ * v5 REMAINS ON DISK AND ADDRESSABLE AS `?model=v5` - it is the rollback, and
+ * `v5` below is deliberately spelled as its own literal path rather than as
+ * EXTERIOR_MODEL_URL, because binding it to the default would have silently
+ * re-pointed the rollback at the promotion the moment this line changed.
+ * ---------------------------------------------------------------------------
  */
-export const EXTERIOR_MODEL_URL = '/models/exterior_mansion_v5.glb';
+export const EXTERIOR_MODEL_URL = '/models/exterior_mansion_v6_p5m.glb';
+const EXTERIOR_MODEL_V5 = '/models/exterior_mansion_v5.glb';
 const EXTERIOR_MODEL_PREVIOUS = '/models/exterior_mansion.glb';
 
 /**
@@ -63,7 +85,7 @@ const EXTERIOR_MODEL_PREVIOUS = '/models/exterior_mansion.glb';
  * location here cannot desynchronise a server render.
  */
 const MODEL_CANDIDATES: Record<string, string> = {
-  v5: EXTERIOR_MODEL_URL,
+  v5: EXTERIOR_MODEL_V5,
   /**
    * Same geometry and the same maps, normals re-encoded ETC1S rather than
    * UASTC. 3.63 MB against 9.72 MB — and NOT shipped, on measurement.
@@ -634,6 +656,67 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * exactly zero. 9 lights and 1 shadow caster, unchanged.
    */
   p5h: '/models/exterior_mansion_v6_p5h.glb',
+  /**
+   * P5K — the P5C CORRECTION CANDIDATE. Not a new pass: p5h with one object
+   * repaired. See docs/PHASE5_REPORT.md §19.
+   *
+   * `edging_hardscape` shipped inside-out. `p5c_transitions.py` wound each
+   * ribbon quad from the caller's traverse direction, which is not a fixed
+   * sense: worked through, rect_run's four sides, the forecourt arc and the
+   * side=-1 approach flank all come out normal −Z while the side=+1 flank alone
+   * comes out +Z — predicting 229 down and 20 up over 132+77+40 = 249 polygons,
+   * which is exactly what the shipped mesh measures. Against a single-sided
+   * MAT_Stone_Trim that left the object rendering **1 px at HERO and 0 at WEST
+   * and NW**.
+   *
+   * REPAIRED AT THE GENERATOR, NOT WITH A POST-HOC RECALC. These ribbons are an
+   * OPEN surface, so `recalc_face_normals` only makes a component mutually
+   * consistent — the global sense it settles on is arbitrary, which would trade
+   * a reproducible bug for a coin toss. Every quad is a near-horizontal strip
+   * whose visible face is its top, so orientation is knowable outright from the
+   * quad's own XY shoelace area. Result asserted: **249/249 faces up, min
+   * normal z 0.99925**, against 20/249 before.
+   *
+   * COLOR_0 added by the same AO bake the rest of the stone uses (mean 0.858 —
+   * between fountain_bowl_lip 0.864 and finial_plinth 0.812, correctly high for
+   * a strip lying in the open). That also retires the material fork: all 39
+   * MAT_Stone_Trim primitives now carry COLOR_0, where p5g and p5h had 38 of 39.
+   *
+   * THE 30 mm LIFT IS UNCHANGED, AND THAT IS A MEASUREMENT. The ground's 520 m
+   * extent gives a 31.74 mm Draco position quantum — confirmed on the decoded
+   * mesh, whose 15,455 vertices carry only 218 distinct Y values exactly
+   * 31.74 mm apart — so 30 mm of lift is under one step, which sounds fatal.
+   * It is not: ray-casting all 568 edging vertices against the shipped
+   * post-Draco ground gives clearance **min 17.71 mm, median 18.98, max 50.72,
+   * with ZERO vertices at or below the ground and none under 5 mm**, against
+   * ~0.54 mm of depth precision at 30 m. Raising it would only float a ribbon
+   * that has no side wall.
+   *
+   * Geometry is otherwise untouched: 508 verts / 249 polys / 498 tris before and
+   * after, and the sorted world vertex positions hash identically
+   * (`b249072723c55974`). Graft: replaced 1, added 0, **no growth waiver
+   * needed**; nodes 483 → 483, materials 17 → 17, textures 40 → 40, images
+   * 40 → 40, triangles 186,007 → 186,007.
+   */
+  p5k: '/models/exterior_mansion_v6_p5k.glb',
+  /**
+   * P5M — the one performance hypothesis the report left untested: the cypress
+   * normal map at 512² instead of 1024². Under evaluation; see §20 of the
+   * report for the verdict.
+   *
+   * WHY IT SHOULD BE FREE, WHICH IS WHY IT WAS WORTH ONE CYCLE. The map is a
+   * 1.5 m tile at 1024², so 1.46 mm per texel. The cypresses are never nearer
+   * than ~40 m, where the NW camera resolves about 43 mm per pixel — a 30×
+   * MINIFICATION, so the GPU is sampling around mip 5 (32×32). A 512² map's
+   * mip 4 is that same 32×32 level built by the same box filter. The only level
+   * this deletes is a base no camera in the sequence ever reaches. That is the
+   * P5A sampling argument run in the opposite direction.
+   *
+   * This is NOT the rejected P5J experiment. That changed the CODEC (ETC1S),
+   * which quantises normal endpoints and cost the cypress 25.5 luma at NW. This
+   * changes RESOLUTION and keeps UASTC. The codec decision stands untouched.
+   */
+  p5m: '/models/exterior_mansion_v6_p5m.glb',
   /**
    * P5H, SECOND ELEMENT — DUSK ARRIVAL LIGHTING. **Tested and REJECTED on
    * measurement.** No candidate, and no light was added.
