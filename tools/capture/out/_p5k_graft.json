@@ -1,0 +1,86 @@
+{
+ "base": "apps/public/public/models/exterior_mansion_v6_p5h.glb",
+ "donor": "C:/dev/Blender/_p5out/P5K/exterior_mansion_v4.glb",
+ "out": "apps/public/public/models/exterior_mansion_v6_p5k.glb",
+ "replaced": [
+  {
+   "node": "edging_hardscape",
+   "mesh": 384,
+   "newMesh": 404,
+   "verts": 568,
+   "tris": 498,
+   "wasVerts": 568,
+   "wasTris": 498,
+   "boundsBase": [
+    [
+     -10.879121780395508,
+     0.0057908110320568085,
+     -7.28000020980835
+    ],
+    [
+     10.879121780395508,
+     0.029999999329447746,
+     34
+    ]
+   ],
+   "boundsDonor": [
+    [
+     -10.879121780395508,
+     0.0057908110320568085,
+     -7.28000020980835
+    ],
+    [
+     10.879121780395508,
+     0.029999999329447746,
+     34
+    ]
+   ],
+   "attrs": [
+    "COLOR_0",
+    "NORMAL",
+    "POSITION",
+    "TEXCOORD_0"
+   ]
+  }
+ ],
+ "added": [],
+ "skippedSharedMesh": [],
+ "droppedNodes": [],
+ "seamSplits": [],
+ "materialsAdded": [],
+ "materialsReused": [
+  "MAT_Stone_Trim"
+ ],
+ "counts": {
+  "bufferViews": [
+   447,
+   448
+  ],
+  "accessors": [
+   3230,
+   3235
+  ],
+  "meshes": [
+   404,
+   405
+  ],
+  "materials": [
+   17,
+   17
+  ],
+  "textures": [
+   40,
+   40
+  ],
+  "images": [
+   40,
+   40
+  ],
+  "nodes": [
+   483,
+   483
+  ]
+ },
+ "sizeMB": 16.625,
+ "sha256": "035049665b0cb8a25726f3af2816d8c55597a43081b7f23f8aead71c3bcdcdb8"
+}
