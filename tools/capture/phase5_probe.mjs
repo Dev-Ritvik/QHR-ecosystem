@@ -64,6 +64,11 @@ async (page) => {
     // this id is >= 24/255 from every other in the table, the separation the
     // nearest-id classifier depends on.
     ['urn',      '^urn_',                                           [0.30, 0.60, 1.00]],
+    // P5K. The edging was invisible and therefore never worth its own class;
+    // once its winding is repaired it has to be measurable on its own, because
+    // "it renders now" and "it improves the frame" are different questions.
+    // Nearest neighbour in the table is roof at an L1 distance of 89/255.
+    ['edging',   '^edging_',                                        [0.85, 0.45, 0.15]],
     ['roof',     '^(mansion_roof|roof_peak|spire_|finial_|cupola_)', [1.00, 0.50, 0.00]],
     ['masonry',  '^(ashlar_|rustic_)',                              [0.50, 0.00, 1.00]],
     ['mansion',  '^(mansion_|portico_|arch|door|lion_)',            [0.00, 0.55, 0.30]],
@@ -416,6 +421,27 @@ async (page) => {
     };
   };
 
+  // THE CONSENT PANEL HAS TO GO BEFORE ANYTHING IS CAPTURED.
+  //
+  // It is a DOM overlay with a full-frame scrim, so `locator('canvas')
+  // .screenshot()` renders the page region and comes back darkened - the
+  // captures are unusable for visual judgement even though the MEASUREMENTS are
+  // unaffected (readPixels reads the WebGL back buffer, and drawImage reads the
+  // canvas; neither sees the DOM, which is why terrain still measured 70.53
+  // against 70.52 on a clean run). Earlier passes only escaped this because a
+  // cookie happened to persist across runs; restarting the server exposed it.
+  // "Essential only" is chosen deliberately - it is the privacy-preserving
+  // option, and analytics have no business in a measurement run.
+  const dismissConsent = async (pg) => {
+    try {
+      const b = pg.getByRole('button', { name: /essential only/i });
+      await b.waitFor({ state: 'visible', timeout: 4000 });
+      await b.click();
+      await pg.waitForTimeout(400);
+      return true;
+    } catch (e) { return false; }
+  };
+
   // ---------------- drive -------------------------------------------------
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 300)); });
@@ -425,12 +451,13 @@ async (page) => {
   await page.context().addInitScript(INIT);
 
   const out = {};
-  const MODELS = (typeof MODEL_LIST !== 'undefined') ? MODEL_LIST : ['p5h','p5g'];
+  const MODELS = (typeof MODEL_LIST !== 'undefined') ? MODEL_LIST : ['p5m','p5k'];
   for (const model of MODELS)
   for (const grade of ['daylight', 'dusk']) {
     if (grade === 'dusk' && false) continue;   // dusk on the newest candidate only
     await page.goto('http://localhost:3001/?model=' + model + (grade === 'dusk' ? '&grade=dusk' : ''),
                     { waitUntil: 'load' });
+    await dismissConsent(page);
     await page.waitForTimeout(10000);
     const att = await page.evaluate(ATTACH);
     if (!att.ok) throw new Error('attach failed: ' + JSON.stringify(att));
@@ -454,6 +481,7 @@ async (page) => {
   // Interior regression, in the same run and the same context: the Phase 5
   // work is exterior-only and /hall must be provably untouched.
   await page.goto('http://localhost:3001/hall', { waitUntil: 'load' });
+  await dismissConsent(page);
   await page.waitForTimeout(9000);
   await page.locator('canvas').screenshot({ path: OUT + (MODELS[0] || 'x') + '_interior_hall.png' });
   out.interiorErrors = errors.length;
