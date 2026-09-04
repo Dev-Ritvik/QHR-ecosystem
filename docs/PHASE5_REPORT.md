@@ -5,7 +5,10 @@
 measurement**. P5F remains a justified no-op; P5I and P5J are evaluation and
 revalidation passes, not authored candidates.
 
-**Recommended candidate: `p5h`.** Default resolver untouched at `v5`.
+**FINAL CANDIDATE: `p5m`** (`5de32404…4fe270a0`). **PROMOTED** — the production
+resolver now points at it; see §21. Sections 1–18 were written before the final
+completion pass and recommended `p5h`, which was correct on the evidence then
+available; §19–§22 record what the completion pass changed.
 
 Starting commit `cd592aa` · P5H revalidation started from `5e17ac4` · branch
 `main`. Final commit in §16.
@@ -589,8 +592,12 @@ honest headline number and it is entirely Phase 5A–5E's: the four new 1024²
 normal maps at ~1.3 MB each, whose only compression lever was measured and
 rejected (§12).
 
-Final commit: see §18. Six Phase 5 commits precede this pass
-(`cd592aa` → `5e17ac4`); this pass adds three.
+**Commit accounting, reconciled against `git log` rather than recalled.** An
+earlier revision of this section said "six Phase 5 commits precede this pass;
+this pass adds three". Both numbers were wrong. The actual history is **four**
+before the P5H pass (`cd592aa`, `66b4cfc`, `0846229`, `5e17ac4`) and **four**
+added by it (`149786d`, `17c09f4`, `e8ef254`, `e861d7e`) — eight at the start of
+the completion pass, whose own commits are listed in §21.
 
 ---
 
@@ -669,5 +676,352 @@ Three things to know before promoting:
 3. **The production resolver was NOT changed.** `EXTERIOR_MODEL_URL` remains
    `'/models/exterior_mansion_v5.glb'`, and nothing was pushed.
 
-**PRODUCTION RESOLVER: v5 — unchanged.**
-**RECOMMENDED CANDIDATE: p5h** (`1fbafd09…b0f34c4b`).
+**PRODUCTION RESOLVER: v5 — unchanged** *(at the time this section was written;
+see §21, where it was changed to `p5m`)*.
+**RECOMMENDED CANDIDATE: p5h** (`1fbafd09…b0f34c4b`) *(superseded by `p5m`, §21)*.
+
+---
+
+## 19. FINAL COMPLETION PASS — P5C repaired, and the last optimisation tested
+
+Everything above this line was written before the completion pass and is left as
+it stood, because §18's recommendation of `p5h` was correct on the evidence
+available at the time. This section records what changed after it.
+
+**Starting HEAD: `e861d7e`** (branch `main`, working tree clean). p5h verified at
+`1fbafd0929699de67456912045f82491c5e5bb6eb8a8c4cedb50ed07b0f34c4b` — the value
+§13 recorded — and v5, p4e, p5g and the interior all verified against their
+recorded hashes before anything was touched.
+
+### 19.1 The defect, re-derived from the generator rather than from the report
+
+§12 established that `edging_hardscape` renders 1 px at HERO and 0 at WEST and
+NW because it is wound inside-out. The completion pass did not take that on
+trust; it worked the winding out of `strip()` directly. Each quad was built as
+`[p0, p1, q1, q0]` — along the polyline, then across the ribbon — so its sense
+depends on the sign relationship between the direction of travel and the offset
+direction. Taking the cross product per caller:
+
+| run | quads | predicted normal |
+|---|---|---|
+| `rect_run` × 4 sides (terrace) | 132 | −Z |
+| forecourt arc | 77 | −Z |
+| approach flank, `side = -1` | 20 | −Z |
+| approach flank, `side = +1` | 20 | **+Z** |
+| **total** | **249** | **229 down / 20 up** |
+
+The shipped mesh measures **249 polygons, 229 down, 20 up**. Every polygon is
+accounted for, and the one run that comes out right is the one whose offset is
+mirrored. That is the whole bug.
+
+### 19.2 The fix, at the generator
+
+**Not a post-hoc `recalc_face_normals`.** These ribbons are an OPEN surface, and
+recalc only makes a connected component mutually consistent — for an open sheet
+the global sense it settles on is arbitrary, so it would trade a reproducible bug
+for a coin toss. Every quad here is a near-horizontal strip whose visible face is
+its top, so the correct orientation is knowable outright: take the quad's own
+shoelace area in XY, which is positive exactly when the vertex order is
+counter-clockwise seen from +Z, and reverse the order when it is not.
+Direction-independent and deterministic.
+
+`tools/blender/p5c_transitions.py` now also asserts the result rather than
+assuming it — the original assertion checked vertex Z against the sampled ground
+to 1e-4, which is a **position** test and says nothing about winding. It is
+additionally made re-runnable (it removes a previous `edging_hardscape` first),
+and its object-control snapshot now excludes the subject from **both** sides; it
+had only been excluded from `after`, which was correct while the script could
+only create the object and fires spuriously now that it also replaces one.
+
+| | shipped (p5h) | corrected |
+|---|---|---|
+| polygons facing up (nz > 0.5) | 20 | **249** |
+| polygons facing down | **229** | **0** |
+| min / mean normal z | — | **0.99925 / 0.99999** |
+| verts / polys / tris | 508 / 249 / 498 | **508 / 249 / 498** |
+| sorted world vertex positions, sha | `b249072723c55974` | **`b249072723c55974`** |
+
+The position hash is the control that matters: **the geometry did not move.**
+
+### 19.3 COLOR_0, and the material fork
+
+`edging_hardscape` was the only one of 37 `MAT_Stone_Trim` primitives without
+`COLOR_0`, which both skipped the StoneAO multiply and made three's
+`GLTFLoader` cache a second material instance (its key carries
+`vertex-colors:`). Baked with `tools/blender/bake_ao_raycast.py` at the same 0.40
+floor as the rest of the stone: **mean 0.858**, which sits between
+`fountain_bowl_lip` (0.864) and `finial_plinth` (0.812) — correctly high for a
+flat strip lying in the open. All **39** trim primitives now carry `COLOR_0`.
+
+**Measured in the live scene, which is the only place this is real:** 16 material
+names resolving to **17 instances** on p5g and p5h, and to **16** on p5k. The
+fork is retired.
+
+### 19.4 Clearance — measured, and deliberately NOT changed
+
+The brief asked for the clearance to be corrected above the Draco quantum. The
+measurement says it does not need correcting, so it was not.
+
+The ground plane's 520 m extent gives a 14-bit position quantum of **31.74 mm** —
+confirmed on the DECODED mesh, whose 15,455 vertices carry only 218 distinct Y
+values exactly 31.74 mm apart — against a 30 mm lift. That sounds fatal. What
+matters is the clearance that survives, so all 568 edging vertices were ray-cast
+against the shipped post-Draco ground:
+
+| min | p05 | median | p95 | max | ≤ 0 mm | ≤ 5 mm |
+|---|---|---|---|---|---|---|
+| **17.71 mm** | 18.98 | 18.98 | 50.72 | 50.72 | **0** | **0** |
+
+Not one vertex is at or below the ground, and the thinnest clearance is roughly
+**33×** the ~0.54 mm depth precision at the 30 m the HERO camera works at.
+Raising it would also cost something: this ribbon has no side wall, so a larger
+lift does not make a taller kerb — it floats a plane over the grass. **Unchanged
+at 30 mm, on evidence.**
+
+### 19.5 Structural diff, p5h → p5k
+
+`graft_draco_nodes.py`, **replaced 1, added 0, and no growth waiver needed** —
+the strict REPLACE checks on transform, POSITION bounds, vertex count and index
+count all passed unaided.
+
+| | p5h | p5k |
+|---|---|---|
+| nodes | 483 | **483** |
+| triangles | 186,007 | **186,007** |
+| materials (glTF) | 17 | **17** |
+| material instances (runtime) | **17** | **16** |
+| textures / images | 40 / 40 | **40 / 40** |
+| geometries | 387 | **387** |
+| meshes | 404 | 405 |
+| GLB | 16.621 MB | 16.625 MB |
+
+The `meshes` +1 and the +4 KB are the superseded mesh left behind: the graft
+never removes bufferViews, because that is what lets it prove the survivors
+byte-identical. This is **pre-existing methodology, not new** — p5a already
+carried 1 orphan (25 KB) and p5g and p5h carry 19 (82.8 KB); p5k makes it 20
+(84.9 KB, 0.5 % of the file). Recorded in §22 as a residual.
+
+### 19.6 Four-camera acceptance — ACCEPTED
+
+All eight captures pose-verified `onBeat` and matched to sub-millimetre (p5k
+0.0000 / 0.0073 / 0.0076 / 0.0000 against p5h 0.0000 / 0.0073 / 0.0075 / 0.0000).
+
+| | HERO | WEST | NW | HERO dusk |
+|---|---|---|---|---|
+| edging coverage, p5h | 0.00 % | 0.00 % | 0.00 % | 0.00 % |
+| edging coverage, p5k | **0.72 %** | **0.69 %** | **0.69 %** | **0.72 %** |
+| edging L | 129.11 | 127.34 | 117.77 | 144.17 |
+| edging sd | 26.34 | 28.25 | 30.69 | 21.41 |
+
+**Hierarchy at HERO:** masonry 133.02 > **edging 129.11** > terrace 116.23 >
+steps 109.89 > urn 100.85 ≈ mansion 100.44 > drive 94.91 > lawn 70.71 >
+hedge 53.55 > cypress 44.86.
+
+**Isolation:** every unrelated class moved **≤ 0.19 luma** at HERO and ≤ 0.11 at
+dusk. The largest single move anywhere was WEST `steps` at 0.41 — a 0.07 %,
+~900-pixel class that does not use `MAT_Stone_Trim` at all and therefore cannot
+be affected by this change; it bounds the instrument's own noise.
+
+**Why it is accepted, and the reservation stated plainly.** It is the
+second-brightest class *by mean*, and that is the fair objection. But mean rank
+ignores area, and by area-weighted light contribution (L × coverage) the edging
+is a minor element:
+
+| terrain | mansion | terrace | roof | drive | masonry | **edging** | urn |
+|---|---|---|---|---|---|---|---|
+| 3045 | 850 | 714 | 384 | 309 | 263 | **93** | 7 |
+
+Checked against §12's rejection triggers: **no z-fighting and no float** (5×
+nearest-neighbour on the thinnest, farthest section shows a solid uniform band
+sitting flush), **no aliasing beyond the terrace's own edge**, **no hierarchy
+damage** (the building's dominant surface still leads and the edging contributes
+93 against terrain's 3045), and it reads as a stone margin rather than an
+outline at all four cameras. It also delivers precisely what P5C was authored
+for and never achieved: the terrace previously met grass on a bare line, and now
+there is a built margin between them.
+
+**The honest reservation:** the band is flat and low-detail at distance — a 1.2 m
+tile on a strip 3.7 px wide carries almost no texture — and it raises the largest
+ground-level luminance step in the frame from 45 to 58 (terrace 116 → edging 129
+→ lawn 71). It is accepted because it is small, correct, free, and reads as
+construction; not because it is invisible.
+
+**Cost: zero.** No new triangles, textures, materials, draw calls, geometries or
+GPU residency — and **one fewer material instance**.
+
+---
+
+## 20. Cypress normal at 512² — TESTED and ACCEPTED
+
+The one optimisation §17 left untested, and the only one attempted here. **This
+is not the rejected P5J experiment**: that changed the CODEC (ETC1S) and cost the
+cypress 25.5 luma at NW. This changes RESOLUTION and keeps UASTC. The codec
+decision stands untouched and was not re-tested.
+
+**Predicted free, from sampling rather than from hope.** The map is a 1.5 m tile
+at 1024² — 1.46 mm per texel. The cypresses are never nearer than ~40 m, where
+the NW camera resolves about 43 mm per pixel: a **30× minification**, so the GPU
+samples around **mip 5** (32×32). A 512² map's mip 4 is that same 32×32 level
+built by the same box filter. The level this deletes is a base no camera in the
+sequence ever reaches — the P5A sampling argument run backwards.
+
+`patch_material_textures.py` gained a per-slot `"maxpx"` key for it, alongside
+the existing per-slot `"codec"`. Controls keep the 1024 default, since their job
+is to reproduce the *shipped* image byte-for-byte.
+
+**Measured, pose-matched, four cameras:**
+
+| cypress | p5k (1024²) | p5m (512²) | Δ |
+|---|---|---|---|
+| HERO | 44.86 sd 15.56 | 44.86 sd 15.56 | **0.00 / 0.00** |
+| WEST | 56.72 sd 17.27 | 56.72 sd 17.29 | 0.00 / +0.02 |
+| **NW** (4.08 % of frame) | 65.75 sd 14.95 | 65.75 sd 14.95 | **0.00 / 0.00** |
+| HERO dusk | 38.29 sd 12.16 | 38.29 sd 12.17 | 0.00 / +0.01 |
+
+Identical to two decimals in mean **and** standard deviation at every camera, and
+coverage identical.
+
+**And the pixel diff was checked against a control, because a class mean can hide
+structure.** A direct image difference showed max 94–126 and ~0.5 % of pixels
+differing — which looks alarming until it is compared with the same candidate
+captured twice:
+
+| NW | maxAbs | meanAbs | px > 8 |
+|---|---|---|---|
+| p5k vs **p5k** (two independent runs) | 102 | **0.0732** | **4,105** |
+| p5k vs **p5m** (1024² vs 512²) | 94 | **0.0722** | **3,725** |
+
+At the camera where the cypress is largest, **the change produces a smaller
+difference than the scene's own run-to-run repeatability.** The render is
+nondeterministic at this magnitude regardless of what is in the file.
+
+**Benefit:** GPU texture residency **62.65 → 61.65 MB (−1.00 MB)**, GLB
+**16.625 → 15.921 MB (−0.70 MB on the wire)**, cypress normal 990.22 KB →
+269.62 KB (**−72 %**). Draw calls, triangles, materials, geometries, programs,
+lights and shadow casters all unchanged. **Accepted.**
+
+The same argument plausibly applies to the hedge normal, but the hedge stands
+13 m from HERO rather than 40, which is a different sampling case. Not tested,
+and listed in §22 rather than assumed.
+
+---
+
+## 21. Final state, regression, and the promotion
+
+**FINAL CANDIDATE: `p5m`** —
+`5de3240453cfaec9b4d60eda70f90991c64f7d782ec296aaab0a731d4fe270a0`.
+
+Chain: `v5 → p4e → p5a → p5b → p5c → p5d → p5e → (p5f no-op) → p5g → p5h → p5k
+→ p5m`. It carries every accepted change and none of the four rejected ones —
+P5A's first lawn albedo, P5J's ETC1S foliage normals, P5H's dusk lamps, and a
+Draco-quantisation diagnosis of the edging defect that a discriminating test
+disproved.
+
+### THE PRODUCTION RESOLVER WAS CHANGED
+
+```
+EXTERIOR_MODEL_URL:  '/models/exterior_mansion_v5.glb'
+                  →  '/models/exterior_mansion_v6_p5m.glb'
+```
+
+Under the completion brief's Outcome A this promotion is the instructed
+conclusion, and `docs/promotion.md` governs Vercel deploy promotion rather than
+the model resolver, so no separate control was bypassed. **Nothing was pushed**;
+the change reaches staging through the documented CI path when the owner pushes.
+
+**This is one cumulative decision.** p5m sits on p4e, which had never been
+promoted, so this promotes the whole Phase 4 surface system together with Phase 5.
+
+**A trap avoided and worth recording:** `MODEL_CANDIDATES.v5` was bound to
+`EXTERIOR_MODEL_URL`, so changing the constant would have silently re-pointed the
+`?model=v5` rollback at the promotion itself. `v5` is now its own literal path.
+
+**Verified on the DEFAULT route, with no `?model=` at all:**
+
+| | result |
+|---|---|
+| GLB actually requested | **`exterior_mansion_v6_p5m.glb`** |
+| `/hall` GLB | `interior_hall.glb` — unchanged |
+| meshes / material instances | 483 / **16** |
+| lights / shadow casters | **9 / 1** |
+| geometries / GL textures | 387 / 62 |
+| pose, HERO / WEST / NW / dusk | 0.0000 / 0.0079 / 0.0079 / 0.0000, all `onBeat` |
+| console errors, all four cameras and `/hall` | **0** |
+
+### Regression
+
+| | result |
+|---|---|
+| typecheck | **5/5 successful** |
+| tests | **266 passing** (188 domain, 30 db, 48 public) |
+| lint | **5/5 successful, 0 errors** |
+| production build | clean |
+| console errors | **0** |
+| `/hall` | loads, correct model, 0 errors |
+
+### Locks
+
+| | result |
+|---|---|
+| every pre-existing GLB | **byte-identical** |
+| v5 | `d7a7e945…87bc87c3` |
+| p4e | `88d46e24…7ef66ee` |
+| p5g | `4addfaa8…aafd55b0` |
+| p5h | `1fbafd09…b0f34c4b` |
+| p5k | `03504966…3bcdcdb8` |
+| interior | `ee95e915…16cefa20` |
+| 42 material source PNGs | **all byte-identical** |
+| locked Blender sources | size and mtime **unchanged** |
+
+### Final performance, v5 → p5m
+
+| | v5 (was production) | p4e | **p5m (now production)** |
+|---|---|---|---|
+| GLB | 10.19 MB | 11.04 MB | **15.92 MB** |
+| unique triangles | 179,397 | 179,397 | **186,007** |
+| HERO draw calls | — | 947 | **955** |
+| GPU texture residency | — | 49.32 MB | **61.65 MB** |
+| material instances | — | 15 | **16** |
+| lights / shadow casters | 9 / 1 | 9 / 1 | **9 / 1** |
+
+Against p5h, the two completion-pass changes are **−0.70 MB wire, −1.00 MB GPU
+residency, −1 material instance, +0 triangles, +0 draw calls** — and 498
+triangles that previously drew nothing now draw the edging.
+
+**Frame timing is still not reported.** The headless rAF rate ran 53–103 /s with
+vsync off, which is not what a visitor's device does.
+
+### Commits in this pass
+
+`e861d7e` (start) → see §22 for the completion-pass commits.
+
+---
+
+## 22. Known residuals, after completion
+
+1. **The ground/backdrop seam is improved 14 %, not solved.** Unchanged by this
+   pass and untouched: the fog investigation is closed on the earlier live sweep.
+2. **The edging is flat and low-detail at distance** and raises the largest
+   ground-level luminance step from 45 to 58. Accepted with the reservation
+   stated in §19.6; if it ever reads as too hard an outline, the lever is the
+   `MAT_Stone_Trim` tile scale on that object, not its geometry.
+3. **Phase 5 still costs +12.33 MB of GPU texture residency over p4e** (49.32 →
+   61.65), down from +13.33 after the cypress 512². The hedge normal is the
+   remaining candidate for the same treatment and is **untested** — the hedge
+   stands 13 m from HERO against the cypress's 40, so it is a genuinely
+   different sampling case and must be measured, not assumed.
+4. **The candidate chain carries 84.9 KB of orphaned bufferViews** (0.5 % of the
+   file) — inherent to a graft that never removes bufferViews so it can prove the
+   survivors byte-identical. Pre-existing from p5a; not introduced here.
+5. **The cypress geometry carries +224 triangles** from Blender 5.2's n-gon
+   fanning. Waived deliberately in P5E; unchanged.
+6. **`SETTLE` can still stop short at high frame rates.** One p5h capture during
+   this pass stopped at 0.0958 m via the `asymptote` fallback at 93 rAF/s. It was
+   detected by the `why` field, discarded, and re-run to `onBeat` — the guard did
+   its job, but the fallback threshold is loose enough to be worth tightening.
+7. **The render is not frame-deterministic** at ~0.07 mean absolute pixel
+   difference (§20). Any future image-difference test must be read against a
+   same-candidate control, not against zero.
+8. **The dusk grade is not the shipping look** (`?grade=dusk` is the rollback),
+   so dusk findings are secondary by construction.
+
