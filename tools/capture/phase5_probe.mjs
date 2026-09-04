@@ -22,10 +22,12 @@
  * The camera is a damped follower of a centripetal Catmull-Rom driven through
  * Lenis's smoothed scroll, so a screenshot taken at a scroll offset is only "at
  * a beat" once the rig has converged. Each capture scrolls to a fraction
- * derived by inverting SWING (0.2s + 0.8*power2.inOut) over CROSSOVER 0.46,
- * waits for 12 consecutive frames of sub-4mm movement, and then asserts the
- * settled position against the beat's authored position. Phase 2.5B lost a day
- * to measurements made against a mis-derived camera; this is the guard.
+ * derived by inverting SWING (0.2s + 0.8*power2.inOut) over CROSSOVER 0.46 and
+ * then holds until the camera is AT the beat - see SETTLE, which converges on
+ * the pose error itself rather than on per-frame movement, because a per-frame
+ * threshold is frame-rate dependent and let a 0.157 m error through. Phase 2.5B
+ * lost a day to measurements made against a mis-derived camera; this is the
+ * guard.
  *
  * WHY COVERAGE IS RENDERED, NOT PROJECTED
  * A world-axis bounding box overstates a cypress cone and cannot see occlusion.
@@ -57,6 +59,11 @@ async (page) => {
     ['fountain', '^fount',                                          [1.00, 1.00, 0.00]],
     ['terrace',  '^terrace_',                                       [1.00, 0.00, 1.00]],
     ['steps',    '^entry_',                                         [0.00, 1.00, 1.00]],
+    // P5H. Matched BEFORE nothing else can claim it - `urn_entry_*` collides
+    // with no rule above (`^entry_` needs the name to START with entry_), and
+    // this id is >= 24/255 from every other in the table, the separation the
+    // nearest-id classifier depends on.
+    ['urn',      '^urn_',                                           [0.30, 0.60, 1.00]],
     ['roof',     '^(mansion_roof|roof_peak|spire_|finial_|cupola_)', [1.00, 0.50, 0.00]],
     ['masonry',  '^(ashlar_|rustic_)',                              [0.50, 0.00, 1.00]],
     ['mansion',  '^(mansion_|portico_|arch|door|lion_)',            [0.00, 0.55, 0.30]],
@@ -103,29 +110,53 @@ async (page) => {
     return { ok: true, renderers: h.renderers.length, scenes: h.scenes.length };
   };
 
-  const SETTLE = async (frac) => {
+  // SETTLE CONVERGES ON THE POSE ERROR, NOT ON PER-FRAME MOVEMENT, and that
+  // correction matters more than it looks.
+  //
+  // The original test was "12 consecutive frames moving under 4 mm". The rig is
+  // a first-order lag, so per-frame movement is (remaining distance / tau) * dt
+  // - it is proportional to the FRAME TIME. A run that happens to render faster
+  // therefore takes smaller steps and trips a fixed per-frame threshold EARLIER,
+  // while still further from the beat. That is exactly what happened on the
+  // first p5h run: 94-101 rAF/s and a settled pose 0.157 / 0.174 / 0.164 m from
+  // the beat, against p5g's 0.000 / 0.014 / 0.024 at 78-85. At HERO's
+  // 0.0245 m/px that is a SIX PIXEL shift between the two frames being
+  // differenced - larger than the 0.07% object under test - and it moved sky
+  // and terrain coverage by 0.35 points on its own.
+  //
+  // So the loop now runs until the camera is actually AT the beat (8 mm), and
+  // only falls back to an asymptote test - 60 frames under 0.5 mm - when the
+  // rig genuinely cannot get closer. The residual floor is the scroll
+  // quantisation: window.scrollTo takes integer pixels, so a derived fraction
+  // lands a pixel off and WEST/NW bottom out around 0.02 m while HERO, at
+  // scroll 0, is exact.
+  const SETTLE = async (arg) => {
+    const { frac, beat } = arg;
     const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo(0, Math.round(frac * max));
     const t0 = performance.now();
-    let last = null, stable = 0, frames = 0;
-    while (performance.now() - t0 < 30000) {
+    let last = null, stable = 0, frames = 0, err = Infinity, why = 'timeout';
+    while (performance.now() - t0 < 40000) {
       await new Promise((r) => requestAnimationFrame(r));
       frames++;
       const p = window.__PROBE_PAIR__;
       if (!p || !p.camera) continue;
       const c = p.camera.position;
+      err = Math.hypot(c.x - beat[0], c.y - beat[1], c.z - beat[2]);
       if (last) {
         const d = Math.hypot(c.x - last[0], c.y - last[1], c.z - last[2]);
-        stable = d < 0.004 ? stable + 1 : 0;
-        if (stable >= 12) break;
+        stable = d < 0.0005 ? stable + 1 : 0;
       }
       last = [c.x, c.y, c.z];
+      if (err < 0.008) { why = 'onBeat'; break; }
+      if (stable >= 60) { why = 'asymptote'; break; }
     }
     const c = window.__PROBE_PAIR__.camera;
     return {
       frames, ms: Math.round(performance.now() - t0),
       fps: +(frames / ((performance.now() - t0) / 1000)).toFixed(1),
-      scrollY: window.scrollY, maxScroll: max, settled: stable >= 12,
+      scrollY: window.scrollY, maxScroll: max,
+      settled: err < 0.008 || stable >= 60, why,
       position: [c.position.x, c.position.y, c.position.z].map((v) => +v.toFixed(4)),
       fov: c.fov,
     };
@@ -231,22 +262,68 @@ async (page) => {
     // The guard is the point. It cannot make the read reliable, but it makes a
     // failed read FAIL rather than return zeros, and it is what exposed that
     // the read had never been sound - earlier runs had simply been lucky.
-    const grabVisible = async () => {
-      for (let attempt = 0; attempt < 30; attempt++) {
-        await new Promise((r) => requestAnimationFrame(r));
-        const cv = document.querySelector('canvas');
-        const t = document.createElement('canvas');
-        t.width = cv.width; t.height = cv.height;
-        t.getContext('2d').drawImage(cv, 0, 0);
-        const d = t.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
-        let dark = 0, n = 0;
-        const step = Math.max(4, Math.floor(d.length / 4 / 4000)) * 4;
-        for (let i = 0; i < d.length; i += step) { n++; if (d[i] + d[i + 1] + d[i + 2] < 12) dark++; }
-        if (dark / n < 0.92) return d;
-      }
-      return null;     // reported as unavailable, never as zeros
+    // REPAIRED, AND THE REPAIR IS MEASURED RATHER THAN ARGUED.
+    //
+    // The original read went through a 2D canvas: drawImage(webglCanvas) then
+    // getImageData. That path asks the browser for a SNAPSHOT of the drawing
+    // buffer, which under preserveDrawingBuffer:false is only valid between
+    // the app's draw and the compositor's clear - so it depended on where the
+    // probe's rAF landed relative to r3f's, and three of four p5j captures
+    // came back black.
+    //
+    // readPixels on the context reads the BACK BUFFER itself. It is not a
+    // snapshot and does not go through the compositor, so it holds whatever
+    // was last drawn until something clears it - which is the next render, not
+    // the next paint. Same rAF ordering, materially weaker dependency on it.
+    //
+    // Both reads are taken and compared. `visAgreeMAD` is the mean absolute
+    // difference between them over the frame; if the two independent paths
+    // agree, the new one is validated by measurement rather than by argument.
+    // readPixels is bottom-up and getImageData is top-down, so the GL read is
+    // flipped into top-down here and `vis` keeps its original orientation.
+    const isDark = (d) => {
+      let dark = 0, n = 0;
+      const step = Math.max(4, Math.floor(d.length / 4 / 4000)) * 4;
+      for (let i = 0; i < d.length; i += step) { n++; if (d[i] + d[i + 1] + d[i + 2] < 12) dark++; }
+      return dark / n >= 0.92;
     };
-    const vis = await grabVisible();
+    const grabGL = () => {
+      const ctx = gl.getContext();
+      const w = gl.domElement.width, hh = gl.domElement.height;
+      const raw = new Uint8Array(w * hh * 4);
+      ctx.readPixels(0, 0, w, hh, ctx.RGBA, ctx.UNSIGNED_BYTE, raw);
+      const flip = new Uint8Array(w * hh * 4);
+      const row = w * 4;
+      for (let y = 0; y < hh; y++) flip.set(raw.subarray((hh - 1 - y) * row, (hh - y) * row), y * row);
+      return flip;
+    };
+    const grab2D = () => {
+      const cv = document.querySelector('canvas');
+      const t = document.createElement('canvas');
+      t.width = cv.width; t.height = cv.height;
+      t.getContext('2d').drawImage(cv, 0, 0);
+      return t.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    };
+    let vis = null, vis2d = null;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      await new Promise((r) => requestAnimationFrame(r));
+      const a = grabGL();
+      if (isDark(a)) continue;
+      vis = a;
+      const b = grab2D();
+      if (!isDark(b)) vis2d = b;
+      break;
+    }
+    let visAgreeMAD = null;
+    if (vis && vis2d) {
+      let s = 0, n = 0;
+      for (let i = 0; i < vis.length; i += 4 * 37) {
+        s += Math.abs(vis[i] - vis2d[i]) + Math.abs(vis[i + 1] - vis2d[i + 1])
+           + Math.abs(vis[i + 2] - vis2d[i + 2]);
+        n += 3;
+      }
+      visAgreeMAD = +(s / n).toFixed(3);
+    }
 
     const saved = [], idMats = new Map();
     scene.traverse((o) => {
@@ -332,6 +409,10 @@ async (page) => {
         .map(([k, v]) => [k, +(100 * v / total).toFixed(2)])),
       shade: vis ? shade : null,
       shadeUnavailable: !vis,
+      // null when the 2D path failed and the GL path did not - which is the
+      // asymmetry the repair exists to produce.
+      visAgreeMAD,
+      visPaths: (vis ? 'gl' : '-') + '/' + (vis2d ? '2d' : '-'),
     };
   };
 
@@ -344,7 +425,7 @@ async (page) => {
   await page.context().addInitScript(INIT);
 
   const out = {};
-  const MODELS = (typeof MODEL_LIST !== 'undefined') ? MODEL_LIST : ['p5j','p4e'];
+  const MODELS = (typeof MODEL_LIST !== 'undefined') ? MODEL_LIST : ['p5h','p5g'];
   for (const model of MODELS)
   for (const grade of ['daylight', 'dusk']) {
     if (grade === 'dusk' && false) continue;   // dusk on the newest candidate only
@@ -357,12 +438,12 @@ async (page) => {
     for (const b of BEATS) {
       if (grade === 'dusk' && b.name !== 'HERO') continue;
       const key = model + '_' + b.name + '_' + grade;
-      const settle = await page.evaluate(SETTLE, b.scroll);
+      const settle = await page.evaluate(SETTLE, { frac: b.scroll, beat: b.pos });
       const err = Math.hypot(settle.position[0] - b.pos[0], settle.position[1] - b.pos[1],
                              settle.position[2] - b.pos[2]);
       await page.locator('canvas').screenshot({ path: OUT + key + '.png' });
       out[key] = {
-        poseErrM: +err.toFixed(4), poseOk: err < 0.05, settled: settle.settled,
+        poseErrM: +err.toFixed(4), poseOk: err < 0.05, settled: settle.settled, why: settle.why,
         fps: settle.fps, frames: settle.frames, scrollY: settle.scrollY, maxScroll: settle.maxScroll,
         position: settle.position, fov: settle.fov,
         census: await page.evaluate(CENSUS),
@@ -374,7 +455,7 @@ async (page) => {
   // work is exterior-only and /hall must be provably untouched.
   await page.goto('http://localhost:3001/hall', { waitUntil: 'load' });
   await page.waitForTimeout(9000);
-  await page.locator('canvas').screenshot({ path: OUT + 'p5j_interior_hall.png' });
+  await page.locator('canvas').screenshot({ path: OUT + (MODELS[0] || 'x') + '_interior_hall.png' });
   out.interiorErrors = errors.length;
   out.consoleErrors = errors;
   // Compact return: the census repeats verbatim across beats and the texture
@@ -384,12 +465,14 @@ async (page) => {
   for (const [k, v] of Object.entries(out)) {
     if (k === 'consoleErrors' || k === 'interiorErrors') { slim[k] = v; continue; }
     slim[k] = {
-      poseErrM: v.poseErrM, settled: v.settled, fps: v.fps,
+      poseErrM: v.poseErrM, settled: v.settled, why: v.why, fps: v.fps,
       calls: v.census.sceneDrawCalls, tris: v.census.sceneTriangles,
       mats: v.census.materials, texN: v.census.texCount, texMB: v.census.texMB,
       geo: v.census.geometries, progs: v.census.programs,
       sky: v.coverage.skyPct, unk: v.coverage.unclassifiedPct, horizon: v.coverage.horizonRow,
       cov: v.coverage.classes, shade: v.coverage.shade, shadeNA: v.coverage.shadeUnavailable,
+      visPaths: v.coverage.visPaths, visAgreeMAD: v.coverage.visAgreeMAD,
+      lights: v.census.lights, casters: v.census.shadowCasters,
     };
   }
   return slim;

@@ -34,7 +34,8 @@ async (page) => {
 
   await ctx.clearCookies();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://localhost:3001/?model=p4e', { waitUntil: 'load' });
+  const MODEL = (typeof MODEL_ID !== 'undefined') ? MODEL_ID : 'p5h';
+  await page.goto('http://localhost:3001/?model=' + MODEL, { waitUntil: 'load' });
   const loadAt = Date.now() - t0;
   await page.waitForTimeout(15000);
 
@@ -64,6 +65,6 @@ async (page) => {
     byType[k].n++; byType[k].kb += Math.round(r.bytes / 1024);
   }
 
-  return { exteriorReadyMs: readyAt, loadEventMs: loadAt, readyLine, nav, byType,
+  return { model: MODEL, exteriorReadyMs: readyAt, loadEventMs: loadAt, readyLine, nav, byType,
            note: 'localhost, no throttling: transfer sizes are real, times are a floor' };
 }
