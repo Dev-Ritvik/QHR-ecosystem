@@ -87,9 +87,13 @@ def read_glb(p):
     return js, binb
 
 
-def resize(img):
-    if max(img.size) <= MAXPX: return img
-    r = MAXPX / float(max(img.size))
+def resize(img, maxpx=MAXPX):
+    """Pipeline resize. `maxpx` is overridable PER SLOT so a map can be shipped
+    at a lower resolution than the 1024 default where the cameras cannot resolve
+    it - see the "maxpx" manifest key. CONTROLS always use the default, because
+    their whole job is to reproduce the SHIPPED image byte-for-byte."""
+    if max(img.size) <= maxpx: return img
+    r = maxpx / float(max(img.size))
     return img.resize((max(1, int(img.width * r)), max(1, int(img.height * r))), Image.LANCZOS)
 
 
@@ -174,7 +178,8 @@ for mname, spec in man.items():
         if slot == 'normalTexture' and s.get('codec') == 'etc1s': kind = 'normal_etc1s'
         img = pack_mr(s['roughness_png'], s.get('metallic_png')) if slot == 'metallicRoughnessTexture' \
             else Image.open(abspath(s['png'])).convert('RGB')
-        payload = encode(resize(img), kind, 'new_%s_%s' % (mname, slot), work)
+        payload = encode(resize(img, int(s.get('maxpx', MAXPX))), kind,
+                         'new_%s_%s' % (mname, slot), work)
         holder = pbr if slot in ('baseColorTexture', 'metallicRoughnessTexture') else m
         old_ref = holder.get(slot)
         proto, old_img = tex_image(old_ref['index']) if old_ref else (None, None)
