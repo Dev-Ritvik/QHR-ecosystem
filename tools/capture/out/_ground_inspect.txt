@@ -1,0 +1,934 @@
+00:02.765  blend            | Read blend: "C:\dev\Blender\mansion_exterior_P4D.blend"
+C:\dev\estate\tools\blender\p5_inspect_ground.py:76: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  row = {'use_nodes': m.use_nodes, 'blend_method': getattr(m, 'blend_method', None),
+C:\dev\estate\tools\blender\p5_inspect_ground.py:78: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  if m.use_nodes:
+###JSON###
+{
+ "found": true,
+ "ground": {
+  "verts": 9409,
+  "polys": 9216,
+  "tris": 18432,
+  "uv_layers": [
+   "UVMap"
+  ],
+  "color_attrs": [],
+  "materials": [
+   "MAT_Ground"
+  ],
+  "matrix_world": [
+   [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "bbox_world": {
+   "min": [
+    -120.0,
+    -120.0,
+    -2.974
+   ],
+   "max": [
+    120.0,
+    120.0,
+    0.973
+   ]
+  },
+  "modifiers": [],
+  "height_world_z": {
+   "min": -2.9744,
+   "max": 0.9735,
+   "mean": -0.7242
+  },
+  "extent_xy": {
+   "x": [
+    -120.0,
+    120.0
+   ],
+   "y": [
+    -120.0,
+    120.0
+   ]
+  },
+  "metres_per_uv_unit": {
+   "p05": 240.0,
+   "median": 240.03,
+   "p95": 240.4,
+   "samples": 4000
+  },
+  "uv_range": {
+   "u": [
+    0.0,
+    1.0
+   ],
+   "v": [
+    0.0,
+    1.0
+   ]
+  }
+ },
+ "materials": {
+  "MAT_Ground": {
+   "use_nodes": true,
+   "blend_method": "HASHED",
+   "backface_culling": true,
+   "nodes": [
+    {
+     "id": "ShaderNodeOutputMaterial",
+     "name": "Material Output"
+    },
+    {
+     "id": "ShaderNodeBsdfPrincipled",
+     "name": "Principled BSDF",
+     "inputs": {
+      "Base Color": [
+       "LINK",
+       "Image Texture",
+       "Color"
+      ],
+      "Metallic": 0.0,
+      "Roughness": [
+       "LINK",
+       "Image Texture.001",
+       "Color"
+      ],
+      "IOR": 1.5,
+      "Alpha": 1.0,
+      "Thin Wall": 0.0,
+      "Normal": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Weight": 0.0,
+      "Diffuse Roughness": 0.0,
+      "Subsurface Weight": 0.0,
+      "Subsurface Radius": [
+       1.0,
+       0.2,
+       0.1
+      ],
+      "Subsurface Scale": 0.005,
+      "Subsurface IOR": 1.4,
+      "Subsurface Anisotropy": 0.0,
+      "Specular IOR Level": 0.5,
+      "Specular Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Anisotropic": 0.0,
+      "Anisotropic Rotation": 0.0,
+      "Tangent": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Transmission Weight": 0.0,
+      "Coat Weight": 0.0,
+      "Coat Roughness": 0.03,
+      "Coat IOR": 1.5,
+      "Coat Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Coat Normal": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Sheen Weight": 0.0,
+      "Sheen Roughness": 0.5,
+      "Sheen Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Color": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Strength": 0.0,
+      "Thin Film Thickness": 0.0,
+      "Thin Film IOR": 1.33
+     }
+    },
+    {
+     "id": "ShaderNodeUVMap",
+     "name": "UV Map",
+     "uv_map": "UVMap"
+    },
+    {
+     "id": "ShaderNodeTexImage",
+     "name": "Image Texture",
+     "image": "ground_basecolor",
+     "filepath": "C:\\dev\\estate\\assets\\materials\\_baked\\ground_basecolor.png",
+     "colorspace": "sRGB",
+     "size": [
+      4096,
+      4096
+     ],
+     "extension": "EXTEND"
+    },
+    {
+     "id": "ShaderNodeTexImage",
+     "name": "Image Texture.001",
+     "image": "ground_roughness",
+     "filepath": "C:\\dev\\estate\\assets\\materials\\_baked\\ground_roughness.png",
+     "colorspace": "Non-Color",
+     "size": [
+      2048,
+      2048
+     ],
+     "extension": "EXTEND"
+    }
+   ],
+   "users": [
+    "ground_plane"
+   ]
+  },
+  "MAT_Hedge": {
+   "use_nodes": true,
+   "blend_method": "HASHED",
+   "backface_culling": false,
+   "nodes": [
+    {
+     "id": "ShaderNodeOutputMaterial",
+     "name": "Material Output"
+    },
+    {
+     "id": "ShaderNodeBsdfPrincipled",
+     "name": "Principled BSDF",
+     "inputs": {
+      "Base Color": [
+       0.026,
+       0.052,
+       0.018,
+       1.0
+      ],
+      "Metallic": 0.0,
+      "Roughness": 0.9,
+      "IOR": 1.5,
+      "Alpha": 1.0,
+      "Thin Wall": 0.0,
+      "Normal": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Weight": 0.0,
+      "Diffuse Roughness": 0.0,
+      "Subsurface Weight": 0.0,
+      "Subsurface Radius": [
+       1.0,
+       0.2,
+       0.1
+      ],
+      "Subsurface Scale": 0.005,
+      "Subsurface IOR": 1.4,
+      "Subsurface Anisotropy": 0.0,
+      "Specular IOR Level": 0.5,
+      "Specular Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Anisotropic": 0.0,
+      "Anisotropic Rotation": 0.0,
+      "Tangent": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Transmission Weight": 0.0,
+      "Coat Weight": 0.0,
+      "Coat Roughness": 0.03,
+      "Coat IOR": 1.5,
+      "Coat Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Coat Normal": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Sheen Weight": 0.0,
+      "Sheen Roughness": 0.5,
+      "Sheen Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Color": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Strength": 0.0,
+      "Thin Film Thickness": 0.0,
+      "Thin Film IOR": 1.33
+     }
+    }
+   ],
+   "users": [
+    "hedge_b",
+    "hedge_l",
+    "hedge_r"
+   ]
+  },
+  "MAT_Cypress": {
+   "use_nodes": true,
+   "blend_method": "HASHED",
+   "backface_culling": false,
+   "nodes": [
+    {
+     "id": "ShaderNodeOutputMaterial",
+     "name": "Material Output"
+    },
+    {
+     "id": "ShaderNodeBsdfPrincipled",
+     "name": "Principled BSDF",
+     "inputs": {
+      "Base Color": [
+       0.019,
+       0.038,
+       0.015,
+       1.0
+      ],
+      "Metallic": 0.0,
+      "Roughness": 0.92,
+      "IOR": 1.5,
+      "Alpha": 1.0,
+      "Thin Wall": 0.0,
+      "Normal": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Weight": 0.0,
+      "Diffuse Roughness": 0.0,
+      "Subsurface Weight": 0.0,
+      "Subsurface Radius": [
+       1.0,
+       0.2,
+       0.1
+      ],
+      "Subsurface Scale": 0.005,
+      "Subsurface IOR": 1.4,
+      "Subsurface Anisotropy": 0.0,
+      "Specular IOR Level": 0.5,
+      "Specular Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Anisotropic": 0.0,
+      "Anisotropic Rotation": 0.0,
+      "Tangent": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Transmission Weight": 0.0,
+      "Coat Weight": 0.0,
+      "Coat Roughness": 0.03,
+      "Coat IOR": 1.5,
+      "Coat Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Coat Normal": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Sheen Weight": 0.0,
+      "Sheen Roughness": 0.5,
+      "Sheen Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Color": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Strength": 0.0,
+      "Thin Film Thickness": 0.0,
+      "Thin Film IOR": 1.33
+     }
+    }
+   ],
+   "users": [
+    "cyp_0_0",
+    "cyp_0_1",
+    "cyp_0_2",
+    "cyp_0_3",
+    "cyp_0_4",
+    "cyp_1_0",
+    "cyp_1_1",
+    "cyp_1_2"
+   ]
+  },
+  "MAT_Water": {
+   "use_nodes": true,
+   "blend_method": "HASHED",
+   "backface_culling": false,
+   "nodes": [
+    {
+     "id": "ShaderNodeOutputMaterial",
+     "name": "Material Output"
+    },
+    {
+     "id": "ShaderNodeBsdfPrincipled",
+     "name": "Principled BSDF",
+     "inputs": {
+      "Base Color": [
+       0.03,
+       0.06,
+       0.07,
+       1.0
+      ],
+      "Metallic": 0.0,
+      "Roughness": 0.07,
+      "IOR": 1.333,
+      "Alpha": 1.0,
+      "Thin Wall": 0.0,
+      "Normal": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Weight": 0.0,
+      "Diffuse Roughness": 0.0,
+      "Subsurface Weight": 0.0,
+      "Subsurface Radius": [
+       1.0,
+       0.2,
+       0.1
+      ],
+      "Subsurface Scale": 0.005,
+      "Subsurface IOR": 1.4,
+      "Subsurface Anisotropy": 0.0,
+      "Specular IOR Level": 0.5,
+      "Specular Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Anisotropic": 0.0,
+      "Anisotropic Rotation": 0.0,
+      "Tangent": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Transmission Weight": 0.8,
+      "Coat Weight": 0.0,
+      "Coat Roughness": 0.03,
+      "Coat IOR": 1.5,
+      "Coat Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Coat Normal": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Sheen Weight": 0.0,
+      "Sheen Roughness": 0.5,
+      "Sheen Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Color": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Strength": 0.0,
+      "Thin Film Thickness": 0.0,
+      "Thin Film IOR": 1.33
+     }
+    }
+   ],
+   "users": [
+    "fount_water",
+    "fountain_jet",
+    "fountain_water"
+   ]
+  },
+  "MAT_Stone_Paving": {
+   "use_nodes": true,
+   "blend_method": "HASHED",
+   "backface_culling": true,
+   "nodes": [
+    {
+     "id": "ShaderNodeOutputMaterial",
+     "name": "Material Output"
+    },
+    {
+     "id": "ShaderNodeBsdfPrincipled",
+     "name": "Principled BSDF",
+     "inputs": {
+      "Base Color": [
+       "LINK",
+       "Mix (Legacy)",
+       "Result"
+      ],
+      "Metallic": 0.0,
+      "Roughness": [
+       "LINK",
+       "Image Texture.001",
+       "Color"
+      ],
+      "IOR": 1.5,
+      "Alpha": 1.0,
+      "Thin Wall": 0.0,
+      "Normal": [
+       "LINK",
+       "Normal Map",
+       "Normal"
+      ],
+      "Weight": 0.0,
+      "Diffuse Roughness": 0.0,
+      "Subsurface Weight": 0.0,
+      "Subsurface Radius": [
+       1.0,
+       0.2,
+       0.1
+      ],
+      "Subsurface Scale": 0.005,
+      "Subsurface IOR": 1.4,
+      "Subsurface Anisotropy": 0.0,
+      "Specular IOR Level": 0.5,
+      "Specular Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Anisotropic": 0.0,
+      "Anisotropic Rotation": 0.0,
+      "Tangent": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Transmission Weight": 0.0,
+      "Coat Weight": 0.0,
+      "Coat Roughness": 0.03,
+      "Coat IOR": 1.5,
+      "Coat Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Coat Normal": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "Sheen Weight": 0.0,
+      "Sheen Roughness": 0.5,
+      "Sheen Tint": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Color": [
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "Emission Strength": 0.0,
+      "Thin Film Thickness": 0.0,
+      "Thin Film IOR": 1.33
+     }
+    },
+    {
+     "id": "ShaderNodeUVMap",
+     "name": "UV Map",
+     "uv_map": "UVMap"
+    },
+    {
+     "id": "ShaderNodeMapping",
+     "name": "Mapping",
+     "scale": [
+      0.2778,
+      0.2778,
+      1.0
+     ],
+     "location": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "id": "ShaderNodeTexImage",
+     "name": "Image Texture",
+     "image": "p4b_paving_basecolor",
+     "filepath": "C:\\dev\\estate\\assets\\materials\\_stone\\p4b_paving_basecolor.png",
+     "colorspace": "sRGB",
+     "size": [
+      1024,
+      1024
+     ],
+     "extension": "REPEAT"
+    },
+    {
+     "id": "ShaderNodeTexImage",
+     "name": "Image Texture.001",
+     "image": "p4b_paving_roughness",
+     "filepath": "C:\\dev\\estate\\assets\\materials\\_stone\\p4b_paving_roughness.png",
+     "colorspace": "Non-Color",
+     "size": [
+      1024,
+      1024
+     ],
+     "extension": "REPEAT"
+    },
+    {
+     "id": "ShaderNodeTexImage",
+     "name": "Image Texture.002",
+     "image": "p4b_paving_normal",
+     "filepath": "C:\\dev\\estate\\assets\\materials\\_stone\\p4b_paving_normal.png",
+     "colorspace": "Non-Color",
+     "size": [
+      1024,
+      1024
+     ],
+     "extension": "REPEAT"
+    },
+    {
+     "id": "ShaderNodeVertexColor",
+     "name": "Color Attribute"
+    },
+    {
+     "id": "ShaderNodeNormalMap",
+     "name": "Normal Map"
+    },
+    {
+     "id": "ShaderNodeMix",
+     "name": "Mix (Legacy)"
+    }
+   ],
+   "users": [
+    "fount_apron",
+    "fount_floor",
+    "terrace_lower",
+    "terrace_upper"
+   ]
+  }
+ },
+ "neighbours": {
+  "terrace_upper": {
+   "min": [
+    -9.5,
+    -8.2,
+    0.0
+   ],
+   "max": [
+    9.5,
+    6.4,
+    0.4
+   ]
+  },
+  "terrace_lower": {
+   "min": [
+    -10.1,
+    -8.8,
+    0.0
+   ],
+   "max": [
+    10.1,
+    7.0,
+    0.14
+   ]
+  },
+  "fount_apron": {
+   "min": [
+    -4.2,
+    -17.4,
+    0.0
+   ],
+   "max": [
+    4.2,
+    -9.0,
+    0.05
+   ]
+  },
+  "fount_wall": {
+   "min": [
+    -2.62,
+    -15.82,
+    0.05
+   ],
+   "max": [
+    2.62,
+    -10.58,
+    0.5
+   ]
+  },
+  "fount_cope": {
+   "min": [
+    -2.78,
+    -15.98,
+    0.5
+   ],
+   "max": [
+    2.78,
+    -10.42,
+    0.64
+   ]
+  },
+  "fount_floor": {
+   "min": [
+    -2.46,
+    -15.66,
+    0.05
+   ],
+   "max": [
+    2.46,
+    -10.74,
+    0.14
+   ]
+  },
+  "fount_water": {
+   "min": [
+    -2.44,
+    -15.64,
+    0.4
+   ],
+   "max": [
+    2.44,
+    -10.76,
+    0.405
+   ]
+  },
+  "entry_step_0": {
+   "min": [
+    -2.5,
+    -6.625,
+    0.4
+   ],
+   "max": [
+    2.5,
+    -6.075,
+    0.51
+   ]
+  },
+  "entry_step_1": {
+   "min": [
+    -2.2,
+    -6.175,
+    0.5
+   ],
+   "max": [
+    2.2,
+    -5.725,
+    0.55
+   ]
+  },
+  "hedge_b": {
+   "min": [
+    -16.3,
+    10.986,
+    0.0
+   ],
+   "max": [
+    16.3,
+    11.814,
+    0.963
+   ]
+  },
+  "hedge_l": {
+   "min": [
+    -16.314,
+    -19.0,
+    0.0
+   ],
+   "max": [
+    -15.486,
+    11.0,
+    0.963
+   ]
+  },
+  "hedge_r": {
+   "min": [
+    15.486,
+    -19.0,
+    0.0
+   ],
+   "max": [
+    16.314,
+    11.0,
+    0.963
+   ]
+  },
+  "fountain_bowl": {
+   "min": [
+    -0.86,
+    -14.06,
+    1.535
+   ],
+   "max": [
+    0.86,
+    -12.34,
+    1.625
+   ]
+  },
+  "mansion_walls": {
+   "min": [
+    -8.05,
+    -6.1,
+    -0.0
+   ],
+   "max": [
+    8.05,
+    5.55,
+    6.8
+   ]
+  }
+ },
+ "cypress": {
+  "cyp_0_0": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_0_1": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_0_2": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_0_3": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_0_4": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_1_0": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_1_1": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_1_2": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_1_3": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_1_4": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_b_0": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_b_1": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_b_2": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cyp_b_3": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "collections": {
+  "COL_Ashlar_East": 62,
+  "COL_Ashlar_East_KIT": 22,
+  "COL_Ashlar_North": 101,
+  "COL_Ashlar_North_KIT": 21,
+  "COL_Ashlar_South": 42,
+  "COL_Ashlar_South_KIT": 13,
+  "COL_Ashlar_West": 62,
+  "COL_Ashlar_West_KIT": 22,
+  "COL_Exterior": 218,
+  "COL_Interior": 577,
+  "COL_REVIEW_ASHLAR": 17,
+  "COL_REVIEW_TEMP": 4
+ },
+ "scene_objects": 1099
+}
+Blender 5.2.0 LTS (hash fbe6228777e7 built 2026-07-14 01:35:40)
+
+Blender quit

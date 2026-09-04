@@ -60,9 +60,21 @@ SEED = 4101
 # in the runtime (+67 luma over reference) - the old marble's heavy warmth had
 # been compensating for the cool sky, and its low albedo (0.34 luma) for the
 # runtime's direct key. So the target is the RENDERED read, not the albedo
-# figure: warmer, and back near the old effective luma. v2 default below lands
-# tint x texture at (0.470, 0.360, 0.235), R/B 2.0, luma 0.374.
-_mean_default = [0.588, 0.469, 0.335]
+# figure: warmer, and back near the old effective luma. v2 landed tint x texture
+# at (0.470, 0.360, 0.235), R/B 2.0, luma 0.374 - still 8-10 luma hot in the
+# runtime, so v4 took the mean down 7%: the value below.
+#
+# THE DEFAULT IS THE SHIPPED VALUE, and that is a bug fix rather than tidying.
+# v3 and v4 were produced by passing --mean on the command line and the default
+# was left at v2, so ANY bare run of this file silently rewrote the P4A source
+# as v2 - and assets/ is gitignored, so nothing would have said so. It happened:
+# P5A imported this module for its four noise helpers, the module body ran, and
+# the wall's base colour drifted. Caught by
+# tools/gltf/verify_source_against_glb.py, which re-encodes the source through
+# the pipeline and compares it to the KTX2 in the shipped GLB; restoring this
+# default reproduces img8 of exterior_mansion_v6_p4e.glb byte for byte
+# (33,567 B, sha256 44e9f633e6ae45c4...), which is also what PROVES the value.
+_mean_default = [0.547, 0.436, 0.312]
 if '--mean' in sys.argv:
     i = sys.argv.index('--mean'); _mean_default = [float(x) for x in sys.argv[i + 1:i + 4]]
 

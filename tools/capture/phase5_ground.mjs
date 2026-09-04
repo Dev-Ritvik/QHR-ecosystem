@@ -202,7 +202,7 @@ async (page) => {
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.context().addInitScript(INIT);
-  await page.goto('http://localhost:3001/?model=p4e', { waitUntil: 'load' });
+  await page.goto('http://localhost:3001/?model=' + (typeof MODEL !== 'undefined' ? MODEL : 'p5b'), { waitUntil: 'load' });
   await page.waitForTimeout(10000);
   await page.evaluate(ATTACH);
 

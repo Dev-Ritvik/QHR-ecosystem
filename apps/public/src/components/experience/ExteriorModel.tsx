@@ -383,6 +383,224 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * judge against v5.
    */
   p4e: '/models/exterior_mansion_v6_p4e.glb',
+  /**
+   * P5A CANDIDATE — the ground surface system. Built on p4e. Not shipped.
+   *
+   * THE DEFECT IT ADDRESSES IS A SAMPLING RATE, NOT A LOOK. The shipped ground
+   * is one 1024 map clamped across 240 m — 0.2344 m per texel — and the
+   * runtime probe ray-cast the real cameras at 0.0197 m per PIXEL at HERO and
+   * 0.0153 at NW. The map is MAGNIFIED 12–15× across the nearest half of every
+   * exterior frame, and that frame is 25–47% ground by the emissive-id
+   * coverage pass. Below mip 0 there is nothing to sample, so half the picture
+   * was a bilinear smear over a Lambert plane with no normal map and no AO.
+   * Re-baking a prettier 240 m map cannot fix that; the frequency is not there.
+   *
+   * Three layers replace it:
+   *   MICRO  tiling turf and gravel sets at 6.0 m — 0.00586 m/texel, which is
+   *          a 3.4× MINIFICATION at the near HERO ground (mip ~1.75) instead
+   *          of a 12× magnification, and still correctly sampled at the
+   *          horizon. Both sets are normalised so their linear mean equals the
+   *          authored target, which makes the mip tail — the far field — the
+   *          intended colour by construction rather than by luck.
+   *   MESO   COLOR_0 on the ground's own 2.5 m vertex grid: damp hollows and
+   *          dry crests off the real height field, a wear halo against every
+   *          hardscape footprint (the lawn-to-terrace contact the frame had
+   *          none of), a broad falloff so the far field never outshines the
+   *          estate, and a 20–60 m mottle that breaks the 6 m tile at a scale
+   *          the tile cannot reach. Multiplies base colour with no runtime code.
+   *   MACRO  `drive_forecourt`, 1,960 triangles: a gravel annulus around the
+   *          fountain (r 3.9–10.6, inner edge tucked under the apron so there
+   *          is no cut to stair-step) clipped at the terrace edge, plus an
+   *          approach band running out between the hedge ends. The arrival was
+   *          previously 1.2% of a zone mask at 0.23 m/texel — i.e. invisible.
+   *
+   * The tile size lives in the MESH UVs (world x,y / 6.0), not in a Mapping
+   * node: P4A lost a tile change because the exporter expressed it as
+   * KHR_texture_transform and the shipped file kept the old scale. UVs are
+   * geometry and cannot be dropped.
+   */
+  p5a: '/models/exterior_mansion_v6_p5a.glb',
+  /**
+   * P5B CANDIDATE — atmospheric continuity. Built on p5a. Not shipped.
+   *
+   * THE DEFECT, AND WHY IT IS NOT A FOG PROBLEM. Rendering the ground alone in
+   * white and reading back its silhouette put the plane's far edge at rows
+   * 359–431 of 900 at WEST and 366–433 at NW: a hard line across mid-frame,
+   * with a photographic backdrop of different hue and value immediately above
+   * it. P5A made it *more* visible, because the lawn now differs from the plate
+   * in structure and chroma as well as in value.
+   *
+   * Daylight fog is a static `Fog(#5E6147, 60, 220)` and it is a locked grade
+   * value. The plane is ±120 m, so its far edge sits ~146 m from the WEST
+   * camera — where that band has reached only (146−60)/(220−60) = **54%**. The
+   * edge is half-dissolved when it stops. Dusk's `Fog(26, 105)` buries the same
+   * edge completely, which is exactly why dusk composites and daylight does not.
+   *
+   * Two ways to close it: move the fog in, or move the edge out. The fog is
+   * tuned so the building renders unfogged (its front face is 28 m out, inside
+   * the 60 m near plane) and pulling it in would start fogging the subject. The
+   * edge is not locked and is simply too close. So the edge moves: the ground's
+   * own boundary loop is extruded outward in four rings to a **260 m circular
+   * rim** — same object, same material, same UV convention, so there is no seam
+   * to hide and no new draw call.
+   *
+   * 260 AND CIRCULAR ARE BOTH DERIVED, and the first attempt was wrong in a way
+   * the authoring script's own assertion caught: a ±320 m SQUARE rim clears the
+   * fog at its nearest point (266 m) but throws its corners to 486 m, past the
+   * 400 m far plane — where the clip would have drawn a fresh hard edge. A
+   * square cannot satisfy both bounds, its corners being √2 further out than
+   * its sides. A circular rim's distance varies only by the camera's own offset
+   * from the origin, so r = 260 clears both at all three cameras: nearest
+   * 226–236 m against a fog that completes at 220, farthest 284–294 m against a
+   * 400 m far plane. Asserted per camera over 720 directions.
+   *
+   * Cost: +3,072 triangles, +0 draw calls, +0 materials, +0 textures — all of
+   * it at a distance where the 6 m tile has resolved to its own mean colour.
+   */
+  p5b: '/models/exterior_mansion_v6_p5b.glb',
+  /**
+   * P5C CANDIDATE — the hardscape/lawn transitions. Built on p5b. Not shipped.
+   *
+   * The terrace met grass on a hard line with nothing between them, and P5A's
+   * gravel forecourt then met grass the same way. 498 triangles of 280 mm flush
+   * edging — around terrace_lower's footprint (placed entirely outside it, so
+   * there is nothing coplanar to fight) and along the forecourt's r 10.6 arc
+   * and approach flanks.
+   *
+   * It is a real construction detail, not a decorative band: a flush edging is
+   * what stops gravel migrating into turf, gives the mower a wheel to run on so
+   * the cut reaches the paving, and holds the paving's bed. It sits 30 mm above
+   * the sampled ground — 110 mm BELOW the terrace's own top — so it reads as
+   * the kerb the terrace sits behind rather than as a second paving level.
+   *
+   * Costs nothing but geometry: `MAT_Stone_Trim` is reused by name, so no new
+   * texture, image, material or shader program.
+   */
+  p5c: '/models/exterior_mansion_v6_p5c.glb',
+  /**
+   * P5D CANDIDATE — the hedge gets a surface. Built on p5c. Not shipped.
+   *
+   * `MAT_Hedge` was a bare `baseColorFactor (0.026, 0.052, 0.018)` with no map
+   * of any kind, holding 2.3–3.8% of frame and rendering as a near-black paper
+   * cutout (masked: L 52.3, sd 20.3 — essentially all of it the cast shadow
+   * rather than surface). It moves to a 1.5 m tiling foliage set with
+   * box-projected world-scale UVs, and the factor drops to (1,1,1) so the
+   * colour lives where it can carry structure.
+   *
+   * THE TILE CARRIES CLUMPS, NOT LEAVES, and that is a measurement rather than
+   * a style choice: the hedge stands 13 m from the HERO camera at 0.010 m per
+   * pixel, so a 40 mm box leaf is 0.4 px. Authoring leaf detail would put all
+   * the energy below every camera's Nyquist limit and buy sparkle. What
+   * resolves is the 150–300 mm clump structure and the shear plane.
+   *
+   * Deliberately NOT changed: the geometry. A clipped hedge's batter is ~40 mm
+   * over a 1.0 m height — four pixels — and buying it would cost a bounds
+   * waiver and a re-ship for detail no camera resolves. The open FRONT between
+   * the two runs' ends is also left alone: that gap is the arrival, and P5A's
+   * forecourt runs through it.
+   */
+  p5d: '/models/exterior_mansion_v6_p5d.glb',
+  /**
+   * P5E CANDIDATE — the cypresses get a surface. Built on p5d. Not shipped.
+   *
+   * Same defect and same remedy as the hedge: `MAT_Cypress` was a bare
+   * `baseColorFactor (0.019, 0.038, 0.015)`, masked at L 44.2 / sd 15.8, and it
+   * is the largest single soft mass at NW (4.08%). It moves to a 1.5 m tiling
+   * set whose structure runs VERTICALLY (the noise lattice is stretched 3:1
+   * along v) because a cypress's sprays run up the tree.
+   *
+   * Two costs stated rather than buried. Re-shipping the 14 cones through
+   * Blender 5.2 changed their triangulation — 304 → 320 triangles each, +224
+   * total — because the exporter fans the cone's n-gon base differently from
+   * the build that produced v5. Bounds are identical to 5 mm and the shape is
+   * unchanged; the graft's `--allow-growth` waiver was passed deliberately for
+   * this and the delta is reported, not absorbed. And the UASTC normal maps for
+   * hedge and cypress are ~1 MB each, which is what takes the candidate from
+   * 14.35 to 16.60 MB — P5J's ETC1S question, on the measured basis that ETC1S
+   * only facets across large flat surfaces and foliage has none.
+   */
+  p5e: '/models/exterior_mansion_v6_p5e.glb',
+  /**
+   * P5F — ARRIVAL. **No candidate file: this pass is a deliberate no-op.**
+   *
+   * The arrival itself was delivered by p5a (the gravel turning circle and
+   * approach) and p5c (its edging). What remained on the list — a threshold or
+   * gate piers where the drive passes between the hedge runs' ends at z 19, and
+   * a treatment where the approach meets the far field at z 34 — was tested
+   * against the mandate's own visibility rule and **rejected**: the HERO camera
+   * stands at z 27 looking toward the origin, so both sit behind or below its
+   * frame, and the emissive-id coverage pass puts the drive at 0.92% at WEST
+   * and 0.41% at NW. Geometry at z 19–34 is not visible at any of the four
+   * validated cameras. Adding it would be decoration with no frame to improve.
+   *
+   * Recorded here rather than silently skipped, because "we built nothing" is a
+   * result that needs its reasoning on the record as much as any other.
+   */
+  /**
+   * P5G CANDIDATE — the fountain water. Built on p5e. Not shipped.
+   *
+   * The water read as a black hole in the forecourt at 4.1% of the HERO frame,
+   * and the cause is arithmetic rather than taste. In glTF a transmissive
+   * material's `baseColorFactor` is its TRANSMISSION TINT: it multiplies
+   * whatever is seen through the surface. `MAT_Water` carried
+   * (0.03, 0.06, 0.07), so it passed 3–7% of the light from the basin floor
+   * beneath it — and that floor is `fount_floor` in `MAT_Stone_Paving`, which
+   * renders at L 116 in the open. The basin was not dark; the water was opaque.
+   *
+   * The replacement is derived, not picked. The water surface sits at y 0.40
+   * over a floor at 0.05–0.14, so the depth is 0.26 m and the light path is
+   * twice that. Clear-water absorption (0.270 / 0.050 / 0.020 per metre at
+   * 600 / 500 / 450 nm) gives a transmittance of (0.869, 0.974, 0.990) — water
+   * over a quarter of a metre is very nearly colourless, with a faint cyan
+   * cast. Multiplied by 0.86 for the suspended matter a stone basin actually
+   * carries, and +2% green for the same reason, that is **(0.747, 0.858,
+   * 0.851)**. The shipped value was 25× / 14× / 12× too dark.
+   *
+   * ROUGHNESS IS NOT TOUCHED, and that is a measurement too. P4D set it to
+   * 0.07 and it is not the limiting factor here: the HERO camera looks down on
+   * the basin at roughly 30° of incidence, where the Fresnel reflectance of an
+   * ior 1.333 surface is about 2.5%. Ninety-seven per cent of what the water
+   * shows is transmission, so the tint is the whole story and the P4D decision
+   * stands untouched.
+   */
+  p5g: '/models/exterior_mansion_v6_p5g.glb',
+  /**
+   * P5H — SECONDARY DETAIL. **Not authored. See docs/PHASE5_REPORT.md §10.**
+   * The one candidate that passes the visibility test (a pair of entrance urns,
+   * ~33 px tall at HERO) was not built, and that is a scope stop rather than a
+   * judgement that it would fail. It is stated as an omission, not as a
+   * decision, so the difference is on the record.
+   *
+   * P5I — COMPOSITION. No candidate file: the composition pass is evaluation,
+   * and it found nothing at HERO / WEST / NW / dusk that needed correcting
+   * which was not already a P5J item. Its findings are in the report.
+   */
+  /**
+   * P5J — PERFORMANCE. **No candidate file, and that is the finding.**
+   *
+   * One optimisation was attempted and REJECTED ON MEASUREMENT. The two
+   * foliage normal maps are the largest single cost Phase 5 added (~1 MB each
+   * on the wire, +8 MB of the GPU residency), and re-encoding them ETC1S
+   * instead of UASTC took them to 336,783 and 297,246 bytes — **−67% and
+   * −71%**, 16.60 → 15.27 MB. The repository's own earlier measurement said
+   * this should be safe: ETC1S was rejected for v5 because it facets across
+   * large FLAT surfaces, and foliage has none.
+   *
+   * It was not safe. Masked against p5g at the same poses, the hedge fell
+   * **48.10 → 32.24 (−15.9)** at WEST and the cypress **56.74 → 43.54
+   * (−13.2)**; at NW the cypress fell **66.44 → 40.91 (−25.5)** and the hedge
+   * **61.82 → 45.77 (−16.1)**. Standard deviation rose at the same time
+   * (cypress 10.95 → 22.85 at NW), which is the signature: the codec is
+   * quantising the normal erratically enough to tilt whole clumps away from
+   * the key, so the planting both darkens and goes blotchy. A 1.3 MB saving is
+   * not worth 25 luma on the largest soft mass in the NW frame.
+   *
+   * Reverted. p5g carries no orphaned images (each candidate in the chain was
+   * pruned as it was built), so a pruned p5j came out byte-identical to it and
+   * has been deleted rather than shipped as a duplicate.
+   *
+   * **p5g is the Phase 5 candidate to judge.**
+   */
 };
 
 export function resolveExteriorModelUrl(search?: string): string {
@@ -603,7 +821,17 @@ function applyGrade(root: THREE.Object3D, grade: Grade): string[] {
     // The ground RECEIVES but does not CAST. It is 240m across, so including it
     // in the shadow camera's render would stretch the depth range over the
     // whole world and quantise the building's own shadows into steps.
-    const isGround = mesh.name === 'ground_plane';
+    //
+    // P5A widened this from one hardcoded name to the ground SURFACES, because
+    // it added a second one. `drive_forecourt` is a flat gravel apron sitting
+    // 12 mm above the ground plane, and it inherited castShadow=true: measured,
+    // that put its 1,960 triangles into the depth pass for a surface that can
+    // only ever cast onto itself, and the draw-call delta at HERO was +2 rather
+    // than the +1 the object is worth. Ground-level surfaces are named here
+    // rather than matched on a heuristic (height, or "is it flat"), because a
+    // heuristic that silently starts excluding the entry steps would be a much
+    // worse bug than the one it fixed.
+    const isGround = mesh.name === 'ground_plane' || mesh.name.startsWith('drive_');
     mesh.castShadow = !isGround;
     mesh.receiveShadow = true;
 

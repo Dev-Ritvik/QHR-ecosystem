@@ -1,0 +1,52 @@
+00:02.438  blend            | Read blend: "C:\dev\Blender\mansion_exterior_P5E.blend"
+C:\dev\estate\tools\blender\p5de_foliage_materials.py:83: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  if m.use_nodes and m.name != SPEC['mat']}
+C:\dev\estate\tools\blender\p5de_foliage_materials.py:157: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  if m2.use_nodes and m2.name != SPEC['mat']}
+###JSON###
+{
+ "pass": "cypress",
+ "uv_objects": [
+  "cyp_0_0",
+  "cyp_0_1",
+  "cyp_0_2",
+  "cyp_0_3",
+  "cyp_0_4",
+  "cyp_1_0",
+  "cyp_1_1",
+  "cyp_1_2",
+  "cyp_1_3",
+  "cyp_1_4",
+  "cyp_b_0",
+  "cyp_b_1",
+  "cyp_b_2",
+  "cyp_b_3"
+ ],
+ "uv_convention": "box-projected world coords / 1.5 m",
+ "material": {
+  "name": "MAT_Cypress",
+  "before": {
+   "base": [
+    0.019,
+    0.038,
+    0.015,
+    1.0
+   ],
+   "rough": 0.92
+  },
+  "after": {
+   "base": "p5_cypress_basecolor",
+   "rough": "p5_cypress_roughness",
+   "normal": "p5_cypress_normal",
+   "normal_strength": 1.0
+  },
+  "doubleSided_kept": true
+ },
+ "other_materials_changed": [],
+ "other_objects_changed": []
+}
+Info: Saved "mansion_exterior_P5E.blend"
+### saved C:\dev\Blender\mansion_exterior_P5E.blend
+Blender 5.2.0 LTS (hash fbe6228777e7 built 2026-07-14 01:35:40)
+
+Blender quit

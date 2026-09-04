@@ -59,6 +59,14 @@ FLAGS = {
                '--encode', 'basis-lz', '--qlevel', '255'],
     'normal': ['--format', 'R8G8B8_UNORM', '--assign-tf', 'linear', '--generate-mipmap',
                '--encode', 'uastc', '--zstd', '18'],
+    # ETC1S for a normal map is normally the wrong trade: FIXLOG's v5etc1s
+    # measurement found it quantises endpoints hard enough to facet visibly, and
+    # every one of the twelve worst cells sat in the terrace paving - the only
+    # large FLAT surface in shot. Foliage has no flat surface at all, which is
+    # why P5J applies it there and nowhere else. Selected per slot with
+    # "codec": "etc1s", never globally.
+    'normal_etc1s': ['--format', 'R8G8B8_UNORM', '--assign-tf', 'linear', '--generate-mipmap',
+                     '--encode', 'basis-lz', '--qlevel', '255', '--normal-mode'],
 }
 SLOT_KIND = {'baseColorTexture': 'colour', 'metallicRoughnessTexture': 'data',
              'normalTexture': 'normal', 'occlusionTexture': 'colour',
@@ -163,6 +171,7 @@ for mname, spec in man.items():
         if slot not in SLOT_KIND: raise SystemExit('unknown slot ' + slot)
         if not isinstance(s, dict) or ('png' not in s and 'roughness_png' not in s): continue
         kind = SLOT_KIND[slot]
+        if slot == 'normalTexture' and s.get('codec') == 'etc1s': kind = 'normal_etc1s'
         img = pack_mr(s['roughness_png'], s.get('metallic_png')) if slot == 'metallicRoughnessTexture' \
             else Image.open(abspath(s['png'])).convert('RGB')
         payload = encode(resize(img), kind, 'new_%s_%s' % (mname, slot), work)

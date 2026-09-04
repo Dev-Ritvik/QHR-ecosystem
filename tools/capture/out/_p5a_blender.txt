@@ -1,0 +1,59 @@
+00:06.078  blend            | Read blend: "C:\dev\Blender\mansion_exterior_P5A.blend"
+C:\dev\estate\tools\blender\p5a_ground_surface.py:106: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  if m.use_nodes and m.name not in TOUCH_MAT}
+C:\dev\estate\tools\blender\p5a_ground_surface.py:228: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  m.use_nodes = True
+C:\dev\estate\tools\blender\p5a_ground_surface.py:348: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  if m.use_nodes and m.name not in TOUCH_MAT}
+###JSON###
+{
+ "ground_grid": {
+  "nx": 97,
+  "ny": 97,
+  "pitch_m": 2.5
+ },
+ "ground_uv": {
+  "convention": "world xy / 6.0 m",
+  "span_uv": 40.0
+ },
+ "color0": {
+  "name": "P5A_Tone",
+  "verts": 9409,
+  "min": 0.7756,
+  "max": 1.0385,
+  "mean": 0.9011
+ },
+ "ground_material": {
+  "was": "MAT_Ground",
+  "now": "MAT_Lawn"
+ },
+ "drive_forecourt": {
+  "verts": 1117,
+  "polys": 980,
+  "tris": 1960,
+  "bbox": [
+   [
+    -10.6,
+    -34.0,
+    -0.02
+   ],
+   [
+    10.6,
+    -8.8,
+    0.01
+   ]
+  ],
+  "material": "MAT_Gravel",
+  "max_lift_residual_mm": 3.0,
+  "collections": [
+   "COL_Exterior"
+  ]
+ },
+ "other_materials_changed": [],
+ "other_objects_changed": []
+}
+Info: Saved "mansion_exterior_P5A.blend"
+### saved C:\dev\Blender\mansion_exterior_P5A.blend
+Blender 5.2.0 LTS (hash fbe6228777e7 built 2026-07-14 01:35:40)
+
+Blender quit

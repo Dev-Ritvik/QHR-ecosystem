@@ -1,0 +1,55 @@
+00:03.297  blend            | Read blend: "C:\dev\Blender\mansion_exterior_P5C.blend"
+C:\dev\estate\tools\blender\p5c_transitions.py:74: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  before_mats = {m.name: snap_mat(m) for m in bpy.data.materials if m.use_nodes}
+C:\dev\estate\tools\blender\p5c_transitions.py:196: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  after_mats = {m.name: snap_mat(m) for m in bpy.data.materials if m.use_nodes}
+###JSON###
+{
+ "terrace_edging": {
+  "footprint": [
+   -10.1,
+   10.1,
+   -8.8,
+   7.0
+  ],
+  "width_m": 0.28,
+  "quads": 132
+ },
+ "forecourt_arc": {
+  "radius": 10.6,
+  "segments": 77,
+  "quads": 77
+ },
+ "approach_flanks": {
+  "quads": 40
+ },
+ "edging_hardscape": {
+  "verts": 508,
+  "polys": 249,
+  "tris": 498,
+  "material": "MAT_Stone_Trim",
+  "reused_existing_material": true,
+  "bbox": [
+   [
+    -10.88,
+    -34.0,
+    0.01
+   ],
+   [
+    10.88,
+    7.28,
+    0.03
+   ]
+  ],
+  "max_lift_residual_mm": 0.0,
+  "terrace_top_z": 0.14,
+  "edging_top_z_above_ground_mm": 30.0
+ },
+ "other_materials_changed": [],
+ "other_objects_changed": []
+}
+Info: Saved "mansion_exterior_P5C.blend"
+### saved C:\dev\Blender\mansion_exterior_P5C.blend
+Blender 5.2.0 LTS (hash fbe6228777e7 built 2026-07-14 01:35:40)
+
+Blender quit

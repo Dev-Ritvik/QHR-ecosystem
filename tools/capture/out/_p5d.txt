@@ -1,0 +1,41 @@
+00:02.468  blend            | Read blend: "C:\dev\Blender\mansion_exterior_P5D.blend"
+C:\dev\estate\tools\blender\p5de_foliage_materials.py:83: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  if m.use_nodes and m.name != SPEC['mat']}
+C:\dev\estate\tools\blender\p5de_foliage_materials.py:157: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  if m2.use_nodes and m2.name != SPEC['mat']}
+###JSON###
+{
+ "pass": "hedge",
+ "uv_objects": [
+  "hedge_b",
+  "hedge_l",
+  "hedge_r"
+ ],
+ "uv_convention": "box-projected world coords / 1.5 m",
+ "material": {
+  "name": "MAT_Hedge",
+  "before": {
+   "base": [
+    0.026,
+    0.052,
+    0.018,
+    1.0
+   ],
+   "rough": 0.9
+  },
+  "after": {
+   "base": "p5_hedge_basecolor",
+   "rough": "p5_hedge_roughness",
+   "normal": "p5_hedge_normal",
+   "normal_strength": 0.85
+  },
+  "doubleSided_kept": true
+ },
+ "other_materials_changed": [],
+ "other_objects_changed": []
+}
+Info: Saved "mansion_exterior_P5D.blend"
+### saved C:\dev\Blender\mansion_exterior_P5D.blend
+Blender 5.2.0 LTS (hash fbe6228777e7 built 2026-07-14 01:35:40)
+
+Blender quit

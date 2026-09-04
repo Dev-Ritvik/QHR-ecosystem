@@ -1,0 +1,128 @@
+00:02.578  blend            | Read blend: "C:\dev\Blender\mansion_exterior_P5B.blend"
+C:\dev\estate\tools\blender\p5b_ground_extension.py:95: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  before_mats = {m.name: snapshot_mat(m) for m in bpy.data.materials if m.use_nodes}
+C:\dev\estate\tools\blender\p5b_ground_extension.py:225: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  after_mats = {m.name: snapshot_mat(m) for m in bpy.data.materials if m.use_nodes}
+###JSON###
+{
+ "boundary": {
+  "verts": 384,
+  "expected": 384,
+  "z_min": -2.823,
+  "z_max": -1.254
+ },
+ "ground": {
+  "verts": [
+   9409,
+   10945
+  ],
+  "polys": [
+   9216,
+   10752
+  ],
+  "tris": 21504,
+  "half_extent": [
+   120.0,
+   260.0
+  ],
+  "z_range": [
+   -5.923,
+   0.973
+  ],
+  "rings": [
+   150.0,
+   190.0,
+   225.0,
+   260.0
+  ],
+  "shape_blend": [
+   0.15,
+   0.45,
+   0.75,
+   1.0
+  ],
+  "drift": [
+   -0.35,
+   -0.95,
+   -1.8,
+   -3.1
+  ],
+  "sample_column_radii": [
+   [
+    0,
+    0,
+    202.8
+   ],
+   [
+    0,
+    48,
+    150.0
+   ],
+   [
+    1,
+    0,
+    233.3
+   ],
+   [
+    1,
+    48,
+    190.0
+   ],
+   [
+    2,
+    0,
+    248.3
+   ],
+   [
+    2,
+    48,
+    225.0
+   ],
+   [
+    3,
+    0,
+    260.0
+   ],
+   [
+    3,
+    48,
+    260.0
+   ]
+  ],
+  "tone_range": [
+   0.7756,
+   1.0385
+  ]
+ },
+ "fog_check": {
+  "fog_far_m": 220.0,
+  "camera_far_plane_m": 400.0,
+  "cameras": {
+   "HERO": {
+    "rim_nearest_m": 226.4,
+    "rim_farthest_m": 293.6,
+    "fully_fogged": true,
+    "inside_far_plane": true
+   },
+   "WEST": {
+    "rim_nearest_m": 233.9,
+    "rim_farthest_m": 286.1,
+    "fully_fogged": true,
+    "inside_far_plane": true
+   },
+   "NW": {
+    "rim_nearest_m": 235.8,
+    "rim_farthest_m": 284.2,
+    "fully_fogged": true,
+    "inside_far_plane": true
+   }
+  }
+ },
+ "other_materials_changed": [],
+ "other_objects_changed": []
+}
+Info: Saved "mansion_exterior_P5B.blend"
+### saved C:\dev\Blender\mansion_exterior_P5B.blend
+Blender 5.2.0 LTS (hash fbe6228777e7 built 2026-07-14 01:35:40)
+
+Blender quit

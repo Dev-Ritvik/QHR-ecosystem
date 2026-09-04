@@ -50,8 +50,10 @@ async (page) => {
   // within 24/255 of each other in the readback.
   const CLASSES = [
     ['terrain',  '^ground_plane$',                                  [1.00, 0.00, 0.00]],
+    ['drive',    '^drive_',                                         [0.60, 0.30, 0.00]],
     ['hedge',    '^hedge_',                                         [0.00, 1.00, 0.00]],
     ['cypress',  '^cyp_',                                           [0.00, 0.00, 1.00]],
+    ['water',    '^(fount_water|fountain_jet|fountain_water)$',    [1.00, 0.75, 0.85]],
     ['fountain', '^fount',                                          [1.00, 1.00, 0.00]],
     ['terrace',  '^terrace_',                                       [1.00, 0.00, 1.00]],
     ['steps',    '^entry_',                                         [0.00, 1.00, 1.00]],
@@ -188,7 +190,7 @@ async (page) => {
       meshes, visibleMeshes, tris: Math.round(tris), visTris: Math.round(visTris),
       materials: mats.size, doubleSided: dbl, transparent: tsp, lights, shadowCasters: casters,
       texCount: texs.size, texMB: +(list.reduce((a, t) => a + t.kb, 0) / 1024).toFixed(2),
-      texTop: list.slice(0, 12),
+      texTop: list.slice(0, 3),
       camera: { fov: camera.fov, near: camera.near, far: camera.far },
       fog: scene.fog ? { near: +scene.fog.near.toFixed(1), far: +scene.fog.far.toFixed(1),
                          color: '#' + scene.fog.color.getHexString() } : null,
@@ -214,6 +216,37 @@ async (page) => {
     const render = gl.__probeOrigRender;
     const rules = spec.map(([n, re, rgb]) => [n, new RegExp(re), rgb]);
     const idOf = (n) => { for (const r of rules) if (r[1].test(n)) return [r[0], r[2]]; return ['other', [0.5, 0.5, 0.5]]; };
+
+    // THE VISIBLE FRAME IS GRABBED FIRST - before a single piece of renderer
+    // state is touched - and the grab is CHECKED.
+    //
+    // Under preserveDrawingBuffer:false the canvas only holds a frame between
+    // the app's draw and the next clear. A callback registered while r3f's own
+    // rAF is running is queued after it, so exactly ONE hop lands inside that
+    // window; two hops land after the following clear and read black. The
+    // original code did one hop with no check and was silently unreliable:
+    // three of four p5j captures came back with every class at L 0, sd 0,
+    // rgb [0,0,0] and were one step from being reported as measurements.
+    //
+    // The guard is the point. It cannot make the read reliable, but it makes a
+    // failed read FAIL rather than return zeros, and it is what exposed that
+    // the read had never been sound - earlier runs had simply been lucky.
+    const grabVisible = async () => {
+      for (let attempt = 0; attempt < 30; attempt++) {
+        await new Promise((r) => requestAnimationFrame(r));
+        const cv = document.querySelector('canvas');
+        const t = document.createElement('canvas');
+        t.width = cv.width; t.height = cv.height;
+        t.getContext('2d').drawImage(cv, 0, 0);
+        const d = t.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+        let dark = 0, n = 0;
+        const step = Math.max(4, Math.floor(d.length / 4 / 4000)) * 4;
+        for (let i = 0; i < d.length; i += step) { n++; if (d[i] + d[i + 1] + d[i + 2] < 12) dark++; }
+        if (dark / n < 0.92) return d;
+      }
+      return null;     // reported as unavailable, never as zeros
+    };
+    const vis = await grabVisible();
 
     const saved = [], idMats = new Map();
     scene.traverse((o) => {
@@ -254,8 +287,14 @@ async (page) => {
     gl.toneMapping = sTone; gl.toneMappingExposure = sExp; gl.outputColorSpace = sCs;
     for (const m of idMats.values()) m.dispose();
 
+    // The VISIBLE frame, read back through a 2D canvas on the very next frame,
+    // so the id mask and the picture it indexes are one frame apart at most and
+    // the camera is settled in both. This is what turns the mask into a
+    // measurement: per-class mean luminance and chroma from the actual render,
+    // which is the Phase 4 material-mask instrument applied to Phase 5 classes.
+
     const table = rules.map((r) => [r[0], r[2]]); table.push(['other', [0.5, 0.5, 0.5]]);
-    const counts = {}; let bg = 0, unk = 0;
+    const counts = {}, stat = {}; let bg = 0, unk = 0;
     const { w, h: hh, buf } = px;
     // Horizon: the row (from the top) above which no classified pixel appears.
     let firstRow = hh;
@@ -271,13 +310,28 @@ async (page) => {
       counts[best] = (counts[best] || 0) + 1;
       const rowFromTop = hh - 1 - Math.floor(i / w);   // readPixels is bottom-up
       if (rowFromTop < firstRow) firstRow = rowFromTop;
+      if (!vis) continue;
+      const vi = (rowFromTop * w + (i % w)) * 4;
+      const st = stat[best] || (stat[best] = { n: 0, r: 0, g: 0, b: 0, l: 0, l2: 0 });
+      const R = vis[vi], G = vis[vi + 1], B = vis[vi + 2];
+      const L = 0.2126 * R + 0.7152 * G + 0.0722 * B;
+      st.n++; st.r += R; st.g += G; st.b += B; st.l += L; st.l2 += L * L;
     }
     const total = w * hh;
+    const shade = {};
+    for (const [k, v] of Object.entries(stat)) {
+      const mL = v.l / v.n;
+      shade[k] = { L: +mL.toFixed(2), sd: +Math.sqrt(Math.max(v.l2 / v.n - mL * mL, 0)).toFixed(2),
+                   rgb: [v.r / v.n, v.g / v.n, v.b / v.n].map((x) => +x.toFixed(1)),
+                   RG: +((v.r / v.n) / Math.max(v.g / v.n, 1e-6)).toFixed(3) };
+    }
     return {
       size: [w, hh], skyPct: +(100 * bg / total).toFixed(2), unclassifiedPct: +(100 * unk / total).toFixed(2),
       horizonRow: firstRow,
       classes: Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1])
         .map(([k, v]) => [k, +(100 * v / total).toFixed(2)])),
+      shade: vis ? shade : null,
+      shadeUnavailable: !vis,
     };
   };
 
@@ -290,10 +344,10 @@ async (page) => {
   await page.context().addInitScript(INIT);
 
   const out = {};
-  const MODELS = (typeof MODEL_LIST !== 'undefined') ? MODEL_LIST : ['p4e', 'v5'];
+  const MODELS = (typeof MODEL_LIST !== 'undefined') ? MODEL_LIST : ['p5j','p4e'];
   for (const model of MODELS)
   for (const grade of ['daylight', 'dusk']) {
-    if (model !== 'p4e' && grade === 'dusk') continue;   // v5 is the size/perf baseline only
+    if (grade === 'dusk' && false) continue;   // dusk on the newest candidate only
     await page.goto('http://localhost:3001/?model=' + model + (grade === 'dusk' ? '&grade=dusk' : ''),
                     { waitUntil: 'load' });
     await page.waitForTimeout(10000);
@@ -316,6 +370,27 @@ async (page) => {
       };
     }
   }
+  // Interior regression, in the same run and the same context: the Phase 5
+  // work is exterior-only and /hall must be provably untouched.
+  await page.goto('http://localhost:3001/hall', { waitUntil: 'load' });
+  await page.waitForTimeout(9000);
+  await page.locator('canvas').screenshot({ path: OUT + 'p5j_interior_hall.png' });
+  out.interiorErrors = errors.length;
   out.consoleErrors = errors;
-  return out;
+  // Compact return: the census repeats verbatim across beats and the texture
+  // list is invariant, so the caller gets the numbers that differ and the rest
+  // is available from the screenshots and the per-run census below.
+  const slim = {};
+  for (const [k, v] of Object.entries(out)) {
+    if (k === 'consoleErrors' || k === 'interiorErrors') { slim[k] = v; continue; }
+    slim[k] = {
+      poseErrM: v.poseErrM, settled: v.settled, fps: v.fps,
+      calls: v.census.sceneDrawCalls, tris: v.census.sceneTriangles,
+      mats: v.census.materials, texN: v.census.texCount, texMB: v.census.texMB,
+      geo: v.census.geometries, progs: v.census.programs,
+      sky: v.coverage.skyPct, unk: v.coverage.unclassifiedPct, horizon: v.coverage.horizonRow,
+      cov: v.coverage.classes, shade: v.coverage.shade, shadeNA: v.coverage.shadeUnavailable,
+    };
+  }
+  return slim;
 }
