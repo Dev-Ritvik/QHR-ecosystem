@@ -1,0 +1,248 @@
+{
+ "src": "apps/public/public/models/exterior_mansion_v6_p5g.glb",
+ "w": 1424,
+ "h": 900,
+ "candidates": [
+  {
+   "key": "urn_W",
+   "note": "entrance urn, west cheek",
+   "cx": -2.75,
+   "cz": 6.199999999999999,
+   "y0": 0.6,
+   "h": 0.86,
+   "w": 0.46
+  },
+  {
+   "key": "urn_E",
+   "note": "entrance urn, east cheek",
+   "cx": 2.75,
+   "cz": 6.199999999999999,
+   "y0": 0.6,
+   "h": 0.86,
+   "w": 0.46
+  },
+  {
+   "key": "gate_pier_W",
+   "note": "gate pier at the drive mouth (P5F hypothesis)",
+   "cx": -6.0,
+   "cz": 32.0,
+   "y0": 0.0,
+   "h": 2.2,
+   "w": 0.8
+  },
+  {
+   "key": "lamp_drive_W",
+   "note": "path lamp, forecourt kerb west",
+   "cx": -7.5,
+   "cz": 16.0,
+   "y0": 0.0,
+   "h": 1.1,
+   "w": 0.22
+  },
+  {
+   "key": "lamp_step_W",
+   "note": "path lamp, foot of the entry steps west",
+   "cx": -3.9,
+   "cz": 7.4,
+   "y0": 0.4,
+   "h": 1.1,
+   "w": 0.22
+  }
+ ],
+ "rows": [
+  {
+   "candidate": "urn_W",
+   "beat": "HERO",
+   "dist": 30.653,
+   "m_per_px": 0.024506,
+   "h_px": 35.1,
+   "w_px": 18.8,
+   "cover_pct": 0.0995,
+   "in_frame": true,
+   "occluders": []
+  },
+  {
+   "candidate": "urn_W",
+   "beat": "WEST",
+   "dist": 24.934,
+   "m_per_px": 0.024846,
+   "h_px": 34.6,
+   "w_px": 18.5,
+   "cover_pct": 0.0851,
+   "in_frame": true,
+   "occluders": [
+    "mansion_walls"
+   ]
+  },
+  {
+   "candidate": "urn_W",
+   "beat": "NW",
+   "dist": 28.973,
+   "m_per_px": 0.027879,
+   "h_px": 30.8,
+   "w_px": 16.5,
+   "cover_pct": 0.0732,
+   "in_frame": true,
+   "occluders": [
+    "archback_F1",
+    "archglass_F1",
+    "mansion_glass",
+    "mansion_gold",
+    "mansion_walls",
+    "mansion_window_back"
+   ]
+  },
+  {
+   "candidate": "urn_E",
+   "beat": "HERO",
+   "dist": 34.053,
+   "m_per_px": 0.026411,
+   "h_px": 32.6,
+   "w_px": 17.4,
+   "cover_pct": 0.0925,
+   "in_frame": true,
+   "occluders": []
+  },
+  {
+   "candidate": "urn_E",
+   "beat": "WEST",
+   "dist": 30.128,
+   "m_per_px": 0.030801,
+   "h_px": 27.9,
+   "w_px": 14.9,
+   "cover_pct": 0.0512,
+   "in_frame": true,
+   "occluders": [
+    "ashlar_SOUTH_022",
+    "ashlar_WEST_036",
+    "mansion_glass",
+    "mansion_gold",
+    "mansion_walls",
+    "mansion_window_back"
+   ]
+  },
+  {
+   "candidate": "urn_E",
+   "beat": "NW",
+   "dist": 31.693,
+   "m_per_px": 0.032597,
+   "h_px": 26.4,
+   "w_px": 14.1,
+   "cover_pct": 0.0497,
+   "in_frame": true,
+   "occluders": [
+    "mansion_glass",
+    "mansion_gold",
+    "mansion_walls",
+    "mansion_window_back"
+   ]
+  },
+  {
+   "candidate": "gate_pier_W",
+   "beat": "HERO",
+   "dist": 20.697,
+   "m_per_px": 0.005097,
+   "h_px": 431.6,
+   "w_px": 157.0,
+   "cover_pct": 0.0,
+   "in_frame": false,
+   "occluders": []
+  },
+  {
+   "candidate": "gate_pier_W",
+   "beat": "WEST",
+   "dist": 36.911,
+   "m_per_px": 0.01011,
+   "h_px": 217.6,
+   "w_px": 79.1,
+   "cover_pct": 0.0,
+   "in_frame": false,
+   "occluders": []
+  },
+  {
+   "candidate": "gate_pier_W",
+   "beat": "NW",
+   "dist": 52.3,
+   "m_per_px": 0.041699,
+   "h_px": 52.8,
+   "w_px": 19.2,
+   "cover_pct": 0.0,
+   "in_frame": false,
+   "occluders": []
+  },
+  {
+   "candidate": "lamp_drive_W",
+   "beat": "HERO",
+   "dist": 22.377,
+   "m_per_px": 0.016049,
+   "h_px": 68.5,
+   "w_px": 13.7,
+   "cover_pct": 0.0,
+   "in_frame": false,
+   "occluders": []
+  },
+  {
+   "candidate": "lamp_drive_W",
+   "beat": "WEST",
+   "dist": 24.691,
+   "m_per_px": 0.015537,
+   "h_px": 70.8,
+   "w_px": 14.2,
+   "cover_pct": 0.0,
+   "in_frame": false,
+   "occluders": []
+  },
+  {
+   "candidate": "lamp_drive_W",
+   "beat": "NW",
+   "dist": 36.645,
+   "m_per_px": 0.03019,
+   "h_px": 36.4,
+   "w_px": 7.3,
+   "cover_pct": 0.0,
+   "in_frame": false,
+   "occluders": []
+  },
+  {
+   "candidate": "lamp_step_W",
+   "beat": "HERO",
+   "dist": 29.242,
+   "m_per_px": 0.023279,
+   "h_px": 47.3,
+   "w_px": 9.5,
+   "cover_pct": 0.0625,
+   "in_frame": true,
+   "occluders": []
+  },
+  {
+   "candidate": "lamp_step_W",
+   "beat": "WEST",
+   "dist": 24.132,
+   "m_per_px": 0.023095,
+   "h_px": 47.6,
+   "w_px": 9.5,
+   "cover_pct": 0.0651,
+   "in_frame": true,
+   "occluders": []
+  },
+  {
+   "candidate": "lamp_step_W",
+   "beat": "NW",
+   "dist": 29.592,
+   "m_per_px": 0.027678,
+   "h_px": 39.7,
+   "w_px": 7.9,
+   "cover_pct": 0.045,
+   "in_frame": true,
+   "occluders": [
+    "archglass_L2",
+    "ashlar_SOUTH_012",
+    "ashlar_WEST_033",
+    "mansion_glass",
+    "mansion_gold",
+    "mansion_walls",
+    "mansion_window_back"
+   ]
+  }
+ ]
+}

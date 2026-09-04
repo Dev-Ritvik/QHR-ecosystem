@@ -565,15 +565,121 @@ const MODEL_CANDIDATES: Record<string, string> = {
    */
   p5g: '/models/exterior_mansion_v6_p5g.glb',
   /**
-   * P5H — SECONDARY DETAIL. **Not authored. See docs/PHASE5_REPORT.md §10.**
-   * The one candidate that passes the visibility test (a pair of entrance urns,
-   * ~33 px tall at HERO) was not built, and that is a scope stop rather than a
-   * judgement that it would fail. It is stated as an omission, not as a
-   * decision, so the difference is on the record.
+   * P5H — SECONDARY DETAIL: two entrance urns, finishing a detail the
+   * architecture already set up.
    *
-   * P5I — COMPOSITION. No candidate file: the composition pass is evaluation,
-   * and it found nothing at HERO / WEST / NW / dusk that needed correcting
-   * which was not already a P5J item. Its findings are in the report.
+   * THE ENTRANCE ALREADY HAD TWO PEDESTALS AND NOTHING ON THEM. `entry_cheek_-1`
+   * and `entry_cheek_1` are the flanking blocks either side of the entry steps —
+   * x ±2.500..3.000, z 5.600..6.800, flat top at y 0.600 — step cheeks built to
+   * carry something. At HERO they project to x 970 and 1138 of 1425, unoccluded,
+   * 30.6 m out. A classical entrance whose cheeks are bare is unfinished, and
+   * that is what the frame showed.
+   *
+   * NOT A NEW VISUAL LANGUAGE. The estate already carries urns: `finial_urn_0..3`
+   * on `finial_plinth_0..3` at the spire base, in MAT_Stone_Trim. This is the
+   * same idea at the scale the ground floor needs, in the same material.
+   *
+   * DESIGNED TO THE PIXEL COUNT, NOT TO A CATALOGUE. tools/gltf/p5h_visibility.py
+   * projected the proposal through the runtime's own cameras BEFORE anything was
+   * modelled: 35.1 px tall and 18.8 px wide at HERO, 34.6 at WEST, occluded by
+   * the building at NW, behind the camera at TURN and CONSTELLATION. So there is
+   * no surface ornament — gadrooning, fluting, handles and an acanthus collar are
+   * all 1–2 px here and would buy sparkle. The silhouette carries the read, so
+   * the form is a campana urn (widest at the mouth, against the sky rather than
+   * against the pedestal) with a lidded top that closes the geometry with no
+   * interior to model. 16 radial segments, from the silhouette error and not from
+   * habit: an n-gon deviates from its circle by R(1−cos(π/n)), which at R = 8.5 px
+   * is 0.65 px at n=8, 0.29 at n=12 and 0.16 at n=16, against the ~0.3 px
+   * anti-aliasing resolves.
+   *
+   * COST, STRUCTURALLY EXACT: +2 nodes, +856 triangles (428 each), +21 KB of GLB.
+   * **Materials 17 → 17, textures 40 → 40, images 40 → 40** — MAT_Stone_Trim is
+   * matched by name in the graft, so no new material, image or shader program.
+   *
+   * COLOR_0 WAS NOT OPTIONAL. MAT_Stone_Trim multiplies base colour by the
+   * StoneAO attribute through a ShaderNodeMix (RGBA/MULTIPLY/Factor 1); a
+   * primitive without it renders unmultiplied AND makes GLTFLoader cache a second
+   * material instance for the same glTF material (its cache key carries
+   * `vertex-colors:`). The urns are baked with tools/blender/bake_ao_raycast.py at
+   * the same 0.40 floor as the rest of the stone and land at mean 0.714 — between
+   * the roof finial urns (0.786) and the cheek they stand on (0.595), and level
+   * with the terrace (0.702). MEASURED in the live scene: 16 material names →
+   * 17 instances on p5g AND on p5h, so the urns joined the 39-primitive
+   * vertex-coloured side and forked nothing.
+   *
+   * MEASURED THROUGH THIS PAGE, pose-verified, p5h against p5g at the same
+   * camera to sub-millimetre (0.0000 / 0.0072 / 0.0073 / 0.0000 m):
+   *
+   *                       HERO      WEST      NW      HERO dusk
+   *   urn coverage        0.07 %    0.04 %    0.00 %  0.07 %
+   *   urn L               100.85    79.76     —       132.03
+   *   urn sd               23.93    22.97     —        30.66
+   *
+   * Isolated against a working control (terrace 81,222 px), the pair renders
+   * 938 px at HERO and 546 at WEST, and is completely occluded by the building
+   * at NW — which is what the pre-authoring audit predicted, so no budget was
+   * spent on a camera that cannot see it.
+   *
+   * SUBORDINATE, WHICH IS THE ACCEPTANCE TEST AND NOT AN OPINION. At HERO the
+   * hierarchy reads masonry 133.02 > terrace 116.10 > steps 109.88 > **urn
+   * 100.85** > drive 94.91 > lawn 70.52 > hedge 53.55 > cypress 44.87. The urns
+   * sit below both large stone surfaces and above the ground: present, not
+   * competing. EVERY unrelated class moved ≤ 0.14 at HERO and ≤ 0.11 at dusk.
+   * The two that moved are the two that should: `steps` −0.27 L / −0.02 pp,
+   * because the urns stand on the cheeks and shade them.
+   *
+   * COST: +2 draw calls per pass (+4 at HERO, since MAT_Water's transmission
+   * re-renders the opaque scene), +1,712 submitted triangles, +2 geometries,
+   * +15.3 KB on the wire. Textures 47 → 47 and GPU residency 62.65 → 62.65 MB —
+   * exactly zero. 9 lights and 1 shadow caster, unchanged.
+   */
+  p5h: '/models/exterior_mansion_v6_p5h.glb',
+  /**
+   * P5H, SECOND ELEMENT — DUSK ARRIVAL LIGHTING. **Tested and REJECTED on
+   * measurement.** No candidate, and no light was added.
+   *
+   * The hypothesis was the report's own: at dusk there is no exterior lighting
+   * beyond window glow, so the arrival should get a restrained source of its
+   * own. It was tested the way the fog stop-condition was — swept on the LIVE
+   * scene by tools/capture/p5h_lightsweep.mjs and restored (9 lights before,
+   * 9 after, baseline re-measured to ±0.11) — rather than by editing a shared
+   * lighting rig on a guess.
+   *
+   * IT BRIGHTENS THE GROUND AND THE ORNAMENT, NOT THE ARCHITECTURE. Two warm
+   * point lights at the foot of the steps, at the only in-frame lamp station of
+   * the three tested (the forecourt kerb at z 16 falls 96 px BELOW the HERO
+   * frame and 561 below WEST). At HERO dusk, Δ luminance against baseline:
+   *
+   *                  i=2.0    i=4.4    i=8.0
+   *     urn          +7.38   +15.23   +26.01
+   *     terrace      +2.92    +5.99   +10.05
+   *     steps        +1.96    +4.28    +7.98
+   *     masonry      +1.28    +2.83    +5.22
+   *     mansion      +0.76    +1.67    +3.12
+   *
+   * The terrace already outruns the masonry at dusk (130.53 vs 126.21); the
+   * lamp widens that gap by 73% at i=4.4, and the urns — a secondary detail —
+   * gain four times what the building does and reach 158 at i=8.0, second only
+   * to the steps. That is §14's failure exactly: a new focal point competing
+   * with the architecture. The visible frame confirms it: two circular pools on
+   * the paving with NO fixture to explain them, which is the "sticker" read
+   * this rig's own comments already document for point lights on flat surfaces.
+   *
+   * AND THE COST LANDS ON THE SHIPPING LOOK. Daylight ships; ?grade=dusk is the
+   * rollback. three's WebGLLights increments `pointLength` unconditionally —
+   * there is no `intensity === 0` skip — so a dusk-only light still costs a
+   * per-fragment loop iteration in daylight, where it contributes nothing.
+   * Paying that, plus a fixture mesh, a new emissive material and a new program,
+   * to make a non-shipping grade worse is not a trade worth making.
+   *
+   * **The urns already deliver the dusk arrival at zero lighting cost**: they
+   * measure L 132.03 at dusk against 100.85 in daylight, because they stand
+   * 2.75 m from the entrance rectAreaLight and catch the wash that is already
+   * there. The detail the hypothesis wanted is geometry, not light.
+   *
+   * P5I — COMPOSITION. No candidate file: the composition pass is evaluation.
+   * Re-run after P5H, it found the hierarchy intact and nothing needing
+   * correction. Its findings are in the report.
    */
   /**
    * P5J — PERFORMANCE. **No candidate file, and that is the finding.**
@@ -597,9 +703,36 @@ const MODEL_CANDIDATES: Record<string, string> = {
    *
    * Reverted. p5g carries no orphaned images (each candidate in the chain was
    * pruned as it was built), so a pruned p5j came out byte-identical to it and
-   * has been deleted rather than shipped as a duplicate.
+   * has been deleted rather than shipped as a duplicate. **Not resurrected in
+   * the P5H revalidation, and not re-tested: the measurement above stands.**
    *
-   * **p5g is the Phase 5 candidate to judge.**
+   * P5J, RE-RUN AFTER P5H, FOUND SOMETHING ELSE — AND IT IS IN P5C, NOT P5H.
+   *
+   * `edging_hardscape` renders **1 pixel at HERO and 0 at WEST and NW**, against
+   * a working control in the same pass (terrace 81,222 px) and against ~3,800 px
+   * that its geometry predicts. It is INSIDE-OUT: 229 of its 249 polygons carry
+   * a normal pointing at the ground (mean normal z −0.839) and MAT_Stone_Trim is
+   * single-sided, so they are backface-culled. Disabling the depth test does not
+   * bring the pixels back — they are not losing a depth fight, they are not
+   * being drawn. (A Draco-quantisation hypothesis — the ground's 520 m extent
+   * gives a 31.74 mm position quantum against the edging's 30 mm lift — was
+   * tested by that same depth-test switch and is NOT the cause.)
+   *
+   * The cause is in tools/blender/p5c_transitions.py: it builds each ribbon quad
+   * from a point order that depends on the traverse direction and never calls
+   * `bmesh.ops.recalc_face_normals`. Its own assertion checks the vertex Z
+   * against the sampled ground to 1e-4 — a POSITION check, which is true and
+   * says nothing about winding. So p5g ships **498 triangles that draw nothing**,
+   * plus the MAT_Stone_Trim material fork above, for an object no camera sees.
+   *
+   * NOT FIXED HERE, deliberately. It is a P5C defect, not P5H's subject; the fix
+   * changes an accepted candidate's appearance (a kerb line would APPEAR that has
+   * never been seen) and needs its own four-camera acceptance pass. It is
+   * pre-existing in p5g and affects no p5h measurement. Recommended as a scoped
+   * follow-up: recalc normals, add the StoneAO attribute, re-verify at all four
+   * cameras. See docs/PHASE5_REPORT.md §12.
+   *
+   * **p5h is the Phase 5 candidate to judge.**
    */
 };
 
