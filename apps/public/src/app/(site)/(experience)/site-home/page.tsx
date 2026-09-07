@@ -33,7 +33,8 @@ import { getPublishedProjects } from '@/lib/projection';
 import { ProjectCard } from '@/components/site/ProjectCard';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 import { PublishSceneCards } from '@/components/experience/PublishSceneCards';
-import { chapters } from '@/components/experience/journey';
+import { chapters, type Chapter } from '@/components/experience/journey';
+import { ChapterUrl } from '@/components/experience/ChapterUrl';
 
 // ISR: Background revalidation every hour, unless manually cleared by the webhook (T37)
 export const revalidate = 3600;
@@ -131,7 +132,10 @@ export default async function SiteHomePage() {
   // with no code change — and no project is ever invented to fill a plinth.
   const stationProjects = availableProjects.slice(0, 4);
   const beat = chapters(stationProjects.length);
-  const at = (id: string) => beat.find((c) => c.id === id) ?? { from: 0, to: 0 };
+  // The fallback carries the id it was asked for, not just zeroes: a chapter
+  // that is missing from the registry should still have a stable anchor rather
+  // than an unnamed section the URL cannot address.
+  const at = (id: string): Chapter => beat.find((c) => c.id === id) ?? { id, from: 0, to: 0 };
 
   const hero = at('hero');
   const revolution = at('revolution');
@@ -142,6 +146,13 @@ export default async function SiteHomePage() {
   return (
     <main className="pb-40">
       <RouteTelemetry routeId="site-home" />
+
+      {/* Scroll <-> URL. Fed the SAME chapter list the camera and the
+          section heights come from, so the address bar cannot drift from
+          the film. Client-only and scene-independent: a visitor with no
+          WebGL still scrolls this page and still gets a working address.
+          Renders nothing. */}
+      <ChapterUrl chapters={beat} />
 
       {/* Hands the published projects to the WebGL tree, which binds them to
           the hologram tables in the hall. Renders nothing itself — the canvas
@@ -189,7 +200,11 @@ export default async function SiteHomePage() {
           Sticky, like every other chapter, and pinned at 62px rather than 0 so
           the block never slides under the fixed bar and never drifts during
           the first 62px of scroll. */}
-      <header className="relative" style={{ minHeight: vh(hero.from, hero.to) }}>
+      <header
+        id="hero"
+        className="relative scroll-mt-[62px]"
+        style={{ minHeight: vh(hero.from, hero.to) }}
+      >
         <div className="sticky top-[62px] h-[calc(100vh-62px)]">
           <div className="mx-auto flex h-full max-w-6xl flex-col px-6 pt-[6vh]">
             <div className="w-full md:max-w-[min(31vw,452px)]">
@@ -273,7 +288,8 @@ export default async function SiteHomePage() {
           look at. Two lines, held still by `sticky` while the building turns
           behind them. */}
       <section
-        className="mx-auto grid max-w-6xl grid-cols-12 px-6"
+        id="revolution"
+        className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
         style={{ minHeight: vh(revolution.from, revolution.to) }}
       >
         <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
@@ -300,7 +316,8 @@ export default async function SiteHomePage() {
           numbers are the thing a buyer of land actually wants. Every one comes
           from the published projection — nothing here is composed. */}
       <section
-        className="mx-auto grid max-w-6xl grid-cols-12 px-6"
+        id="constellation"
+        className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
         style={{ minHeight: vh(constellation.from, constellation.to) }}
       >
         <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
@@ -364,7 +381,8 @@ export default async function SiteHomePage() {
               the whole room with the staircase on axis, so the copy is one
               line and gets out of the way. */}
           <section
-            className="mx-auto grid max-w-6xl grid-cols-12 px-6"
+            id="establish"
+            className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
             style={{ minHeight: vh(establish.from, establish.to) }}
           >
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
@@ -397,7 +415,8 @@ export default async function SiteHomePage() {
             return (
               <section
                 key={project.projectId}
-                className="mx-auto grid max-w-6xl grid-cols-12 px-6"
+                id={c.id}
+                className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
                 style={{ minHeight: vh(c.from, c.to) }}
               >
                 <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
@@ -419,7 +438,8 @@ export default async function SiteHomePage() {
               it in the scene opens About; this is the same destination, as a
               link, for everyone who cannot click a painting. */}
           <section
-            className="mx-auto grid max-w-6xl grid-cols-12 px-6"
+            id="portrait"
+            className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
             style={{ minHeight: vh(portrait.from, portrait.to) }}
           >
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
