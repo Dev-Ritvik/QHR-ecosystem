@@ -3,6 +3,7 @@ import { ConsentPanel } from '@/components/consent/ConsentPanel';
 import { SiteHeader } from '@/components/site/SiteHeader';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { CursorRing } from '@/components/site/CursorRing';
+import { RouteVeil } from '@/components/site/RouteVeil';
 import { TelemetryProvider } from '@/lib/telemetry/TelemetryProvider';
 import { MarketingPixels } from '@/lib/marketing/pixels';
 import { PostHogProvider } from './posthog-provider';
@@ -47,6 +48,12 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <SiteFooter />
           </div>
           <CursorRing />
+          {/* THE site's route transition, mounted here rather than in the
+              experience segment on purpose: it has to survive navigations
+              that unmount the canvas entirely — into /projects, which is
+              outside (experience) — and it has to exist on pages that never
+              had a canvas. One device, every navigation. */}
+          <RouteVeil />
           <ConsentPanel />
           {/* Renders nothing at all without Marketing consent — no script tag,
               no network request. A pixel loaded and then told not to track has

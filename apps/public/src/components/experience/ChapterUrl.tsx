@@ -58,6 +58,7 @@
 
 import { useEffect } from 'react';
 import type { Chapter } from './journey';
+import { isNavigating } from '@/components/site/RouteVeil';
 
 /**
  * How long a chapter must hold before the bar is rewritten.
@@ -150,7 +151,32 @@ export function ChapterUrl({ chapters }: { chapters: Chapter[] }) {
     let settleTimer = 0;
     let frame = 0;
 
+    // TWO WRITERS, ONE HISTORY ENTRY: THE BUG THIS GUARD EXISTS FOR.
+    //
+    // Clicking a project card from a station chapter left the visitor on `/`
+    // with the URL reading `/#station-1` and the route veil shut until its
+    // watchdog fired — the navigation simply did not happen. Cause: this
+    // component's settle timer fired DURING the router's in-flight push and
+    // replaceState'd the URL out from under it. The App Router reconciles
+    // against window.history, so rewriting the address mid-navigation is not a
+    // cosmetic clash; it loses the navigation.
+    //
+    // The rule is therefore: the moment a click could take this document
+    // somewhere else, this stops writing. It is deliberately keyed on the
+    // GESTURE rather than on the veil, because the veil does not intercept
+    // under reduced motion and Next's own Link handles those clicks — the race
+    // exists on that path too.
+    const mountPath = window.location.pathname;
+    let leaving = false;
+    let leaveTimer = 0;
+
     const write = (id: string) => {
+      // A navigation has already committed: this page is on its way out and
+      // has no business naming the chapter of a document that is being
+      // replaced.
+      // isNavigating covers the case a click listener cannot see: a
+      // programmatic push, which is how the holograms open a project page.
+      if (leaving || isNavigating() || window.location.pathname !== mountPath) return;
       current = id;
       // The FIRST chapter is the bare page. Landing on the home page and
       // seeing `/#hero` in the bar is noise: the document already is the hero.
@@ -184,11 +210,42 @@ export function ChapterUrl({ chapters }: { chapters: Chapter[] }) {
       frame = requestAnimationFrame(sample);
     };
 
+    /**
+     * Capture phase, and it never preventDefaults — this only decides whether
+     * WE may keep writing, and must not change what the click does.
+     */
+    const onLinkClick = (e: MouseEvent) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.('a');
+      if (!(a instanceof HTMLAnchorElement)) return;
+      const href = a.getAttribute('href');
+      if (!href || !href.startsWith('/')) return;
+      const url = new URL(href, window.location.origin);
+      // Same document, different fragment — that is this component's own
+      // business and must not silence it.
+      if (url.pathname === mountPath) return;
+
+      leaving = true;
+      pending = null;
+      window.clearTimeout(settleTimer);
+
+      // Release if the navigation never happens. A cancelled or failed push
+      // would otherwise leave the address bar frozen for the rest of the
+      // visit, which is a quieter fault than the one above but still a fault.
+      window.clearTimeout(leaveTimer);
+      leaveTimer = window.setTimeout(() => {
+        if (window.location.pathname === mountPath) leaving = false;
+      }, 3000);
+    };
+
     window.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('click', onLinkClick, true);
     return () => {
       window.removeEventListener('scroll', onScroll);
+      document.removeEventListener('click', onLinkClick, true);
       window.clearTimeout(settleTimer);
       window.clearTimeout(restoreTimer);
+      window.clearTimeout(leaveTimer);
       if (frame) cancelAnimationFrame(frame);
     };
   }, [chapters]);

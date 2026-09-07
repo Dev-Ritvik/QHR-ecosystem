@@ -62,7 +62,7 @@ import {
 import { CROSSOVER, journeyState, readJourney } from './journey';
 import { Constellation } from './Constellation';
 import { InteriorStage } from './InteriorStage';
-import { useRouter } from 'next/navigation';
+import { veiledPush } from '@/components/site/RouteVeil';
 
 /**
  * Scrub, in seconds per unit of a pose's `ease` — the lag between where scroll
@@ -1506,7 +1506,6 @@ export function WorldCanvas() {
   const pathname = usePathname() || '/';
   const place = placeForRoute(pathname);
   const sceneCards = useSceneCards((st) => st.cards);
-  const router = useRouter();
   const [tier, setTier] = useState<DeviceTier>('mid');
   const [failed, setFailed] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -1561,8 +1560,20 @@ export function WorldCanvas() {
 
   /** Clicking a hologram or the portrait is a real navigation. Routed rather
    *  than location-assigned so the App Router transition is a client one and
-   *  the canvas — and therefore the camera — survives it. */
-  const openHref = useCallback((href: string) => router.push(href), [router]);
+   *  the canvas — and therefore the camera — survives it.
+   *
+   *  Through the veil, and through the SAME veil a link click uses. A hologram
+   *  and a link in the page beneath it lead to the same project page; if one
+   *  dissolves and the other cuts, the 3D reads as a separate toy bolted onto
+   *  the site rather than as part of it.
+   *
+   *  The router moved with it: RouteVeil owns the only useRouter on this path
+   *  now, and under reduced motion it still calls router.push — it simply does
+   *  not dissolve. A second router here would have been two code paths to the
+   *  same page. The hard-navigation fallback inside veiledPush is for the case
+   *  where the veil is not mounted at all, which on this site cannot happen:
+   *  it lives in the (site) layout above every route that has a canvas. */
+  const openHref = useCallback((href: string) => veiledPush(href), []);
 
   // Probed on mount, not during render, so server and first client render agree.
   useEffect(() => setSupported(webglSupported()), []);
