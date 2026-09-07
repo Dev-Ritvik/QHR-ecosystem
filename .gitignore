@@ -54,3 +54,10 @@ out/web_raw/
 
 # Playwright MCP logs
 .playwright-mcp/
+
+# Phase 6 capture COMPARISON sets. tools/capture/out6/ is the committed baseline
+# (LFS, same convention as Phase 5's out/); these are the paired runs a
+# before/after diff needs and they have no provenance value once the verdict is
+# recorded — two captures of the same build exist only to measure the noise
+# floor for one comparison.
+tools/capture/out6_*/

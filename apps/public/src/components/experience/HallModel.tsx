@@ -82,6 +82,150 @@ export function promoteLightmaps(root: THREE.Object3D): number {
 }
 
 /**
+ * Collapse the per-material COPIES of the lightmap atlas onto one texture each.
+ *
+ * THE DEFECT, MEASURED BEFORE IT WAS FIXED.
+ *
+ * interior_hall.glb carries ONE lightmap image (images[3], 1,472 KB on the
+ * wire), referenced by ONE textures[] entry, used by SEVEN materials as
+ * occlusionTexture. On the wire it is unambiguously a single asset. At runtime
+ * the probe found SEVEN distinct THREE.Texture objects named "lightmap", each
+ * 4096x4096 with 13 mip levels and 21,845 KB of transcoded payload — sharing
+ * exactly ONE ArrayBuffer and ONE image between them, and FOUR of them already
+ * holding their own `__webglTexture` in the renderer's WebGLProperties.
+ *
+ * Four GL objects for one atlas is 85.3 MB of VRAM where 21.3 MB would do, and
+ * the remaining three upload as soon as their materials are drawn — 149 MB at a
+ * camera that sees the whole room.
+ *
+ * WHY THE COPIES EXIST. GLTFLoader's assignTexture clones a texture whenever a
+ * material asks for a non-zero texCoord, because `channel` lives on the texture
+ * rather than on the binding:
+ *
+ *     if ( mapDef.texCoord !== undefined && mapDef.texCoord > 0 ) {
+ *       texture = texture.clone();
+ *       texture.channel = mapDef.texCoord;
+ *     }
+ *
+ * Six of the seven materials declare `texCoord: 1`, so six clones are made. The
+ * clone shares `image` and `mipmaps` — which is why there is one ArrayBuffer —
+ * but it is a distinct object, and WebGLProperties keys on the object, so each
+ * one gets its own upload. Nothing is wrong with the loader or the asset; the
+ * cost is structural and it is the consumer's job to collapse it.
+ *
+ * WHAT IS AND IS NOT MERGED. The key includes `channel` deliberately: the whole
+ * reason the clones exist is that they may sample different UV sets, and merging
+ * across that would silently re-map the atlas onto the wrong coordinates. It
+ * also includes the sampling state that would change a pixel — colour space,
+ * wrapping, filtering, flipY and the offset/repeat transform. Two textures share
+ * an object only when every one of those agrees, so this cannot change how a
+ * single texel is fetched. `MAT_Ceiling_Plaster_LM` declares no texCoord and so
+ * keeps its own channel-0 texture; whether that is right for the ceiling is an
+ * asset question and is deliberately NOT decided here.
+ *
+ * The orphans are disposed, not merely dereferenced. three frees a GL texture
+ * only on an explicit `dispose()`, so dropping the reference would leave every
+ * duplicate resident for the life of the context — the exact leak this exists to
+ * remove. Disposing a clone is safe precisely because the payload is shared: the
+ * renderer deletes that texture's own GL object and the ArrayBuffer stays owned
+ * by the survivor.
+ */
+export function shareDuplicateTextures(root: THREE.Object3D): {
+  merged: number;
+  freedMB: number;
+} {
+  type Keyed = THREE.Texture & { __canonicalised?: boolean };
+  const canonical = new Map<string, THREE.Texture>();
+  const orphans = new Set<THREE.Texture>();
+  const kept = new Set<THREE.Texture>();
+  let merged = 0;
+  let freedBytes = 0;
+
+  const bytesOf = (t: THREE.Texture): number => {
+    const mips = (t as THREE.CompressedTexture).mipmaps;
+    if (!mips || !mips.length) return 0;
+    let n = 0;
+    for (const m of mips) n += (m as { data?: ArrayBufferView }).data?.byteLength ?? 0;
+    return n;
+  };
+
+  const SLOTS = [
+    'map', 'lightMap', 'aoMap', 'normalMap', 'roughnessMap',
+    'metalnessMap', 'emissiveMap', 'alphaMap',
+  ] as const;
+
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) {
+      const mat = m as unknown as Record<string, unknown>;
+      if (!mat) continue;
+      for (const slot of SLOTS) {
+        const tex = mat[slot] as Keyed | null | undefined;
+        // `image` identity is the join: clones share it, unrelated textures
+        // cannot. Anything without a decoded source is left alone.
+        if (!tex || !tex.image) continue;
+
+        const key = [
+          slot,
+          // Object identity as a string: a WeakMap-assigned tag would be
+          // cleaner, but uuid on the SHARED image is not available, so the
+          // image object itself is registered in a side list below.
+          imageId(tex.image),
+          tex.channel,
+          tex.colorSpace,
+          tex.wrapS, tex.wrapT,
+          tex.magFilter, tex.minFilter, tex.anisotropy,
+          tex.flipY ? 1 : 0,
+          tex.offset.x, tex.offset.y, tex.repeat.x, tex.repeat.y, tex.rotation,
+        ].join('|');
+
+        const first = canonical.get(key);
+        if (!first) {
+          canonical.set(key, tex);
+          kept.add(tex);
+          continue;
+        }
+        if (first === tex) continue;
+
+        freedBytes += bytesOf(tex);
+        orphans.add(tex);
+        mat[slot] = first;
+        merged += 1;
+      }
+    }
+  });
+
+  // Only dispose what nothing kept. A texture can legitimately be both the
+  // survivor for one key and a duplicate for another (different slot, same
+  // object), and disposing it then would delete a texture still in use.
+  for (const t of orphans) {
+    if (kept.has(t)) continue;
+    t.dispose();
+  }
+
+  return { merged, freedMB: +(freedBytes / 1048576).toFixed(2) };
+}
+
+/**
+ * A stable id for a decoded texture source, so two textures can be compared by
+ * the image they share rather than by a name that is neither unique nor
+ * required. WeakMap so nothing here can keep an image alive.
+ */
+const imageIds = new WeakMap<object, number>();
+let nextImageId = 1;
+function imageId(image: unknown): number {
+  if (typeof image !== 'object' || image === null) return 0;
+  const existing = imageIds.get(image as object);
+  if (existing !== undefined) return existing;
+  const id = nextImageId;
+  nextImageId += 1;
+  imageIds.set(image as object, id);
+  return id;
+}
+
+/**
  * Remove the punctual lights the GLB carries, because the bake already contains
  * them.
  *
@@ -281,6 +425,12 @@ export function HallModel({
     // material, and cloning it while its lightmap was still sitting in the
     // occlusion slot would hand the clone an aoMap nothing ever promotes.
     const dressed = dressInterior(root);
+    // LAST of the material passes, and it has to be. It compares textures by
+    // their sampling state — anisotropy included — so it must run after
+    // guardAnisotropy has settled that, after the promotion has moved the atlas
+    // into the lightMap slot, and after dressInterior's material clone exists to
+    // be collapsed with the rest.
+    const shared = shareDuplicateTextures(root);
     let meshes = 0;
     let tris = 0;
     root.traverse((o) => {
@@ -308,11 +458,13 @@ export function HallModel({
     const centre = box.getCenter(new THREE.Vector3());
     // eslint-disable-next-line no-console
     console.info(
-      '[hall_ready] meshes=%d tris=%d lightmaps=%d bakedLightsRemoved=%d dressed=[%s] anisotropyDisarmed=[%s] | size %sx%sx%s | centre %s,%s,%s | y %s..%s',
+      '[hall_ready] meshes=%d tris=%d lightmaps=%d bakedLightsRemoved=%d texturesMerged=%d freedMB=%s dressed=[%s] anisotropyDisarmed=[%s] | size %sx%sx%s | centre %s,%s,%s | y %s..%s',
       meshes,
       Math.round(tris),
       promoted,
       strippedLights,
+      shared.merged,
+      shared.freedMB.toFixed(2),
       dressed.join(','),
       disarmed.join(','),
       size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2),
