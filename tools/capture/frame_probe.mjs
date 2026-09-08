@@ -106,6 +106,21 @@ const SHOTS = {
   portrait: 0.8273,
   'turn-out': 0.86,
   city: 0.9,
+  // The city SECTION's own midpoint rather than the camera beat. The film
+  // clamps at JOURNEY_END 0.90 and then HOLDS, so 0.90 is where the camera
+  // arrives and 0.94 (desktop) / 0.87 (mobile) is where the copy is read
+  // against it — measured from the section offsets, which sit at 0.903..0.983
+  // at 1440x900 and 0.836..0.909 at 390x844.
+  'city-held': 0.94,
+  'city-held-narrow': 0.873,
+  // The START of the sticky pane's pin window, which is where a chapter's
+  // copy is actually READ. Each section is only ~1.2 viewports tall, so its
+  // sticky pane holds for about a fifth of a viewport and then rides up with
+  // the section — photographing a chapter at its section MIDPOINT catches the
+  // copy on its way off the top of the screen, which is a picture of the
+  // capture being wrong rather than of the page.
+  'city-pin': 0.845,
+  'city-pin-wide': 0.912,
 };
 
 /**

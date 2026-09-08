@@ -570,13 +570,18 @@ export default async function SiteHomePage() {
                 data-chapter-fade
               >
                 <p className="t-eyebrow text-[#F2EDE4]/45">Out the front door</p>
-                <p className="t-h3 mt-6 text-[#F2EDE4]/85">
+                {/* The measure is stepped down on small screens because this
+                    chapter carries more than any other — a heading, every
+                    published project, and the note about what the positions
+                    mean. `!` is needed: t-h3 sets its own font-size from a CSS
+                    layer that wins over a plain utility. */}
+                <p className="t-h3 mt-4 !text-[1.3rem] leading-snug text-[#F2EDE4]/85 md:mt-6 md:!text-[1.8rem]">
                   Two districts.
                   <br className="hidden sm:block" /> Every layout we hold, and
                   where it stands.
                 </p>
 
-                <ul className="mt-10 space-y-7">
+                <ul className="mt-6 space-y-5 md:mt-10 md:space-y-7">
                   {stationProjects.map((project: any) => (
                     <li key={project.projectId}>
                       {/* Focus or hover this and the project's marker lifts in
@@ -595,7 +600,7 @@ export default async function SiteHomePage() {
                   ))}
                 </ul>
 
-                <p className="t-body mt-10 max-w-[34ch] text-[#F2EDE4]/50">
+                <p className="t-body mt-6 max-w-[34ch] !text-[0.8rem] text-[#F2EDE4]/50 md:mt-10 md:!text-[0.95rem]">
                   Positions in the scene are a diagram of the network, not a
                   map: the district is real, the plot counts are real, and the
                   place on the ground is not published.

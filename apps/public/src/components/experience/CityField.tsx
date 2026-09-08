@@ -236,9 +236,38 @@ export interface CityFieldProps {
 export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldProps) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
-  const beacons = useMemo(() => buildBeacons(projects), [projects]);
+  const size = useThree((s) => s.size);
+
+  /**
+   * HOW WIDE THE FIELD IS ALLOWED TO SPREAD, ON THIS SCREEN.
+   *
+   * The lens is authored as a VERTICAL fov, so a portrait viewport sees a much
+   * narrower horizontal cone from the same beat: at 390x844 the aspect is 0.46
+   * against the reference 1.60, so the frame is three and a half times narrower
+   * across. Measured at that size, ONE of the three markers was in shot and the
+   * other two sat behind the door jamb — a beacon field with two thirds of its
+   * beacons off screen.
+   *
+   * The layout itself is untouched: which project sits in which district band,
+   * and where inside it, is still decided entirely by cityLayout.ts. This
+   * scales the whole arrangement toward its own centre line, the way a plan
+   * drawing is reproduced at a smaller scale — the relationships survive, the
+   * spread fits the frame.
+   */
+  const spread = Math.min(1, Math.max(0.22, size.width / size.height / 1.6));
+  const beacons = useMemo(
+    () =>
+      buildBeacons(projects).map((b) => ({
+        ...b,
+        x: FIELD.centreX + (b.x - FIELD.centreX) * spread,
+      })),
+    [projects, spread],
+  );
   const bands = useMemo(() => districtBands(projects), [projects]);
-  const boundary = bands.length > 1 ? bands[0].to : FIELD.halfWidth * 2;
+  const boundary =
+    bands.length > 1
+      ? FIELD.centreX + (bands[0].to - FIELD.centreX) * spread
+      : FIELD.halfWidth * 2;
 
   const groupRef = useRef<THREE.Group>(null);
   const headsRef = useRef<THREE.Points>(null);
@@ -263,12 +292,12 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
       uNight: { value: new THREE.Color(NIGHT) },
       uContour: { value: new THREE.Color(CONTOUR) },
       uBoundary: { value: boundary },
-      uHalfWidth: { value: FIELD.halfWidth },
+      uHalfWidth: { value: FIELD.halfWidth * Math.max(spread, 0.55) },
       uCentreX: { value: FIELD.centreX },
       uNear: { value: FIELD.near },
       uFar: { value: FIELD.far },
     }),
-    [boundary],
+    [boundary, spread],
   );
 
   const groundMaterial = useMemo(

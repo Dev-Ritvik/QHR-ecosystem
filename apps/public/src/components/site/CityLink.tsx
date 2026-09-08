@@ -67,11 +67,21 @@ export function CityLink({
       onFocus={() => setFocus(slug)}
       onBlur={() => setFocus(null)}
     >
-      <span className="t-h3 block text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A] group-focus-visible:text-[#E8B98A]">
+      {/* Sized down on small screens rather than left to wrap. The chapter
+          carries an eyebrow, a three-line heading, every published project and
+          a note about what the positions mean; at the display size this uses on
+          desktop that list is taller than a 390x844 viewport, and the pane is a
+          centred sticky frame, so the overflow is CLIPPED rather than
+          scrollable — measured, the first project's line was cut off the top. */}
+      <span className="t-h3 block !text-[1.12rem] leading-snug text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A] group-focus-visible:text-[#E8B98A] md:!text-[1.6rem]">
         {name}
       </span>
-      {place ? <span className="t-body mt-1 block text-[#F2EDE4]/55">{place}</span> : null}
-      <span className="t-eyebrow mt-2 block text-[#F2EDE4]/45">
+      {place ? (
+        <span className="t-body mt-0.5 block !text-[0.8rem] text-[#F2EDE4]/55 md:mt-1 md:!text-[0.95rem]">
+          {place}
+        </span>
+      ) : null}
+      <span className="t-eyebrow mt-1.5 block text-[#F2EDE4]/45 md:mt-2">
         {available} of {total} plots open
       </span>
     </Link>
