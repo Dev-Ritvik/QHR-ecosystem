@@ -58,10 +58,12 @@ import {
   interiorCurves,
   interiorCurveT,
   interiorLensAt,
+  CHAPTER_WEIGHTS,
 } from './interiorPath';
 import { CROSSOVER, journeyState, readJourney } from './journey';
 import { Constellation } from './Constellation';
 import { InteriorStage } from './InteriorStage';
+import { CityField } from './CityField';
 import { veiledPush } from '@/components/site/RouteVeil';
 
 /**
@@ -564,6 +566,8 @@ function JourneyDriver({
   onArmed,
   reveal,
   interiorLeg,
+  cityReveal,
+  cityFrom,
   veil,
 }: {
   active: boolean;
@@ -573,6 +577,10 @@ function JourneyDriver({
   reveal: React.MutableRefObject<number>;
   /** Interior leg progress, 0..1, for the stage. */
   interiorLeg: React.MutableRefObject<number>;
+  /** District field presence, 0..1. */
+  cityReveal: React.MutableRefObject<number>;
+  /** Leg progress at which the city chapter opens. */
+  cityFrom: number;
   /** The blackout element. Written directly rather than through state. */
   veil: React.RefObject<HTMLDivElement>;
 }) {
@@ -592,8 +600,9 @@ function JourneyDriver({
     journeyState.armed = false;
     reveal.current = 0;
     interiorLeg.current = 0;
+    cityReveal.current = 0;
     if (veil.current) veil.current.style.opacity = '0';
-  }, [active, reveal, interiorLeg, veil]);
+  }, [active, reveal, interiorLeg, cityReveal, veil]);
 
   useFrame(() => {
     if (!active) return;
@@ -631,6 +640,28 @@ function JourneyDriver({
         : 0;
 
     interiorLeg.current = journeyState.leg === 'interior' ? s : 0;
+
+    // THE DISTRICT FIELD'S CHAPTER, on the same construction as the
+    // constellation's and with the same lesson applied: it reaches full
+    // strength BEFORE the beat it belongs to, not at the end of the leg. The
+    // city beat lands at legProgress 1.0, which is document scroll 0.90 —
+    // JOURNEY_END, where the footer is already arriving — so a ramp that
+    // finished there would finish behind the credits, exactly as the
+    // constellation's did behind the veil.
+    //
+    // cityFrom is derived from the chapter weights rather than written out, so
+    // publishing a fourth project moves the field with the film instead of
+    // leaving it lit a chapter early.
+    // 0.62 of the chapter, not all of it. The city BEAT lands at legProgress
+    // 1.0 — document scroll 0.90, JOURNEY_END — so a ramp that finished with
+    // the chapter would reach full strength on the last frame of the film with
+    // the footer already arriving over it. Lit by 62% of the way in, the field
+    // is at strength while the camera is still settling onto the threshold,
+    // which is also the better order: the land opens, then the camera arrives.
+    cityReveal.current =
+      journeyState.leg === 'interior'
+        ? smooth01((s - cityFrom) / Math.max(1e-3, (1 - cityFrom) * 0.62))
+        : 0;
 
     // THE VEIL, written straight to the DOM.
     //
@@ -1749,6 +1780,10 @@ export function WorldCanvas() {
   // each one would undo everything the scroll driver exists to avoid.
   const constellationReveal = useRef(0);
   const interiorLeg = useRef(0);
+  /** The district field's chapter presence. Its own channel rather than a
+   *  threshold on interiorLeg, because the field has to be dark for the whole
+   *  interior and only ignite on the last chapter. */
+  const cityReveal = useRef(0);
   const veilRef = useRef<HTMLDivElement>(null);
 
   // Three published projects, three stations. The count drives the interior
@@ -1756,6 +1791,43 @@ export function WorldCanvas() {
   // number — see the note in interiorPath.buildInteriorBeats about why this is
   // not four.
   const stationCount = Math.min(4, sceneCards.length);
+
+  /**
+   * Leg progress at which the district field's chapter opens.
+   *
+   * Derived from CHAPTER_WEIGHTS and the station count rather than written as a
+   * number, because buildInteriorBeats renormalises the leg by exactly this sum
+   * — so a fourth published project moves the chapter and this moves with it.
+   * The alternative is the failure journey.ts already records: the same
+   * constant in two files, edited in one of them.
+   */
+  const cityFrom = useMemo(() => {
+    const W = CHAPTER_WEIGHTS;
+    const span = W.establish + stationCount * W.station + W.portrait + W.city;
+    return (W.establish + stationCount * W.station + W.portrait) / span;
+  }, [stationCount]);
+
+  /**
+   * The published projects, in the shape the district field's layout reads.
+   *
+   * Same store the hologram tables bind to, so a beacon and a plan can never
+   * disagree about what is published — and `total` is carried because the
+   * beacon's SIZE is its unit count, which is the one piece of real magnitude
+   * these three projects have.
+   */
+  const cityProjects = useMemo(
+    () =>
+      sceneCards.map((c) => ({
+        slug: c.slug,
+        name: c.name,
+        locality: c.locality,
+        city: c.city,
+        totalUnits: c.total ?? 0,
+        availableUnits: c.available ?? 0,
+        soldOut: c.soldOut,
+      })),
+    [sceneCards],
+  );
 
   /** Clicking a hologram or the portrait is a real navigation. Routed rather
    *  than location-assigned so the App Router transition is a client one and
@@ -1850,6 +1922,8 @@ export function WorldCanvas() {
             onArmed={onArmed}
             reveal={constellationReveal}
             interiorLeg={interiorLeg}
+            cityReveal={cityReveal}
+            cityFrom={cityFrom}
             veil={veilRef}
           />
           <CameraClipping set={set} />
@@ -1948,6 +2022,19 @@ export function WorldCanvas() {
               projects={sceneCards}
               legProgress={interiorLeg}
               onOpen={openHref}
+            />
+          ) : null}
+          {/* THE DISTRICT FIELD, beyond the entry doors. Mounted with the
+              interior because it lives in the hall's coordinate space and is
+              framed by the hall's own opening; dark, and off the raycaster's
+              list, for every chapter but the last. */}
+          {onJourney && interiorArmed ? (
+            <CityField
+              projects={cityProjects}
+              reveal={cityReveal}
+              root={hallRoot}
+              onOpen={(slug) => openHref(`/projects/${slug}`)}
+              tier={tier}
             />
           ) : null}
           {look.free ? (

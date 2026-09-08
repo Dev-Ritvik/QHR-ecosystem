@@ -202,13 +202,12 @@ export function chapters(stationCount: number): Chapter[] {
     { id: 'constellation', from: ext * 0.62, to: ext },
   ];
 
-  // Interior: establish, one per station, portrait. Matches the proportions
-  // buildInteriorBeats lays out — establish and the turn take the first 30%,
-  // each station 15%, the portrait the last 16%.
+  // Interior: establish, one per station, the portrait, then the threshold.
+  // Matches the proportions buildInteriorBeats lays out.
   // The SAME weights the camera path uses, imported rather than restated. They
   // were duplicated once and immediately drifted; see the note on
   // CHAPTER_WEIGHTS.
-  const span = W.establish + n * W.station + W.portrait;
+  const span = W.establish + n * W.station + W.portrait + W.city;
   let cursor = CROSSOVER;
   const push = (id: string, frac: number) => {
     const width = (frac / span) * int;
@@ -218,6 +217,9 @@ export function chapters(stationCount: number): Chapter[] {
   push('establish', W.establish);
   for (let i = 0; i < n; i += 1) push(`station-${i + 1}`, W.station);
   push('portrait', W.portrait);
+  // THE DISTRICT FIELD, seen through the entry doors. The last chapter of the
+  // film and the one Phase 6 recorded as missing entirely.
+  push('city', W.city);
 
   // Floating-point drift over eight additions lands a few thousandths short;
   // the last chapter owns the remainder so the track always closes exactly on

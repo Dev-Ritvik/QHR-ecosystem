@@ -37,6 +37,10 @@ export interface SpatialCard {
   locality: string;
   city: string;
   available: number | null;
+  /** projects_pub.total_units. Carried for the district field, where a
+   *  beacon's SIZE is its unit count — the one piece of real magnitude these
+   *  projects have, since none of them has a coordinate. */
+  total: number | null;
   soldOut: boolean;
 }
 

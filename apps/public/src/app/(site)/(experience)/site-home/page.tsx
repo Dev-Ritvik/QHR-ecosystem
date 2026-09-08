@@ -192,6 +192,7 @@ export default async function SiteHomePage() {
   const constellation = at('constellation');
   const establish = at('establish');
   const portrait = at('portrait');
+  const city = at('city');
 
   return (
     <main className={`pb-40 ${TRACK_ROOT_TRANSPARENT}`}>
@@ -219,6 +220,7 @@ export default async function SiteHomePage() {
           locality: p.locality ?? '',
           city: p.city ?? '',
           available: typeof p.availableUnits === 'number' ? p.availableUnits : null,
+          total: typeof p.totalUnits === 'number' ? p.totalUnits : null,
           soldOut: Boolean(p.isSoldOut),
         }))}
       />
@@ -541,8 +543,66 @@ export default async function SiteHomePage() {
             </div>
           </section>
 
+          {/* ── CHAPTER 6 · THE DISTRICT FIELD ─────────────────────────────
+              The camera comes off the portrait, turns down the axis and stands
+              at the entry doors. They dissolve, and the land the company sells
+              opens beyond them: one marker per published layout, sized by its
+              real plot count, sitting in its own district's band.
+
+              THIS LIST IS THE AUTHORITY, not the markers. The canvas is
+              decorative and aria-hidden; a visitor with no WebGL, no pointer or
+              no sight reaches every project from here, in the same order, with
+              the same numbers. The 3D enhances these links — it does not
+              replace them, and it never becomes the only way to a project. */}
+          <section
+            id="city"
+            className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
+            style={{ minHeight: vh(city.from, city.to) }}
+          >
+            <div className="col-span-12 md:col-span-6 md:max-w-[42vw]">
+              <div
+                className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+                data-chapter-fade
+              >
+                <p className="t-eyebrow text-[#F2EDE4]/45">Out the front door</p>
+                <p className="t-h3 mt-6 text-[#F2EDE4]/85">
+                  Two districts.
+                  <br className="hidden sm:block" /> Every layout we hold, and
+                  where it stands.
+                </p>
+
+                <ul className="mt-10 space-y-7">
+                  {stationProjects.map((project: any) => (
+                    <li key={project.projectId}>
+                      <Link
+                        href={`/projects/${project.slug}`}
+                        className="tap-target group block"
+                      >
+                        <span className="t-h3 block text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A]">
+                          {project.name}
+                        </span>
+                        <span className="t-body mt-1 block text-[#F2EDE4]/55">
+                          {[project.locality, project.city].filter(Boolean).join(' · ')}
+                        </span>
+                        <span className="t-eyebrow mt-2 block text-[#F2EDE4]/45">
+                          {project.availableUnits} of {project.totalUnits} plots open
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+
+                <p className="t-body mt-10 max-w-[34ch] text-[#F2EDE4]/50">
+                  Positions in the scene are a diagram of the network, not a
+                  map: the district is real, the plot counts are real, and the
+                  place on the ground is not published.
+                </p>
+              </div>
+            </div>
+          </section>
+
           {/* The camera's last beat lands here and is allowed to hold. No copy
-              at all for a third of a viewport: the portrait has been reached,
+              at all for a third of a viewport: the district field has opened,
               the sequence is over, and the frame is the only thing on screen
               before the footer arrives over it. */}
           <div aria-hidden className="min-h-[34vh]" />

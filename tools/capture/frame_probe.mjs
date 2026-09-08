@@ -90,20 +90,22 @@ const SHOTS = {
   late: 0.42,
   // The interior fractions are the BEATS, not chapter midpoints, and they are
   // derived rather than eyeballed. buildInteriorBeats(3) renormalises by
-  // span = 0.26 + 3*0.19 + 0.18 = 1.01, and document scroll is
+  // span = 0.26 + 3*0.19 + 0.18 + 0.20 = 1.21, and document scroll is
   // 0.46 + at*(0.90 - 0.46). The Phase 6 audit photographed "establish" at 0.52,
   // which is a third of the way from the establishing beat to the turn onto the
   // first station — a frame mid-move, judged as if it were the composition.
   veil: 0.46,
   threshold: 0.46,
-  establish: 0.4974,
-  'turn-left': 0.5348,
-  'station-1': 0.5733,
-  'station-2': 0.656,
-  'station-3': 0.7388,
-  withdraw: 0.8067,
-  'stair-foot': 0.8216,
-  portrait: 0.9,
+  establish: 0.4912,
+  'turn-left': 0.5224,
+  'station-1': 0.5546,
+  'station-2': 0.6236,
+  'station-3': 0.6927,
+  withdraw: 0.7494,
+  'stair-foot': 0.7618,
+  portrait: 0.8273,
+  'turn-out': 0.86,
+  city: 0.9,
 };
 
 /**

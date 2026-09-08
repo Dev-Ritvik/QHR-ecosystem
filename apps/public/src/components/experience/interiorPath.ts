@@ -233,6 +233,19 @@ export const CHAPTER_WEIGHTS = {
   station: 0.19,
   /** Withdrawal, the foot of the stairs, and the portrait. */
   portrait: 0.18,
+  /**
+   * THE THRESHOLD AND THE DISTRICT FIELD.
+   *
+   * The film's last chapter, and the one the Phase 6 report records as missing
+   * outright: no city plane, no beacons, no dive. It is placed here, after the
+   * portrait, because the hall has NO WINDOW — parsed from the delivered GLB,
+   * the only opening in 545 nodes is `int_door_arch` with `int_doors` in it, on
+   * the entry axis at z 5.25. So the region is revealed through the door the
+   * visitor came in by, which is both the model's only aperture and the right
+   * sentence: the film ends by turning round and looking out at the land the
+   * house is here to sell.
+   */
+  city: 0.2,
 } as const;
 
 /** Camera pose for a station, derived from its anchor so the two cannot drift. */
@@ -475,6 +488,46 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
     position: [0, 3.05, 1.7],
     target: [0, 4.3, -5.15],
     fov: LENS.portrait,
+    roll: 0,
+  });
+
+  // TURN OUT. The camera comes off the portrait, down the axis, and starts to
+  // face the way it came in. A beat of its own so the reversal is a MOVE — the
+  // longest one in the room, from the back wall to the middle of the floor —
+  // rather than a cut from a portrait to a doorway.
+  beats.push({
+    id: 'turn-out',
+    at: W.establish + n * W.station + W.portrait + W.city * 0.45,
+    position: [0, 2.5, -1.2],
+    target: [0, 2.6, 5.3],
+    fov: LENS.traverse,
+    roll: 0,
+  });
+
+  // THE THRESHOLD. Square onto the entry doors, framing the opening.
+  //
+  // z 3.50 is derived, and the first attempt at 1.65 is why it is stated.
+  //
+  // 1.65 holds the whole opening in frame — 3.6m of throw for a 3.74m-tall
+  // door at 56 degrees — and the frame it produced was a keyhole: a 2.68m
+  // doorway seen from across the room, with the region a slot in the middle of
+  // a wall. The chapter is supposed to be a revelation, not a peephole.
+  //
+  // At 1.75m back the opening subtends 75 degrees horizontally against the
+  // frame's own 80, so the jambs sit at the extreme edges and everything
+  // between them is region — the visitor is standing IN the doorway rather than
+  // looking at it. The head and sill leave frame, which is what they do when
+  // you step into a door.
+  //
+  // Eye height 2.05, and the aim dropped to 1.35, so the horizon sits a little
+  // above centre: the sight line to the field's ground at y -2.4 first meets it
+  // about 7m beyond the threshold, which is why FIELD.near is 20 and not less.
+  beats.push({
+    id: 'city',
+    at: W.establish + n * W.station + W.portrait + W.city,
+    position: [0, 2.05, 3.5],
+    target: [0, 1.35, 14.0],
+    fov: LENS.establish,
     roll: 0,
   });
 
