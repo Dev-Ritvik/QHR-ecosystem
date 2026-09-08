@@ -67,24 +67,73 @@ export interface CameraBeat {
    * the subject has to hold the frame on its own.
    */
   frameOffset: number;
+  /**
+   * How far into evening this beat is, 0..1. Optional; absent means 0.
+   *
+   * WHY THE FILM CHANGES TIME OF DAY, AND WHY THAT IS NOT "DARKEN EVERYTHING"
+   *
+   * The exterior ships a DAYLIGHT grade fitted to the hero. The interior it
+   * cuts to is a candlelit hall — wall sconces with visible flames, and a
+   * lightmap baked for lamplight. So the film already crossed from noon to
+   * night; the veil was hiding that cut rather than motivating it.
+   *
+   * Letting evening fall across the last exterior chapter motivates it, and
+   * pays for itself twice. The constellation is ADDITIVE light, and additive
+   * light over a sunlit equirect sky is invisible by construction: the shipped
+   * frame put a 12m sphere over a bright cloud bank and the sphere read as
+   * dust. Against a falling sky it reads as light, with no change to the
+   * shader at all.
+   *
+   * It is ZERO for the hero, the quarter and the three-quarter, so every frame
+   * the Phase 5 grade was fitted against is untouched.
+   */
+  evening?: number;
 }
 
 /**
  * The constellation's centre, in exterior world metres.
  *
- * Beyond the back of the estate and well above it: the cypresses top out at
- * 5.40, the spire at 11.72, and the hedge line ends at z -11.80, so nothing in
- * the model comes near this. The revolution ends by turning away from the
- * mansion to face it, which is the only way to give it a frame of its own —
- * the brief asks for the sphere as a focal point with a text block beside it,
- * not for the sphere as an ornament above a house.
+ * MOVED IN PHASE 6B, from [0, 16, -46] to directly above the spire, and the
+ * reason is a measurement rather than a preference.
+ *
+ * The old placement put the sphere 46m out in open field behind the estate, so
+ * the only way to frame it was to turn the camera away from the building. That
+ * is exactly what the shipped path did — and the frame it produced was
+ * photographed and counted:
+ *
+ *     mansion_walls on screen        coverage 0.000 from scroll 0.285 onward
+ *     draw calls at the constellation          4     (955 at the hero)
+ *     what remained in shot     a terrain plane, a stock equirect sky,
+ *                               and a point cloud
+ *
+ * Four draw calls is the whole defect in one number. Every piece of authored
+ * geometry in the project — the mansion, the portico, the fountain, the
+ * hedges, the cypresses — was behind the camera for the last third of the
+ * exterior film, leaving a photographic hillside as the accidental subject.
+ *
+ * And the brief had already said where it goes. CLAUDE.md: "at the top the
+ * house there will be a pointed end ... and at the top there will be a glowing
+ * ball made up of multiple glowing spheres". Above the spire, crowning the
+ * building. The old comment argued the sphere needed "a frame of its own" and
+ * traded the building away to get one; the brief asks for both in one frame,
+ * and both in one frame is also the only composition that can hand off to the
+ * city layer, because it is the one that establishes RESIDENCE beneath
+ * NETWORK.
+ *
+ * CLEARANCE. The spire tips out at 11.72 (x, z within +/-0.18) and the corner
+ * finials at 9.19. The shader pushes hovered points outward by 0.19 of a unit
+ * radius, which at radius 6.2 is 1.18m, so the lowest a point can ever reach is
+ * 19.8 - 6.2 - 1.18 = 12.42 — seven tenths of a metre above the spire tip. The
+ * sphere crowns the roof and never sinks into it, at rest or under the pointer.
  */
-export const CONSTELLATION: [number, number, number] = [0, 16.0, -46.0];
+export const CONSTELLATION: [number, number, number] = [0, 19.8, 0];
 
-/** World radius of the constellation. Chosen against the arrival beat: at 22m
- *  with a 38-degree lens the frame is 15.1m tall, so a 12.4m sphere holds 82%
- *  of it — large enough to be the subject, small enough that the pointer can
- *  approach it from outside its silhouette and be felt doing so. */
+/** World radius of the constellation. Re-scored against the Phase 6B arrival
+ *  beat: the sphere centre is 48.4m from the eye at a 37-degree lens, where the
+ *  frame is 32.4m tall, so a 12.4m sphere holds 38% of frame height and sits
+ *  clear above a mansion holding 46% of frame width. Large enough to be the
+ *  subject, small enough that the residence beneath it still reads as the
+ *  thing the network belongs to. */
 export const CONSTELLATION_RADIUS = 6.2;
 
 /**
@@ -224,38 +273,67 @@ export const BEATS: readonly CameraBeat[] = [
     frameOffset: 6.4,
   },
   {
-    // THE TURN AWAY. The aim leaves the building for the first time in the
-    // sequence and starts travelling out into the dark behind the estate. This
-    // beat exists so the pan is a MOVE rather than a cut: the camera is already
-    // looking where it is going before it gets there.
+    // THE CRANE, which replaces what used to be THE TURN AWAY.
+    //
+    // The old beat swung the aim off the building and out into empty field, so
+    // that by 0.82 the estate was already gone. This one keeps the building and
+    // climbs: the camera rises from 8.4m to 15m while retreating from -19 to
+    // -32, and the aim lifts from the mansion's centroid toward its roofline.
+    // The move reads as pulling back to see what the house belongs to, which is
+    // the sentence the chapter has to say.
     at: 0.82,
-    position: [-6.0, 12.2, -14.0],
-    target: [0.0, 12.0, -34.0],
-    fog: [22, 120],
+    position: [-21.0, 15.0, -32.0],
+    target: [0.0, 10.0, 0.0],
+    fog: [30, 165],
     keyIntensity: 2.4,
-    fov: 46,
-    roll: -0.012,
-    frameOffset: 4.2,
+    fov: 44,
+    roll: -0.02,
+    frameOffset: 4.6,
+    // EVENING IS COMPLETE HERE, not at the last beat — the light changes DURING
+    // the crane and has finished by the time the camera settles.
+    //
+    // Putting the 1 on the final beat instead was measured and was wrong for the
+    // same structural reason the constellation's own reveal curve was wrong:
+    // `at: 1.0` is the END of the leg, which is document scroll 0.46, which is
+    // the middle of the crossover veil. The held frame of the chapter sits at
+    // legProgress 0.81, and with the 1 on the last beat that frame photographed
+    // at evening 0.72 — sky mean 75.4 where the fully fallen frame reads 58.7.
+    // The chapter would have spent its whole held moment on the way to a look
+    // it only reached behind a black screen.
+    evening: 1,
   },
   {
-    // CONSTELLATION. Level with the sphere and 22m out, unbanked, on the axis.
+    // CONSTELLATION. The rear three-quarter, craned to 18m and 48m out, holding
+    // the estate low-right with the sphere directly above its spire.
     //
-    // The fog opens back up here on purpose. Everywhere else on this path fog
-    // is doing compositional work — burying the far edge of a 450m ground
-    // plane. Out here there is no ground in frame and the far value has to stay
-    // low, or the constellation is read against a lifted grey instead of
-    // against night.
+    // MEASURED at 1440x900 with the projection in tools/capture/frame_solve.mjs:
+    //
+    //     mansion        box [497, 437, 1156, 919]   46% of frame width
+    //     constellation  centre [821, 255]           39% of frame height
+    //     spire          [812, 471, 826, 542]        between the two
+    //     left third     clear to x 497              the copy column's gutter
+    //
+    // The old beat at [0, 16, -24] aimed at [0, 16, -46] and measured mansion
+    // coverage 0.000. This is the same chapter with the building still in it.
     at: 1.0,
-    position: [0.0, 16.0, -24.0],
-    target: [0.0, 16.0, -46.0],
-    fog: [30, 140],
-    keyIntensity: 2.0,
-    fov: 38,
+    position: [-24.0, 18.0, -42.0],
+    target: [0.0, 12.8, 0.0],
+    // Fog is doing MORE work here than anywhere else on the path, not less. The
+    // authored terrain stops dead at +/-120m, and from this vantage the far edge
+    // is 149m away and lands at y 453 — a hard line straight across the frame,
+    // the single artefact that most reads as a diorama on a table. 60..150
+    // takes that edge to 89% haze while leaving the building, whose nearest
+    // corner is 39.8m from the eye, completely untouched.
+    fog: [60, 150],
+    keyIntensity: 2.6,
+    fov: 37,
     roll: 0.0,
-    // Nearly closed. The sphere is the subject and has to hold the frame; the
-    // text block sits beside it in the DOM, in the space this small offset
-    // opens on the left.
-    frameOffset: 2.6,
+    // Held open rather than closed. The subject is now a PAIR — residence and
+    // network — and the pair has to sit in the right of frame together with the
+    // text block beside it, which needs more offset than a lone sphere did.
+    frameOffset: 3.6,
+    // Held, not still climbing. See the note on the beat above.
+    evening: 1,
   },
 ];
 
@@ -338,20 +416,29 @@ export function lensAt(scroll: number): {
   return { fov: last.fov, roll: last.roll, frameOffset: last.frameOffset };
 }
 
-export function atmosphereAt(scroll: number): { near: number; far: number; key: number } {
+export function atmosphereAt(scroll: number): {
+  near: number;
+  far: number;
+  key: number;
+  evening: number;
+} {
   const s = Math.min(1, Math.max(0, scroll));
   for (let i = 0; i < BEATS.length - 1; i += 1) {
     const a = BEATS[i];
     const b = BEATS[i + 1];
     if (s <= b.at) {
       const k = b.at === a.at ? 0 : (s - a.at) / (b.at - a.at);
+      const ea = a.evening ?? 0;
+      const eb = b.evening ?? 0;
       return {
         near: a.fog[0] + (b.fog[0] - a.fog[0]) * k,
         far: a.fog[1] + (b.fog[1] - a.fog[1]) * k,
         key: a.keyIntensity + (b.keyIntensity - a.keyIntensity) * k,
+        evening: ea + (eb - ea) * k,
       };
     }
   }
   const last = BEATS[BEATS.length - 1];
-  return { near: last.fog[0], far: last.fog[1], key: last.keyIntensity };
+  return { near: last.fog[0], far: last.fog[1], key: last.keyIntensity,
+           evening: last.evening ?? 0 };
 }

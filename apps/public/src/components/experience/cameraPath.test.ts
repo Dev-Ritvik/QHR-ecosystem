@@ -23,7 +23,15 @@
 
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { BEATS, POSITION_CURVE, TARGET_CURVE, curveT, lensAt, CONSTELLATION } from './cameraPath';
+import {
+  BEATS,
+  POSITION_CURVE,
+  TARGET_CURVE,
+  curveT,
+  lensAt,
+  CONSTELLATION,
+  CONSTELLATION_RADIUS,
+} from './cameraPath';
 import {
   buildInteriorBeats,
   interiorCurves,
@@ -137,6 +145,100 @@ function sampleCurve(curve: THREE.CatmullRomCurve3, n: number): THREE.Vector3[] 
 const NEAR_EXTERIOR = 0.5;
 const NEAR_INTERIOR = 0.1;
 
+// ── Composition ────────────────────────────────────────────────────────────
+//
+// A beat is a pose, and a pose says nothing about what is in shot. Phase 6B
+// found that out expensively: the constellation beat aimed exactly where its
+// test said it should and the frame it produced contained no building at all.
+// So the last beat is also checked as a PICTURE, by projecting the measured
+// bounds through it.
+//
+// This reproduces what WorldCanvas does to build the view matrix, including the
+// frame offset — the aim is pushed `frameOffset` metres LEFT in CAMERA space,
+// which is what holds a subject in the right of frame while the copy column
+// occupies the left. A projection that ignores it puts every subject in the
+// wrong half.
+
+/** The reference frame these compositions were authored against. */
+const FRAME: readonly [number, number] = [1440, 900];
+
+const SUBJECT_BOUNDS = {
+  // The mansion shell with its rustic base and the spire that tops it.
+  mansion: { min: [-9.64, 0, -6.54], max: [9.64, 11.72, 8.34] },
+  spire: { min: [-0.18, 9.19, -0.18], max: [0.18, 11.72, 0.18] },
+} as const;
+
+function frameAt(beat: (typeof BEATS)[number]) {
+  const eye = new THREE.Vector3(...beat.position);
+  const fwd0 = new THREE.Vector3(...beat.target).sub(eye).normalize();
+  const right0 = new THREE.Vector3().crossVectors(fwd0, new THREE.Vector3(0, 1, 0)).normalize();
+  // Shift the AIM, not the eye — the vantage is unchanged and only the
+  // subject's place in the frame moves.
+  const aim = new THREE.Vector3(...beat.target).addScaledVector(right0, -beat.frameOffset);
+  const fwd = aim.clone().sub(eye).normalize();
+  const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+  const up = new THREE.Vector3().crossVectors(right, fwd);
+  const halfH = Math.tan((beat.fov * Math.PI) / 360);
+  const halfW = halfH * (FRAME[0] / FRAME[1]);
+
+  const project = (p: THREE.Vector3) => {
+    const d = p.clone().sub(eye);
+    const z = d.dot(fwd);
+    return {
+      z,
+      sx: (d.dot(right) / (z * halfW)) * 0.5 * FRAME[0] + FRAME[0] / 2,
+      sy: -(d.dot(up) / (z * halfH)) * 0.5 * FRAME[1] + FRAME[1] / 2,
+    };
+  };
+
+  const boxOf = (b: { min: readonly number[]; max: readonly number[] }) => {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let anyFront = false;
+    for (let i = 0; i < 8; i += 1) {
+      const q = project(
+        new THREE.Vector3(
+          i & 1 ? b.max[0] : b.min[0],
+          i & 2 ? b.max[1] : b.min[1],
+          i & 4 ? b.max[2] : b.min[2],
+        ),
+      );
+      if (q.z <= 0) continue;
+      anyFront = true;
+      minX = Math.min(minX, q.sx);
+      maxX = Math.max(maxX, q.sx);
+      minY = Math.min(minY, q.sy);
+      maxY = Math.max(maxY, q.sy);
+    }
+    const onX = Math.min(maxX, FRAME[0]) - Math.max(minX, 0);
+    const onY = Math.min(maxY, FRAME[1]) - Math.max(minY, 0);
+    return {
+      inFrame: anyFront && onX > 0 && onY > 0,
+      box: [minX, minY, maxX, maxY],
+      widthPct: ((maxX - minX) / FRAME[0]) * 100,
+    };
+  };
+
+  const c = project(new THREE.Vector3(...CONSTELLATION));
+  const rPx = (CONSTELLATION_RADIUS / (c.z * halfH)) * 0.5 * FRAME[1];
+  const conBox = [c.sx - rPx, c.sy - rPx, c.sx + rPx, c.sy + rPx];
+
+  return {
+    mansion: boxOf(SUBJECT_BOUNDS.mansion),
+    spire: boxOf(SUBJECT_BOUNDS.spire),
+    constellation: {
+      inFrame:
+        c.z > 0 &&
+        Math.min(conBox[2], FRAME[0]) - Math.max(conBox[0], 0) > 0 &&
+        Math.min(conBox[3], FRAME[1]) - Math.max(conBox[1], 0) > 0,
+      box: conBox,
+      diameterPctH: ((rPx * 2) / FRAME[1]) * 100,
+    },
+  };
+}
+
 describe('exterior camera path', () => {
   const samples = sampleCurve(POSITION_CURVE, 600);
 
@@ -194,14 +296,44 @@ describe('exterior camera path', () => {
     }
   });
 
-  it('finishes aimed at the constellation, not past it', () => {
+  it('finishes with the residence AND the network in one frame', () => {
+    // THIS REPLACES "finishes aimed at the constellation, not past it", which
+    // asserted that the final target IS the sphere centre.
+    //
+    // That assertion was satisfied by the shipped path and the shipped path was
+    // the defect. With the sphere 46m out in open field behind the estate, the
+    // only way to put it at frame centre was to turn the camera off the
+    // building — and the frame that produced was photographed and counted:
+    // mansion coverage 0.000 and FOUR draw calls, a terrain plane and a stock
+    // sky. The old test passed on every one of those frames, because "aimed at
+    // the sphere" says nothing about what else is in shot.
+    //
+    // The contract this chapter actually has is compositional, so the test is:
+    // both subjects in frame, the sphere above the roof, and the left of frame
+    // left clear for the copy column that sits beside them.
     const last = BEATS[BEATS.length - 1];
-    const eye = new THREE.Vector3(...last.position);
-    const aim = new THREE.Vector3(...last.target);
-    const centre = new THREE.Vector3(...CONSTELLATION);
-    // The final target IS the sphere centre, and the camera is outside it.
-    expect(aim.distanceTo(centre)).toBeLessThan(0.01);
-    expect(eye.distanceTo(centre)).toBeGreaterThan(12);
+    const shot = frameAt(last);
+
+    expect(shot.mansion.inFrame, 'the residence is in the final frame').toBe(true);
+    expect(shot.constellation.inFrame, 'so is the network above it').toBe(true);
+
+    // Present, and present as the anchor rather than as a detail or as the
+    // whole shot. Under a fifth of frame width it stops being readable as a
+    // building; past two thirds it is a second hero and the chapter has not
+    // moved.
+    expect(shot.mansion.widthPct).toBeGreaterThan(20);
+    expect(shot.mansion.widthPct).toBeLessThan(66);
+
+    // The sphere crowns the roof: its lowest point is above the spire's
+    // highest, in SCREEN space, so nothing about the pose can bury one in the
+    // other.
+    expect(shot.constellation.box[3]).toBeLessThan(shot.spire.box[1]);
+
+    // The copy column runs down the left. Nothing may intrude on the first
+    // quarter of the frame.
+    expect(Math.min(shot.mansion.box[0], shot.constellation.box[0])).toBeGreaterThan(
+      FRAME[0] * 0.25,
+    );
   });
 
   it('keeps the lens inside a believable range across the whole track', () => {

@@ -609,13 +609,25 @@ function JourneyDriver({
     }
 
     // THE CONSTELLATION'S CHAPTER. Dark through the hero and the revolution,
-    // igniting as the camera turns onto it, extinguished by the veil. The
+    // igniting as the crane rises onto it, extinguished by the veil. The
     // thresholds are the ones journey.chapters() gives the DOM, so the copy
     // beside the sphere arrives with the sphere rather than near it.
+    //
+    // 0.60/0.32 -> 0.58/0.20, AND THAT IS A DEFECT FIX, NOT A TASTE CHANGE.
+    //
+    // The old ramp reached full strength at legProgress 0.92. The veil starts
+    // closing at document scroll 0.424, which is legProgress 0.922. So the
+    // constellation was at full strength for 0.002 of the leg — measured on the
+    // shipped build, reveal read 0.215 at the chapter's own opening, 0.726 at
+    // its MIDPOINT, and 0.977 four fifths of the way through. The object the
+    // chapter is named after was never once seen at strength in a held frame.
+    //
+    // 0.58..0.78 lights it during the crane and holds it lit for the whole of
+    // the frame the visitor actually stops on.
     const s = journeyState.legProgress;
     reveal.current =
       journeyState.leg === 'exterior'
-        ? smooth01((s - 0.6) / 0.32) * (1 - journeyState.veil)
+        ? smooth01((s - 0.58) / 0.2) * (1 - journeyState.veil)
         : 0;
 
     interiorLeg.current = journeyState.leg === 'interior' ? s : 0;
@@ -996,6 +1008,44 @@ function useLook(set: SceneSet) {
  * everything past the building — which is exactly the part of the frame the
  * headings sit over.
  */
+/**
+ * The daylight fog band, and the values evening interpolates it toward.
+ *
+ * DAY_FOG is the shipped pair, lifted out of the constructor so the frame loop
+ * and the effect cannot drift apart about what "no evening yet" means.
+ *
+ * Neither colour is picked. HAZE_DAY is DAYLIGHT_HAZE — the mean of the
+ * approved Blender render across the band just above its own horizon. HAZE_NIGHT
+ * is GRADE_BG.dusk, the navy the preloader, the crossover veil and the interior
+ * clear colour already share, so the land settles into the film's own night
+ * rather than into a third colour invented for this chapter.
+ *
+ * KEY_EVENING is the daylight key reddened. A sun at 15m against an 80m throw
+ * is a sun near the horizon, and its light has come through enough air to lose
+ * its blue; the shipped #FFF0DB is that sun at noon.
+ */
+const DAY_FOG: readonly [number, number] = [60, 220];
+const EVENING_FOG_FAR = 150;
+/** Aerial-perspective colour, sampled from the approved render's own horizon band. */
+const DAYLIGHT_HAZE = '#5E6147';
+const HAZE_DAY = new THREE.Color(DAYLIGHT_HAZE);
+/**
+ * The film's navy, LIFTED — and lifted by measurement rather than by eye.
+ *
+ * GRADE_BG.dusk (#0A1120) is the right hue and the wrong value here, because it
+ * is authored as a CLEAR COLOUR and a clear colour is not tone-mapped. Fog is.
+ * Put through this pipeline — sRGB to linear on construction, ACES, exposure
+ * 0.75 — #0A1120 rendered the far landscape at [7,10,10]: not night air, a
+ * black stripe, and the one artefact the brief names outright as forbidden.
+ *
+ * #131E33 is the same hue at roughly 3x the linear value, which lands the
+ * hazed distance around [22,27,34] — darker than the sky above it, lighter
+ * than nothing, and continuous with both.
+ */
+const HAZE_NIGHT = new THREE.Color('#131E33');
+const KEY_DAY = new THREE.Color('#FFF0DB');
+const KEY_EVENING = new THREE.Color('#FFC489');
+
 function ExteriorLighting({
   driveByScroll,
   grade,
@@ -1009,8 +1059,8 @@ function ExteriorLighting({
 }) {
   const day = grade === 'daylight';
   const scene = useThree((s) => s.scene);
-  const scroll = useScrollProgress();
   const key = useRef<THREE.DirectionalLight>(null);
+  const hemi = useRef<THREE.HemisphereLight>(null);
 
   useEffect(() => {
     const prev = scene.fog;
@@ -1033,7 +1083,7 @@ function ExteriorLighting({
     // pointless: the plane's far edge sits ~130m out, which that band fogged
     // by 19%, and the edge stayed as hard as it was.
     scene.fog = day
-      ? new THREE.Fog(DAYLIGHT_HAZE, 60, 220)
+      ? new THREE.Fog(DAYLIGHT_HAZE, DAY_FOG[0], DAY_FOG[1])
       : new THREE.Fog(GRADE_BG.dusk, 34, 190);
     return () => {
       scene.fog = prev;
@@ -1046,15 +1096,93 @@ function ExteriorLighting({
   // portico — the building would sit in haze at the exact moment it should be
   // most present. Fog closes from 34..190 to 14..95 and the key lifts as the
   // camera arrives.
+  // scene.backgroundIntensity is a global the evening fall below writes every
+  // frame, so it has to be handed back on unmount — a route that leaves the
+  // journey mid-chapter would otherwise inherit a sky at 10%.
+  useEffect(
+    () => () => {
+      scene.backgroundIntensity = 1;
+    },
+    [scene],
+  );
+
   useFrame(() => {
-    if (!driveByScroll || day) return;
-    const a = atmosphereAt(scroll.current);
+    if (!driveByScroll) return;
+
+    // LEG progress, not document scroll — and that is a fix, not a detail.
+    //
+    // BEATS[].at are fractions of the EXTERIOR LEG, which is the first 46% of
+    // the document (journey.ts, CROSSOVER). The camera has always read them
+    // that way: the rig calls curveT(SWING(legProgress)) and lensAt(legProgress).
+    // This call read `scroll.current`, which is DOCUMENT scroll, so the
+    // atmosphere has been sampling the path at less than half the parameter the
+    // camera was at — at the constellation beat, where legProgress is 1.0, it
+    // was reading 0.42 and returning the values authored for the revolution.
+    //
+    // It went unseen because it was unreachable: the daylight branch returned
+    // before this line, and daylight is what ships. It is live now, so it is
+    // correct now. Clamped to 1 past the crossover, so the last exterior frame
+    // before the cut is the fully-fallen one rather than a rewind.
+    const legS =
+      journeyState.leg === 'exterior' ? journeyState.legProgress : 1;
+    const a = atmosphereAt(legS);
     const fog = scene.fog as THREE.Fog | null;
-    if (fog && (fog as THREE.Fog).isFog) {
-      fog.near = a.near;
-      fog.far = a.far;
+
+    if (!day) {
+      if (fog && fog.isFog) {
+        fog.near = a.near;
+        fog.far = a.far;
+      }
+      if (key.current) key.current.intensity = a.key;
+      return;
     }
-    if (key.current) key.current.intensity = a.key;
+
+    // ── EVENING, across the last exterior chapter only ────────────────────
+    //
+    // Every line here is IDENTITY at evening 0, which is every frame of the
+    // hero, the quarter and the three-quarter — the three vantages the Phase 5
+    // daylight grade was fitted against. Nothing about those frames moves.
+    //
+    // What it is for: the film cuts from this exterior into a candlelit hall,
+    // and the constellation it is cutting through is additive light. Additive
+    // light over a sunlit equirect sky cannot be seen — measured, the shipped
+    // 12m sphere over a bright cloud bank read as dust. Letting the sun go down
+    // over the last chapter fixes the cut and the sphere at once, with no
+    // change to either.
+    const e = a.evening;
+
+    if (fog && fog.isFog) {
+      // near stays at 60 throughout: the building's nearest corner is 39.8m
+      // from the final eye, so the architecture is never touched at any point
+      // in the fall. Only the far plane closes, and it closes because the
+      // authored terrain STOPS at +/-120m and its edge is 149m from that eye —
+      // a dead-straight line across the frame at 22% haze. 150 takes the same
+      // edge to 89%.
+      fog.near = DAY_FOG[0];
+      fog.far = DAY_FOG[1] + (EVENING_FOG_FAR - DAY_FOG[1]) * e;
+      fog.color.copy(HAZE_DAY).lerp(HAZE_NIGHT, e);
+    }
+
+    // The KEY SURVIVES. This is the difference between evening falling and the
+    // lights going out: the sky and the land drop away while the building keeps
+    // a warm light on it, which is the magic-hour architectural shot and the
+    // register the whole film is in. Down 35%, and warmed — a sun near the
+    // horizon is reddened by the air it is coming through, so this is the same
+    // physics the fog is.
+    if (key.current) {
+      key.current.intensity = keyIntensity * (1 - 0.35 * e);
+      key.current.color.copy(KEY_DAY).lerp(KEY_EVENING, e);
+    }
+    // The FILL DIES. The hemisphere is sky light, and there is no sky left to
+    // fill with. This is what lets the shadowed elevation go dark enough for
+    // the sphere above it to read.
+    if (hemi.current) hemi.current.intensity = hemiIntensity * (1 - 0.78 * e);
+
+    // The photographic environment recedes rather than being replaced. It keeps
+    // its cloud structure and its hill silhouettes at a tenth of the luminance,
+    // which is what dusk looks like — and it means the frame still has real
+    // landscape in it rather than a flat colour where a landscape was.
+    scene.backgroundIntensity = 1 - 0.9 * e;
   });
 
   return (
@@ -1245,7 +1373,11 @@ function ExteriorLighting({
           authored terrain rather than a plane graded to near-black in code. At
           0.5 it lifted the ground to the same value as the lit facade and the
           architecture stopped separating from its site. */}
+      {/* ref, because the evening fall writes .intensity every frame. args are
+          CONSTRUCTOR arguments — driving the fall through them would rebuild
+          the light sixty times a second. */}
       <hemisphereLight
+        ref={hemi}
         args={
           day
             ? ['#BBD2E8', '#5C5A48', hemiIntensity]
@@ -1453,9 +1585,6 @@ function RoomEnvironmentMap({ intensity }: { intensity: number }) {
  * would silently re-light every material in the scene.
  */
 const SKY_EQUIRECT_URL = '/textures/env_meadow_bg_2k.jpg';
-
-/** Aerial-perspective colour, sampled from the approved render's own horizon band. */
-const DAYLIGHT_HAZE = '#5E6147';
 
 function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
   const scene = useThree((s) => s.scene);

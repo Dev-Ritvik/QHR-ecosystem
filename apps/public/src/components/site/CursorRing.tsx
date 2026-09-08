@@ -103,6 +103,11 @@ export function CursorRing() {
     <div
       ref={ring}
       aria-hidden
+      // Addressable, so a capture probe can take the ring out of a frame it is
+      // judging. It is a fixed element outside header/main/footer, so it
+      // otherwise survives every "hide the DOM" pass and ends up baked into
+      // composition captures as a gold circle over the scene.
+      data-cursor-ring=""
       className="pointer-events-none fixed left-0 top-0 z-[70] hidden h-[26px] w-[26px] rounded-full border border-[#E8B98A]/60 opacity-0 transition-opacity duration-300 md:block"
       style={{ willChange: 'transform' }}
     />

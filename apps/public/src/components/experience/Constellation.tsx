@@ -353,6 +353,11 @@ export function Constellation({
   return (
     <points
       ref={points}
+      // Named so the capture probe can find it, hide it and photograph the same
+      // held frame twice. An additive object over a bright sky can be at full
+      // reveal and still put almost nothing on screen; a differenced pair is the
+      // only way to tell that apart from "still fading in".
+      name="CONSTELLATION"
       position={position}
       scale={radius}
       geometry={geometry}

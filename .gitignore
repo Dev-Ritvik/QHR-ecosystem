@@ -61,3 +61,4 @@ out/web_raw/
 # recorded — two captures of the same build exist only to measure the noise
 # floor for one comparison.
 tools/capture/out6_*/
+tools/capture/out6b_*/
