@@ -30,8 +30,85 @@
 import { useEffect, useRef, useState } from 'react';
 import { useProgress } from '@react-three/drei';
 
+/**
+ * drei's progress store, read at most once per animation frame.
+ *
+ * ---------------------------------------------------------------------------
+ * THIS EXISTS TO FIX A REAL PRODUCTION CRASH, NOT TO SAVE RENDERS
+ * ---------------------------------------------------------------------------
+ *
+ * Reading `useProgress()` directly threw React error #185 — "Maximum update
+ * depth exceeded" — on roughly one in every four Tier-2 page loads in a
+ * production build. Measured, not inferred: 5 walks of
+ * /downloads -> /properties -> /faqs -> /terms produced 5 uncaught errors, and
+ * the stack named the mechanism outright:
+ *
+ *   at onProgress            <- drei's store setter
+ *   at hT.itemEnd            <- three's LoadingManager
+ *   at Set.forEach           <- zustand notifying every subscriber
+ *
+ * drei's useProgress is a zustand store whose `set()` is called once per LOADED
+ * ITEM by DefaultLoadingManager.onProgress. This build loads two GLBs with
+ * roughly ninety Draco and KTX2 dependencies between them, so that is ~90
+ * synchronous store writes, each one scheduling a React update. Enough of them
+ * land while React is already committing that the nested-update counter passes
+ * its limit of 50 and React gives up on the tree.
+ *
+ * It is NOT a Phase 6 regression. The same measurement against the pre-Phase-6
+ * build (src at ed7e3e7) produced a HIGHER rate — 8 errors across 5 walks
+ * against 5 — so the defect predates every Phase 6 commit and simply had no
+ * test looking for it until the experience suite ran.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY COALESCING FIXES IT RATHER THAN MERELY REDUCING IT
+ * ---------------------------------------------------------------------------
+ *
+ * The counter only climbs for updates scheduled DURING a commit. A
+ * requestAnimationFrame callback is a fresh task, so an update scheduled from
+ * one starts a new cycle and the counter resets. Coalescing therefore removes
+ * the nesting, not just most of it — and as a side effect turns ~90 renders of
+ * the cover into one per frame.
+ *
+ * The cost is that the counter is at most one frame stale, which for a loading
+ * percentage is not a cost at all.
+ */
+function useCoalescedProgress() {
+  const [snapshot, setSnapshot] = useState(() => useProgress.getState());
+
+  useEffect(() => {
+    let raf = 0;
+    let latest: ReturnType<typeof useProgress.getState> | null = null;
+
+    const flush = () => {
+      raf = 0;
+      if (latest) {
+        setSnapshot(latest);
+        latest = null;
+      }
+    };
+
+    const unsubscribe = useProgress.subscribe((state) => {
+      latest = state;
+      if (!raf) raf = requestAnimationFrame(flush);
+    });
+
+    // The store can advance between the initial getState above and this
+    // subscribe — the models start loading the moment the canvas mounts. One
+    // catch-up read, so a fast load cannot leave the cover reading 0 forever.
+    latest = useProgress.getState();
+    raf = requestAnimationFrame(flush);
+
+    return () => {
+      unsubscribe();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return snapshot;
+}
+
 export function Preloader() {
-  const { progress, active } = useProgress();
+  const { progress, active } = useCoalescedProgress();
   const [done, setDone] = useState(false);
   const [gone, setGone] = useState(false);
   // Never runs backwards. The manager's total climbs as new dependencies are

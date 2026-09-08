@@ -18,8 +18,26 @@ export default function ExperienceLayout({ children }: { children: ReactNode }) 
       {/* The world (fixed, decorative — content is never inside the canvas) */}
       <ExperienceCanvasHost />
 
-      {/* The readable layer: real DOM above the world */}
-      <div className="relative z-10">{children}</div>
+      {/*
+        The readable layer: real DOM above the world.
+
+        `pointer-events-none` with the page taking it straight back is not a
+        flourish — it is what lets the world underneath be touched at all. This
+        wrapper is full-width and as tall as the document, and it sits at z-10
+        over a canvas at z-0, so without this it swallows every pointer event
+        aimed at anything in the scene. Measured on the film: at the first
+        project table, `elementFromPoint` returned this div, and dragging the
+        table did nothing on any pointer device.
+
+        `[&>*]` restores it to the page root only, so every ordinary page
+        behaves exactly as before. A page that wants the world reachable
+        through it — the film does — overrides with `!pointer-events-none` and
+        re-enables its own content, which is the pattern /hall already used by
+        hand.
+      */}
+      <div className="relative z-10 pointer-events-none [&>*]:pointer-events-auto">
+        {children}
+      </div>
     </div>
   );
 }

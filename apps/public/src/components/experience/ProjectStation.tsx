@@ -285,6 +285,14 @@ export function ProjectStation({
           would remove it from the raycast entirely, so it is transparent with
           depthWrite off instead. */}
       <mesh
+        // Named so the interaction can be AIMED AT and therefore verified. The
+        // proxy is invisible and unnamed by nature, so an end-to-end test had
+        // nothing to target and was reduced to projecting the TURNTABLE node
+        // and hoping the ray landed — which it did not, because the turntable's
+        // origin sits on the floor and its top edge only grazes the cylinder.
+        // A name costs nothing and turns "the table turns" into something that
+        // can be asserted rather than assumed.
+        name={`station_drag_${anchor.id}`}
         position={[0, TABLE_TOP / 2, 0]}
         onPointerDown={onDown}
         onPointerMove={onMove}
@@ -304,6 +312,7 @@ export function ProjectStation({
           station (1.505 / 1.401 / 1.441 / 1.441) — a single shared constant
           would leave three of the four targets misaligned with their plan. */}
       <mesh
+        name={`station_holo_${anchor.id}`}
         position={[0, anchor.holoY, 0]}
         onClick={openProject}
         onPointerOver={enter('pointer')}

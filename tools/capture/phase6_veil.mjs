@@ -55,12 +55,20 @@ async (page) => {
    * reported as one for two runs. The scroll lock is the real precondition, so
    * it is what gets waited on.
    */
+  // Wait for the preloader to APPLY its lock and then release it. The naive
+  // `!== 'hidden'` check resolves instantly, because the Preloader is
+  // dynamic(ssr:false) and the inline style is '' until it mounts — measured,
+  // it returned at 359 ms with zero meshes in the scene while the cover did not
+  // actually lift until 2870 ms.
   const ready = async () => {
-    await page.waitForFunction(
-      () => document.documentElement.style.overflow !== 'hidden',
-      undefined,
-      { timeout: 20000 },
-    );
+    const locked = await page
+      .waitForFunction(() => document.documentElement.style.overflow === 'hidden',
+                       undefined, { timeout: 8000 })
+      .then(() => true, () => false);
+    if (locked) {
+      await page.waitForFunction(() => document.documentElement.style.overflow !== 'hidden',
+                                 undefined, { timeout: 45000 });
+    }
     await page.waitForTimeout(600);
   };
 

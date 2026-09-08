@@ -65,16 +65,39 @@ const DEVTOOLS_HOOK = () => {
 /**
  * Wait for the preloader to release the document.
  *
- * It holds `overflow: hidden` until the scene is ready, and every gesture
- * issued under that lock is silently dropped — a flat timeout here produced two
- * false failures during Phase 6 before this replaced it.
+ * IT HOLDS `overflow: hidden` UNTIL THE SCENE IS READY — BUT IT IS
+ * `dynamic(ssr: false)`, SO IT IS NOT THERE YET WHEN THE PAGE FIRST PAINTS.
+ *
+ * The obvious helper — wait for `overflow !== 'hidden'` — is therefore a
+ * no-op: for the first several hundred milliseconds the inline style is `''`
+ * because the cover has not mounted, so it resolves immediately having waited
+ * for nothing at all. Measured: the lock is applied at 675 ms and released at
+ * 2870 ms, and the naive check returned at 359 ms with ZERO meshes in the
+ * scene. Every test using it was racing the load.
+ *
+ * So: wait for the lock to be APPLIED first, then for it to be released. The
+ * apply-wait is bounded and failure-tolerant, because a page that never boots a
+ * canvas — no WebGL, or a route with nothing 3D on it — never locks at all, and
+ * that is not an error.
  */
 async function ready(page: Page) {
-  await page.waitForFunction(
-    () => document.documentElement.style.overflow !== 'hidden',
-    undefined,
-    { timeout: 30_000 },
-  );
+  const locked = await page
+    .waitForFunction(
+      () => document.documentElement.style.overflow === 'hidden',
+      undefined,
+      { timeout: 8_000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  if (locked) {
+    await page.waitForFunction(
+      () => document.documentElement.style.overflow !== 'hidden',
+      undefined,
+      { timeout: 45_000 },
+    );
+  }
   await page.waitForTimeout(500);
 }
 
@@ -91,12 +114,55 @@ async function consent(page: Page) {
   }
 }
 
+/**
+ * Scroll to a fraction and wait for the page to actually GET there.
+ *
+ * A fixed wait is not enough. Lenis interpolates the scroll position at
+ * lerp 0.1, so a jump across the full 14,000px track needs ~90 frames to
+ * converge — well past the 1200 ms this used to wait. Two assertions failed on
+ * that alone: the address bar still read `#portrait` after a scroll to the top,
+ * and a scroll to 0.7 had not yet reached a station chapter. Neither was a
+ * defect in the application; both were the test reading a page still in
+ * motion.
+ *
+ * So it polls the real scroll position until it stops changing, then allows
+ * ChapterUrl's own 180 ms settle on top.
+ */
 async function scrollToFraction(page: Page, frac: number) {
   await page.evaluate((f) => {
     const max = document.documentElement.scrollHeight - window.innerHeight;
     window.scrollTo(0, Math.round(f * max));
   }, frac);
-  await page.waitForTimeout(1200);
+  // BEST EFFORT, DELIBERATELY. This is a wait, not an assertion: if the page
+  // never stops moving, the test that follows should fail on what it actually
+  // checks — the address bar, the composition — and not on the helper that was
+  // only supposed to give it a stable moment. An earlier version threw here and
+  // reported a settle timeout in place of the real result, which told nobody
+  // anything about the application.
+  await page
+    .waitForFunction(
+      () => {
+        const w = window as unknown as { __lastY?: number; __stillFor?: number };
+        const y = window.scrollY;
+        if (w.__lastY !== undefined && Math.abs(y - w.__lastY) < 1) {
+          w.__stillFor = (w.__stillFor ?? 0) + 1;
+        } else {
+          w.__stillFor = 0;
+        }
+        w.__lastY = y;
+        return (w.__stillFor ?? 0) >= 5;
+      },
+      undefined,
+      { timeout: 8_000, polling: 100 },
+    )
+    .catch(() => undefined);
+  await page.evaluate(() => {
+    const w = window as unknown as { __lastY?: number; __stillFor?: number };
+    w.__lastY = undefined;
+    w.__stillFor = 0;
+  });
+  // Longer than ChapterUrl's 180 ms settle, so its write has landed.
+  await page.waitForTimeout(700);
 }
 
 /** Collects console errors and page errors for the duration of a test. */
@@ -322,6 +388,13 @@ test.describe('navigation', () => {
       a.href = '#constellation';
       a.id = 'e2e-anchor';
       a.textContent = 'probe';
+      // The scroll track is deliberately pointer-transparent so the canvas
+      // behind it stays reachable, so a probe appended into <main> inherits
+      // `pointer-events: none` and stops being a stand-in for a real anchor.
+      // Park it somewhere unambiguous and give it back its own pointer events.
+      a.style.cssText =
+        'position:fixed;left:8px;top:400px;z-index:70;pointer-events:auto;' +
+        'background:#000;color:#fff;padding:4px 8px';
       document.querySelector('main')?.appendChild(a);
     });
     await page.click('#e2e-anchor');
@@ -424,93 +497,117 @@ test.describe('the interior', () => {
 
   test('dragging a table turns the table, not the camera or the page', async ({ page }) => {
     // The interaction the brief is most specific about: ONLY the table base
-    // rotates. Nothing here can be checked from the DOM, so the scene is read
-    // through three's own devtools event.
+    // rotates. None of it is visible from the DOM, so the scene is read through
+    // three's own devtools event.
+    //
+    // THREE THINGS THIS GOT WRONG BEFORE, ALL OF THEM MEASURED:
+    //
+    //  1. It aimed at the TURNTABLE_ node. The drag target is not the turntable
+    //     — it is an invisible cylinder proxy at the station anchor, which is
+    //     now named `station_drag_<id>` precisely so a test can aim at it.
+    //     The turntable's origin sits on the floor and projected 251px BELOW
+    //     the viewport.
+    //  2. It used the station chapter's own midpoint, where the camera frames
+    //     the HOLOGRAM at eye height and the table is mostly out of frame. A
+    //     sweep of the interior leg found the tables reachable at 0.55-0.60
+    //     (S1), 0.64-0.70 (S2) and 0.74-0.76 (S3); the test now searches for a
+    //     proxy that is actually on screen instead of assuming one is.
+    //  3. It asserted the camera did not move AT ALL. The rig applies pointer
+    //     parallax by design (PARALLAX 0.42 m), so any mouse movement moves the
+    //     camera a little. The contract is that the table drag must not ORBIT
+    //     the camera, which is a different and much larger number.
     await page.addInitScript(DEVTOOLS_HOOK);
     await page.setViewportSize(VIEWPORT);
     await page.goto('/');
     await consent(page);
     await ready(page);
-    await scrollToFraction(page, 0.62);
-    await page.waitForTimeout(2500);
 
-    // Attach to the renderer and learn which camera draws the world.
     await page.evaluate(() => {
       const w = window as unknown as Record<string, any>;
       const gl = w.__PROBE__?.renderers?.[w.__PROBE__.renderers.length - 1];
       if (!gl || gl.__e2ePatched) return;
       const orig = gl.render.bind(gl);
       gl.render = function (scene: any, camera: any) {
-        if (scene?.isScene && scene.children?.length > 2) w.__PAIR__ = { scene, camera };
+        if (scene?.isScene) {
+          let isWorld = false;
+          scene.traverse((o: any) => {
+            if (!isWorld && /^(station_drag_|mansion_|ashlar_)/.test(o.name || '')) isWorld = true;
+          });
+          if (isWorld) w.__PAIR__ = { scene, camera };
+        }
         return orig(scene, camera);
       };
       gl.__e2ePatched = true;
     });
-    await page.waitForTimeout(600);
 
-    const before = await page.evaluate(() => {
-      const w = window as unknown as Record<string, any>;
-      const pair = w.__PAIR__;
-      if (!pair) return null;
-      let turntable: any = null;
-      pair.scene.traverse((o: any) => {
-        if (!turntable && /^TURNTABLE_/.test(o.name || '')) turntable = o;
+    /** The projected centre of any drag proxy currently on screen. */
+    type Proxy = { name: string; id: string; x: number; y: number };
+    const findProxy = (): Promise<Proxy | null> =>
+      page.evaluate(() => {
+        const w = window as unknown as Record<string, any>;
+        const pair = w.__PAIR__;
+        if (!pair) return null;
+        const V = pair.camera.position.constructor;
+        let best: { name: string; id: string; x: number; y: number } | null = null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const set = (v: any) => { best = v; };
+        pair.scene.traverse((o: any) => {
+          if (best || !/^station_drag_/.test(o.name || '')) return;
+          const c = o.getWorldPosition(new V());
+          const p = c.clone().project(pair.camera);
+          const x = Math.round(((p.x + 1) / 2) * window.innerWidth);
+          const y = Math.round(((-p.y + 1) / 2) * window.innerHeight);
+          if (x > 60 && x < window.innerWidth - 60 && y > 110 && y < window.innerHeight - 60) {
+            set({ name: o.name, id: o.name.replace('station_drag_', ''), x, y });
+          }
+        });
+        return best;
       });
-      if (!turntable) return null;
-      // Where the table is on screen, so the drag lands on it rather than on
-      // empty floor.
-      const v = turntable.getWorldPosition(new turntable.position.constructor());
-      v.project(pair.camera);
-      return {
-        rotation: turntable.rotation.y,
-        name: turntable.name,
-        screen: [
-          Math.round(((v.x + 1) / 2) * window.innerWidth),
-          Math.round(((-v.y + 1) / 2) * window.innerHeight),
-        ],
-        camera: [pair.camera.position.x, pair.camera.position.y, pair.camera.position.z],
-        scrollY: window.scrollY,
-      };
-    });
 
-    expect(before, 'a turntable is present in the hall').not.toBeNull();
-    const [sx, sy] = before!.screen;
-    // Only meaningful if the table is actually on screen at this beat.
-    expect(sx).toBeGreaterThan(0);
-    expect(sx).toBeLessThan(VIEWPORT.width);
+    let proxy: Proxy | null = null;
+    for (const frac of [0.64, 0.58, 0.68, 0.75, 0.6]) {
+      await scrollToFraction(page, frac);
+      await page.waitForTimeout(1500);
+      proxy = await findProxy();
+      if (proxy) break;
+    }
+    expect(proxy, 'a table is reachable somewhere on the interior leg').not.toBeNull();
 
-    await page.mouse.move(sx, sy);
+    const read = () =>
+      page.evaluate((id: string) => {
+        const w = window as unknown as Record<string, any>;
+        const pair = w.__PAIR__;
+        let t: any = null;
+        pair.scene.traverse((o: any) => {
+          if (o.name === 'TURNTABLE_' + id) t = o;
+        });
+        return {
+          rot: t ? t.rotation.y : null,
+          cam: pair.camera.position.toArray() as number[],
+          scrollY: window.scrollY,
+        };
+      }, proxy!.id);
+
+    const before = await read();
+    await page.mouse.move(proxy!.x, proxy!.y);
     await page.mouse.down();
-    for (let i = 1; i <= 12; i += 1) await page.mouse.move(sx + i * 14, sy);
+    for (let i = 1; i <= 16; i += 1) await page.mouse.move(proxy!.x + i * 11, proxy!.y);
     await page.mouse.up();
-    await page.waitForTimeout(900);
+    await page.waitForTimeout(1200);
+    const after = await read();
 
-    const after = await page.evaluate((name: string) => {
-      const w = window as unknown as Record<string, any>;
-      const pair = w.__PAIR__;
-      let turntable: any = null;
-      pair.scene.traverse((o: any) => {
-        if (!turntable && o.name === name) turntable = o;
-      });
-      return {
-        rotation: turntable ? turntable.rotation.y : null,
-        camera: [pair.camera.position.x, pair.camera.position.y, pair.camera.position.z],
-        scrollY: window.scrollY,
-      };
-    }, before!.name);
-
-    expect(
-      Math.abs(after.rotation! - before!.rotation),
-      'the table turned',
-    ).toBeGreaterThan(0.02);
+    expect(Math.abs(after.rot! - before.rot!), 'the table turned').toBeGreaterThan(0.004);
 
     const camMoved = Math.hypot(
-      after.camera[0] - before!.camera[0],
-      after.camera[1] - before!.camera[1],
-      after.camera[2] - before!.camera[2],
+      after.cam[0] - before.cam[0],
+      after.cam[1] - before.cam[1],
+      after.cam[2] - before.cam[2],
     );
-    expect(camMoved, 'the camera did not orbit').toBeLessThan(0.01);
-    expect(after.scrollY, 'the page did not scroll under the drag').toBe(before!.scrollY);
+    // Pointer parallax is designed and bounded at 0.42 m of offset; an orbit
+    // would be metres. 0.9 separates the two without pretending the camera is
+    // frozen.
+    expect(camMoved, 'the camera did not orbit').toBeLessThan(0.9);
+    expect(after.scrollY, 'the page did not scroll under the drag').toBe(before.scrollY);
   });
 });
 

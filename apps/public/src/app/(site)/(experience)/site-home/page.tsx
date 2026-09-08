@@ -100,6 +100,44 @@ const TRACK_VH = 1700;
  * exactly when it is needed.
  */
 
+/**
+ * THE TRACK MUST NOT SWALLOW POINTER EVENTS MEANT FOR THE WORLD.
+ *
+ * MEASURED, and it was a real defect rather than a test artefact. At scroll
+ * 0.62 the first station's table projects to screen (1008, 750) — comfortably
+ * in frame — and `document.elementFromPoint(1008, 750)` returned the chapter
+ * SECTION, not the canvas. The section is `mx-auto max-w-6xl`, so its box spans
+ * x 144..1296 of a 1440px viewport regardless of how narrow the visible copy
+ * column is, and it sits at z-10 over a canvas at z-0. Every pointer event in
+ * that band went to an empty grid cell.
+ *
+ * So dragging a table did nothing, and the same band covers the holograms. The
+ * E2E case for it failed with the turntable's rotation unchanged at exactly 0 —
+ * the interaction had never been reachable, on any pointer device, since the
+ * track was written.
+ *
+ * The fix is the idiom /hall already uses: the track is transparent to the
+ * pointer, and only the things a visitor actually reads or clicks take it back.
+ * `[&>*]:pointer-events-auto` restores it to the pane's own children rather
+ * than to the pane, so the empty space above and below a centred block stays
+ * transparent too — that space is most of a `h-screen` pane.
+ *
+ * Text selection is unaffected: the copy itself is a direct child and keeps
+ * pointer events.
+ */
+// Applied to <main> as well as to every chapter section. Sections alone were
+// not enough: <main> is full-width and as tall as the whole film, so after the
+// sections were fixed `elementFromPoint` at the first table still returned MAIN.
+// Everything that is not a chapter — the empty state, the sold-out list — takes
+// its pointer events back explicitly.
+// `!` (important) on <main> specifically: the (experience) layout re-enables
+// pointer events on its direct child, and that descendant rule outranks a plain
+// utility class. The film is the one page that needs the world reachable
+// through it, so it says so louder.
+const TRACK_TRANSPARENT = 'pointer-events-none';
+const TRACK_ROOT_TRANSPARENT = '!pointer-events-none';
+const PANE_CONTENT_INTERACTIVE = 'pointer-events-none [&>*]:pointer-events-auto';
+
 /** A chapter's height in vh, from its share of the scroll track. */
 function vh(from: number, to: number): string {
   return `${((to - from) * TRACK_VH).toFixed(2)}vh`;
@@ -156,7 +194,7 @@ export default async function SiteHomePage() {
   const portrait = at('portrait');
 
   return (
-    <main className="pb-40">
+    <main className={`pb-40 ${TRACK_ROOT_TRANSPARENT}`}>
       <RouteTelemetry routeId="site-home" />
 
       {/* Scroll <-> URL. Fed the SAME chapter list the camera and the
@@ -218,12 +256,19 @@ export default async function SiteHomePage() {
           the first 62px of scroll. */}
       <header
         id="hero"
-        className="relative scroll-mt-[62px]"
+        className={`relative scroll-mt-[62px] ${TRACK_TRANSPARENT}`}
         style={{ minHeight: vh(hero.from, hero.to) }}
       >
-        <div className="sticky top-[62px] h-[calc(100vh-62px)]" data-chapter-fade>
-          <div className="mx-auto flex h-full max-w-6xl flex-col px-6 pt-[6vh]">
-            <div className="w-full md:max-w-[min(31vw,452px)]">
+        <div
+          className={`sticky top-[62px] h-[calc(100vh-62px)] ${PANE_CONTENT_INTERACTIVE}`}
+          data-chapter-fade
+        >
+          {/* The hero nests one level deeper than the other chapters, so the
+              pane's `[&>*]` rule would hand pointer events straight back to a
+              full-width, full-height wrapper. The transparency is carried down
+              to the copy column, which is the only thing here worth clicking. */}
+          <div className="pointer-events-none mx-auto flex h-full max-w-6xl flex-col px-6 pt-[6vh]">
+            <div className="pointer-events-auto w-full md:max-w-[min(31vw,452px)]">
               {/* Small uppercase metadata. The two districts, because they are
                   the specific factual claim the whole page rests on and they
                   no longer need to be carried by the body copy. */}
@@ -305,11 +350,14 @@ export default async function SiteHomePage() {
           behind them. */}
       <section
         id="revolution"
-        className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
+        className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
         style={{ minHeight: vh(revolution.from, revolution.to) }}
       >
         <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
-          <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
+          <div
+            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            data-chapter-fade
+          >
             <p className="t-eyebrow text-[#F2EDE4]/45">Twenty years, one district</p>
             <p className="t-h3 mt-6 text-[#F2EDE4]/85">
               We do not broker land.
@@ -333,11 +381,14 @@ export default async function SiteHomePage() {
           from the published projection — nothing here is composed. */}
       <section
         id="constellation"
-        className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
+        className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
         style={{ minHeight: vh(constellation.from, constellation.to) }}
       >
         <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
-          <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
+          <div
+            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            data-chapter-fade
+          >
             <p className="t-eyebrow text-[#F2EDE4]/45">Every plot, plotted</p>
             <h2 className="t-h2 mt-6 text-[#F2EDE4]">
               One point for
@@ -382,7 +433,7 @@ export default async function SiteHomePage() {
       </section>
 
       {list.length === 0 ? (
-        <div className="mx-auto max-w-6xl px-6 pt-[20vh]">
+        <div className="pointer-events-auto mx-auto max-w-6xl px-6 pt-[20vh]">
           <p className="t-h3 text-[#F2EDE4]/70">No layouts are open right now.</p>
           <p className="t-body mt-3 text-[#F2EDE4]/60">
             Ask the head office what is coming — new layouts are released before
@@ -398,11 +449,14 @@ export default async function SiteHomePage() {
               line and gets out of the way. */}
           <section
             id="establish"
-            className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
+            className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
             style={{ minHeight: vh(establish.from, establish.to) }}
           >
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
-              <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
+              <div
+            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            data-chapter-fade
+          >
                 <p className="t-eyebrow text-[#F2EDE4]/45">Inside</p>
                 <p className="t-h3 mt-6 text-[#F2EDE4]/85">
                   Each layout stands on its own table.
@@ -432,11 +486,14 @@ export default async function SiteHomePage() {
               <section
                 key={project.projectId}
                 id={c.id}
-                className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
+                className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
                 style={{ minHeight: vh(c.from, c.to) }}
               >
                 <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
-                  <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
+                  <div
+            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            data-chapter-fade
+          >
                     <p className="t-eyebrow mb-6 text-[#F2EDE4]/40 [font-variant-numeric:tabular-nums]">
                       {String(i + 1).padStart(2, '0')} &nbsp;/&nbsp;{' '}
                       {String(stationProjects.length).padStart(2, '0')}
@@ -455,11 +512,14 @@ export default async function SiteHomePage() {
               link, for everyone who cannot click a painting. */}
           <section
             id="portrait"
-            className="mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6"
+            className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
             style={{ minHeight: vh(portrait.from, portrait.to) }}
           >
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
-              <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
+              <div
+            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            data-chapter-fade
+          >
                 <p className="t-eyebrow text-[#F2EDE4]/45">At the top of the stairs</p>
                 <p className="t-h3 mt-6 text-[#F2EDE4]/85">
                   The name on the sanction letters
@@ -492,7 +552,7 @@ export default async function SiteHomePage() {
               equivalent — but they are real projects and a buyer checking a
               developer's history should be able to see them. */}
           {soldOutProjects.length > 0 && (
-            <section className="mx-auto grid max-w-6xl grid-cols-12 px-6 pt-[14vh]">
+            <section className="pointer-events-auto mx-auto grid max-w-6xl grid-cols-12 px-6 pt-[14vh]">
               <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
                 <div className="mb-10 flex items-baseline gap-6">
                   <h2 className="t-eyebrow text-[#F2EDE4]/60">Sold out</h2>
