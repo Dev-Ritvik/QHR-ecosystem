@@ -560,7 +560,11 @@ export default async function SiteHomePage() {
             className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
             style={{ minHeight: vh(city.from, city.to) }}
           >
-            <div className="col-span-12 md:col-span-6 md:max-w-[42vw]">
+            {/* col-span-5 / 36vw, the same measure every other chapter uses.
+                It was 6 / 42vw, which reached x 720 of 1440 — far enough right
+                that the leftmost marker projected BEHIND the list and a click
+                on it landed on the copy rather than on the scene. */}
+            <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
               <div
                 className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
                 data-chapter-fade

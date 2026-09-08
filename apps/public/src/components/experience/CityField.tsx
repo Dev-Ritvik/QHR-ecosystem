@@ -70,6 +70,7 @@ const GROUND_FRAG = /* glsl */ `
   uniform vec3  uContour;
   uniform float uBoundary;   // world x of the district boundary
   uniform float uHalfWidth;
+  uniform float uCentreX;
   uniform float uNear;
   uniform float uFar;
 
@@ -132,7 +133,7 @@ const GROUND_FRAG = /* glsl */ `
     // an unhazed edge reads as a table. This one fades to the night it sits in
     // before it reaches its own boundary, in depth AND across width.
     float depth = smoothstep(uFar * 0.55, uFar, vWorld.z);
-    float flank = smoothstep(uHalfWidth * 0.55, uHalfWidth, abs(vWorld.x));
+    float flank = smoothstep(uHalfWidth * 0.55, uHalfWidth, abs(vWorld.x - uCentreX));
     float fade = clamp(1.0 - max(depth, flank), 0.0, 1.0);
 
     vec3 tint = ground + uContour * (lines * 0.30 + indexed * 0.34) * fade;
@@ -263,6 +264,7 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
       uContour: { value: new THREE.Color(CONTOUR) },
       uBoundary: { value: boundary },
       uHalfWidth: { value: FIELD.halfWidth },
+      uCentreX: { value: FIELD.centreX },
       uNear: { value: FIELD.near },
       uFar: { value: FIELD.far },
     }),
@@ -615,7 +617,7 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
         name="city_ground"
         geometry={groundGeometry}
         material={groundMaterial}
-        position={[0, FIELD.y, FIELD.far * 0.5]}
+        position={[FIELD.centreX, FIELD.y, FIELD.far * 0.5]}
         rotation={[-Math.PI / 2, 0, 0]}
         renderOrder={-1}
       />

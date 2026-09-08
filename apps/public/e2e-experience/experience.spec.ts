@@ -45,6 +45,9 @@
 // change and no debug path that could ship by accident.
 
 import { test, expect, type Page } from '@playwright/test';
+// The app's own chapter table. Imported rather than restated so the address-bar
+// walk below and the film cannot drift apart.
+import { chapters } from '../src/components/experience/journey';
 
 const VIEWPORT = { width: 1440, height: 900 };
 
@@ -249,14 +252,30 @@ test.describe('the address bar', () => {
     // The first chapter is the bare path on purpose.
     expect(new URL(page.url()).hash).toBe('');
 
-    await scrollToFraction(page, 0.32);
-    expect(new URL(page.url()).hash).toBe('#constellation');
-
-    await scrollToFraction(page, 0.7);
-    expect(new URL(page.url()).hash).toMatch(/^#station-/);
-
-    await scrollToFraction(page, 0.87);
-    expect(new URL(page.url()).hash).toBe('#portrait');
+    // WALKED FROM THE APP'S OWN CHAPTER TABLE, not from hardcoded fractions.
+    //
+    // The first version named the chapter it expected at 0.32 / 0.70 / 0.87 —
+    // the same numbers written in two places — so adding the city chapter
+    // renormalised the interior leg and 0.87 stopped being the portrait. The
+    // test then failed for a reason that had nothing to do with the address
+    // bar, which is the failure mode a duplicated constant always has.
+    //
+    // Deriving it from the SECTIONS' offsets was tried next and is a different
+    // quantity again: the page carries a held frame, a sold-out block and a
+    // footer after the film, so a section's midpoint in document coordinates
+    // lands past its chapter's scroll range. ChapterUrl decides the hash from
+    // the scroll fraction against journey.chapters(), so that is what this
+    // reads.
+    const stationCount = await page.locator('#city a[href^="/projects/"]').count();
+    const beat = chapters(stationCount);
+    expect(beat.length, 'the film has chapters to walk').toBeGreaterThan(3);
+    for (const chapter of beat) {
+      await scrollToFraction(page, (chapter.from + chapter.to) / 2);
+      // `hero` is the bare path by design — it is the top of the document.
+      expect(new URL(page.url()).hash, `at ${chapter.id}`).toBe(
+        chapter.id === 'hero' ? '' : `#${chapter.id}`,
+      );
+    }
 
     // Back to the top sheds the fragment rather than keeping the last chapter.
     await scrollToFraction(page, 0);
@@ -565,7 +584,24 @@ test.describe('the interior', () => {
       });
 
     let proxy: Proxy | null = null;
-    for (const frac of [0.64, 0.58, 0.68, 0.75, 0.6]) {
+    // The station BEATS in document scroll, recomputed after the city chapter
+    // was added: buildInteriorBeats(3) renormalises the interior leg by
+    // 0.26 + 3*0.19 + 0.18 + 0.20 = 1.21, so the three stations land at
+    // legProgress 0.2149 / 0.3719 / 0.5289 and therefore at these fractions.
+    // The old list was written against a 1.01 span; after the change it pointed
+    // BETWEEN stations, where every station's emphasis is under the interaction
+    // gate and a drag correctly does nothing.
+    // MEASURED, not derived. Recomputing these from the chapter weights was
+    // tried and was wrong for the reason this test's own comment already gives:
+    // at a station's BEAT the camera frames the hologram and the table is
+    // mostly out of frame, so the beat is exactly where the proxy is NOT
+    // reachable. tools/capture/station_sweep.mjs walks the interior leg in 0.01
+    // steps and reports which proxies project inside the frame AND have the
+    // canvas under them; after the city chapter renormalised the leg it
+    // returned S2 at 0.61 (866,699), S1 at 0.51 and 0.52, and nothing else
+    // clickable — 0.74 and 0.75 put S2 on screen but behind the page's own
+    // imagery, where a visitor could not click it either.
+    for (const frac of [0.61, 0.51, 0.52]) {
       await scrollToFraction(page, frac);
       await page.waitForTimeout(1500);
       proxy = await findProxy();
@@ -846,6 +882,30 @@ test.describe('the district field', () => {
     });
     await page.waitForTimeout(400);
 
+    // SETTLE FIRST. The rig damps toward the scroll pose with a 3.1s time
+    // constant, so for seconds after a jump the camera is still travelling —
+    // and a marker projected through a moving camera has moved by more than its
+    // own width by the time a click round-trips. Measured: this test passed
+    // alone and failed inside the suite, on nothing but that.
+    await page
+      .waitForFunction(
+        () => {
+          const w = window as unknown as Record<string, any>;
+          const p = w.__CITY__;
+          if (!p) return false;
+          const c = p.camera.position;
+          const last = w.__camLast as number[] | undefined;
+          w.__camLast = [c.x, c.y, c.z];
+          if (!last) return false;
+          const d = Math.hypot(c.x - last[0], c.y - last[1], c.z - last[2]);
+          w.__camStill = d < 0.002 ? (w.__camStill ?? 0) + 1 : 0;
+          return (w.__camStill ?? 0) >= 6;
+        },
+        undefined,
+        { timeout: 12_000, polling: 120 },
+      )
+      .catch(() => undefined);
+
     // Where a marker actually is on screen, projected through the camera the
     // app is drawing with — the same technique the turntable test uses, and for
     // the same reason: none of this is visible from the DOM.
@@ -870,7 +930,14 @@ test.describe('the district field', () => {
           y > 110 &&
           y < window.innerHeight - 40
         ) {
-          best = { slug: m[1], x, y };
+          // AND REACHABLE. The chapter's copy column is a real, interactive
+          // block of the page sitting over the left of the canvas, so a marker
+          // projected behind it is on screen and not clickable — a click there
+          // lands on the list, not the scene. Asking the document what is
+          // actually under the point is the only way to know, and it is also
+          // what a visitor's pointer would find.
+          const hit = document.elementFromPoint(x, y);
+          if (hit && hit.tagName === 'CANVAS') best = { slug: m[1], x, y };
         }
       });
       return best as { slug: string; x: number; y: number } | null;
@@ -886,25 +953,37 @@ test.describe('the district field', () => {
 
     await page.mouse.click(marker!.x, marker!.y);
 
-    // THE DIVE, caught while it runs. dive.ts hands over to the veil at 300 ms
-    // and travels for 620, so the camera is provably moving before the screen
-    // is covered.
-    await page.waitForTimeout(220);
-    const camDuring = await page.evaluate(() => {
-      const p = (window as unknown as Record<string, any>).__CITY__;
-      return p ? [p.camera.position.x, p.camera.position.y, p.camera.position.z] : null;
-    });
-    const moved = Math.hypot(
-      (camDuring?.[0] ?? 0) - (camBefore?.[0] ?? 0),
-      (camDuring?.[1] ?? 0) - (camBefore?.[1] ?? 0),
-      (camDuring?.[2] ?? 0) - (camBefore?.[2] ?? 0),
-    );
+    // THE DIVE, caught while it runs — SAMPLED, not sampled once. dive.ts hands
+    // over to the veil at 300 ms and travels for 620, and a single reading at a
+    // fixed offset is a race against the frame the browser happened to draw.
+    // The furthest the camera gets from where it started is the number that
+    // means something.
+    let moved = 0;
+    for (let i = 0; i < 9; i += 1) {
+      const now = await page.evaluate(() => {
+        const p = (window as unknown as Record<string, any>).__CITY__;
+        return p ? [p.camera.position.x, p.camera.position.y, p.camera.position.z] : null;
+      });
+      if (now && camBefore) {
+        moved = Math.max(
+          moved,
+          Math.hypot(now[0] - camBefore[0], now[1] - camBefore[1], now[2] - camBefore[2]),
+        );
+      }
+      await page.waitForTimeout(70);
+    }
+
+    // THE DESTINATION IS ASSERTED FIRST, ON PURPOSE. Both of these can fail,
+    // and they fail for entirely different reasons — one says the marker was
+    // never hit, the other says it was hit and the camera did not move. Putting
+    // the navigation first means the error names which.
+    await expect(page).toHaveURL(new RegExp(`/projects/${marker!.slug}$`), { timeout: 12_000 });
+
     // Pointer parallax alone is worth at most ~0.42 m; a dive is metres.
     expect(moved, 'the camera travels toward the marker before the veil closes').toBeGreaterThan(
       1.2,
     );
 
-    await expect(page).toHaveURL(new RegExp(`/projects/${marker!.slug}$`), { timeout: 12_000 });
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     expect(documents.length, 'client-side navigation, not a document load').toBe(before);
 

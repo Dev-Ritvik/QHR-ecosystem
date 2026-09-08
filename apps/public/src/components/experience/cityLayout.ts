@@ -98,9 +98,24 @@ export const FIELD = {
    * every depth, with the band margins below leaving 9.5m of usable width per
    * district.
    */
-  near: 20,
-  far: 54,
+  near: 24,
+  far: 56,
   halfWidth: 15,
+  /**
+   * Where the populated band is CENTRED, and why it is not on the axis.
+   *
+   * The chapter's copy runs down the left of the page over the canvas, and it
+   * is real interactive text — so a marker projected behind it is on screen and
+   * not clickable: a click there lands on the list. Measured at 1440x900, the
+   * leftmost of the three markers landed at x 620 with the copy column reaching
+   * x 720, and `document.elementFromPoint` at that marker returned the list
+   * rather than the canvas.
+   *
+   * The camera looks toward +z, so screen-right is world -x. Shifting the field
+   * 3.5m in that direction moves every marker about 85px right, and the column
+   * is narrowed to match the other chapters' measure, which takes it to x 628.
+   */
+  centreX: -3.5,
   /** Ground height. Below the hall floor, so the land falls away from the
    *  threshold instead of continuing it. */
   y: -2.4,
@@ -139,10 +154,11 @@ export function districtBands(projects: CityProject[]): { district: string; from
     if (!order.includes(d)) order.push(d);
   }
   const span = (FIELD.halfWidth * 2) / Math.max(1, order.length);
+  const left = FIELD.centreX - FIELD.halfWidth;
   return order.map((district, i) => ({
     district,
-    from: -FIELD.halfWidth + i * span,
-    to: -FIELD.halfWidth + (i + 1) * span,
+    from: left + i * span,
+    to: left + (i + 1) * span,
   }));
 }
 

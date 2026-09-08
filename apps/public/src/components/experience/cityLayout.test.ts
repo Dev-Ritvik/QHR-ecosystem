@@ -91,7 +91,7 @@ describe('city layout', () => {
 
   it('keeps every beacon inside the field the doorway frames', () => {
     for (const b of buildBeacons(PUBLISHED)) {
-      expect(Math.abs(b.x)).toBeLessThanOrEqual(FIELD.halfWidth);
+      expect(Math.abs(b.x - FIELD.centreX)).toBeLessThanOrEqual(FIELD.halfWidth);
       expect(b.z).toBeGreaterThanOrEqual(FIELD.near);
       expect(b.z).toBeLessThanOrEqual(FIELD.far);
     }
@@ -122,7 +122,7 @@ describe('city layout', () => {
     const one = buildBeacons([PUBLISHED[0]]);
     expect(one).toHaveLength(1);
     expect(one[0].weight).toBe(1);
-    expect(Math.abs(one[0].x)).toBeLessThanOrEqual(FIELD.halfWidth);
+    expect(Math.abs(one[0].x - FIELD.centreX)).toBeLessThanOrEqual(FIELD.halfWidth);
   });
 
   it('scales past the published three without collapsing', () => {
@@ -140,7 +140,7 @@ describe('city layout', () => {
     const beacons = buildBeacons(many);
     expect(beacons).toHaveLength(24);
     for (const b of beacons) {
-      expect(Math.abs(b.x)).toBeLessThanOrEqual(FIELD.halfWidth);
+      expect(Math.abs(b.x - FIELD.centreX)).toBeLessThanOrEqual(FIELD.halfWidth);
       expect(b.z).toBeGreaterThanOrEqual(FIELD.near);
       expect(b.z).toBeLessThanOrEqual(FIELD.far);
     }

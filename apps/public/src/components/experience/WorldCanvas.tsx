@@ -422,7 +422,15 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
     // it, which is the "rigid, mechanical" reading. At SCRUB 2.2 the same pose
     // lags 3.1s and the room keeps moving after the wheel stops, which is the
     // whole effect.
-    const k = 1 - Math.exp(-delta / Math.max(0.05, p.ease * SCRUB));
+    // A DIVE OVERRIDES THE SCRUB, and it has to. The film's lag is 3.1s by
+    // design — that is what makes scrolling feel like a move — and a 620ms dive
+    // fed through it moves the camera 9% of the way before the veil closes.
+    // MEASURED: on a busy machine the dive travelled 0.15m in its first 220ms,
+    // which is pointer-parallax scale, i.e. a dive the visitor cannot see. A
+    // 0.11s constant lands it inside the handoff while still damping the
+    // pointer jitter the raw pose carries.
+    const tau = diveState.active ? 0.11 : Math.max(0.05, p.ease * SCRUB);
+    const k = 1 - Math.exp(-delta / tau);
     camera.position.lerp(desired.current, k);
     target.current.lerp(look.current, k);
     camera.lookAt(target.current);
