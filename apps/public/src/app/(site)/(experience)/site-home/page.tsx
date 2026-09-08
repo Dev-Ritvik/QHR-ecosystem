@@ -35,6 +35,7 @@ import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 import { PublishSceneCards } from '@/components/experience/PublishSceneCards';
 import { chapters, type Chapter } from '@/components/experience/journey';
 import { ChapterUrl } from '@/components/experience/ChapterUrl';
+import { ChapterFade } from '@/components/experience/ChapterFade';
 
 // ISR: Background revalidation every hour, unless manually cleared by the webhook (T37)
 export const revalidate = 3600;
@@ -86,6 +87,17 @@ const TRACK_VH = 1700;
  * through the top of the frame at the same moment the incoming pane's content is
  * still a full viewport below the fold. Only one chapter is ever legible, which
  * is the whole point of a chapter.
+ */
+
+/**
+ * THE DEPARTURE FADE.
+ *
+ * Each chapter's content block is tagged for <ChapterFade>, which dissolves it
+ * as it rides out of frame rather than letting it slide under the header. The
+ * full account of the defect, and of the CSS mask that was tried here first and
+ * does not work, is in ChapterFade.tsx — the short version is that a mask is
+ * anchored to the element box, so its fade band leaves the screen with the pane
+ * exactly when it is needed.
  */
 
 /** A chapter's height in vh, from its share of the scroll track. */
@@ -154,6 +166,10 @@ export default async function SiteHomePage() {
           Renders nothing. */}
       <ChapterUrl chapters={beat} />
 
+      {/* Dissolves a chapter as it leaves the frame. Renders nothing;
+          reads the panes tagged data-chapter-fade below. */}
+      <ChapterFade />
+
       {/* Hands the published projects to the WebGL tree, which binds them to
           the hologram tables in the hall. Renders nothing itself — the canvas
           is mounted by the layout above this page, so a store is the only path
@@ -205,7 +221,7 @@ export default async function SiteHomePage() {
         className="relative scroll-mt-[62px]"
         style={{ minHeight: vh(hero.from, hero.to) }}
       >
-        <div className="sticky top-[62px] h-[calc(100vh-62px)]">
+        <div className="sticky top-[62px] h-[calc(100vh-62px)]" data-chapter-fade>
           <div className="mx-auto flex h-full max-w-6xl flex-col px-6 pt-[6vh]">
             <div className="w-full md:max-w-[min(31vw,452px)]">
               {/* Small uppercase metadata. The two districts, because they are
@@ -293,7 +309,7 @@ export default async function SiteHomePage() {
         style={{ minHeight: vh(revolution.from, revolution.to) }}
       >
         <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
-          <div className="sticky top-0 flex h-screen flex-col justify-center">
+          <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
             <p className="t-eyebrow text-[#F2EDE4]/45">Twenty years, one district</p>
             <p className="t-h3 mt-6 text-[#F2EDE4]/85">
               We do not broker land.
@@ -321,7 +337,7 @@ export default async function SiteHomePage() {
         style={{ minHeight: vh(constellation.from, constellation.to) }}
       >
         <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
-          <div className="sticky top-0 flex h-screen flex-col justify-center">
+          <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
             <p className="t-eyebrow text-[#F2EDE4]/45">Every plot, plotted</p>
             <h2 className="t-h2 mt-6 text-[#F2EDE4]">
               One point for
@@ -386,7 +402,7 @@ export default async function SiteHomePage() {
             style={{ minHeight: vh(establish.from, establish.to) }}
           >
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
-              <div className="sticky top-0 flex h-screen flex-col justify-center">
+              <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
                 <p className="t-eyebrow text-[#F2EDE4]/45">Inside</p>
                 <p className="t-h3 mt-6 text-[#F2EDE4]/85">
                   Each layout stands on its own table.
@@ -420,7 +436,7 @@ export default async function SiteHomePage() {
                 style={{ minHeight: vh(c.from, c.to) }}
               >
                 <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
-                  <div className="sticky top-0 flex h-screen flex-col justify-center">
+                  <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
                     <p className="t-eyebrow mb-6 text-[#F2EDE4]/40 [font-variant-numeric:tabular-nums]">
                       {String(i + 1).padStart(2, '0')} &nbsp;/&nbsp;{' '}
                       {String(stationProjects.length).padStart(2, '0')}
@@ -443,7 +459,7 @@ export default async function SiteHomePage() {
             style={{ minHeight: vh(portrait.from, portrait.to) }}
           >
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
-              <div className="sticky top-0 flex h-screen flex-col justify-center">
+              <div className="sticky top-0 flex h-screen flex-col justify-center" data-chapter-fade>
                 <p className="t-eyebrow text-[#F2EDE4]/45">At the top of the stairs</p>
                 <p className="t-h3 mt-6 text-[#F2EDE4]/85">
                   The name on the sanction letters

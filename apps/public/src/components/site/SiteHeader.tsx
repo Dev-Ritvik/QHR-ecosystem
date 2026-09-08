@@ -28,6 +28,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from './Logo';
+import { ResumeResidence } from './ResumeResidence';
 
 const PRIMARY = [
   { href: '/properties', label: 'Plots' },
@@ -126,6 +127,12 @@ export function SiteHeader() {
         <div className="mx-auto flex h-[62px] max-w-6xl items-center gap-6 px-5">
           <Logo size={30} />
 
+          {/* The way back into the film. Renders nothing on the film itself,
+              and nothing until this session has reached a chapter — see
+              ResumeResidence. Sits beside the logo rather than in the nav
+              because it is not a destination, it is a resume. */}
+          <ResumeResidence className="hidden md:inline-block" />
+
           <nav aria-label="Primary" className="ml-auto hidden md:block">
             <ul className="flex items-center gap-5">
               {PRIMARY.map((l) => {
@@ -199,6 +206,11 @@ export function SiteHeader() {
           className="fixed inset-0 z-30 overflow-y-auto bg-[#060A14]/97 px-6 pb-16 pt-[78px] backdrop-blur-sm md:hidden"
         >
           <div className="mx-auto max-w-md">
+            {/* First item in the panel, above the route groups: on a phone the
+                header has no room for it, so this is where the same affordance
+                lives. Renders nothing when there is nothing to resume, so the
+                menu is unchanged on a first visit. */}
+            <ResumeResidence className="mb-8 block" />
             {ALL.map((g) => (
               <section key={g.group} className="mb-9">
                 <h2 className="text-[10px] uppercase tracking-[0.22em] text-[#F2EDE4]/50">

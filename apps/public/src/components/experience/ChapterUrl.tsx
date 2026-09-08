@@ -59,6 +59,7 @@
 import { useEffect } from 'react';
 import type { Chapter } from './journey';
 import { isNavigating } from '@/components/site/RouteVeil';
+import { rememberChapter } from '@/components/site/residence';
 
 /**
  * How long a chapter must hold before the bar is rewritten.
@@ -188,6 +189,11 @@ export function ChapterUrl({ chapters }: { chapters: Chapter[] }) {
       // state silently breaks back/forward for the whole segment — the kind of
       // fault that only shows up two navigations later.
       window.history.replaceState(window.history.state, '', next);
+      // The bar carries the chapter only while the film is on screen; the
+      // moment a visitor opens a project page it is the project's URL. This is
+      // what survives that trip and lets the header offer a resume rather than
+      // a reset.
+      rememberChapter(id);
     };
 
     const sample = () => {
