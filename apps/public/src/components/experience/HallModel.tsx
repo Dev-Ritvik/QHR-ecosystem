@@ -293,6 +293,211 @@ export function stripBakedLights(root: THREE.Object3D): number {
  *
  * What is left is only what the delivery genuinely does not address.
  */
+/**
+ * THE PROJECTION, AND WHY ADDITIVE BLENDING ALONE WAS NEVER GOING TO BE ENOUGH.
+ *
+ * The plan plates and the extruded plot blocks carry the sanctioned layout sheet
+ * as an emissive texture, drawn additively so the room shows through. That is
+ * the right instinct and it produced the wrong picture, because of what the
+ * sheet actually is. Measured on assets/floorplans/kartikeya_holo_tex.png:
+ *
+ *     60.0% of pixels above luma 200        the paper
+ *      4.6% below luma 60                   the drawing
+ *
+ * Additive blending emits what is BRIGHT. On a brochure sheet that is the paper,
+ * so a station rendered as a white rectangle with the plan washed out inside it
+ * — a lightbox on a stick, which is exactly what "essentially a bright quad"
+ * described. The plate was not flat because it lacked geometry; the extruded
+ * blocks are there, 9,960 vertices of them. They were invisible because they
+ * were white-on-white.
+ *
+ * SO THE PLATE EMITS ITS INK, NOT ITS PAPER. A hologram is a drawing in light,
+ * and a drawing in light has always been light lines on nothing — a blueprint,
+ * a plan table, a projected transparency. Every line stays exactly where the
+ * sanctioned sheet puts it and nothing is redrawn, moved or relabelled; what
+ * changes is which end of the sheet's own value range emits. Paper falls out,
+ * plot outlines, road edges, dimensions, plot numbers and the greenery come
+ * forward.
+ *
+ * The ink mask is a smoothstep rather than a plain inversion because a plain
+ * one leaves the paper emitting at 17% over 60% of the area, which is most of a
+ * lightbox back. Luma is read in LINEAR space, after three has decoded the sRGB
+ * texture, so the thresholds are linear too: 0.62 is roughly sRGB 205.
+ *
+ * CHROMA IS KEPT, PARTLY. Neutral ink is tinted to the projection's own colour;
+ * saturated ink keeps its hue. That is what lets the lake read as water and the
+ * planting as planting on a plan whose whole job is to say which land is which,
+ * without turning the station into a colour wheel.
+ *
+ * THE BLOCK SIDES GET A FRESNEL, and that is what makes the extrusion read as
+ * extrusion. MAT_Holo3D_Side is flat white at emissive strength 4: additively
+ * blended, a box lit that way is a solid glowing lump with no silhouette. A
+ * view-dependent falloff dims the faces square to the lens and keeps the
+ * grazing ones, so each plot volume shows its edges and its far wall through
+ * its near one. Restrained on purpose — this is a plan of land, not a city of
+ * neon.
+ */
+const HOLO_TINT = new THREE.Color('#FFD9A8');
+
+/**
+ * Per-role treatment. The three materials that carry the plan are doing three
+ * different jobs and were all being drawn the same way, which is most of why
+ * the station read as one white sheet.
+ *
+ *   plate   THE DRAWING. Roads, boundaries, plot numbers, dimensions. Pure ink:
+ *           a tight window at the very bottom of the sheet's value range, so
+ *           what emits is the line work and nothing else. No floor — paper must
+ *           reach zero or the plate is a lightbox again.
+ *   top     THE PLOT SURFACES, one per extruded volume. A low floor so each
+ *           plot reads as a lit face rather than a hole, plus its own patch of
+ *           ink so the number and the "30' X 56'" stay legible on top of it.
+ *   side    THE EXTRUSION WALLS. No texture at all; a grazing-angle falloff is
+ *           the whole treatment, because that is what gives a transparent
+ *           volume a silhouette.
+ *
+ * THE FIRST ATTEMPT USED ONE WINDOW FOR ALL THREE and is worth recording,
+ * because it looked plausible and was measurably wrong: smoothstep(0.03, 0.62)
+ * emits everything below linear 0.62, which on this sheet is the tree canopies
+ * and the road surfaces — so the LANDSCAPING lit up and the plots, whose fills
+ * are pale yellow at linear 0.87, went black. A layout plan where the plots are
+ * the holes is the product turned inside out.
+ */
+const HOLO_ROLE = {
+  // gain 0.42 -> 0.26. With the paper gone, the plate is the SITE GROUND —
+  // the land the plots stand on — and it was rendering brighter than the
+  // plots themselves, which puts the product behind its own backdrop.
+  plate: { lo: 0.004, hi: 0.13, floor: 0.0, gain: 0.26, chroma: 0.9, soft: 0 },
+  // chroma 1.1 -> 0.55. At full chroma the plot fills keep the sheet's own
+  // print colours — scarlet, bottle green, cobalt — and a hundred saturated
+  // blocks read as a board game rather than as a projection. Half-strength
+  // keeps which-land-is-which legible while the whole model stays in the
+  // projection's colour.
+  top: { lo: 0.01, hi: 0.4, floor: 0.2, gain: 0.5, chroma: 0.55, soft: 0 },
+} as const;
+
+/**
+ * THE BLOCKS ARE SOLID; THE PLAN AND THE LABELS ARE LIGHT.
+ *
+ * Everything under MAT_Holo* was drawn additively with depthWrite off, and for
+ * the plate and the callouts that is right — they are a projection and the room
+ * should show through them. For the extruded plot volumes it is not, and the
+ * second station is where it showed: from a lower vantage the blocks stack in
+ * depth, and additive blending with no depth write sums EVERY layer, so a
+ * hundred plot volumes each contributing a fifth of a unit arrived at the frame
+ * as a flat white sheet. Overdraw, not exposure.
+ *
+ * Solid blocks fix it structurally rather than by tuning a number down until
+ * the symptom goes: the volumes write depth, so each pixel is one block instead
+ * of fifteen, they occlude each other the way a physical site model does, and
+ * the plate underneath is correctly hidden where a block stands on it. Their
+ * base colour is black and their only output is emissive, so they still read as
+ * luminous rather than as lit plastic.
+ */
+const HOLO_SOLID = /^MAT_Holo3D_(Top|Side)/;
+
+function holographic(mat: THREE.MeshStandardMaterial & { __holo?: boolean }) {
+  if (mat.__holo) return;
+  mat.__holo = true;
+
+  const isSide = /Side$/.test(mat.name);
+  const role = /Plate/.test(mat.name) ? HOLO_ROLE.plate : HOLO_ROLE.top;
+
+  const u = {
+    uInkLo: { value: role.lo },
+    uInkHi: { value: role.hi },
+    uInkSoft: { value: role.soft },
+    uInkFloor: { value: role.floor },
+    // The sides carry no texture, so their whole output is uGain times the
+    // grazing term against an authored emissive strength of 4.8 — untamed, a
+    // face square to the lens arrives at 4.8, which is five times white.
+    //
+    // 0.34 -> 0.6 once the tops were lifted above the ground plate. With the
+    // ground and the plot faces close in value, the EDGES are what separate one
+    // plot volume from the next, and a grazing-angle rim is the only thing in
+    // this material doing that.
+    uGain: { value: isSide ? 0.6 : role.gain },
+    uChroma: { value: role.chroma },
+    uTint: { value: HOLO_TINT },
+    // Square-on faces keep this much of their emission; grazing faces keep all.
+    uEdgeFloor: { value: 0.1 },
+    uEdgePow: { value: 1.5 },
+  };
+
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, u);
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        'void main() {',
+        `uniform float uInkLo;
+         uniform float uInkHi;
+         uniform float uInkSoft;
+         uniform float uInkFloor;
+         uniform float uGain;
+         uniform float uChroma;
+         uniform vec3  uTint;
+         uniform float uEdgeFloor;
+         uniform float uEdgePow;
+         void main() {`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        isSide
+          ? `#include <emissivemap_fragment>
+             {
+               // vViewPosition points FROM the fragment TO the camera in view
+               // space and vNormal is the view-space normal, so their angle is
+               // exactly the grazing term a volume needs to show a silhouette.
+               float f = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
+               totalEmissiveRadiance *= uTint * uGain * mix(uEdgeFloor, 1.0, pow(f, uEdgePow));
+             }`
+          : `#ifdef USE_EMISSIVEMAP
+               vec4 emissiveColor = texture2D( emissiveMap, vEmissiveMapUv );
+               {
+                 vec3 c = emissiveColor.rgb;
+                 // THE SHEET CARRIES ITS OWN MASK, AND IT IS THE AUTHORED ONE.
+                 // 85-89% of every plan texture is TRANSPARENT — the paper is
+                 // already cut away in alpha, leaving only the drawing opaque.
+                 // Nothing in the pipeline was reading it: glTF declares these
+                 // materials OPAQUE, and even after dressInterior forces
+                 // transparency the alpha that reaches the blend comes from the
+                 // BASE colour and never from an emissive map. So the plates
+                 // were emitting paper the artist had already deleted.
+                 //
+                 // uInkLo/uInkHi stay as a SECOND, optional gate on top of the
+                 // mask, weighted by uInkSoft, for pale fills inside the drawing.
+                 // Luma is read in LINEAR space — three has already decoded the
+                 // sRGB texture by here — so those thresholds are linear.
+                 float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+                 float ink = emissiveColor.a
+                   * mix(1.0, 1.0 - smoothstep(uInkLo, uInkHi, luma), uInkSoft);
+                 float mx = max(max(c.r, c.g), c.b);
+                 float mn = min(min(c.r, c.g), c.b);
+                 float sat = mx > 0.0015 ? (mx - mn) / mx : 0.0;
+                 vec3 hue = mx > 0.0015 ? c / mx : vec3(1.0);
+                 vec3 tinted = uTint * mix(vec3(1.0), hue, clamp(sat * uChroma, 0.0, 1.0));
+                 emissiveColor.rgb = tinted * (uInkFloor + (1.0 - uInkFloor) * ink) * uGain;
+               }
+               totalEmissiveRadiance *= emissiveColor.rgb;
+             #endif`,
+      );
+  };
+  // ONE PROGRAM PER MATERIAL, BY NAME, and that is not caution — it is a fix.
+  //
+  // The first version keyed by ROLE: 'holo-plate', 'holo-top', 'holo-side'.
+  // Every plate then shared one compiled program, and station 2's plate
+  // rendered its raw sheet at emissive strength 3.1 — a blown white rectangle
+  // behind the model — while station 1's, with identical code and identical
+  // uniforms, inverted correctly. Materials that share a cache key share the
+  // compiled GLSL, so which of them compiles FIRST decides what all of them
+  // run; anything the key does not distinguish (a missing emissive map on one
+  // of the callout materials that also lands in the 'holo-top' bucket, say)
+  // silently becomes everyone's shader.
+  //
+  // Eleven programs instead of three, for eleven materials that are on screen
+  // one station at a time. Correctness is worth more than eight programs.
+  mat.customProgramCacheKey = () => `holo-${mat.name}`;
+}
+
 function dressInterior(root: THREE.Object3D): string[] {
   const touched: string[] = [];
 
@@ -340,7 +545,17 @@ function dressInterior(root: THREE.Object3D): string[] {
       // box of emissive panels, which is what this room is — is the proxy the
       // scene already carries. 6.0 against scene.environmentIntensity 0.1 is an
       // effective 0.6, six tenths of what a fully lit surface would see.
-      if (!mat.lightMap && mat.isMeshStandardMaterial) {
+      // The holograms are excluded, and finding out why cost two rebuilds. They
+      // carry no lightmap either, so the first version of this lifted them with
+      // everything else — and they arrive from the GLB at metalness 1,
+      // roughness 1 with a black base colour, which is a mirror. Handing a
+      // mirror six times the room's environment turned the plan plates into
+      // sheets of reflected wall: station 2 rendered as a blank white rectangle
+      // that looked exactly like the additive-overdraw defect it had just
+      // stopped being. They are light sources, not surfaces; they are handled
+      // in their own block below, where their environment response is taken to
+      // zero outright.
+      if (!mat.lightMap && mat.isMeshStandardMaterial && !/^MAT_Holo/.test(mat.name)) {
         mat.envMapIntensity = UNBAKED_ENV_INTENSITY;
         mat.needsUpdate = true;
         if (!touched.includes('unbaked-env')) touched.push('unbaked-env');
@@ -401,12 +616,20 @@ function dressInterior(root: THREE.Object3D): string[] {
       // so that a future edit to this block cannot accidentally switch a
       // deliberately dark station back on.
       if (/^MAT_Holo/.test(mat.name) && !/_S4$/.test(mat.name)) {
-        mat.transparent = true;
-        mat.blending = THREE.AdditiveBlending;
-        mat.depthWrite = false;
+        const solid = HOLO_SOLID.test(mat.name);
+        mat.transparent = !solid;
+        mat.blending = solid ? THREE.NormalBlending : THREE.AdditiveBlending;
+        mat.depthWrite = solid;
+        // A PROJECTION IS NOT A METAL. These arrive metalness 1 / roughness 1
+        // with a black base, which in a room with an environment map is a rough
+        // mirror — so the plan plates rendered the WALL rather than the plan.
+        // Their entire output should be their own emissive.
+        mat.metalness = 0;
+        mat.envMapIntensity = 0;
         // Tone mapping stays ON. These sit inside a room graded by ACES, and an
         // untone-mapped emissive in a tone-mapped frame is the one thing
         // guaranteed to look pasted on.
+        holographic(mat);
         mat.needsUpdate = true;
         mat.__dressed = true;
         if (!touched.includes('holograms')) touched.push('holograms');

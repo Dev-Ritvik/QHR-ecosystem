@@ -67,6 +67,9 @@ const VIEW = (args.get('viewport') || '1440x900').split('x').map(Number);
 // default strips the DOM so a pixel statistic is a statement about the FRAME;
 // legibility of the type over it is a different question and needs the type.
 const KEEP_DOM = args.get('dom') === 'keep';
+// --hide a,b,c takes named objects out of the scene before the shutter, so a
+// frame can be attributed to an object rather than argued about.
+const HIDE = (args.get('hide') || '').split(',').filter(Boolean);
 
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -470,6 +473,7 @@ const main = async () => {
     const info = await page.evaluate(REPORT, NAMES);
     const lateBy = +(pin.uTime - target).toFixed(3);
 
+    for (const h of HIDE) await page.evaluate(SET_VISIBLE, { name: h, visible: false });
     if (!KEEP_DOM) await page.evaluate(CHROME, true);
     await page.waitForTimeout(140);
     const file = (suffix) => path.join(OUT, `${name}${suffix}.png`);

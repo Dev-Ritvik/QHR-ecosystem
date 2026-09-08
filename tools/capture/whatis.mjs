@@ -163,6 +163,11 @@ const PICK = (points) => {
     let vis = o.visible;
     let p = o.parent;
     while (vis && p) { vis = p.visible; p = p.parent; }
+    // Invisible interaction proxies sit IN FRONT of what they proxy — that is
+    // their job — so a ray that stops at the first hit reports the proxy every
+    // time. Anything the camera cannot see is not what the frame shows.
+    const mm = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (mm && mm.transparent && mm.opacity === 0) return;
     if (vis) meshes.push(o);
   });
   for (const [px, py] of points) {
@@ -215,6 +220,24 @@ const PICK = (points) => {
       emissive: mat && mat.emissive ? '#' + mat.emissive.getHexString() : null,
       emissiveIntensity: mat ? mat.emissiveIntensity : null,
       lightMap: !!(mat && mat.lightMap),
+      holo: !!(mat && mat.__holo),
+      holoCompiled: mat ? mat.__holoCompiled : null,
+      holoAnchor: mat ? mat.__holoHadAnchor : null,
+      emissiveIntensityNow: mat ? mat.emissiveIntensity : null,
+      emissiveMap: mat && mat.emissiveMap ? {
+        name: mat.emissiveMap.name,
+        uuid: mat.emissiveMap.uuid.slice(0, 8),
+        w: mat.emissiveMap.image ? mat.emissiveMap.image.width : null,
+        h: mat.emissiveMap.image ? mat.emissiveMap.image.height : null,
+        channel: mat.emissiveMap.channel,
+        colorSpace: mat.emissiveMap.colorSpace,
+        compressed: !!mat.emissiveMap.isCompressedTexture,
+        mips: mat.emissiveMap.mipmaps ? mat.emissiveMap.mipmaps.length : 0,
+      } : null,
+      hasUv1: !!(best.m.geometry.attributes && best.m.geometry.attributes.uv1),
+      hasUv: !!(best.m.geometry.attributes && best.m.geometry.attributes.uv),
+      patched: !!(mat && typeof mat.onBeforeCompile === 'function'
+        && mat.onBeforeCompile.toString().indexOf('uInkLo') >= 0),
       map: !!(mat && mat.map),
       blending: mat ? mat.blending : null,
       transparent: mat ? mat.transparent : null,
