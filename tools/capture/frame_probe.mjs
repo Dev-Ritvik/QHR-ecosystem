@@ -85,12 +85,22 @@ const SHOTS = {
   constellation: 0.3725,
   'con-late': 0.41,
   late: 0.42,
+  // The interior fractions are the BEATS, not chapter midpoints, and they are
+  // derived rather than eyeballed. buildInteriorBeats(3) renormalises by
+  // span = 0.26 + 3*0.19 + 0.18 = 1.01, and document scroll is
+  // 0.46 + at*(0.90 - 0.46). The Phase 6 audit photographed "establish" at 0.52,
+  // which is a third of the way from the establishing beat to the turn onto the
+  // first station — a frame mid-move, judged as if it were the composition.
   veil: 0.46,
-  establish: 0.52,
-  'station-1': 0.62,
-  'station-2': 0.7,
-  'station-3': 0.78,
-  portrait: 0.87,
+  threshold: 0.46,
+  establish: 0.4974,
+  'turn-left': 0.5348,
+  'station-1': 0.5733,
+  'station-2': 0.656,
+  'station-3': 0.7388,
+  withdraw: 0.8067,
+  'stair-foot': 0.8216,
+  portrait: 0.9,
 };
 
 /**
@@ -214,11 +224,23 @@ const SETTLE = async (frac) => {
  * assumption.
  */
 const HOLD_UNTIL = async (target) => {
+  // The constellation's uTime is the preferred clock because it is the one the
+  // shaders animate against, but it only exists while the EXTERIOR is mounted —
+  // the interior leg has no shader clock at all. r3f's own clock is the same
+  // elapsed time by construction (both accumulate the render loop's delta from
+  // canvas mount), so it is the honest fallback rather than a second timebase.
   const read = () => {
     const { scene } = window.__PROBE_PAIR__;
     const o = scene.getObjectByName('CONSTELLATION');
     const m = o && o.material;
-    return m && m.uniforms && m.uniforms.uTime ? m.uniforms.uTime.value : null;
+    if (m && m.uniforms && m.uniforms.uTime) return m.uniforms.uTime.value;
+    const r3f = scene.__r3f;
+    const store = r3f && (r3f.root || (r3f.store && { getState: r3f.store.getState }));
+    if (store && typeof store.getState === 'function') {
+      const st = store.getState();
+      if (st && st.clock) return st.clock.elapsedTime;
+    }
+    return null;
   };
   const t0 = performance.now();
   let uTime = read();
@@ -228,7 +250,8 @@ const HOLD_UNTIL = async (target) => {
     uTime = read();
   }
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  return { uTime: +read().toFixed(3), why: uTime >= target ? 'pinned' : 'timeout' };
+  const end = read();
+  return { uTime: end === null ? -1 : +end.toFixed(3), why: uTime >= target ? 'pinned' : 'timeout' };
 };
 
 /**
@@ -289,6 +312,12 @@ const REPORT = (names) => {
   let uTimeAny = null;
   let uTimeAnyFrom = null;
   let turn = null;
+  const r3f = scene.__r3f;
+  const store = r3f && (r3f.root || (r3f.store && { getState: r3f.store.getState }));
+  const clock =
+    store && typeof store.getState === 'function' && store.getState().clock
+      ? +store.getState().clock.elapsedTime.toFixed(3)
+      : null;
   scene.traverse((o) => {
     const m = o.material;
     if (m && m.uniforms) {
@@ -313,7 +342,7 @@ const REPORT = (names) => {
     dir: [dir.x, dir.y, dir.z].map((k) => +k.toFixed(3)),
     fov: +c.fov.toFixed(2),
     reveal,
-    phase: { uTime, uTimeAny, uTimeAnyFrom, turn },
+    phase: { uTime, uTimeAny, uTimeAnyFrom, clock, turn },
     draw: { calls: d.calls, triangles: d.triangles },
     fog: scene.fog
       ? {
@@ -463,7 +492,7 @@ const main = async () => {
 
     report.shots.push({ name, frac, settle, pin: { target, ...pin }, lateBy, pair, ...info });
     process.stdout.write(
-      `${name}: frac ${settle.frac} reveal ${info.reveal} uTime ${info.phase.uTime}`
+      `${name}: frac ${settle.frac} reveal ${info.reveal} clock ${info.phase.clock}`
         + ` pin ${pin.why} lateBy ${lateBy}\n`,
     );
   }

@@ -1388,6 +1388,76 @@ function ExteriorLighting({
   );
 }
 
+/**
+ * The one real-time light in the hall, and why there is exactly one.
+ *
+ * THE ROOM IS BAKED, AND THAT IS CORRECT. interior_hall.glb ships ten punctual
+ * lights — a chandelier at 41,307 cd, a portrait spot at 10,327, and eight
+ * sconces at 870 — and the lightmap is a bake OF THOSE LIGHTS. stripBakedLights()
+ * removes them because leaving them in double-counts every one, and measured,
+ * they took the frame to blown white. None of that changes here: the walls, the
+ * marble, the ceiling and the stair are lit by the bake and stay lit by the bake.
+ *
+ * WHAT THE BAKE DOES NOT DELIVER IS FOCAL HIERARCHY. Measured on the shipped
+ * establishing frame at 1440x900, by region mean luminance:
+ *
+ *     left wall      99.8        balustrade     89.5
+ *     right wall     80.3        portrait       56.2
+ *     stair tread    44.5        floor          26.3
+ *
+ * The brightest things in the shot are the WALLPAPER, and the founder's
+ * portrait — the destination of the entire interior sequence, and the surface
+ * the brief hangs the About page on — renders darker than the plaster it is
+ * mounted on. That is the hierarchy inverted, and no amount of exposure fixes
+ * it because exposure moves both.
+ *
+ * So: one spot, at the fixture that is already modelled above the frame
+ * (`piclight_shade`, world [0, 5.95, -5.02]), reusing LGT_portrait's own
+ * authored cone (outer 0.9076 rad) and colour. It is bounded by `distance` so
+ * it cannot spill down the stair, and it casts no shadow — a depth pass for one
+ * picture light is not a trade worth making.
+ */
+const PORTRAIT_LIGHT = {
+  position: [0, 5.88, -4.98] as [number, number, number],
+  aim: [0, 4.15, -5.24] as [number, number, number],
+  angle: 0.9076,
+  colour: '#FFE6C6',
+};
+
+function InteriorLighting() {
+  const spot = useRef<THREE.SpotLight>(null);
+  const aim = useRef<THREE.Object3D>(null);
+
+  // three does not update a SpotLight's target for you, and a target that is
+  // not in the scene keeps an identity matrixWorld — which would aim this at
+  // the room's origin, i.e. at the middle of the floor.
+  useEffect(() => {
+    if (spot.current && aim.current) spot.current.target = aim.current;
+  }, []);
+
+  return (
+    <>
+      <object3D ref={aim} position={PORTRAIT_LIGHT.aim} />
+      <spotLight
+        ref={spot}
+        position={PORTRAIT_LIGHT.position}
+        angle={PORTRAIT_LIGHT.angle}
+        penumbra={0.6}
+        decay={2}
+        // `distance` is NOT a soft bound in three — it is a windowing term,
+        // pow(1 - d/cutoff, decay), applied on top of the inverse square. At a
+        // 5m cutoff the portrait sits 1.9m out and lost 62% of the light to the
+        // window alone, which is why the first intensity did almost nothing.
+        // 12m puts the window at 0.71 here and still leaves the stair foot, 6m
+        // away, at under 3% of the portrait's illumination.
+        distance={12}
+        intensity={40}
+        color={PORTRAIT_LIGHT.colour}
+      />
+    </>
+  );
+}
+
 /** Clip planes have to be pushed onto the live camera and the projection matrix
  *  rebuilt; passing them to <Canvas> only seeds the first one. */
 function CameraClipping({ set }: { set: SceneSet }) {
@@ -1864,6 +1934,10 @@ export function WorldCanvas() {
                 outside, the glass and fountain water need it to refract. */}
             <RoomEnvironmentMap intensity={look.env} />
           </Suspense>
+          {/* The picture light over the founder's portrait — the only real-time
+              light in a room that is otherwise entirely baked. See the note on
+              the component for why there is exactly one. */}
+          {set === 'interior' ? <InteriorLighting /> : null}
           {/* The interactive layer inside the hall: the turntables, the
               holograms and the portrait. Mounted only on the journey — /hall
               and /projects hold a still frame and have no scroll choreography

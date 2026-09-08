@@ -280,16 +280,38 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
     roll: 0,
   });
 
-  // ESTABLISH. Backed onto the entry axis and lifted, holding the staircase as
-  // the central architectural axis with both side walls in frame — the A2/A3
-  // and A1/A4 corners the brief's plan names. The portrait is visible but small
-  // at the end of the axis, which is the point: it is the destination,
-  // announced early and arrived at last.
+  // ESTABLISH. A three-quarter across the room, holding the staircase as the
+  // architectural axis with the right wall raking away and the back half of the
+  // left wall behind it. The portrait is visible but small at the end of that
+  // axis, which is the point: it is the destination, announced early and
+  // arrived at last.
+  //
+  // OFF THE AXIS OF SYMMETRY IN PHASE 6B, and the reason is in the frame that
+  // was there before. [0, 2.15, 3.15] -> [0, 2.35, -4.6] stands on the room's
+  // own mirror line, so both side walls meet the lens at the same angle and
+  // render at the same value, the stair fills the centre, and there is no
+  // foreground, no diagonal and no convergence anywhere — an elevation drawing
+  // rather than a photograph. Measured on the shipped build at 1440x900, the
+  // frame carried no clipping and a usable range (mean 57.6, p05 13.8,
+  // p95 120.6) and still read as inert, because RANGE is not the same as
+  // STRUCTURE.
+  //
+  // 2.35m right and 1.05m back, aimed 0.85m left of the axis, puts the right
+  // wall at a 20-degree rake and brings the left wall in from z -1.38 back.
+  // Both walls now converge, which is the depth cue a symmetric frame cannot
+  // have at any exposure.
+  //
+  // AND WHAT IT DELIBERATELY DOES NOT DO: get a project station into this
+  // frame. The room is 15m wide and 11m deep and the camera stands near its
+  // front wall, so from any vantage that holds the stair, S1 sits 54 degrees
+  // off axis against a 40-degree half-angle. Fitting both would need an
+  // 80-degree lens — a fisheye in a classical hall. The establishing CHAPTER
+  // still delivers the station: `turn-left` is the very next beat.
   beats.push({
     id: 'establish',
     at: CHAPTER_WEIGHTS.establish * 0.33,
-    position: [0, 2.15, 3.15],
-    target: [0, 2.35, -4.6],
+    position: [2.35, 2.5, 4.2],
+    target: [-0.85, 2.55, -4.6],
     fov: LENS.establish,
     roll: 0,
   });

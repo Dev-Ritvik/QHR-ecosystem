@@ -30,6 +30,11 @@ export const HALL_MODEL_URL = '/models/interior_hall.glb';
  *  the bake means changing this, so it is named rather than inlined. */
 const LIGHTMAP_INTENSITY = 4.6597;
 
+/** Environment response for the surfaces the bake never reached. Multiplies
+ *  against scene.environmentIntensity (0.1 inside), so 6.0 is an effective 0.6.
+ *  See the note in dressInterior for what it is for and how it was counted. */
+const UNBAKED_ENV_INTENSITY = 6.0;
+
 let ktx2Singleton: KTX2Loader | null = null;
 let dracoSingleton: DRACOLoader | null = null;
 
@@ -305,6 +310,41 @@ function dressInterior(root: THREE.Object3D): string[] {
     for (const m of mats) {
       const mat = m as THREE.MeshStandardMaterial & { __dressed?: boolean };
       if (!mat || mat.__dressed) continue;
+
+      // A THIRD OF THE ROOM CARRIES NO LIGHTMAP, AND WAS RENDERING AT AMBIENT.
+      //
+      // promoteLightmaps has already run, so `mat.lightMap` is the exact test
+      // for "this surface has baked GI". Counted from the GLB, the ones that do
+      // not are not a rounding error:
+      //
+      //     MAT_Trim_Cream      216 primitives, 0 with UV1   the anthemion
+      //                                                       frieze, capitals,
+      //                                                       every ornament
+      //     MAT_Gold             46, 0 with UV1   sconce arms, picture light
+      //     MAT_Wood_Dark        18, 0 with UV1   newels, wall panels
+      //     MAT_MarbleFloor       2, 0 with UV1   the urn plinths
+      //     rug field + border    2, 0 with UV1
+      //
+      // Their only illumination was ambientLight 0.12 plus the RoomEnvironment
+      // cube at scene.environmentIntensity 0.1. Diffuse dark wood under that
+      // renders black: RAYCAST through the establishing frame at x 120 and
+      // x 250 both returned `wallpanel_-1_12` / `wallpanel_-1_36`,
+      // MAT_Wood_Dark, lightMap false — the two unexplained black slabs on the
+      // left wall. The gold went the same way, which is why a room full of
+      // brass reads as a room full of nothing.
+      //
+      // envMapIntensity is PER MATERIAL, so raising it here reaches exactly the
+      // surfaces with no bake and cannot touch a single lightmapped one. That is
+      // also the physically honest place to put it: an object with no baked GI
+      // needs its indirect light from somewhere, and the environment cube — a
+      // box of emissive panels, which is what this room is — is the proxy the
+      // scene already carries. 6.0 against scene.environmentIntensity 0.1 is an
+      // effective 0.6, six tenths of what a fully lit surface would see.
+      if (!mat.lightMap && mat.isMeshStandardMaterial) {
+        mat.envMapIntensity = UNBAKED_ENV_INTENSITY;
+        mat.needsUpdate = true;
+        if (!touched.includes('unbaked-env')) touched.push('unbaked-env');
+      }
 
       // THE BENCH. Material 'model' arrives metalness 0.8, roughness 0.5, base
       // 0.5 grey, with no maps — and the interior's environment intensity is
