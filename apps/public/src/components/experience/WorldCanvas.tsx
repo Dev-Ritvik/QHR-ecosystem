@@ -61,6 +61,7 @@ import {
   CHAPTER_WEIGHTS,
 } from './interiorPath';
 import { CROSSOVER, journeyState, readJourney } from './journey';
+import { cancelDive, diveProgress, diveState } from './dive';
 import { Constellation } from './Constellation';
 import { InteriorStage } from './InteriorStage';
 import { CityField } from './CityField';
@@ -153,6 +154,10 @@ const SWING = (s: number) => SWING_LEAD * s + (1 - SWING_LEAD) * SWING_EASE(s);
 
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+/** One scratch vector for the dive's endpoint. Module-level because the frame
+ *  loop must not allocate. */
+const TMP = new THREE.Vector3();
 
 const STATION_RE = /^holo3d_(S[123])_/;
 
@@ -298,6 +303,23 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
 
   useEffect(applyPose, [applyPose]);
 
+  // A DIVE IS INTERRUPTIBLE. Any scroll cancels it — the visitor has changed
+  // their mind and the camera belongs to the film again — and it is cancelled
+  // on unmount so a canvas rebuilt on the next route cannot inherit a move
+  // whose destination is in another scene.
+  useEffect(() => {
+    const onScroll = () => cancelDive();
+    window.addEventListener('wheel', onScroll, { passive: true });
+    window.addEventListener('touchmove', onScroll, { passive: true });
+    window.addEventListener('keydown', onScroll);
+    return () => {
+      window.removeEventListener('wheel', onScroll);
+      window.removeEventListener('touchmove', onScroll);
+      window.removeEventListener('keydown', onScroll);
+      cancelDive();
+    };
+  }, []);
+
   useFrame((_, delta) => {
     const p = poseFor(place);
 
@@ -349,6 +371,22 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
     } else {
       desired.current.lerpVectors(fromPos.current, toPos.current, t);
       look.current.lerpVectors(fromLook.current, toLook.current, t);
+    }
+
+    // THE DIVE. A selected beacon overrides the scroll pose for the length of
+    // the move, blending from where the camera actually was when the visitor
+    // chose it toward a stand-off short of the marker.
+    //
+    // It writes `desired`/`look` rather than the camera directly, so the same
+    // first-order damping below carries it and the move inherits the film's own
+    // weight instead of arriving as a second, harder motion. The frame offset
+    // is closed out over the same curve: the copy column is on its way out and
+    // the subject should end centred.
+    const dive = diveProgress(performance.now());
+    if (dive !== null) {
+      desired.current.set(...diveState.fromPos).lerp(TMP.set(...diveState.toPos), dive);
+      look.current.set(...diveState.fromTarget).lerp(TMP.set(...diveState.toTarget), dive);
+      offset *= 1 - dive;
     }
 
     // FRAME THE SUBJECT RIGHT. Aim left of the target along the camera's own

@@ -33,6 +33,7 @@ import { getPublishedProjects } from '@/lib/projection';
 import { ProjectCard } from '@/components/site/ProjectCard';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 import { PublishSceneCards } from '@/components/experience/PublishSceneCards';
+import { CityLink } from '@/components/site/CityLink';
 import { chapters, type Chapter } from '@/components/experience/journey';
 import { ChapterUrl } from '@/components/experience/ChapterUrl';
 import { ChapterFade } from '@/components/experience/ChapterFade';
@@ -574,20 +575,18 @@ export default async function SiteHomePage() {
                 <ul className="mt-10 space-y-7">
                   {stationProjects.map((project: any) => (
                     <li key={project.projectId}>
-                      <Link
-                        href={`/projects/${project.slug}`}
-                        className="tap-target group block"
-                      >
-                        <span className="t-h3 block text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A]">
-                          {project.name}
-                        </span>
-                        <span className="t-body mt-1 block text-[#F2EDE4]/55">
-                          {[project.locality, project.city].filter(Boolean).join(' · ')}
-                        </span>
-                        <span className="t-eyebrow mt-2 block text-[#F2EDE4]/45">
-                          {project.availableUnits} of {project.totalUnits} plots open
-                        </span>
-                      </Link>
+                      {/* Focus or hover this and the project's marker lifts in
+                          the field — see the note in CityLink for why the
+                          keyboard path is a link here rather than a focusable
+                          object inside an aria-hidden canvas. */}
+                      <CityLink
+                        slug={project.slug}
+                        name={project.name}
+                        locality={project.locality ?? null}
+                        city={project.city ?? null}
+                        available={project.availableUnits}
+                        total={project.totalUnits}
+                      />
                     </li>
                   ))}
                 </ul>

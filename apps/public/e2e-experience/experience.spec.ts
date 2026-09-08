@@ -709,6 +709,236 @@ test.describe('degraded paths', () => {
   });
 });
 
+test.describe('the district field', () => {
+  // The last chapter, and the one Phase 6 recorded as missing entirely. Its
+  // contract is not "a city appears" — it is that what appears is DERIVED from
+  // published data, reachable without a pointer, and routes to pages that exist.
+  //
+  // 0.90 is the city beat: journey.ts puts JOURNEY_END there, and
+  // buildInteriorBeats(3) renormalises the interior leg by
+  // 0.26 + 3*0.19 + 0.18 + 0.20 = 1.21, which lands `city` at legProgress 1.0.
+  const CITY = 0.9;
+
+  test('opens with one marker per published project, and no others', async ({ page }) => {
+    await page.addInitScript(DEVTOOLS_HOOK);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    await scrollToFraction(page, CITY);
+    await page.waitForTimeout(1600);
+
+    // The DOM list is the authority, so it decides how many markers there
+    // should be. Reading the count from the page rather than hardcoding three
+    // keeps this true the day a fourth project publishes.
+    const links = await page.locator('#city a[href^="/projects/"]').all();
+    expect(links.length, 'the chapter lists every published project').toBeGreaterThan(0);
+
+    const slugs = (await Promise.all(links.map((l) => l.getAttribute('href')))).map((h) =>
+      (h ?? '').replace('/projects/', ''),
+    );
+
+    const beacons = await page.evaluate(() => {
+      const w = window as unknown as Record<string, any>;
+      if (!w.__PROBE__) return null;
+      const found: string[] = [];
+      let ground = false;
+      for (const scene of w.__PROBE__.scenes as any[]) {
+        scene.traverse((o: any) => {
+          if (o.name === 'city_ground') ground = true;
+          const m = /^beacon_(.+)$/.exec(o.name || '');
+          if (m && !found.includes(m[1])) found.push(m[1]);
+        });
+      }
+      return { ground, found };
+    });
+
+    expect(beacons, 'the scene was observed').not.toBeNull();
+    expect(beacons!.ground, 'the district ground is in the scene').toBe(true);
+    expect(
+      beacons!.found.slice().sort(),
+      'one marker per published project, and no invented ones',
+    ).toEqual(slugs.slice().sort());
+  });
+
+  test('every listed project is a real page, not a 404', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+
+    const hrefs = (
+      await Promise.all(
+        (await page.locator('#city a[href^="/projects/"]').all()).map((l) =>
+          l.getAttribute('href'),
+        ),
+      )
+    ).filter(Boolean) as string[];
+    expect(hrefs.length).toBeGreaterThan(0);
+
+    for (const href of hrefs) {
+      const res = await page.request.get(href);
+      expect(res.status(), `${href} responds`).toBe(200);
+    }
+  });
+
+  test('the field states that it is a diagram and not a map', async ({ page }) => {
+    // The one claim this chapter must never make. No published project has a
+    // centroid, so a visitor must not be able to read these positions as
+    // geography — and the page has to say so in words, not only in a comment.
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    await expect(page.locator('#city')).toContainText(/diagram of the network, not a map/i);
+  });
+
+  test('a keyboard can reach a project without touching the scene', async ({ page }) => {
+    // The canvas is aria-hidden, so the beacons are deliberately NOT focusable.
+    // The contract is that the list beside them is, and that it goes to the
+    // same place.
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    await scrollToFraction(page, CITY);
+
+    const first = page.locator('#city a[href^="/projects/"]').first();
+    const href = await first.getAttribute('href');
+    await first.focus();
+    await expect(first).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(new RegExp(`${href}$`));
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  });
+
+  test('selecting a marker dives, veils, and lands on that project', async ({ page }) => {
+    const errors = watchErrors(page);
+    const documents: string[] = [];
+    page.on('request', (r) => {
+      if (r.resourceType() === 'document') documents.push(r.url());
+    });
+
+    await page.addInitScript(DEVTOOLS_HOOK);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    await scrollToFraction(page, CITY);
+    await page.waitForTimeout(1800);
+
+    await page.evaluate(() => {
+      const w = window as unknown as Record<string, any>;
+      const gl = w.__PROBE__?.renderers?.[w.__PROBE__.renderers.length - 1];
+      if (!gl || gl.__e2eCityPatched) return;
+      const orig = gl.render.bind(gl);
+      gl.render = function patched(scene: any, camera: any) {
+        if (scene?.isScene) {
+          let isWorld = false;
+          scene.traverse((o: any) => {
+            if (!isWorld && /^(beacon_|city_ground)/.test(o.name || '')) isWorld = true;
+          });
+          if (isWorld) w.__CITY__ = { scene, camera };
+        }
+        return orig(scene, camera);
+      };
+      gl.__e2eCityPatched = true;
+    });
+    await page.waitForTimeout(400);
+
+    // Where a marker actually is on screen, projected through the camera the
+    // app is drawing with — the same technique the turntable test uses, and for
+    // the same reason: none of this is visible from the DOM.
+    const marker = await page.evaluate(() => {
+      const w = window as unknown as Record<string, any>;
+      const pair = w.__CITY__;
+      if (!pair) return null;
+      const V = pair.camera.position.constructor;
+      let best: { slug: string; x: number; y: number } | null = null;
+      pair.scene.traverse((o: any) => {
+        if (best) return;
+        const m = /^beacon_(.+)$/.exec(o.name || '');
+        if (!m) return;
+        const c = o.getWorldPosition(new V());
+        const p = c.clone().project(pair.camera);
+        const x = Math.round(((p.x + 1) / 2) * window.innerWidth);
+        const y = Math.round(((-p.y + 1) / 2) * window.innerHeight);
+        if (
+          p.z < 1 &&
+          x > 40 &&
+          x < window.innerWidth - 40 &&
+          y > 110 &&
+          y < window.innerHeight - 40
+        ) {
+          best = { slug: m[1], x, y };
+        }
+      });
+      return best as { slug: string; x: number; y: number } | null;
+    });
+
+    expect(marker, 'at least one marker is on screen at the city beat').not.toBeNull();
+
+    const before = documents.length;
+    const camBefore = await page.evaluate(() => {
+      const p = (window as unknown as Record<string, any>).__CITY__;
+      return p ? [p.camera.position.x, p.camera.position.y, p.camera.position.z] : null;
+    });
+
+    await page.mouse.click(marker!.x, marker!.y);
+
+    // THE DIVE, caught while it runs. dive.ts hands over to the veil at 300 ms
+    // and travels for 620, so the camera is provably moving before the screen
+    // is covered.
+    await page.waitForTimeout(220);
+    const camDuring = await page.evaluate(() => {
+      const p = (window as unknown as Record<string, any>).__CITY__;
+      return p ? [p.camera.position.x, p.camera.position.y, p.camera.position.z] : null;
+    });
+    const moved = Math.hypot(
+      (camDuring?.[0] ?? 0) - (camBefore?.[0] ?? 0),
+      (camDuring?.[1] ?? 0) - (camBefore?.[1] ?? 0),
+      (camDuring?.[2] ?? 0) - (camBefore?.[2] ?? 0),
+    );
+    // Pointer parallax alone is worth at most ~0.42 m; a dive is metres.
+    expect(moved, 'the camera travels toward the marker before the veil closes').toBeGreaterThan(
+      1.2,
+    );
+
+    await expect(page).toHaveURL(new RegExp(`/projects/${marker!.slug}$`), { timeout: 12_000 });
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    expect(documents.length, 'client-side navigation, not a document load').toBe(before);
+
+    // BACK lands on the film again, and the film still works.
+    await page.goBack();
+    await expect(page).toHaveURL(/localhost:3001\/($|#|\?)/);
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+
+  test('reduced motion routes from a marker with no camera animation', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.addInitScript(DEVTOOLS_HOOK);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    await scrollToFraction(page, CITY);
+    await page.waitForTimeout(1600);
+
+    // The list is the path that must keep working when the scene does not
+    // animate — same destination, same client-side push, no dissolve.
+    const first = page.locator('#city a[href^="/projects/"]').first();
+    const href = await first.getAttribute('href');
+    const documents: string[] = [];
+    page.on('request', (r) => {
+      if (r.resourceType() === 'document') documents.push(r.url());
+    });
+    await first.click();
+    await expect(page).toHaveURL(new RegExp(`${href}$`));
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    expect(documents, 'still a client-side navigation under reduced motion').toEqual([]);
+  });
+});
+
 test.describe('the rest of the site', () => {
   test('Tier-2 pages are ordinary documents with working chrome', async ({ page }) => {
     const errors = watchErrors(page);

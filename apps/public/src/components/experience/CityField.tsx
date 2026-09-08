@@ -38,6 +38,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { buildBeacons, districtBands, FIELD, type Beacon, type CityProject } from './cityLayout';
+import { HANDOFF_MS, cancelDive, startDive } from './dive';
+import { useBeaconFocus } from '@/components/site/CityLink';
 
 /** The film's night. Same value the veil, the preloader and the exterior's
  *  evening fog all settle on, so the field belongs to the same picture. */
@@ -232,6 +234,7 @@ export interface CityFieldProps {
 
 export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldProps) {
   const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
   const beacons = useMemo(() => buildBeacons(projects), [projects]);
   const bands = useMemo(() => districtBands(projects), [projects]);
   const boundary = bands.length > 1 ? bands[0].to : FIELD.halfWidth * 2;
@@ -242,6 +245,15 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
   const hoverRef = useRef<Float32Array>(new Float32Array(0));
   const targetHover = useRef<Float32Array>(new Float32Array(0));
   const shown = useRef(0);
+
+  /** The slug the DOM list is pointing at or focused on. Subscribed rather than
+   *  read per frame, so a keyboard walk down the list costs one render each and
+   *  the frame loop stays allocation-free. */
+  const focusSlug = useBeaconFocus((s) => s.slug);
+  const focusIndex = useMemo(
+    () => (focusSlug ? beacons.findIndex((b) => b.slug === focusSlug) : -1),
+    [focusSlug, beacons],
+  );
 
   // ── Ground ────────────────────────────────────────────────────────────────
   const groundUniforms = useMemo(
@@ -489,8 +501,53 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
   useEffect(
     () => () => {
       gl.domElement.style.cursor = '';
+      cancelDive();
     },
     [gl],
+  );
+
+  /**
+   * SELECT A BEACON: dive, then hand over to the veil.
+   *
+   * The camera leaves from where it ACTUALLY is — read off the live camera at
+   * the moment of the click, not from the beat it is nominally on — so an
+   * interrupted scroll or the pointer parallax offset both start the move from
+   * the frame the visitor was looking at.
+   *
+   * The destination is a stand-off short of the marker rather than the marker
+   * itself: arriving inside a point sprite means arriving inside nothing, and
+   * the last frame before the cut should still be a frame of the field.
+   *
+   * Under reduced motion `startDive` returns false and the route is taken at
+   * once. Either way the navigation is the SAME veiled client-side push the
+   * link in the copy beside it uses; there is no second transition device here.
+   */
+  const select = useCallback(
+    (b: Beacon) => {
+      const from = camera.position;
+      const aim = new THREE.Vector3();
+      camera.getWorldDirection(aim);
+      aim.multiplyScalar(6).add(from);
+
+      const head = new THREE.Vector3(b.x, FIELD.y + 1.0 + b.weight * 0.5, b.z);
+      const standoff = head.clone().sub(from).normalize().multiplyScalar(-7.5).add(head);
+      standoff.y = Math.max(FIELD.y + 2.2, standoff.y);
+
+      const animated = startDive({
+        slug: b.slug,
+        fromPos: [from.x, from.y, from.z],
+        fromTarget: [aim.x, aim.y, aim.z],
+        toPos: [standoff.x, standoff.y, standoff.z],
+        toTarget: [head.x, head.y, head.z],
+      });
+
+      if (!animated) {
+        onOpen(b.slug);
+        return;
+      }
+      window.setTimeout(() => onOpen(b.slug), HANDOFF_MS);
+    },
+    [camera, onOpen],
   );
 
   useFrame((_, delta) => {
@@ -527,7 +584,10 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
     const target = targetHover.current;
     let dirty = false;
     for (let i = 0; i < hover.length; i += 1) {
-      const next = hover[i] + (target[i] - hover[i]) * Math.min(1, delta * 8);
+      // Either source lights a marker: the pointer over the marker itself, or
+      // focus on that project's link in the copy beside it.
+      const wanted = Math.max(target[i], i === focusIndex ? 1 : 0);
+      const next = hover[i] + (wanted - hover[i]) * Math.min(1, delta * 8);
       if (Math.abs(next - hover[i]) > 1e-4) dirty = true;
       hover[i] = next;
     }
@@ -594,8 +654,11 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
           onPointerOut={() => setHover(i, false)}
           onClick={(e: ThreeEvent<MouseEvent>) => {
             e.stopPropagation();
+            // A marker that is barely revealed is not yet a target — the same
+            // gate the stations use, and for the same reason: a hit volume the
+            // visitor cannot see should not be clickable.
             if (shown.current < 0.4) return;
-            onOpen(b.slug);
+            select(b);
           }}
         >
           <boxGeometry args={[3.4, 3.4, 3.4]} />
