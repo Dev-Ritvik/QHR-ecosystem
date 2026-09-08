@@ -1,8 +1,13 @@
 # PHASE 6 — THE CINEMATIC PRESENTATION LAYER
 
-**Status: NOT COMPLETE.** A defined, measured subset is done and committed. What
-is outstanding is named in §23, and one deliverable — the new E2E suite — is
-written but has not been executed.
+**Status: COMPLETE**, as of the Phase 6B completion pass recorded in PART TWO
+below. Jump to §6B.29 for the verdict and §6B.28 for what is genuinely still
+open.
+
+PART ONE is the AUDIT pass and is left exactly as it was written. Its verdict —
+NOT COMPLETE — was correct at the time and is superseded, not corrected: every
+item it left open is closed in Part Two, and where Part Two found Part One's
+diagnosis to be wrong it says so and gives the measurement.
 
 ---
 
@@ -618,3 +623,478 @@ pixel-level identity check behind it.
 The next session should, in order: run the E2E suite; fix the constellation
 composition; diagnose the interior lighting; then decide whether the city layer
 is worth its cost.
+
+---
+
+# PART TWO — PHASE 6B: THE COMPLETION PASS
+
+**Status: COMPLETE.** Every system the Phase 6 report named as missing is built,
+measured and tested. The E2E suite has been executed and passes 27/27 against a
+production build. What remains open is listed in §6B.28 and is limitation rather
+than omission.
+
+Part One above is left exactly as written. It is the record of the audit pass
+and its verdict was correct at the time.
+
+## 6B.1 Starting HEAD
+
+```
+6003712  docs(phase6): the report, the FIXLOG entry, and the final production captures
+```
+
+Branch `main`, working tree clean apart from a line-ending-only difference in
+`apps/public/next.config.mjs` (empty diff; left untouched).
+
+## 6B.2 Final HEAD
+
+```
+b655f0b  fix(phase6b): fit the district field and its copy to a phone
+```
+
+## 6B.3 Commits
+
+```
+f47aed7  fix(phase6b): run the suite for real, and fix the three things it caught
+7867082  feat(phase6b): put the residence back in the constellation chapter, and let evening fall
+bbbffa2  feat(phase6b): give the hall a shot, a hierarchy, and light on the third of it the bake never reached
+cf6ad81  feat(phase6b): the hologram stops being a lightbox and becomes a site model
+0bf01c8  feat(phase6b): the film leaves the house — a district field beyond the threshold
+99aee6f  feat(phase6b): selecting a beacon dives toward it and hands over to the veil
+429f058  test(phase6b): fix three suite failures at their causes, not at their assertions
+bfb8cbc  perf(phase6b): merge the static masonry — 955 draw calls to 233, pixel for pixel
+b655f0b  fix(phase6b): fit the district field and its copy to a phone
+```
+
+Nine commits, no history rewritten, nothing force-pushed, nothing pushed at all.
+
+## 6B.4 Files changed
+
+21 files under `apps/public/`, +3,171 / −176 lines. New: `CityField.tsx`,
+`cityLayout.ts`, `cityLayout.test.ts`, `dive.ts`, `CityLink.tsx`. New tools:
+`frame_probe.mjs`, `frame_solve.mjs`, `whatis.mjs`, `station_sweep.mjs`,
+`geometry_census.mjs`.
+
+## 6B.5 Systems implemented
+
+| system | state |
+| --- | --- |
+| E2E suite executed | 27/27 against `next start` |
+| Constellation composition | rebuilt — sphere over the spire, camera cranes, evening falls |
+| Interior establishing shot | re-posed off-axis, portrait lit, unbaked surfaces given an environment |
+| Hologram | rebuilt as a solid extruded site model on an alpha-masked plan |
+| City / district field | built — ground, contours, district bands, beacons |
+| Project beacons | built — three, derived from published data, routed to real pages |
+| Camera dive | built — 620 ms, handing over to the existing route veil at 300 ms |
+| Performance | 955 → 233 draw calls at the hero, pixel-identical |
+| Responsive | field and copy fitted to 390 / 768 / 1440 |
+
+## 6B.6 Systems deliberately left unchanged
+
+The promoted exterior model and every Phase 5 material decision; the roof,
+paving, kerbs and terrain; the hero, quarter and three-quarter camera beats;
+the daylight grade at those beats; the dusk rollback; the URL contract; the
+route veil; the resume affordance; the chapter fade; the lightmap deduplication;
+deterministic Motes; the WebGL fallback; the capability tiers; `places.ts`.
+
+## 6B.7 Visual problems found
+
+1. **The constellation chapter had no scene in it.** Photographed on the
+   shipped build: `mansion_walls` coverage **0.000** from scroll 0.285 onward,
+   **4 draw calls** at the constellation against 955 at the hero, sky share
+   **64.4 %** rising to 68.3 %. What remained in shot was a terrain plane, a
+   stock equirect meadow and a point cloud.
+2. **The constellation was never seen at full strength.** Its reveal ramp
+   reached 1.0 at legProgress 0.92; the crossover veil starts closing at 0.922.
+   Measured: reveal **0.215** at the chapter's opening, **0.726** at its
+   midpoint, 0.977 four fifths through.
+3. **The interior establishing shot stood on the room's axis of symmetry** —
+   both side walls at the same angle and the same value, no foreground, no
+   convergence. It was not, however, low on dynamic range: mean 57.6, p05 13.8,
+   p95 120.6, 0.2 % crushed. Range is not structure.
+4. **The focal hierarchy was inverted.** Region means in that frame: left wall
+   99.8, balustrade 89.5, right wall 80.3, **portrait 56.2**, floor 26.3. The
+   brightest thing in the shot was the wallpaper and the founder's portrait
+   rendered darker than the plaster it hangs on.
+5. **A third of the room receives no baked light.** MAT_Trim_Cream 216
+   primitives with 0 UV1, MAT_Gold 46, MAT_Wood_Dark 18, MAT_MarbleFloor 2, the
+   rug 2 — lit by `ambientLight 0.12` and nothing else. Unlit metal reflects
+   nothing and renders black.
+6. **The hologram emitted the sheet's PAPER.** 60–89 % of each plan texture is
+   transparent — the artist masked the paper out in alpha — and nothing read
+   that mask, so the plate emitted the brightest and largest part of the sheet.
+7. **Additive overdraw** stacked a hundred plot volumes into a flat white sheet
+   from the second station's lower vantage.
+8. **Two thirds of the beacons were off screen on a phone** — the vertical fov
+   gives a 3.5× narrower horizontal cone at 390×844.
+9. **One beacon sat behind the chapter's own copy column**, so a click on it
+   landed on the list rather than the scene, for a test and a visitor alike.
+
+## 6B.8 Visual problems fixed
+
+All nine. Measured after:
+
+| measurement | before | after |
+| --- | --- | --- |
+| mansion on screen at the constellation | 0.000 | in frame, 46 % of frame width |
+| draw calls at the constellation | 4 | 246 |
+| sky share of frame | 64.4 % | 45.9 % |
+| sky mean at the last held frame | 111.8 | 32.2 |
+| brightest constellation pixel | 187 | 209 |
+| peak-over-sky contrast | 1.67× | 6.5× |
+| constellation reveal at its chapter midpoint | 0.726 | 1.000 |
+| portrait face vs plaster beside it | 73.1 vs 106.2 | 126.2 vs 108.0 |
+| gold in the establishing frame | 83.9 | 103.5 |
+| crushed pixels in that frame | 0.22 % | 0.02 % |
+| station draw calls (S1/S2/S3) | 72 / 66 / 81 | 70 / 64 / 79 |
+| station triangles | 23,752 / 21,328 / 33,840 | 17,750 / 15,458 / 25,652 |
+
+## 6B.9 City architecture
+
+The region is revealed **through the entry doors**, because the hall has no
+window: parsed from `interior_hall.glb`, 545 nodes, and the only aperture in the
+shell is `int_door_arch` with `int_doors` in it at z 5.25 on the entry axis.
+
+The hall also has no HOLE in it — the arch and the doors are decorative panels
+on the face of a solid wall, which a raycast through the threshold frame proved
+by returning `int_wall_front` dead centre at 3.69 m. So the wall opens: a clone
+of its material discards fragments inside the doorway's own measured rectangle,
+and the rectangle widens from the centre line as the chapter arrives. Both that
+material and the doors' are cloned for their one mesh — the plaster is on 22
+primitives and the dark wood on 18.
+
+The field itself is **abstracted architectural cartography**: one two-triangle
+ground quad carrying its relief, its contour lines and its district boundary
+entirely in a fragment shader, with instanced shafts and a point cloud of heads
+above it. Contours use `fwidth` so a line is one pixel wide at the threshold and
+one pixel wide at the horizon; the ground fades to the film's own night in depth
+and across width so its finite edge is never seen — the lesson the exterior's
+terrain edge taught in Part One.
+
+**Four draw calls, whatever publishes.** Measured at the threshold beat: 20
+calls and 4,554 triangles for the whole frame, field and room together.
+
+## 6B.10 Beacon data source
+
+`projection.projects_pub`, read through the same store the hologram tables bind
+to. Queried live against the projection this build talks to:
+
+| slug | name | locality | district | total | available | centroid | bbox |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| kartikeya-water-front | Kartikeya Water Front | Poosapatirega | Vizianagaram | 113 | 113 | NULL | NULL |
+| lucky-garden | Lucky Garden | Kumaram Village, Garividi | Vizianagaram | 181 | 118 | NULL | NULL |
+| vsr-gayatri-township | VSR Gayatri Township | Bayyannapeta, near Allinagaram | Srikakulam | 113 | 113 | NULL | NULL |
+
+`projection.geometry_pub` 0 rows. `projection.pois_pub` 0 rows.
+`projection.units_pub` 407 rows — which is 113 + 181 + 113, and matches the
+constellation chapter's own "PLOTS 407 / OPEN 344".
+
+## 6B.11 Coordinate derivation
+
+**There are no coordinates, so none are used.** Every published project has
+`centroid` NULL and `bbox` NULL. There is nothing to project, no datum to choose
+and no scale bar to draw, and any "map" of these three would be three dots
+invented by whoever wrote the code.
+
+`cityLayout.ts` derives positions from what is real:
+
+* **district** (`projects_pub.city`) → which horizontal band a beacon sits in;
+* **publication order** → which band comes first, left to right;
+* **slug** → a 32-bit FNV-1a hash, two independent draws, deciding where inside
+  its band a project sits;
+* **totalUnits** → the beacon's SIZE. 181 against 113 is the data's ratio;
+* **availableUnits** → its state, and the DOM's "118 of 181 plots open";
+* **locality** → the label.
+
+Collision handling is four fixed relaxation passes with a clamp back into the
+band — fixed passes rather than "until settled", because a convergence loop
+depends on floating-point ordering and that is exactly what reshuffles a layout
+between machines.
+
+The representation is **explicitly abstract and says so on the page**: "Positions
+in the scene are a diagram of the network, not a map: the district is real, the
+plot counts are real, and the place on the ground is not published." An E2E case
+asserts that sentence is present.
+
+`fromCentroids()` is left as a named seam for the day the data supports a real
+projection.
+
+Ten unit tests hold the derivation: deterministic across calls, independent of
+input order, every district in its own band, every beacon inside the frame, no
+two closer than 6 m, weights matching the real unit counts, and it still holds
+at 24 projects across 3 districts.
+
+## 6B.12 Camera dive architecture
+
+`dive.ts`. A module-level mutable object read once per frame by the rig — the
+same construction as `journeyState`, for the same reason.
+
+* travels for **620 ms**, asks the veil to close at **300 ms**, so the last
+  stretch of movement happens behind a closing screen rather than on a held
+  frame;
+* leaves from where the camera **actually is**, read off the live camera at the
+  instant of the click;
+* aims at a **stand-off** short of the marker — arriving inside a point sprite
+  means arriving inside nothing;
+* writes the rig's `desired`/`look`, so the film's own damping carries it —
+  except that a dive overrides the 3.1 s scrub with a 0.11 s constant, because
+  measured at the film's own lag the camera travelled 9 % of the way before the
+  veil closed;
+* **interruptible**: any wheel, touch or key cancels it, and it is cancelled on
+  unmount;
+* under **reduced motion** it does not run at all and the route is taken
+  immediately.
+
+It is not a second transition device. Selecting a marker and clicking that
+project's link in the copy beside it end in the same veiled client-side push.
+
+## 6B.13 Route behaviour
+
+Unchanged from Part One, and re-proved. Chapters are fragments; projects are
+routes. In-page fragments do not veil; project navigation does. The city chapter
+adds `#city` to the same registry. Measured in this pass: **zero document
+requests** for a beacon selection and for a reduced-motion list click, and back
+from a project lands on the film.
+
+## 6B.14 Reduced-motion behaviour
+
+No dive; the route is taken immediately. The veil does not dissolve but still
+routes client-side. Two E2E cases cover it, both passing: `reduced motion still
+navigates and still reads` and `reduced motion routes from a marker with no
+camera animation`, the latter asserting **zero document requests**.
+
+## 6B.15 Accessibility behaviour
+
+**The list is the interactive layer; the beacon is its rendering.** The canvas is
+`aria-hidden`, so the markers are deliberately NOT focusable — putting a
+focusable control inside an aria-hidden subtree is not an accessibility win, it
+is a defect: the focus ring lands somewhere the accessibility tree says does not
+exist.
+
+So the city chapter's copy carries every published project as a real `<Link>`
+with its locality, its district and its plot counts, in the same order, and
+focusing or hovering one **lifts its marker in the field**. Keyboard visitors
+get the identical destination, the identical transition and identical feedback.
+An E2E case tabs to the first project and presses Enter.
+
+The skip link remains the first tab stop; `keyboard navigation reaches the
+content` still passes.
+
+## 6B.16 Mobile behaviour
+
+The field scales its spread toward its own centre line by the viewport's aspect.
+The layout is untouched — which project sits in which band, and where inside it,
+is still `cityLayout.ts` and still deterministic — but the arrangement is
+reproduced at a smaller scale so it fits the frame. At 768×1024 all three
+markers are in shot; at 390×844 two are, with the third inside the jamb.
+
+The chapter's copy is stepped down on small screens: at the reduced measure the
+block is 466 px inside an 844 px pane.
+
+`mobile boots, scrolls, and does not overflow sideways` passes.
+
+## 6B.17 Performance, before and after
+
+Measured at the settled hero, 1440×900, production build:
+
+| | before | after |
+| --- | --- | --- |
+| draw calls | 955 | **233** (−75.6 %) |
+| visible meshes | 481 | 120 |
+| drawn triangles | 367,558 | 367,558 |
+| visible triangles | 185,367 | 185,367 |
+
+The triangle counts are identical because nothing was simplified: the same
+geometry is submitted in four buffers instead of 363.
+
+The census decided the target. Three quarters of the meshes the hero draws were
+static masonry sharing two materials, and the ashlar blocks carry **22 triangles
+each**:
+
+```
+ashlar_NORTH  101/101    2,222 tris   MAT_Stone_Wall
+ashlar_EAST    62/62     1,364        MAT_Stone_Wall
+ashlar_WEST    62/62     1,364        MAT_Stone_Wall
+ashlar_SOUTH   42/42       924        MAT_Stone_Wall
+rustic_b/f/l/r 96/96    57,984        MAT_Stone_Rustic
+```
+
+Full film after the merge:
+
+| frame | draw calls | triangles |
+| --- | --- | --- |
+| hero | 233 | 367,558 |
+| revolution | 239 | 369,478 |
+| turn | 244 | 368,488 |
+| constellation | 246 | 369,128 |
+| **establish** | **552** | **597,477** |
+| station 1 / 2 / 3 | 70 / 64 / 79 | 17,750 / 15,458 / 25,652 |
+| portrait | 126 | 75,982 |
+| city | 20 | 4,554 |
+
+The interior establishing shot is now the film's most expensive frame. It is not
+optimised in this pass — see §6B.28.
+
+## 6B.18 Memory
+
+Not re-measured in this pass, and that is stated rather than implied. Part One's
+measurement stands: two laps of the segment-crossing loop with every hop a
+client navigation gave geometries 0, textures 0, programs 0, canvases 0 and heap
++9 MB against +112 MB for lap 1's one-off cost.
+
+What this pass added is accounted for by construction rather than by
+measurement: the district field disposes its four geometries and four materials
+on unmount, the threshold's two cloned materials are disposed and their meshes'
+originals restored, and the merged masonry geometries are disposed by the effect
+that created them — while the originals are **removed from the graph and never
+disposed**, because `scene.clone(true)` shares geometry with drei's cached parse
+and disposing them would corrupt every later mount.
+
+## 6B.19 E2E command
+
+```
+pnpm --filter @estate/public exec playwright test --config=playwright.experience.config.ts
+```
+
+Against `pnpm start` — a production build, not `next dev`.
+
+## 6B.20 E2E actual result
+
+```
+27 passed (10.7m)
+```
+
+Six of those are new and cover the city contract:
+
+* one marker per published project and no others — the count read from the DOM
+  list rather than hardcoded;
+* every listed project returns 200, so no beacon points at a 404;
+* the chapter says in words that it is a diagram and not a map;
+* a keyboard reaches a project without touching the scene;
+* selecting a marker moves the camera more than 1.2 m before the veil closes,
+  lands on that project's page, does it with **zero** document requests, and
+  comes back coherently;
+* reduced motion routes with no camera animation and still no document load.
+
+## 6B.21 Production build result
+
+```
+✓ Compiled successfully
+✓ Generating static pages (33/33)
+```
+
+## 6B.22 Typecheck result
+
+`pnpm -r typecheck` — 5 of 5 workspaces, clean.
+
+## 6B.23 Lint result
+
+`pnpm -r lint` — 5 of 5 workspaces, **0 errors**. Warnings are the pre-existing
+`<img>` and exhaustive-deps set recorded in Part One.
+
+## 6B.24 Unit and integration test result
+
+```
+packages/domain   21 files   188 tests   passed
+packages/db        4 files    30 tests   passed
+apps/public        4 files    61 tests   passed
+                              279 total
+```
+
+`apps/public` gains 13: ten for the city layout, and the shader scan extended to
+`CityField.tsx`.
+
+## 6B.25 Console error result
+
+**Zero** across every capture run in this pass — the ten-frame desktop matrix,
+the mobile and tablet runs, and every E2E case that watches for them.
+
+## 6B.26 Document-request result
+
+Zero for a beacon selection, zero for a reduced-motion list click, zero while
+scrolling the film. Project pages are real routes and are reached client-side.
+
+## 6B.27 Visual regression result
+
+Ten frames captured at 1440×900 with the camera settled on its beat and the
+scene clock pinned: hero, revolution, turn, constellation, establish, station 1,
+station 2, station 3, portrait, city. All ten land on their authored pose; every
+`lateBy` is inside its slot; zero console errors. Held at
+`tools/capture/out6b/matrix-*.png`.
+
+The masonry merge was checked against a **same-build control**, which is the
+method Part One established this renderer needs:
+
+| frame | control (same build, 2 runs) | candidate (before vs after) |
+| --- | --- | --- |
+| hero | mean 0.0260, >8 1434 | mean 0.0255, >8 1402 |
+| turn | mean 0.0367, >8 1828 | mean 0.0307, >8 1476 |
+| con-early | mean 0.1927, >8 15218 | mean 0.1919, >8 15143 |
+| constellation | mean 0.4149, >8 25181 | mean 0.4324, >8 26240 |
+| con-late | mean 0.4599, >8 26548 | mean 0.4645, >8 26762 |
+| late | mean 0.4593, >8 26612 | mean 0.4664, >8 26903 |
+
+Every frame is inside the build's own run-to-run repeatability. The ember field
+moving between runs is a larger difference than the change under test.
+
+The BEACON and DIVE rows of the brief's matrix are proved by measurement rather
+than by a still: a hover is a per-marker uniform, and a dive is a camera
+displacement. Both are asserted in the E2E suite.
+
+## 6B.28 Known limitations
+
+1. **The interior establishing shot is the film's most expensive frame** — 552
+   draw calls and 597,477 triangles. The same merge that took the exterior from
+   955 to 233 would very likely apply (MAT_Trim_Cream alone is 216 primitives),
+   but the hall's geometry is looked up by name in more places than the
+   exterior's — the turntables, the holograms, the doors, the front wall, the
+   picture light — so it needs its own family analysis first, and
+   `geometry_census.mjs` cannot currently provide one (see 2).
+2. **`geometry_census.mjs` misreports on the interior leg.** At the hero it
+   reads 481 meshes and 955 calls, matching `frame_probe` exactly; at the
+   interior establishing beat it reads 8 meshes and 4 calls for a room with 545
+   nodes. The scene it is handed there is the EffectComposer's, and neither a
+   mesh-count filter nor picking the largest announced scene recovers the right
+   one. The interior's draw cost in §6B.17 comes from `frame_probe`, which reads
+   `gl.info` immediately after the world pass and is unaffected.
+3. **The film's chapter fractions and the DOM's section offsets are close but
+   not equal.** `chapters()` puts the constellation at 0.285–0.460 while its
+   section sits at 0.311–0.502 at 1440×900 and 0.288–0.465 at 390×844. The
+   camera and the copy therefore drift by a few percent, viewport-dependent,
+   because the film's sections are sized in viewport heights while the page's
+   tail is not. It is within a chapter's width everywhere measured and reads
+   correctly, but it is a real coupling and the honest fix is to derive the
+   journey's extent from the film's own measured height rather than from the
+   `JOURNEY_END = 0.90` constant. Not attempted here: it touches the scroll
+   mapping every other system reads.
+4. **Each film section is only about 1.2 viewports tall**, so its sticky pane
+   pins for roughly a fifth of a viewport and then rides up with the section. A
+   chapter's copy is read at the START of that window. This is by design and
+   works, but it makes the film sensitive to copy length — the city chapter
+   needed a reduced measure on small screens to stay inside it.
+5. **The equirect sky is a European alpine meadow.** It is Phase 5 material and
+   is left alone, and the evening fall now takes it to a tenth of its luminance
+   over the last exterior chapter — but at the hero it is still a photograph of
+   somewhere that is not Vizianagaram.
+6. **Two dark-wood dado panels read as voids** in the establishing frame at
+   luma ~30 against plaster at ~100. Raycast to `MAT_Wood_Dark`, `lightMap`
+   false, with a real base-colour map: authored dark wood, twelve of them around
+   the room. Left alone deliberately — it is a design decision, not a defect.
+7. **Memory was not re-measured** this pass. See §6B.18.
+8. **The fourth station stays dark.** Three projects are published and there are
+   four plinths. This is correct behaviour and is stated here so it is not read
+   as a fault.
+
+## 6B.29 Final verdict
+
+**PHASE 6 COMPLETE.**
+
+Every system the Phase 6 report named as missing exists, is derived from real
+repository data, is covered by executed tests, and has a measurement behind each
+claim made for it. The one performance opportunity the brief singled out is
+taken, at 75.6 % of the frame's draw calls, with a same-build control proving
+the picture did not change. The limitations above are named, quantified, and
+none of them blocks a visitor from entering the residence, reading the film,
+turning a table, opening a plan, walking out into the district and selecting a
+project — with a keyboard, with reduced motion, or on a phone.
+
+Nothing has been pushed.

@@ -143,8 +143,14 @@ const SHOTS = {
  * The numbers are budgeted from that measured run plus half again: the first
  * shot arrived at 41.7, and later settles cost 10.9 / 9.9 / 9.6 / 8.8.
  */
-const FIRST_UT = 60;
-const SLOT_UT = 18;
+// RAISED for the regression matrix. 60/18 was budgeted for six shots and was
+// met for three of them; a ten-shot walk overruns every slot after the second,
+// and a pin that is never met is worse than no pin because the report still
+// carries a column that looks like one. Measured settle costs on this machine
+// are ~33 s of scene clock for the first long jump and 9-18 s afterwards, so
+// 80 + 40 clears every one with margin.
+const FIRST_UT = 80;
+const SLOT_UT = 40;
 
 const INIT = () => {
   const hits = { scenes: [], renderers: [] };

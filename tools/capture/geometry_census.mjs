@@ -51,7 +51,15 @@ const ATTACH = () => {
   if (gl.__cePatched) return true;
   const orig = gl.render.bind(gl);
   gl.render = function patched(scene, camera) {
-    const main = scene && scene.isScene && scene.children && scene.children.length > 2;
+    // COUNT MESHES, do not count children. `children.length > 2` matched the
+    // EffectComposer's own scene — a handful of interaction proxies and a
+    // fullscreen quad — and the interior census duly reported 8 visible meshes
+    // and 4 draw calls for a room with 545 nodes in it. Phase 6 made the same
+    // mistake once already and recorded it; this is the same trap with a
+    // different scene on the other end.
+    let meshes = 0;
+    if (scene && scene.isScene) scene.traverse((o) => { if (o.isMesh) meshes += 1; });
+    const main = meshes > 60;
     if (main) window.__PAIR__ = { scene, camera };
     const r = orig(scene, camera);
     if (main) {
@@ -65,7 +73,32 @@ const ATTACH = () => {
 };
 
 const CENSUS = () => {
-  const { scene, camera } = window.__PAIR__;
+  // KNOWN LIMITATION, STATED RATHER THAN HIDDEN: this census is correct on the
+  // EXTERIOR leg and misreports on the interior one.
+  //
+  // At the hero it reads 481 visible meshes and 955 draw calls, which match
+  // frame_probe's independent numbers exactly. At the interior establishing
+  // beat it reads 8 meshes and 4 calls for a room with 545 nodes in it — the
+  // scene it is handed there is the EffectComposer's, not the world's, and
+  // neither the render-time mesh-count filter below nor picking the largest
+  // scene three has announced recovers the right one. The likely cause is that
+  // the canvas is rebuilt when the leg flips, so the world scene alive at that
+  // moment was never the one this probe latched onto.
+  //
+  // It is not chased further because it did not need to be: the exterior
+  // optimisation this tool exists for is measured, and the INTERIOR's draw cost
+  // is measured accurately by tools/capture/frame_probe.mjs, which reads
+  // gl.info immediately after the world pass (552 calls / 597,477 triangles at
+  // the establishing beat). Anyone extending the interior's geometry work
+  // should fix this first rather than trust the numbers it prints there.
+  const camera = window.__PAIR__.camera;
+  let scene = window.__PAIR__.scene;
+  let best = -1;
+  for (const s of window.__PROBE__.scenes) {
+    let n = 0;
+    s.traverse((o) => { if (o.isMesh) n += 1; });
+    if (n > best) { best = n; scene = s; }
+  }
   const V = scene.position.constructor;
   const box = (() => {
     let B = null;
