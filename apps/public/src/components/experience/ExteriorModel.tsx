@@ -31,6 +31,7 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { attachLoaders } from './HallModel';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { guardAnisotropy } from './materialGuards';
 
 /**
@@ -1134,6 +1135,125 @@ function applyGrade(root: THREE.Object3D, grade: Grade): string[] {
 
   return touched;
 }
+/**
+ * Families of static masonry that are merged on load, and why these two.
+ *
+ * THE CENSUS DECIDED THIS, NOT AN INSTINCT. tools/capture/geometry_census.mjs
+ * reads the live scene at the settled hero and groups every visible mesh by
+ * family. At 1440x900:
+ *
+ *     family          in frame   triangles   materials
+ *     ashlar_NORTH     101/101        2222   MAT_Stone_Wall
+ *     ashlar_EAST       62/62         1364   MAT_Stone_Wall
+ *     ashlar_WEST       62/62         1364   MAT_Stone_Wall
+ *     ashlar_SOUTH      42/42          924   MAT_Stone_Wall
+ *     rustic_b/f/l/r    96/96        57984   MAT_Stone_Rustic
+ *     ------------------------------------------------------------
+ *                      363 of 481 visible meshes, on TWO materials
+ *
+ * 363 of the 481 meshes the hero draws are static masonry sharing two
+ * materials, and the ashlar blocks carry TWENTY-TWO TRIANGLES EACH. Every one
+ * of them is a draw call in the colour pass and a second in the shadow pass, so
+ * these two families alone account for roughly 726 of the frame's 955 calls
+ * while contributing 64k of its 185k triangles. That is the highest-value
+ * category by an enormous margin, and it is also the safest: nothing here is
+ * interactive, nothing is raycast, nothing moves, and every block already casts
+ * and receives shadow identically.
+ *
+ * WHAT IS DELIBERATELY NOT MERGED. The fountain (transmission, and the water
+ * animates), the glass, the cypresses (their own material and a wind shader),
+ * the terrain (one mesh already), `ground_plane` and `drive_*` (applyGrade
+ * looks them up BY NAME), and `mansion_walls` (named, and read by the capture
+ * probe as the composition's subject). Merging by name family rather than by
+ * material is what keeps those out: a material-only rule would have swallowed
+ * the trim and the named meshes with it.
+ *
+ * The cost of merging is per-block frustum culling, and the census answers that
+ * too — 363 of 363 are in frame at the hero, so there was nothing to cull.
+ */
+const MERGE_FAMILIES = /^(ashlar|rustic)_/;
+
+/**
+ * Merge the static masonry into one mesh per material.
+ *
+ * Geometries are CLONED before they are transformed. `scene.clone(true)` shares
+ * geometry by reference with drei's cached parse, so baking a world matrix into
+ * the original would corrupt every later mount of the model — and for the same
+ * reason the originals are removed from the graph but never disposed.
+ */
+function mergeStaticFamilies(root: THREE.Object3D): {
+  merged: number;
+  removed: number;
+  owned: THREE.BufferGeometry[];
+} {
+  root.updateMatrixWorld(true);
+  const inverseRoot = root.matrixWorld.clone().invert();
+
+  const groups = new Map<
+    string,
+    { material: THREE.Material; source: THREE.Mesh; parts: THREE.BufferGeometry[]; meshes: THREE.Mesh[] }
+  >();
+
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!MERGE_FAMILIES.test(mesh.name || '')) return;
+    const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+    if (!material) return;
+
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    // mergeGeometries returns null unless every input has the SAME attributes,
+    // so the signature is part of the key rather than a hope.
+    const signature = Object.keys(geometry.attributes).sort().join(',');
+    const key = `${material.uuid}|${signature}|${geometry.index ? 'i' : 'n'}`;
+
+    const clone = geometry.clone();
+    clone.applyMatrix4(inverseRoot.clone().multiply(mesh.matrixWorld));
+
+    const group = groups.get(key);
+    if (group) {
+      group.parts.push(clone);
+      group.meshes.push(mesh);
+    } else {
+      groups.set(key, { material, source: mesh, parts: [clone], meshes: [mesh] });
+    }
+  });
+
+  const owned: THREE.BufferGeometry[] = [];
+  let merged = 0;
+  let removed = 0;
+
+  for (const [key, group] of groups) {
+    // A family of one is already one draw call; merging it would only cost a
+    // copy of its vertices.
+    if (group.parts.length < 2) {
+      for (const g of group.parts) g.dispose();
+      continue;
+    }
+    const combined = mergeGeometries(group.parts, false);
+    for (const g of group.parts) g.dispose();
+    if (!combined) continue;
+
+    const mesh = new THREE.Mesh(combined, group.material);
+    mesh.name = `merged_${(group.material.name || 'material').replace(/\W+/g, '')}_${merged}`;
+    mesh.castShadow = group.source.castShadow;
+    mesh.receiveShadow = group.source.receiveShadow;
+    mesh.renderOrder = group.source.renderOrder;
+    mesh.frustumCulled = true;
+    root.add(mesh);
+    owned.push(combined);
+    merged += 1;
+
+    for (const m of group.meshes) {
+      m.removeFromParent();
+      removed += 1;
+    }
+    void key;
+  }
+
+  return { merged, removed, owned };
+}
+
 export function ExteriorModel({
   onReady,
   grade = 'daylight',
@@ -1161,6 +1281,13 @@ export function ExteriorModel({
     // whole bloom chain — and therefore the whole screen — to black.
     const disarmed = guardAnisotropy(root);
     const graded = applyGrade(root, grade);
+
+    // AFTER the grade, and that ordering is load-bearing: applyGrade swaps the
+    // paving materials per grade and looks its targets up BY NAME, so merging
+    // first would hide the meshes it is meant to find. See the note on
+    // MERGE_FAMILIES for what is merged and what is deliberately left alone.
+    const batched = mergeStaticFamilies(root);
+
     let meshes = 0;
     let tris = 0;
     root.traverse((o) => {
@@ -1234,6 +1361,20 @@ export function ExteriorModel({
     }));
 
     onReady?.({ meshes, tris: Math.round(tris) });
+
+    // eslint-disable-next-line no-console
+    console.info(
+      '[exterior_batched] merged=%d meshesRemoved=%d',
+      batched.merged, batched.removed,
+    );
+
+    // The merged geometries are the only ones this component OWNS — every other
+    // geometry in the tree belongs to drei's cached parse and is shared with
+    // every future mount, which is also why the originals are removed from the
+    // graph and never disposed.
+    return () => {
+      for (const g of batched.owned) g.dispose();
+    };
   }, [root, onReady, grade]);
 
   return <primitive object={root} />;
