@@ -993,7 +993,7 @@ test.describe('the district field', () => {
     expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
   });
 
-  test('reduced motion routes from a marker with no camera animation', async ({ page }) => {
+  test('reduced motion routes from the chapter list with no camera animation', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.addInitScript(DEVTOOLS_HOOK);
     await page.setViewportSize(VIEWPORT);
@@ -1005,6 +1005,13 @@ test.describe('the district field', () => {
 
     // The list is the path that must keep working when the scene does not
     // animate — same destination, same client-side push, no dissolve.
+    //
+    // NOT the marker: this case was titled "from a marker" and never touched
+    // one. The marker path under reduced motion — startDive() returning false
+    // and select() routing at once — is measured in PHASE6_REPORT.md §6B.34.3
+    // (0.237 m of camera displacement against 25.386 m with motion allowed)
+    // and is deliberately still not asserted here, because projecting and
+    // clicking a beacon needs the settle machinery the dive case carries.
     const first = page.locator('#city a[href^="/projects/"]').first();
     const href = await first.getAttribute('href');
     const documents: string[] = [];

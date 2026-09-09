@@ -416,17 +416,33 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
     mesh.count = beacons.length;
   }, [beacons]);
 
-  useEffect(
-    () => () => {
-      groundGeometry.dispose();
-      groundMaterial.dispose();
-      headGeometry.dispose();
-      headMaterial.dispose();
-      shaftGeometry.dispose();
-      shaftMaterial.dispose();
-    },
-    [groundGeometry, groundMaterial, headGeometry, headMaterial, shaftGeometry, shaftMaterial],
-  );
+  // ONE EFFECT PER RESOURCE, and that is not a style preference.
+  //
+  // A single cleanup listing all six disposes ALL of them whenever ANY ONE of
+  // them is replaced — and they are not replaced together. `spread` is a
+  // function of aspect, so a viewport resize rebuilds the beacon head geometry
+  // and the ground material while the ground geometry, the shaft geometry and
+  // the two remaining materials keep their identity. Under one shared cleanup
+  // those four were disposed anyway, while still in the scene and still being
+  // drawn.
+  //
+  // It never showed up as a broken picture: three re-uploads a disposed
+  // geometry from its attributes on the next draw and recompiles a disposed
+  // material's program, so the cost is a recompile and a re-upload per resize
+  // rather than a missing frame, and gl.info reports nothing. MEASURED by
+  // marking every dispose() and then asking the live graph what it was still
+  // holding — one aspect change left city_ground's geometry, city_shafts'
+  // geometry and material and city_beacons' material disposed and visible, and
+  // a second resize took city_ground's geometry to its third disposal.
+  //
+  // Depending on one resource each means a resource is released exactly when it
+  // is replaced, and every one of them is still released on unmount.
+  useEffect(() => () => groundGeometry.dispose(), [groundGeometry]);
+  useEffect(() => () => groundMaterial.dispose(), [groundMaterial]);
+  useEffect(() => () => headGeometry.dispose(), [headGeometry]);
+  useEffect(() => () => headMaterial.dispose(), [headMaterial]);
+  useEffect(() => () => shaftGeometry.dispose(), [shaftGeometry]);
+  useEffect(() => () => shaftMaterial.dispose(), [shaftMaterial]);
 
   // ── The threshold ─────────────────────────────────────────────────────────
   //

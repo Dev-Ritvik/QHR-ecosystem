@@ -1,8 +1,11 @@
 # PHASE 6 — THE CINEMATIC PRESENTATION LAYER
 
 **Status: COMPLETE**, as of the Phase 6B completion pass recorded in PART TWO
-below. Jump to §6B.29 for the verdict and §6B.28 for what is genuinely still
-open.
+below, and independently re-verified against `846b029` in PART THREE. Jump to
+§6B.29 for the verdict, §6B.28 for what is genuinely still open, and §6B.31 for
+Part Two's claims re-measured with different instruments — including the four
+places where Part Two's prose is corrected (§6B.34) and the one defect the
+re-check found (§6B.33).
 
 PART ONE is the AUDIT pass and is left exactly as it was written. Its verdict —
 NOT COMPLETE — was correct at the time and is superseded, not corrected: every
@@ -862,6 +865,11 @@ routes client-side. Two E2E cases cover it, both passing: `reduced motion still
 navigates and still reads` and `reduced motion routes from a marker with no
 camera animation`, the latter asserting **zero document requests**.
 
+**Superseded:** the second case never touched a marker — it clicks the chapter's
+DOM list link — and is now titled `reduced motion routes from the chapter list
+with no camera animation`. Its assertions are unchanged. The marker path under
+reduced motion is measured in §6B.34.3 and is correct.
+
 ## 6B.15 Accessibility behaviour
 
 **The list is the interactive layer; the beacon is its rendering.** The canvas is
@@ -1097,4 +1105,201 @@ none of them blocks a visitor from entering the residence, reading the film,
 turning a table, opening a plan, walking out into the district and selecting a
 project — with a keyboard, with reduced motion, or on a phone.
 
-Nothing has been pushed.
+Nothing has been pushed. **Superseded:** that was true when this line was
+written; `846b029` was pushed to `origin/main` on 2026-09-09, before the
+verification below began. See §6B.37 for the current push status.
+
+---
+
+# PART THREE — INDEPENDENT VERIFICATION OF PART TWO
+
+Part Two was re-checked against `846b029` on the instruction that it might be
+wrong and that none of its measurements should be trusted. Nothing below is
+quoted from it: every number was re-taken, and where the instrument that
+produced the original figure could have been agreeing with itself, a different
+instrument was written.
+
+## 6B.30 What was re-measured, and with what
+
+The capture tools in `tools/capture/` produced Part Two's figures, so they were
+not used to confirm them. Two throwaway probes were written instead and kept out
+of the repository:
+
+* a draw-call probe that identifies the world pass by the presence of a mesh the
+  **application named** (`int_`, `merged_`, `city_`, `beacon_`, …) rather than by
+  a mesh-count threshold, and reads `gl.info` immediately after each render call.
+  This is the failure `geometry_census.mjs` records in §6B.28.2 and it does not
+  have it: it reports the interior correctly.
+* a dispose probe that patches `dispose()` on the prototypes three actually
+  handed out, marks every disposed resource, and then asks the **live scene
+  graph** what it is still holding. Nothing else can see this class of fault —
+  three re-uploads a disposed geometry and recompiles a disposed material on the
+  next frame, so it produces no console error, no visual artefact and no change
+  in `gl.info`.
+
+## 6B.31 Result, claim by claim
+
+| Part Two claim | independently measured | verdict |
+| --- | --- | --- |
+| E2E `27 passed` | **27 passed (10.3m)**, exit 0, `next start` | confirmed |
+| build clean, 33/33 static pages | `✓ Compiled successfully`, `✓ 33/33`, exit 0 | confirmed |
+| typecheck 5/5 | 5/5, exit 0 | confirmed |
+| lint 5/5, 0 errors | 5/5, 0 errors, exit 0 | confirmed |
+| 188 + 30 + 61 = 279 tests | 188 + 30 + 61 = **279** | confirmed |
+| hero 233 calls / 367,558 tris | **233 / 367,558** | confirmed exactly |
+| establish 552 calls / 597,477 tris | **553 / 597,489** | confirmed (one mote apart) |
+| city 20 calls / 4,554 tris | **20 / 4,554** | confirmed exactly |
+| one marker per published project | 3 markers, 3 list entries, same slugs | confirmed |
+| every beacon routes to a real page | `/projects/{kartikeya-water-front, lucky-garden, vsr-gayatri-township}` → **200**; an unknown slug → 404 | confirmed |
+| beacon weight is the real unit count | page renders 113/113, 118/181, 113/113 — the numbers `cityLayout.ts` documents | confirmed |
+| mobile fits, no horizontal overflow | 390×844: `scrollWidth` 390 = `innerWidth` 390, zero overflowing elements at the city chapter | confirmed |
+| the city copy is 466 px in an 844 px pane | ink **466 px**, pane **844 px** | confirmed exactly |
+| §6B.28.4 — a chapter is read at the START of its pin window | swept the whole section: readable at 390×844 across frac **0.828–0.866** (3/3 links in frame), at 1440×900 across **0.904–0.928**; unreadable at the section midpoint in both | confirmed, including the failure it predicts |
+
+The one figure Part Two did not put a measurement behind is now measured.
+
+## 6B.32 Memory, measured
+
+§6B.18 declined to re-measure and rested on "accounted for by construction".
+Three laps of the hardest available loop — film → hall → district field → select
+a beacon → project page (which is outside `(experience)`, so the entire canvas is
+torn down) → back → film:
+
+| | geometries | textures | programs | canvases | heap |
+| --- | --- | --- | --- | --- | --- |
+| lap 1 | 390 | 101 | 58 | 1 | 230 MB |
+| lap 2 | 134 | 62 | 20 | 1 | 232 MB |
+| lap 3 | 134 | 62 | 20 | 1 | 234 MB |
+
+Flat from lap 2. Lap 1 is the one-off cost of a first load with both models
+resident. One canvas throughout, so no WebGL context is leaked across teardown;
++2 MB of heap per lap is ordinary churn against a 230 MB working set. **The
+construction argument holds, and now has a number behind it.**
+
+## 6B.33 The one defect the verification found
+
+**`CityField` disposed live GPU resources on every viewport aspect change.**
+
+Its six memoized resources shared one cleanup with all six in the dependency
+array, and they are not replaced together: `spread` is a function of aspect, so a
+resize rebuilds the beacon head geometry and the ground material while the ground
+geometry, the shaft geometry and two materials keep their identity — and were
+disposed anyway, still in the scene and still being drawn.
+
+Measured with the dispose probe, one aspect change:
+
+```
+before   6 dispose() calls, 4 STILL IN THE SCENE and visible:
+           city_ground   geometry PlaneGeometry
+           city_shafts   geometry CylinderGeometry
+           city_shafts   material ShaderMaterial
+           city_beacons  material ShaderMaterial
+         a second resize took city_ground's geometry to its THIRD disposal
+after    2 dispose() calls — exactly the two resources being replaced —
+         and 0 still in the scene
+```
+
+It was invisible by every other means: three re-uploads the geometry from its
+attributes and recompiles the program on the next frame, so the cost was a
+shader recompile and a buffer re-upload per resize rather than a missing frame.
+Fixed by giving each resource its own effect and its own dependency, so a
+resource is released exactly when it is replaced. Every one is still released on
+unmount.
+
+## 6B.34 Corrections to Part Two
+
+1. **§6B.18 says the district field "disposes its four geometries and four
+   materials".** It disposed three of each explicitly; the invisible pointer
+   proxies' geometry and material are created in JSX and released by
+   react-three-fiber. After §6B.33 it is six one-line effects. The count was
+   wrong in a paragraph arguing that the accounting was right, which is the
+   reason §6B.32 exists.
+2. **`cityLayout.ts`'s `FIELD` comment says the band is "20..54 and +/-15".** The
+   code is `near: 24, far: 56`. The reasoning in that comment is sound and the
+   values it argues for are not the values below it. Left as found — it changes
+   no behaviour and correcting prose was out of this pass's scope — but it should
+   not be read as a measurement.
+3. **The E2E case named "reduced motion routes from a marker with no camera
+   animation" does not touch a marker** — it clicks the chapter's DOM list link,
+   as its own comment says. The list path is genuinely covered; the marker path
+   under reduced motion (`startDive` returning false, the caller routing at once)
+   is asserted nowhere in the suite. So it was measured directly for this pass,
+   projecting a beacon through the live camera and clicking it at the same point
+   under both settings:
+
+   | | max camera displacement | destination | document requests |
+   | --- | --- | --- | --- |
+   | reduced motion | **0.237 m** | `/projects/kartikeya-water-front` | 0 |
+   | motion allowed | **25.386 m** | same | 0 |
+
+   0.237 m is pointer parallax, which the suite itself bounds at ~0.42 m. **The
+   behaviour is correct**; it was the coverage claim in §6B.20's last bullet
+   that was not. **Fixed here:** the case is now titled *"reduced motion routes
+   from the chapter list with no camera animation"*, which is what it clicks,
+   and its comment names the marker path as measured-but-unasserted. The
+   assertions are untouched — the title was the false part, not the test.
+4. **§6B.29 ends "Nothing has been pushed."** `846b029` was pushed to
+   `origin/main` before this verification began.
+
+## 6B.35 What was checked and found NOT to be a defect
+
+* **The masonry merge is not idempotent across an effect re-run** — the originals
+  are removed from the graph on the first pass, so a second pass has nothing to
+  merge, and `applyGrade`'s paving pass would then miss the 96 `rustic_*` blocks
+  it looks up by name. Reachability was measured rather than argued:
+  `[exterior_batched]` logs **once** on `/` and **once** on `/?grade=dusk`
+  (merged=2, meshesRemoved=363, 231 calls / 367,534 triangles at dusk), because
+  `ExteriorModel` suspends on its GLB and does not commit until after `useLook`
+  has already settled the grade. Latent, not live. **Not changed** — the fix is a
+  re-entrancy guard on a path nothing reaches, and this pass was not scoped to
+  add one.
+* **A scroll or keypress cancels a dive but not the navigation it started.**
+  `select()` schedules `onOpen` at 300 ms and `cancelDive` only stops the camera.
+  Reading the comment as scoped to the camera, this is as designed: the click was
+  a decision to navigate.
+* **The `?grade=dusk` frame** — 231 calls / 367,534 triangles, within two motes
+  of daylight's 233 / 367,558. The merge serves both grades.
+
+## 6B.36 Verdict of the verification pass
+
+Part Two's acceptance claims are **accurate**. Every headline number reproduced,
+two of them exactly; the establishing frame differs by one draw call and twelve
+triangles, which is the ember field between two runs. The suite runs and passes
+as reported. One genuine defect was found in the memory lifecycle — the one area
+Part Two argued for instead of measuring — and it is fixed and re-measured. Four
+statements in Part Two's prose are corrected above; none of them changes a
+verdict.
+
+Regression after the fix, on a fresh production build: typecheck **5/5**, lint
+**5/5 / 0 errors**, **279** unit tests, `✓ Compiled successfully` / `✓ 33/33`,
+and the experience suite **27 passed** against `next start` — the same 27 that
+passed before it, run twice at 10.1m and once at 15.8m.
+
+**The suite is sensitive to the machine it runs on, and that is worth recording
+rather than hiding.** One run in the middle of this pass returned 24/27 with the
+host down to **1.0 GB of free RAM**: two failures were unambiguous environment
+(`net::ERR_NETWORK_CHANGED`, and a page closed under it) and the third was
+`follows the film without a request or a history entry` hitting its 120 s cap.
+That case walks every chapter through a settle wait and spends **1.9m of its 2m
+budget** even on a clean run, so it has almost no headroom. With memory freed it
+passes. Not changed here — raising a timeout to buy margin is exactly the kind
+of edit that makes a suite stop reporting — but anyone who sees it fail should
+check free memory before reading it as a regression.
+
+**PART TWO'S VERDICT STANDS. PHASE 6 COMPLETE.**
+
+## 6B.37 Push status
+
+Stated accurately here because §6B.29 got it wrong the moment the branch moved,
+and because "nothing has been pushed" is the kind of line that is true for
+exactly as long as nobody reads it.
+
+| | |
+| --- | --- |
+| `846b029` — the Phase 6B completion pass | pushed to `origin/main`, 2026-09-09 |
+| this correction set — the `CityField` lifecycle fix, PART THREE, the four prose corrections and the E2E title | pushed to `origin/main` in the same operation that recorded this line |
+
+Branch `main`, remote `origin` = `github.com/Dev-Ritvik/QHR-ecosystem`. The only
+thing left in the working tree afterwards is a **zero-byte line-ending
+difference** on `apps/public/next.config.mjs` that predates both passes and is
+deliberately not committed by either.
