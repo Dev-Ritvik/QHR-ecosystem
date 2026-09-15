@@ -68,8 +68,30 @@ import { guardAnisotropy } from './materialGuards';
  * EXTERIOR_MODEL_URL, because binding it to the default would have silently
  * re-pointed the rollback at the promotion the moment this line changed.
  * ---------------------------------------------------------------------------
+ * PROMOTED 2026-09-14, Phase 3 finished: p5m -> p3f.
+ *
+ * Phase 3 was authored on 2026-09-01 and never shipped: every later phase
+ * branched from the 27 August source, so p5m had no P3_ node and bare wall at
+ * every corner of the ashlar. p3f is p5m plus the P3.4 architecture - column
+ * bases, door jambs, a third tread, the crowning cornice, the portico bed
+ * mould, the architrave fillet and 48 corner quoins - re-authored for this
+ * lineage rather than copied: the quoins toned like the ashlar beside them,
+ * the trim baked instead of hand-matched, and 52 of the 56 pieces turned the
+ * right way out (p34 shipped them inside out). Five neighbours whose AO the
+ * new pieces move are re-baked; everything else in the file is byte-identical
+ * to p5m.
+ *
+ * Against p5m at HERO: 251 draw calls against 233, 370,120 drawn triangles
+ * against 367,558, 17 materials and 40 textures unchanged, zero console
+ * errors. The quoins merge into their own MAT_Stone_Wall batch (merged 3,
+ * meshes removed 411) - see the encoding note in mergeStaticFamilies for why
+ * they could not join the ashlar's.
+ *
+ * p5m REMAINS ON DISK AND ADDRESSABLE AS `?model=p5m`, spelled as its own
+ * literal path for the same reason v5's is. Full record: docs/PHASE3_REPORT.md.
+ * ---------------------------------------------------------------------------
  */
-export const EXTERIOR_MODEL_URL = '/models/exterior_mansion_v6_p5m.glb';
+export const EXTERIOR_MODEL_URL = '/models/exterior_mansion_v6_p3f.glb';
 const EXTERIOR_MODEL_V5 = '/models/exterior_mansion_v5.glb';
 const EXTERIOR_MODEL_PREVIOUS = '/models/exterior_mansion.glb';
 
@@ -719,6 +741,37 @@ const MODEL_CANDIDATES: Record<string, string> = {
    */
   p5m: '/models/exterior_mansion_v6_p5m.glb',
   /**
+   * P3F — PHASE 3, FINISHED: the P3.4 architecture carried into the production
+   * lineage. p5m plus 56 nodes, with 5 neighbours re-baked. Built by
+   * tools/blender/p3f_integrate.py and p3f_neighbours.py, exported by
+   * export_web.py and grafted with graft_draco_nodes.py; see docs/PHASE3_REPORT.md.
+   *
+   * WHY IT WAS NEVER IN PRODUCTION. Phase 3 (p31-p34) was authored on the 27
+   * August source and committed with production left on v5. Phase 2.5B, 4 and 5
+   * all branched from that same source, so p5m has zero P3_ nodes and the
+   * ashlar still runs 5.07 m to the cornice with bare wall at every corner.
+   *
+   * WHAT IS ADDED: the column bases, door jambs, third tread, crowning cornice,
+   * portico bed mould and architrave fillet (8 P3_ nodes, MAT_Stone_Trim /
+   * MAT_Stone_Steps), and the 48 corner quoins (MAT_Stone_Wall) — 1,270
+   * triangles, on the Phase 4 materials BY NAME, so no material, texture or
+   * image is added.
+   *
+   * WHAT p34 HAD WRONG FOR THIS LINEAGE, and is re-authored rather than copied:
+   * the quoins carried no per-block tone where every ashlar block carries one
+   * (P4A), and the trim pieces carried a hand-matched AO constant each where
+   * every production trim surface carries a raycast bake. Both are redone in
+   * the production scene.
+   *
+   * WHAT IS REPLACED, AND WHY ONLY THESE: lion_frieze, mansion_walls,
+   * entry_cheek_-1/1 and entry_step_0 — the objects whose AO the new pieces
+   * move by more than 0.05 anywhere. Decoded against p5m, every replaced
+   * vertex lands on a shipped (position, normal, uv), and colour changes
+   * beyond 1.6 m of a P3 piece: 0 on four of them, 7 of 89,903 on
+   * mansion_walls at <= 0.008.
+   */
+  p3f: '/models/exterior_mansion_v6_p3f.glb',
+  /**
    * P5H, SECOND ELEMENT — DUSK ARRIVAL LIGHTING. **Tested and REJECTED on
    * measurement.** No candidate, and no light was added.
    *
@@ -1171,7 +1224,11 @@ function applyGrade(root: THREE.Object3D, grade: Grade): string[] {
  * The cost of merging is per-block frustum culling, and the census answers that
  * too — 363 of 363 are in frame at the hero, so there was nothing to cull.
  */
-const MERGE_FAMILIES = /^(ashlar|rustic)_/;
+//
+// quoin_ is Phase 3's 48 corner blocks, laid into the strip the ashlar layout
+// reserved at every corner: the same stone, the same material, the same static
+// role. Left out, they are 48 more meshes and roughly 96 more calls at the hero.
+const MERGE_FAMILIES = /^(ashlar|rustic|quoin)_/;
 
 /**
  * Merge the static masonry into one mesh per material.
@@ -1204,7 +1261,24 @@ function mergeStaticFamilies(root: THREE.Object3D): {
     const geometry = mesh.geometry as THREE.BufferGeometry;
     // mergeGeometries returns null unless every input has the SAME attributes,
     // so the signature is part of the key rather than a hope.
-    const signature = Object.keys(geometry.attributes).sort().join(',');
+    //
+    // AND THE SAME ENCODING, not just the same names. mergeAttributes refuses
+    // inconsistent array types, and a null result skips the WHOLE group. The
+    // 267 ashlar blocks in p5m carry COLOR_0 as UNSIGNED_SHORT normalised VEC4
+    // (they arrived through P4A's transplant) while export_web.py writes FLOAT
+    // VEC3 — so the first quoin grafted from a normal export would have put
+    // every ashlar block back on its own draw call, with nothing but a
+    // console.error to say so. Verified against this repo's three before the
+    // key changed: Uint16/4/normalised + Float32/3 returns null. Keyed on type,
+    // item size and normalisation, mismatched encodings become two batches
+    // instead of none.
+    const signature = Object.keys(geometry.attributes)
+      .sort()
+      .map((k) => {
+        const a = geometry.attributes[k] as THREE.BufferAttribute;
+        return `${k}:${a.array.constructor.name}/${a.itemSize}/${a.normalized ? 'n' : 'r'}`;
+      })
+      .join(',');
     const key = `${material.uuid}|${signature}|${geometry.index ? 'i' : 'n'}`;
 
     const clone = geometry.clone();

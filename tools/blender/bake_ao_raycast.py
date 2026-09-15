@@ -82,8 +82,11 @@ CUT_PREFIX = ("cyp_", "hedge_", "REV_", "TEMP_", "SHOTCAM",
               "AO_TEST", "AO_SWEEP", "AO_PROBE")
 CUT_NAME = {"EXT_HAZE", "INT_HAZE"}
 CUT_COLL = ("COL_Interior", "COL_REVIEW_TEMP", "COL_REVIEW_ASHLAR")
-# the applied masonry: an occluder for FULL, not for ARCH
-MASONRY_PREFIX = ("ashlar_", "rustic_")
+# the applied masonry: an occluder for FULL, not for ARCH. quoin_ is the 48
+# corner blocks Phase 3 (P3.3) laid into the ashlar's reserved corner strip -
+# the same stone, the same material and the same role as the blocks beside
+# them, so the same rule
+MASONRY_PREFIX = ("ashlar_", "rustic_", "quoin_")
 MASONRY_COLL = ("COL_Ashlar_West", "COL_Ashlar_East", "COL_Ashlar_North",
                 "COL_Ashlar_South", "COL_Ashlar_West_KIT", "COL_Ashlar_East_KIT",
                 "COL_Ashlar_North_KIT", "COL_Ashlar_South_KIT")

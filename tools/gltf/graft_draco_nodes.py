@@ -257,10 +257,25 @@ for name in targets:
         # reported, because the three facts together are stronger evidence of
         # identity than the vertex count alone ever was - and much narrower than
         # --allow-growth, which exists for a deliberate change of extent.
-        seam_split = (drift <= 0.005 and bc[1] == dc[1] and dc[0] >= bc[0])
+        #
+        # IN EITHER DIRECTION. The exporter WELDS corners whose attributes are
+        # identical as readily as it splits ones that are not, so a change of
+        # vertex data can lower the count on the same triangles too. P3F's
+        # lion_frieze re-bake put 407 more corners at the AO floor and the frieze
+        # went 22,379 -> 22,267 vertices on an identical 24,117 indices and
+        # identical bounds; decoded, every one of the 22,267 donor vertices
+        # lands on a shipped (position, normal, uv). The original rule only
+        # admitted the P5D direction, which is an accident of which case came
+        # first, not a difference in the evidence.
+        seam_split = (drift <= 0.005 and bc[1] == dc[1])
         if seam_split and bc != dc:
             splits.append({'node': name, 'verts': [bc[0], dc[0]], 'indices': bc[1]})
-        if not GROW and not seam_split:
+        if seam_split:
+            # Identity is already established by the transform, the bounds and
+            # the index count. Sending a re-split through the growth checks below
+            # is what made the rule one-directional in the first place.
+            pass
+        elif not GROW:
             if drift > 0.005:
                 raise SystemExit('%s: POSITION bounds moved %.4f m (pass --allow-growth if intended)' % (name, drift))
             if bc != dc:
@@ -348,7 +363,7 @@ print('GRAFT  replaced %d, added %d, shared-mesh skips %d, dropped %d'
 for r in replaced: print('  REPLACE %-22s %6d v %6d t  %s' % (r['node'], r['verts'], r['tris'], ','.join(r['attrs'])))
 for r in added:    print('  ADD     %-22s %6d v %6d t  %s' % (r['node'], r['verts'], r['tris'], ','.join(r['attrs'])))
 if dropped:        print('  DROP    %s' % ', '.join(dropped))
-if splits:         print('  SEAM-SPLIT (same topology, UV seams duplicated verts): %s'
+if splits:         print('  SEAM-SPLIT (same topology and bounds, vertices re-split or re-welded): %s'
                          % ', '.join('%s %d->%d v on %d idx' % (x['node'], x['verts'][0], x['verts'][1], x['indices']) for x in splits))
 print('  materials +%s  reused %s' % (added_materials, sorted(set(reused_materials))))
 print('  %s' % json.dumps(rep['counts']))
