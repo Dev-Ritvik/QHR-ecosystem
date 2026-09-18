@@ -90,8 +90,28 @@ import { guardAnisotropy } from './materialGuards';
  * p5m REMAINS ON DISK AND ADDRESSABLE AS `?model=p5m`, spelled as its own
  * literal path for the same reason v5's is. Full record: docs/PHASE3_REPORT.md.
  * ---------------------------------------------------------------------------
+ * PROMOTED 2026-09-15, client review: p3f -> v7, the estate.
+ *
+ * The review asked for the house to be "bigger, taller, wider, and importantly
+ * longer" with its features kept, and listed what was wrong with p3f: windows
+ * whose black bleeds past the arches, upper windows with no glass (they were
+ * blind panels), stone "like a skin disease", an unfinished back elevation, and
+ * a background of Central European hills with a village in it.
+ *
+ * v7 is built by tools/blender/build_estate_v7.py rather than patched: a nine-bay
+ * house (31 m of podium against 19, spire tip 20.34 m against 11.72) with the
+ * same pedimented centre, portico, lion frieze, carved front doors, arched
+ * windows, parapet, quoins, slate roof, cupola and pointed spire, glazed and
+ * curtained on every elevation, in clean dressed limestone with geometric
+ * rustication; set in an Indian estate — palm avenue, forecourt fountain,
+ * parterres, a rear canal garden, a compound wall and a planted belt. 4.6 MB
+ * against p3f's 17.6. Shipped by tools/gltf/ship_estate_v7.sh, which also
+ * regenerates estateBounds.ts for the camera tests.
+ *
+ * p3f REMAINS ON DISK AND ADDRESSABLE AS `?model=p3f` — the rollback.
+ * ---------------------------------------------------------------------------
  */
-export const EXTERIOR_MODEL_URL = '/models/exterior_mansion_v6_p3f.glb';
+export const EXTERIOR_MODEL_URL = '/models/exterior_estate_v7.glb';
 const EXTERIOR_MODEL_V5 = '/models/exterior_mansion_v5.glb';
 const EXTERIOR_MODEL_PREVIOUS = '/models/exterior_mansion.glb';
 
@@ -771,6 +791,8 @@ const MODEL_CANDIDATES: Record<string, string> = {
    * mansion_walls at <= 0.008.
    */
   p3f: '/models/exterior_mansion_v6_p3f.glb',
+  /** The client-review estate; the default. See EXTERIOR_MODEL_URL. */
+  v7: '/models/exterior_estate_v7.glb',
   /**
    * P5H, SECOND ELEMENT — DUSK ARRIVAL LIGHTING. **Tested and REJECTED on
    * measurement.** No candidate, and no light was added.
@@ -888,11 +910,13 @@ export function resolveExteriorModelUrl(search?: string): string {
  * but fog still has to close before 120m or the terrain simply stops.
  */
 export const EXTERIOR_BOUNDS = {
-  spireTop: 11.72,
+  // v7: estateBounds.ts is the measured source; restated here for the runtime.
+  spireTop: 20.34,
   // The delivered terrain spans +/-120m and undulates from y -2.97 to +0.97.
   // It was a flat 450m plane; the camera far plane and the fog are tuned
   // against this number, so it is measured rather than assumed.
-  groundHalfSpan: 120,
+  // v7: flat inside the compound wall, a planted berm outside it, +/-330 m.
+  groundHalfSpan: 330,
 } as const;
 
 /**
@@ -1330,9 +1354,13 @@ function mergeStaticFamilies(root: THREE.Object3D): {
 
 export function ExteriorModel({
   onReady,
+  onRoot,
   grade = 'daylight',
 }: {
   onReady?: (info: { meshes: number; tris: number }) => void;
+  /** The mounted scene graph, handed up for the front doors to adopt — the same
+   *  contract HallModel offers the hologram stations. Null on unmount. */
+  onRoot?: (root: THREE.Object3D | null) => void;
   grade?: Grade;
 }) {
   const gl = useThree((s) => s.gl);
@@ -1450,6 +1478,14 @@ export function ExteriorModel({
       for (const g of batched.owned) g.dispose();
     };
   }, [root, onReady, grade]);
+
+  // Its own effect, declared after the grade and the merge so a consumer never
+  // receives a graph those passes have not finished with. The doors are not in
+  // a merged family, so nothing here moves them.
+  useEffect(() => {
+    onRoot?.(root);
+    return () => onRoot?.(null);
+  }, [root, onRoot]);
 
   return <primitive object={root} />;
 }

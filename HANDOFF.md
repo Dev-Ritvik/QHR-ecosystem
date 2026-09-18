@@ -219,15 +219,19 @@ cannot be tuned apart).
 
 ## Not requested — deliberately
 
-**A shared exterior/interior doorway.** The exterior door sits at z 5.02–5.16,
-x ±1.25, y 0.55–3.85; the interior doors at z 5.19–5.29, x ±1.30, y 0–3.70.
+**A shared exterior/interior doorway.** The exterior door sits at z 8.17–8.31,
+x ±1.35, y 0.55–3.95; the interior doors at z 7.57–7.69, x ±1.49, y 0–4.26.
+(Both moved with the client review: the estate was rebuilt as v7 and the hall
+extended by bays — tools/blender/build_estate_v7.py and extend_hall_v7.py.)
 They are close but they are different openings in different files at different
 levels of detail. Making them one continuous space would mean merging the two
 models, which is a much larger job than this session. The web build handles the
 transition as a match cut through a blackout on the same axis at the same eye
 height, which is the correct film solution and needs nothing from Blender.
 
-**Extra lights.** The interior's ten punctual lamps are already baked into the
-lightmap and are stripped on load; adding more would double-count again. If the
-bake is ever redone, `interior_hall.manifest.json` records the exact command
-chain and the 4.6597 normalisation divisor.
+**Extra lights.** The interior's punctual lamps (fourteen since the extension
+added a pair of sconces to each side wall) are already baked into the lightmap
+and are stripped on load; adding more would double-count again. The bake HAS
+been redone for the extended hall, and `interior_hall.manifest.json` records the
+exact command chain and the current normalisation divisor — **3.0801**, which
+replaced 4.6597 with the room.

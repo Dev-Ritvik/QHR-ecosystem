@@ -23,15 +23,25 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { guardAnisotropy } from './materialGuards';
+import { finishHall } from './hallFinish';
+import { refurnishHall } from './hallJoinery';
 
 export const HALL_MODEL_URL = '/models/interior_hall.glb';
 
 /** From interior_hall.manifest.json — the bake's normalisation divisor. Changing
- *  the bake means changing this, so it is named rather than inlined. */
-const LIGHTMAP_INTENSITY = 4.6597;
+ *  the bake means changing this, so it is named rather than inlined.
+ *
+ *  3.0801 is the divisor of the bake for the EXTENDED hall (the client review:
+ *  "bigger, taller, wider, and importantly longer"). It replaces 4.6597, which
+ *  belonged to the 15.0 x 10.6 x 6.4m room: the atlas is normalised by its own
+ *  99.5th percentile, and a room whose surfaces stand further from the same
+ *  lamps has a lower one. Using the old number would render the new bake 51%
+ *  too bright. */
+const LIGHTMAP_INTENSITY = 3.0801;
 
 /** Environment response for the surfaces the bake never reached. Multiplies
- *  against scene.environmentIntensity (0.1 inside), so 6.0 is an effective 0.6.
+ *  against scene.environmentIntensity (0.3 inside since the client-review
+ *  finishes; it was 0.1 when this was counted), so 6.0 is an effective 1.8.
  *  See the note in dressInterior for what it is for and how it was counted. */
 const UNBAKED_ENV_INTENSITY = 6.0;
 
@@ -576,21 +586,9 @@ function dressInterior(root: THREE.Object3D): string[] {
         touched.push('bench');
       }
 
-      // THE URNS. material_0.001 arrives metalness 1, roughness 1 — the one
-      // combination that reflects almost nothing in any direction. They stand
-      // at eye height either side of the hall, exactly where the camera passes
-      // them, and render as black blobs. Their base colour map is real and
-      // stays; only the response is corrected to the glazed ceramic the
-      // silhouette obviously is.
-      //
-      // Still required against the final delivery — re-checked by parsing it.
-      if (mat.name === 'material_0.001') {
-        mat.metalness = 0.12;
-        mat.roughness = 0.42;
-        mat.needsUpdate = true;
-        mat.__dressed = true;
-        touched.push('urns');
-      }
+      // THE URNS are no longer dressed here. material_0.001 was the decimated
+      // photogrammetry urn, and no response setting could hide an atlas that no
+      // longer matched its mesh; hallJoinery.ts replaces both urns outright.
 
       // THE HOLOGRAMS. Every MAT_Holo* material is emissive-only: a black base
       // colour, a white emissive factor, an emissive strength of 2.6 to 9, and
@@ -688,6 +686,11 @@ export function HallModel({
     // material, and cloning it while its lightmap was still sitting in the
     // occlusion slot would hand the clone an aoMap nothing ever promotes.
     const dressed = dressInterior(root);
+    // The room's finishes (hallFinish.ts) after the dressing, so a finish that
+    // names a response — the walnut's environment gain — is the value that
+    // stands, and before the texture merge, so the maps it clears are never
+    // counted as shared.
+    const finished = finishHall(root);
     // LAST of the material passes, and it has to be. It compares textures by
     // their sampling state — anisotropy included — so it must run after
     // guardAnisotropy has settled that, after the promotion has moved the atlas
@@ -713,7 +716,9 @@ export function HallModel({
     // and there was no number anywhere in the app to say whether the camera was
     // misplaced or the model was a hundred times too large.
     //
-    // Measured in Blender against this exact GLB: x -7.80..7.80, y -0.10..6.50,
+    // Measured against this exact GLB: x -10.20..10.20, y -0.13..8.10,
+    // z -8.55..8.00 — the hall as extended by bays for the client review
+    // (tools/blender/extend_hall_v7.py); it was x -7.80..7.80, y -0.10..6.50,
     // z -5.98..5.60. Metres, floor at zero. If these numbers ever drift, the
     // model changed and every pose in poses.ts needs re-checking.
     const box = new THREE.Box3().setFromObject(root);
@@ -721,7 +726,7 @@ export function HallModel({
     const centre = box.getCenter(new THREE.Vector3());
     // eslint-disable-next-line no-console
     console.info(
-      '[hall_ready] meshes=%d tris=%d lightmaps=%d bakedLightsRemoved=%d texturesMerged=%d freedMB=%s dressed=[%s] anisotropyDisarmed=[%s] | size %sx%sx%s | centre %s,%s,%s | y %s..%s',
+      '[hall_ready] meshes=%d tris=%d lightmaps=%d bakedLightsRemoved=%d texturesMerged=%d freedMB=%s dressed=[%s] finished=%d anisotropyDisarmed=[%s] | size %sx%sx%s | centre %s,%s,%s | y %s..%s',
       meshes,
       Math.round(tris),
       promoted,
@@ -729,6 +734,7 @@ export function HallModel({
       shared.merged,
       shared.freedMB.toFixed(2),
       dressed.join(','),
+      finished.length,
       disarmed.join(','),
       size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2),
       centre.x.toFixed(2), centre.y.toFixed(2), centre.z.toFixed(2),
@@ -738,7 +744,16 @@ export function HallModel({
     onReady?.({ promoted, meshes, tris: Math.round(tris) });
   }, [root, onReady]);
 
-  // Separate effect from the one above, and deliberately so: the consumer
+  // The turned joinery and the urns (hallJoinery.ts). Its own effect because
+  // it is the one pass that ADDS to the graph, so it is the one that has to be
+  // undone: a remount gets a fresh clone, and the replacements, the geometry
+  // they were built from and the originals' visibility must not outlive it.
+  useEffect(() => {
+    const joinery = refurnishHall(root);
+    return () => joinery.dispose();
+  }, [root]);
+
+  // Separate from the counting pass, and deliberately so: the consumer
   // re-parents nodes inside `root`, and running that in the same effect as the
   // traversal that counts them would have the count depend on whether the
   // surgery had happened yet.

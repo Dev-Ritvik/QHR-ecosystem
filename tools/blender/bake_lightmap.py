@@ -1,4 +1,4 @@
-"""
+r"""
 Decimate to a web budget, build a lightmap UV set, and bake interior GI.
 
 Reads mansion_exterior.blend and writes mansion_web.blend plus a lightmap
@@ -23,7 +23,13 @@ Three things worth knowing before changing any of this:
     fed back as lightMapIntensity. Clipping instead would flatten every hotspot.
 
     blender --background mansion_exterior.blend --python bake_lightmap.py \
-        -- <outdir> [atlas_px] [samples] [seconds]
+        -- <outdir> [atlas_px] [samples] [seconds] [save_as.blend] [texture_limit_px]
+
+save_as defaults to C:\dev\Blender\mansion_web.blend, as it always has; pass a
+path to bake a variant (the extended hall) without overwriting that file.
+texture_limit_px caps the textures Cycles loads for the bake (Simplify), which
+only affects bounce colour - the bake has no colour pass - and keeps the scene
+inside a laptop GPU's memory.
 """
 import bpy, bmesh, sys, os, json, math
 
@@ -32,6 +38,8 @@ OUT = argv[0]
 PX = int(argv[1]) if len(argv) > 1 else 4096
 SAMPLES = int(argv[2]) if len(argv) > 2 else 512
 TL = float(argv[3]) if len(argv) > 3 else 1800.0
+SAVE_AS = argv[4] if len(argv) > 4 else r"C:\dev\Blender\mansion_web.blend"
+TEXTURE_LIMIT = argv[5] if len(argv) > 5 else None
 os.makedirs(OUT, exist_ok=True)
 
 sc = bpy.context.scene
@@ -226,6 +234,11 @@ if prefs:
         except Exception:
             continue
 
+if TEXTURE_LIMIT:
+    sc.render.use_simplify = True
+    cy.texture_limit_render = TEXTURE_LIMIT
+    print("SIMPLIFY|texture_limit=%s" % TEXTURE_LIMIT)
+
 cy.samples = SAMPLES
 cy.use_adaptive_sampling = True
 cy.adaptive_threshold = 0.01
@@ -266,7 +279,12 @@ if haze:
 
 # --------------------------------------------------------- 5. normalise + save
 import numpy as np
-px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)
+# foreach_get, NOT img.pixels[:]: the slice builds a Python list of 67 million
+# floats for a 4K atlas, which costs gigabytes and minutes. The buffer protocol
+# fills a numpy array directly.
+flat = np.empty(len(img.pixels), dtype=np.float32)
+img.pixels.foreach_get(flat)
+px = flat.reshape(-1, 4)
 rgb = px[:, :3]
 lit = rgb[rgb.max(axis=1) > 1e-4]
 scale = float(np.percentile(lit, 99.5)) if lit.size else 1.0
@@ -284,7 +302,7 @@ v = np.clip(rgb / scale, 0.0, 1.0)
 # three.js reads it back with SRGBColorSpace and linearises for free.
 px[:, :3] = np.where(v <= 0.0031308, v * 12.92,
                      1.055 * np.power(np.maximum(v, 1e-8), 1.0 / 2.4) - 0.055)
-img.pixels = px.reshape(-1).tolist()
+img.pixels.foreach_set(px.reshape(-1))
 
 img.filepath_raw = os.path.join(OUT, "lightmap.png")
 img.file_format = 'PNG'
@@ -306,7 +324,6 @@ report.update({
 })
 json.dump(report, open(os.path.join(OUT, "lightmap_manifest.json"), "w"), indent=1)
 
-bpy.ops.wm.save_as_mainfile(filepath=r"C:\dev\Blender\mansion_web.blend",
-                            copy=False)
-print("SAVED|mansion_web.blend|drawn_tris=%d" % report["drawn_tris"])
+bpy.ops.wm.save_as_mainfile(filepath=SAVE_AS, copy=False)
+print("SAVED|%s|drawn_tris=%d" % (SAVE_AS, report["drawn_tris"]))
 print("DONE")

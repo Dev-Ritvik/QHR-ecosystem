@@ -54,6 +54,12 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { StationAnchor } from './interiorPath';
+import {
+  clicksSuppressed,
+  lockCanvasScroll,
+  stationControls,
+  suppressClicks,
+} from './stationControls';
 
 export interface StationProject {
   slug: string;
@@ -79,7 +85,9 @@ export function tickStations(delta: number) {
 /**
  * Table geometry, measured from the delivered GLB rather than assumed.
  *
- * `table_top_S1` spans x −6.52..−5.37 around a station centre of −5.95: a
+ * `table_top_S1` spans x −8.42..−7.27 around a station centre of −7.85 (the
+ * stations moved out with the walls when the hall was extended; the tables
+ * themselves are unchanged, being the room's human scale): a
  * radius of 0.575, so Ø1.15 m. Its upper surface sits at y 0.80, with
  * `table_inlay_S1` coplanar at 0.80 and `table_base_S1` running 0.00..0.75.
  *
@@ -113,7 +121,9 @@ export function ProjectStation({
   /** The loaded hall scene. Read-only — nothing is re-parented. */
   root: THREE.Object3D | null;
   anchor: StationAnchor;
-  project: StationProject;
+  /** Null for a table with no published project behind it: it still turns,
+   *  but its hologram opens nothing. */
+  project: StationProject | null;
   /** 0..1 — how much the camera is on this station right now. A ref, so this
    *  component never re-renders at scroll frequency. */
   emphasis: React.MutableRefObject<number>;
@@ -128,6 +138,12 @@ export function ProjectStation({
   /** Angular velocity carried after release, so the table coasts to rest. */
   const spin = useRef(0);
   const hovering = useRef(false);
+  /** True while any drag holds this table - its own proxy's, or one picked up
+   *  from elsewhere in the room by useDragAnywhere. */
+  const held = useRef(false);
+  /** Pointer travel of the current proxy drag, so a real drag suppresses the
+   *  click r3f would otherwise also report. */
+  const travel = useRef(0);
 
   // ── Bind to the exported turntable ───────────────────────────────────────
   //
@@ -169,24 +185,28 @@ export function ProjectStation({
   // camera on this page, so a wheel or a swipe during a drag would move the
   // viewer away from the table they are holding.
   const setScrollLock = useCallback(
-    (locked: boolean) => {
-      gl.domElement.style.touchAction = locked ? 'none' : '';
-      document.documentElement.style.overscrollBehavior = locked ? 'contain' : '';
-    },
+    (locked: boolean) => lockCanvasScroll(gl.domElement, locked),
     [gl],
   );
 
+  // NO EMPHASIS GATE ON THE DRAG. It was gated on the camera's attention like the
+  // hologram click, and that is why a table would not turn until the camera was
+  // nearly on it. A pointer that lands on a table is unambiguous about which
+  // table it means, from any distance; only the CLICK that navigates keeps its
+  // gate, because a hologram behind the camera must never open a page.
   const onDown = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
-      if (emphasis.current < ACTIVE || !turntable.current) return;
+      if (!turntable.current) return;
       e.stopPropagation();
       (e.target as Element | null)?.setPointerCapture?.(e.pointerId);
       drag.current = { x: e.clientX, from: turntable.current.rotation.y };
+      held.current = true;
+      travel.current = 0;
       spin.current = 0;
       setScrollLock(true);
       document.body.style.cursor = 'grabbing';
     },
-    [emphasis, setScrollLock],
+    [setScrollLock],
   );
 
   const onMove = useCallback((e: ThreeEvent<PointerEvent>) => {
@@ -197,6 +217,7 @@ export function ProjectStation({
     // Radians per pixel. 0.006 puts a half-turn at ~260px of travel, which is
     // roughly a thumb's width on a phone and a comfortable wrist on a mouse.
     const next = d.from + (e.clientX - d.x) * 0.006;
+    travel.current = Math.max(travel.current, Math.abs(e.clientX - d.x));
     spin.current = next - g.rotation.y;
     g.rotation.y = next;
   }, []);
@@ -207,6 +228,8 @@ export function ProjectStation({
       e.stopPropagation();
       (e.target as Element | null)?.releasePointerCapture?.(e.pointerId);
       drag.current = null;
+      held.current = false;
+      if (travel.current > 6) suppressClicks();
       setScrollLock(false);
       document.body.style.cursor = hovering.current ? 'grab' : '';
     },
@@ -218,7 +241,7 @@ export function ProjectStation({
   const tick = useCallback(
     (delta: number) => {
       const g = turntable.current;
-      if (!g || drag.current) return;
+      if (!g || drag.current || held.current) return;
       if (Math.abs(spin.current) > 1e-5) {
         // Coast, then settle. Exponential decay rather than a fixed step so the
         // slowdown is frame-rate independent.
@@ -244,6 +267,22 @@ export function ProjectStation({
     };
   }, [anchor.id, tick]);
 
+  // Publish this table to input that starts elsewhere in the room.
+  useEffect(() => {
+    stationControls.set(anchor.id, {
+      id: anchor.id,
+      centre: new THREE.Vector3(cx, TABLE_TOP, cz),
+      turntable,
+      spin,
+      emphasis,
+      proxyDrag: drag,
+      held,
+    });
+    return () => {
+      stationControls.delete(anchor.id);
+    };
+  }, [anchor.id, cx, cz, emphasis]);
+
   // ── HOVER / CURSOR ───────────────────────────────────────────────────────
   const enter = useCallback(
     (cursor: string) => (e: ThreeEvent<PointerEvent>) => {
@@ -254,20 +293,27 @@ export function ProjectStation({
     },
     [emphasis],
   );
+  // The grab affordance follows the drag, which is no longer gated.
+  const grabCursor = useCallback((e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    hovering.current = true;
+    if (!drag.current) document.body.style.cursor = 'grab';
+  }, []);
   const leave = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     hovering.current = false;
     if (!drag.current) document.body.style.cursor = '';
   }, []);
 
+  const slug = project?.slug ?? null;
   const openProject = useCallback(
     (e: ThreeEvent<MouseEvent>) => {
-      if (emphasis.current < ACTIVE) return;
+      if (!slug || emphasis.current < ACTIVE || clicksSuppressed()) return;
       e.stopPropagation();
       document.body.style.cursor = '';
-      onOpen(project.slug);
+      onOpen(slug);
     },
-    [emphasis, onOpen, project.slug],
+    [emphasis, onOpen, slug],
   );
 
   // Hologram hit volume. Sized from the delivered plan: `holo3d_S1_blocks`
@@ -298,7 +344,7 @@ export function ProjectStation({
         onPointerMove={onMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        onPointerOver={enter('grab')}
+        onPointerOver={grabCursor}
         onPointerOut={leave}
       >
         <cylinderGeometry args={[TABLE_RADIUS, TABLE_RADIUS, TABLE_TOP, 20]} />
@@ -315,7 +361,7 @@ export function ProjectStation({
         name={`station_holo_${anchor.id}`}
         position={[0, anchor.holoY, 0]}
         onClick={openProject}
-        onPointerOver={enter('pointer')}
+        onPointerOver={slug ? enter('pointer') : undefined}
         onPointerOut={leave}
       >
         <boxGeometry args={holoBox} />

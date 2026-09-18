@@ -10,7 +10,8 @@
 //
 // 1. THERE IS NO WINDOW. Parsed from interior_hall.glb: 545 nodes, and the only
 //    opening in the shell is `int_door_arch` with `int_doors` inside it, on the
-//    entry axis at z 5.25. So the region is revealed through the entry, which
+//    entry axis at z 7.63 (5.25 before the hall was extended by bays). So the
+//    region is revealed through the entry, which
 //    is also the better sentence — the film ends by turning round and looking
 //    out at the land the house exists to sell.
 //
@@ -40,6 +41,8 @@ import * as THREE from 'three';
 import { buildBeacons, districtBands, FIELD, type Beacon, type CityProject } from './cityLayout';
 import { HANDOFF_MS, cancelDive, startDive } from './dive';
 import { useBeaconFocus } from '@/components/site/CityLink';
+import { clicksSuppressed } from './stationControls';
+import { doorwayState } from './doorway';
 
 /** The film's night. Same value the veil, the preloader and the exterior's
  *  evening fog all settle on, so the field belongs to the same picture. */
@@ -509,14 +512,15 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
             '#include <clipping_planes_fragment>',
             `#include <clipping_planes_fragment>
              {
-               // The doorway, measured from the GLB: x -1.30..1.30, y 0..3.70,
-               // on the entry axis. The hole widens from the centre line as the
-               // chapter arrives; the height is opened at once, so the opening
-               // is always a door and never a letterbox.
-               float halfW = 1.34 * uOpen;
+               // The doorway, measured from the GLB: x -1.50..1.50, y 0..4.26
+               // since the hall was extended by bays, on the entry axis. The
+               // hole widens from the centre line as the chapter arrives; the
+               // height is opened at once, so the opening is always a door and
+               // never a letterbox.
+               float halfW = 1.54 * uOpen;
                if (uOpen > 0.002
                    && abs(vDoorPos.x) < halfW
-                   && vDoorPos.y < 3.74) discard;
+                   && vDoorPos.y < 4.3) discard;
              }`,
           );
       };
@@ -598,11 +602,34 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
   );
 
   useFrame((_, delta) => {
-    const group = groupRef.current;
-    if (!group) return;
-
     shown.current += (reveal.current - shown.current) * Math.min(1, delta * 3.2);
     const r = shown.current;
+
+    // The doors dissolve INTO the reveal rather than cutting: they are the last
+    // solid thing between the room and the region, and a cut there would read
+    // as a missing frame.
+    //
+    // THE DOORWAY USES THE SAME OPENING. A passage into the hall (doorway.ts)
+    // brings the camera in from outside the front wall, through this doorway,
+    // so for those few hundred milliseconds the wall is held open and the doors
+    // are out of the way — whichever of the two asks for more. The camera faces
+    // into the room the whole time, so the opening closing again behind it is
+    // never on screen.
+    const passage = doorwayState.channels.hallOpen;
+    const door = doorState.current;
+    if (door) {
+      const mat = door.material as THREE.MeshStandardMaterial;
+      mat.opacity = Math.min(1 - Math.min(1, r * 1.6), 1 - passage);
+      door.mesh.visible = mat.opacity > 0.01;
+    }
+    // The wall parts a little behind the doors, so the leaves are gone before
+    // the opening finishes widening rather than dissolving inside a hole.
+    openUniform.current.value = Math.max(Math.min(1, Math.max(0, (r - 0.12) / 0.6)), passage);
+
+    // The threshold above runs even with no field to draw: a hall with no
+    // published project still has a front door the camera comes in through.
+    const group = groupRef.current;
+    if (!group) return;
 
     // Below the floor there is nothing to draw and nothing to hit. Skipping the
     // subtree keeps the field off the raycaster's list for the 80% of the film
@@ -611,19 +638,6 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
     groundUniforms.uReveal.value = r;
     headUniforms.uReveal.value = r;
     shaftUniforms.uReveal.value = r;
-
-    // The doors dissolve INTO the reveal rather than cutting: they are the last
-    // solid thing between the room and the region, and a cut there would read
-    // as a missing frame.
-    const door = doorState.current;
-    if (door) {
-      const mat = door.material as THREE.MeshStandardMaterial;
-      mat.opacity = 1 - Math.min(1, r * 1.6);
-      door.mesh.visible = mat.opacity > 0.01;
-    }
-    // The wall parts a little behind the doors, so the leaves are gone before
-    // the opening finishes widening rather than dissolving inside a hole.
-    openUniform.current.value = Math.min(1, Math.max(0, (r - 0.12) / 0.6));
 
     if (!group.visible) return;
 
@@ -704,7 +718,7 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
             // A marker that is barely revealed is not yet a target — the same
             // gate the stations use, and for the same reason: a hit volume the
             // visitor cannot see should not be clickable.
-            if (shown.current < 0.4) return;
+            if (shown.current < 0.4 || clicksSuppressed()) return;
             select(b);
           }}
         >

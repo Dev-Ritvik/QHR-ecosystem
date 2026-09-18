@@ -325,7 +325,7 @@ export function Constellation({
     // Point size in metres of world, converted to the pixels the shader wants.
     // Scaled by the object's own scale so a change of radius does not silently
     // change the grain of the constellation.
-    uniforms.uSize.value = 0.9;
+    uniforms.uSize.value = 0.9 * (radius / 6.2);
 
     let gain = 0;
     if (active.current) {

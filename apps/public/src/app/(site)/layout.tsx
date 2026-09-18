@@ -2,7 +2,6 @@ import { ConsentProvider } from '@/lib/consent/ConsentProvider';
 import { ConsentPanel } from '@/components/consent/ConsentPanel';
 import { SiteHeader } from '@/components/site/SiteHeader';
 import { SiteFooter } from '@/components/site/SiteFooter';
-import { CursorRing } from '@/components/site/CursorRing';
 import { RouteVeil } from '@/components/site/RouteVeil';
 import { TelemetryProvider } from '@/lib/telemetry/TelemetryProvider';
 import { MarketingPixels } from '@/lib/marketing/pixels';
@@ -47,7 +46,6 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
                 inside the footer, which is on every page. */}
             <SiteFooter />
           </div>
-          <CursorRing />
           {/* THE site's route transition, mounted here rather than in the
               experience segment on purpose: it has to survive navigations
               that unmount the canvas entirely — into /projects, which is

@@ -47,7 +47,13 @@
 import { test, expect, type Page } from '@playwright/test';
 // The app's own chapter table. Imported rather than restated so the address-bar
 // walk below and the film cannot drift apart.
-import { chapters } from '../src/components/experience/journey';
+import {
+  chapters,
+  CROSSOVER,
+  DOOR_IN,
+  DOOR_OUT,
+  JOURNEY_END,
+} from '../src/components/experience/journey';
 
 const VIEWPORT = { width: 1440, height: 900 };
 
@@ -133,8 +139,23 @@ async function consent(page: Page) {
  */
 async function scrollToFraction(page: Page, frac: number) {
   await page.evaluate((f) => {
+    // THE SAME MEASURE THE APP USES (src/components/experience/filmTrack.ts):
+    // on the film, a fraction is a fraction of the TRACK, whose end the page
+    // marks with data-film-end; elsewhere it is a fraction of the document. The
+    // document measure put every chapter's copy up to a viewport away from its
+    // shot, and a test reading it would have been measuring that desync.
+    let best = 0;
+    let span = 0;
+    document.querySelectorAll<HTMLElement>('[data-film-end]').forEach((m) => {
+      const fraction = Number(m.dataset.filmEnd);
+      const y = m.getBoundingClientRect().top + window.scrollY;
+      if (fraction > 0 && fraction >= best && y > 0) {
+        best = fraction;
+        span = y / fraction;
+      }
+    });
     const max = document.documentElement.scrollHeight - window.innerHeight;
-    window.scrollTo(0, Math.round(f * max));
+    window.scrollTo(0, Math.round(f * (span > 1 ? span : max)));
   }, frac);
   // BEST EFFORT, DELIBERATELY. This is a wait, not an assertion: if the page
   // never stops moving, the test that follows should fail on what it actually
@@ -500,13 +521,15 @@ test.describe('the interior', () => {
     await consent(page);
     await ready(page);
 
-    expect(glbs.some((u) => /exterior_mansion/.test(u)), 'the exterior loads first').toBe(true);
+    // Any exterior model: the default was renamed with the v7 estate
+    // (exterior_estate_v7.glb), and the rollbacks keep their exterior_mansion names.
+    expect(glbs.some((u) => /\/models\/exterior_/.test(u)), 'the exterior loads first').toBe(true);
 
     await scrollToFraction(page, 0.35);
     await page.waitForTimeout(2500);
     expect(
       glbs.some((u) => /interior_hall/.test(u)),
-      'the interior is armed before the crossover at 0.46',
+      `the interior is armed before the crossover at ${CROSSOVER}`,
     ).toBe(true);
 
     await scrollToFraction(page, 0.62);
@@ -601,7 +624,15 @@ test.describe('the interior', () => {
     // returned S2 at 0.61 (866,699), S1 at 0.51 and 0.52, and nothing else
     // clickable — 0.74 and 0.75 put S2 on screen but behind the page's own
     // imagery, where a visitor could not click it either.
-    for (const frac of [0.61, 0.51, 0.52]) {
+    //
+    // RE-EXPRESSED AS INTERIOR-LEG PROGRESS when the approach to the front door
+    // moved the crossover. The camera inside is a function of leg progress
+    // alone, so the measured positions are 0.341 (S2) and 0.114 / 0.136 (S1) of
+    // the leg; written as document fractions they went stale the moment the
+    // exterior grew, which is exactly the duplicated-constant failure the
+    // address-bar walk below already records.
+    const legToDocument = (leg: number) => DOOR_IN + leg * (JOURNEY_END - DOOR_IN);
+    for (const frac of [0.341, 0.114, 0.136].map(legToDocument)) {
       await scrollToFraction(page, frac);
       await page.waitForTimeout(1500);
       proxy = await findProxy();
@@ -644,6 +675,156 @@ test.describe('the interior', () => {
     // frozen.
     expect(camMoved, 'the camera did not orbit').toBeLessThan(0.9);
     expect(after.scrollY, 'the page did not scroll under the drag').toBe(before.scrollY);
+  });
+});
+
+test.describe('the front door', () => {
+  // BY CLIENT REVIEW: the passage into the hall "must open from the actual
+  // door", accelerate, go white, and decelerate inside. None of that is a DOM
+  // fact, so — like the turntable case — the camera is read through three's own
+  // devtools event, and the passage reports its state and its white coverage on
+  // <html data-doorway data-doorway-coverage>, written by the same frame that
+  // paints the light.
+  test('wheeling through the door plays the passage and lands inside', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.addInitScript(DEVTOOLS_HOOK);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+
+    await page.evaluate(() => {
+      const w = window as unknown as Record<string, any>;
+      const gl = w.__PROBE__?.renderers?.[w.__PROBE__.renderers.length - 1];
+      if (!gl || gl.__e2eDoorPatched) return;
+      const orig = gl.render.bind(gl);
+      gl.render = function (scene: any, camera: any) {
+        // The world scene is found once and then only its camera is refreshed;
+        // the composer's own full-screen scenes are small and never match.
+        if (w.__DOOR__?.scene === scene) {
+          w.__DOOR__.camera = camera;
+        } else if (scene?.isScene) {
+          let isWorld = false;
+          scene.traverse((o: any) => {
+            if (!isWorld && /^(mansion_|ashlar_|door_leaf_)/.test(o.name || '')) isWorld = true;
+          });
+          if (isWorld) w.__DOOR__ = { scene, camera };
+        }
+        return orig(scene, camera);
+      };
+      gl.__e2eDoorPatched = true;
+    });
+
+    const stationCount = await page.locator('#city a[href^="/projects/"]').count();
+    const approach = chapters(stationCount).find((c) => c.id === 'approach');
+    expect(approach, 'the film has an approach chapter').toBeTruthy();
+
+    // Stand at the door. A JUMP, not a crossing — this must not start anything.
+    // The approach CHAPTER runs on across the doorway band (journey.ts); the door
+    // itself is DOOR_OUT.
+    await scrollToFraction(page, DOOR_OUT - 0.003);
+    expect(await page.locator('html').getAttribute('data-doorway')).toBe('idle');
+
+    // The hall must be in the scene for the passage to swap into it without a
+    // hold; it is armed well before the door, so wait for it rather than guess.
+    await page
+      .waitForFunction(
+        () => {
+          const p = (window as unknown as Record<string, any>).__DOOR__;
+          return !!p?.scene.getObjectByName('int_wall_front');
+        },
+        undefined,
+        { timeout: 45_000, polling: 250 },
+      )
+      .catch(() => undefined);
+    await page.waitForTimeout(800);
+
+    const pose = () =>
+      page.evaluate(() => {
+        const p = (window as unknown as Record<string, any>).__DOOR__;
+        const el = document.documentElement;
+        return {
+          cam: p ? (p.camera.position.toArray() as number[]) : null,
+          state: el.dataset.doorway ?? null,
+          coverage: Number(el.dataset.doorwayCoverage ?? 0),
+          y: window.scrollY,
+        };
+      });
+
+    const atDoor = await pose();
+    expect(atDoor.cam, 'the camera was observed').not.toBeNull();
+    // Square on the entry axis, out beyond the fountain.
+    expect(Math.abs(atDoor.cam![0])).toBeLessThan(0.6);
+    expect(atDoor.cam![2]).toBeGreaterThan(18);
+
+    // By hand, across the door.
+    await page.mouse.move(720, 450);
+    let started = false;
+    for (let i = 0; i < 12 && !started; i += 1) {
+      await page.mouse.wheel(0, 120);
+      await page.waitForTimeout(90);
+      started = (await pose()).state === 'enter';
+    }
+    expect(started, 'a crossing made by hand at the door starts the passage').toBe(true);
+
+    // Sample the passage. Before the swap the page is held at the door, so the
+    // scroll position tells the two sides apart.
+    const heldY = (await pose()).y;
+    let nearestTheDoor = Infinity;
+    let peak = 0;
+    const scrollYs = new Set<number>();
+    for (let i = 0; i < 80; i += 1) {
+      const s = await pose();
+      if (s.state !== 'enter') break;
+      scrollYs.add(s.y);
+      if (s.y === heldY && s.cam) nearestTheDoor = Math.min(nearestTheDoor, s.cam[2]);
+      peak = Math.max(peak, s.coverage);
+      // Try to scroll the page out from under the passage; it must not move.
+      if (i % 5 === 0) await page.mouse.wheel(0, 400);
+      await page.waitForTimeout(60);
+    }
+
+    expect(peak, 'the light fills the frame').toBeGreaterThan(0.99);
+    // THE CAMERA HAS TO FLY IN, AND THIS IS WHAT PROVES IT DID.
+    //
+    // The samples are taken while the page is HELD, and the last one lands just
+    // after the swap — so what this reads is either the near end of the exterior
+    // rush (DOORWAY.exteriorPass, z 7.5) or the hall side's own start
+    // (DOORWAY.hallStart, z 10.6), whichever the loop catches before the state
+    // leaves 'enter'. Both are inside the portico. What it must NOT read is the
+    // door beat the passage began at, z 33.6, out beyond the fountain — a
+    // passage that plays with the camera parked there is the regression this
+    // guards, and it would measure 33.
+    //
+    // 9 -> 14 with the estate rebuilt and the hall extended. The numbers this
+    // was written against — a door plane at z 5.06 and a fountain at 13.2 —
+    // are the v5 exterior's; v7 puts the door leaves at z 8.17..8.31 and the
+    // fountain at 26.05..33.95, and the hall's start moved out from 8.2 to 10.6
+    // with a room 2.4 m longer.
+    expect(nearestTheDoor, 'the camera flew over the fountain to the door').toBeLessThan(14);
+    expect(
+      scrollYs.size,
+      'the page is held at the door, then landed once — the wheel does not move it',
+    ).toBeLessThanOrEqual(2);
+
+    await page.waitForFunction(
+      () => document.documentElement.getAttribute('data-doorway') === 'idle',
+      undefined,
+      { timeout: 20_000 },
+    );
+    await page.waitForTimeout(900);
+
+    const inside = await pose();
+    expect(inside.coverage, 'and the light has gone').toBe(0);
+    // In the hall: interior_hall.glb's walls stand at x +/-9.9 and z +/-7.7
+    // since it was extended by bays for the client review.
+    expect(Math.abs(inside.cam![0])).toBeLessThan(9.9);
+    expect(inside.cam![2]).toBeLessThan(7.7);
+    expect(inside.cam![2]).toBeGreaterThan(-7.7);
+    expect(new URL(page.url()).hash, 'the page landed on the first chapter inside').toBe(
+      '#establish',
+    );
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
   });
 });
 

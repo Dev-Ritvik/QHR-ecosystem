@@ -60,6 +60,7 @@ import { useEffect } from 'react';
 import type { Chapter } from './journey';
 import { isNavigating } from '@/components/site/RouteVeil';
 import { rememberChapter } from '@/components/site/residence';
+import { measureFilmSpan } from './filmTrack';
 
 /**
  * How long a chapter must hold before the bar is rewritten.
@@ -97,8 +98,9 @@ export function ChapterUrl({ chapters }: { chapters: Chapter[] }) {
       return chapters[chapters.length - 1]?.id ?? null;
     };
 
-    const maxScroll = () =>
-      Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    // The SAME measure the camera uses (filmTrack.ts). Against the document it
+    // put the address a chapter behind the frame on the long track.
+    const maxScroll = () => measureFilmSpan();
 
     // ---- URL -> scroll ---------------------------------------------------
     // Runs first, and only once, so an incoming fragment is honoured before

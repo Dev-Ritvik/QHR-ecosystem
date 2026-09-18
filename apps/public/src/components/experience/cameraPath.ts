@@ -15,14 +15,15 @@
 // importantly it CHANGES DIRECTION — dolly, rise, orbit, drop, pedestal — so
 // each beat reframes the building instead of creeping toward it.
 //
-// GEOMETRY THIS PATH MUST RESPECT (measured from exterior_mansion.glb, three
-// space, metres):
+// GEOMETRY THIS PATH MUST RESPECT is estateBounds.ts: measured from
+// exterior_estate_v7.glb by tools/gltf/estate_bounds_v7.py, one box per solid
+// and one per palm and tree, and asserted against the whole path in
+// cameraPath.test.ts. In outline (three space, metres):
 //
-//   mansion      x -9.55..9.55   y 0..6.80 (spire 11.72)   z -5.55..6.10
-//   entry step   z 6.15
-//   fountain     centre (0, ·, 13.2), bowl radius ~2.7  -> a solid cylinder
-//                the camera must not fly through
-//   hedges       x +/-15.9        cypress x +/-27
+//   house + podium  x -15.5..15.5  y 0..12.6 (spire 20.34)  z -10.3..13.25
+//   fountain        centre (0, ·, 30), radius 3.95, 3.4 m tall
+//   palm avenue     x +/-7.6 from z 47 to 208; forecourt palms at r 17.5
+//   compound wall   x +/-72, z -84..215, a planted belt beyond it
 //
 // Every keyframe below, and the interpolated path between them, is rendered and
 // scored by tools/blender/audit_camera_path.py before it ships. Three cameras
@@ -33,7 +34,38 @@
 
 import * as THREE from 'three';
 
+/**
+ * THE ESTATE GREW, AND THE FILM GREW WITH IT.
+ *
+ * The client review asked for the mansion to be "bigger, taller, wider, and
+ * importantly longer", keeping its features. exterior_estate_v7.glb is that
+ * house: 31 m of podium where there were 19, 20.3 m to the spire tip where there
+ * were 11.7, the same pedimented centre, portico, arched windows, parapet and
+ * spire, now nine bays long.
+ *
+ * Every approved beat below is written in the coordinates it was signed off in
+ * and grown by this factor about the estate's centre. Scaling a camera's
+ * position, its aim, its fog and its frame offset by the same factor as the
+ * subject reproduces the same picture of a larger subject exactly, so the hero,
+ * the revolution and the constellation keep their approved compositions rather
+ * than being re-guessed. The approach to the door is NOT grown: the door is the
+ * same door, 3.4 m tall, and those beats are re-authored on it (see below).
+ */
+export const ESTATE_SCALE = 1.6;
+const grow = (v: readonly [number, number, number]): [number, number, number] => [
+  v[0] * ESTATE_SCALE,
+  v[1] * ESTATE_SCALE,
+  v[2] * ESTATE_SCALE,
+];
+const growFog = (f: readonly [number, number]): [number, number] => [
+  f[0] * ESTATE_SCALE,
+  f[1] * ESTATE_SCALE,
+];
+
 export interface CameraBeat {
+  /** A name for the shot, so a test or a note can point at one beat without
+   *  counting array indices that move whenever a beat is added. */
+  id: string;
   /** Scroll progress 0..1 where this beat lands. */
   at: number;
   position: [number, number, number];
@@ -126,7 +158,14 @@ export interface CameraBeat {
  * 19.8 - 6.2 - 1.18 = 12.42 — seven tenths of a metre above the spire tip. The
  * sphere crowns the roof and never sinks into it, at rest or under the pointer.
  */
-export const CONSTELLATION: [number, number, number] = [0, 19.8, 0];
+/*
+ * V7: AT [0, 33.3, 0], radius 9.92. The approved placement grown with the estate
+ * (19.8 x 1.6 = 31.7) would crown a spire that grew MORE than 1.6x — the tip is
+ * 20.34, not 18.75 — and the hover push would reach 31.7 - 9.92 - 1.88 = 19.9,
+ * inside the tip. So the centre is set by the same clearance rule the note
+ * above states, at the new scale: tip 20.34 + 1.12 + radius 9.92 + push 1.88.
+ */
+export const CONSTELLATION: [number, number, number] = [0, 33.3, 0];
 
 /** World radius of the constellation. Re-scored against the Phase 6B arrival
  *  beat: the sphere centre is 48.4m from the eye at a 37-degree lens, where the
@@ -134,7 +173,38 @@ export const CONSTELLATION: [number, number, number] = [0, 19.8, 0];
  *  clear above a mansion holding 46% of frame width. Large enough to be the
  *  subject, small enough that the residence beneath it still reads as the
  *  thing the network belongs to. */
-export const CONSTELLATION_RADIUS = 6.2;
+export const CONSTELLATION_RADIUS = 6.2 * ESTATE_SCALE;
+
+/**
+ * Where the constellation's held frame sits on the exterior leg.
+ *
+ * ADDED WITH THE APPROACH, BY CLIENT REVIEW. The film used to end on the
+ * constellation and close a black veil over that frame — so the visitor passed
+ * from a crane shot forty-eight metres behind the house straight into the hall,
+ * and the review put it plainly: the transition "opens here in the site", and it
+ * must open from the actual door. The exterior leg therefore gained a fourth
+ * chapter after the constellation: the camera comes down the left flank as the
+ * light goes, swings onto the entry axis over the fountain, and stops square on
+ * the front door. doorway.ts takes it through that door.
+ *
+ * The first three chapters are NOT re-authored. Their beats keep their exact
+ * positions, targets, lenses and relative spacing; they are compressed into the
+ * first FILM_SHARE of the leg, and the page grows by the same factor (journey.ts)
+ * so every one of them keeps the scroll distance it was paced against. Two
+ * separate curves meet at the constellation beat rather than one curve through
+ * all ten points: a Catmull-Rom through a point bends the segments on BOTH sides
+ * of it, so a single curve would have reshaped the approved crane move to suit
+ * the new descent. The camera slows almost to rest at the join (see
+ * exteriorSwing), so the change of direction there is a crane that settles and
+ * then sets off again, not a kink.
+ *
+ * 0.625 is 1 / 1.6: the approach gets 0.6 of the page the first three chapters
+ * share. Sampled on the two curves through the swing ease, that is the share at
+ * which the approach's fastest moment sweeps around the house at 63 degrees per
+ * viewport of scroll against the film's 53 — a finale a little quicker than the
+ * orbit it follows, not a whip-pan.
+ */
+export const FILM_SHARE = 0.625;
 
 /**
  * The beats, in order. Three chapters: the hero, the revolution, and the
@@ -174,8 +244,9 @@ export const CONSTELLATION_RADIUS = 6.2;
  * an estate-agent walkthrough. This one stays airborne, which is the register
  * the brief asks for.
  */
-export const BEATS: readonly CameraBeat[] = [
+export const FILM_BEATS: readonly CameraBeat[] = [
   {
+    id: 'hero',
     // HERO. The three-quarter bird's eye the brief opens on, derived from the
     // measured bounds rather than taken literally from the reference numbers.
     //
@@ -217,8 +288,8 @@ export const BEATS: readonly CameraBeat[] = [
     // The elevation is untouched at 18.7 degrees, and the left edge lands
     // within two pixels of where it was, so the column of type keeps exactly
     // the gutter it was composed against.
-    position: [-20.0, 15.5, 27.0],
-    target: [0.0, 4.1, 0.0],
+    position: grow([-20.0, 15.5, 27.0]),
+    target: grow([0.0, 4.1, 0.0]),
     // ATMOSPHERIC PERSPECTIVE, tightened from [40, 150].
     //
     // The key is a directional light, so it lights all 240m of lawn at the same
@@ -232,7 +303,7 @@ export const BEATS: readonly CameraBeat[] = [
     // third and burying the far edge of the terrain entirely. That is depth
     // recovered from a real optical effect rather than a gradient painted over
     // the problem.
-    fog: [26, 105],
+    fog: growFog([26, 105]),
     keyIntensity: 2.3,
     // 44 -> 41. A longer lens compresses the facade, which is what
     // architectural photography does and what a wide angle undoes: at 44 the
@@ -243,36 +314,42 @@ export const BEATS: readonly CameraBeat[] = [
     // 60% for the hero column; the last 0.2 compensates the swing to a more
     // frontal azimuth so the left edge stays where the type was composed
     // against it.
-    frameOffset: 6.2,
+    frameOffset: 6.2 * ESTATE_SCALE,
   },
   {
+    id: 'quarter',
     // REVOLUTION, QUARTER. Swung onto the left flank and dropped four metres,
     // banking into the turn. Widest lens here because this is the fastest leg
     // and a wide lens exaggerates the parallax between the near colonnade and
     // the far cypresses, which is what the eye reads as speed.
-    at: 0.3,
-    position: [-26.0, 9.0, 2.0],
-    target: [0.0, 4.6, 0.0],
-    fog: [30, 136],
+    //
+    // Every `at` in this list is its approved value times FILM_SHARE — see the
+    // note there. 0.3 of the old leg is 0.3 of the film.
+    at: 0.3 * FILM_SHARE,
+    position: grow([-26.0, 9.0, 2.0]),
+    target: grow([0.0, 4.6, 0.0]),
+    fog: growFog([30, 136]),
     keyIntensity: 2.5,
     fov: 56,
     roll: -0.048,
-    frameOffset: 8.2,
+    frameOffset: 8.2 * ESTATE_SCALE,
   },
   {
+    id: 'three-quarter',
     // REVOLUTION, THREE-QUARTER. Behind the left shoulder of the building, the
     // lowest and closest point of the orbit. 8.40m of altitude against a 6.80m
     // roof and 5.40m cypresses.
-    at: 0.58,
-    position: [-15.0, 8.4, -19.0],
-    target: [0.0, 4.8, 0.0],
-    fog: [24, 120],
+    at: 0.58 * FILM_SHARE,
+    position: grow([-15.0, 8.4, -19.0]),
+    target: grow([0.0, 4.8, 0.0]),
+    fog: growFog([24, 120]),
     keyIntensity: 2.7,
     fov: 52,
     roll: -0.036,
-    frameOffset: 6.4,
+    frameOffset: 6.4 * ESTATE_SCALE,
   },
   {
+    id: 'crane',
     // THE CRANE, which replaces what used to be THE TURN AWAY.
     //
     // The old beat swung the aim off the building and out into empty field, so
@@ -281,14 +358,14 @@ export const BEATS: readonly CameraBeat[] = [
     // -32, and the aim lifts from the mansion's centroid toward its roofline.
     // The move reads as pulling back to see what the house belongs to, which is
     // the sentence the chapter has to say.
-    at: 0.82,
-    position: [-21.0, 15.0, -32.0],
-    target: [0.0, 10.0, 0.0],
-    fog: [30, 165],
+    at: 0.82 * FILM_SHARE,
+    position: grow([-21.0, 15.0, -32.0]),
+    target: grow([0.0, 10.0, 0.0]),
+    fog: growFog([30, 165]),
     keyIntensity: 2.4,
     fov: 44,
     roll: -0.02,
-    frameOffset: 4.6,
+    frameOffset: 4.6 * ESTATE_SCALE,
     // EVENING IS COMPLETE HERE, not at the last beat — the light changes DURING
     // the crane and has finished by the time the camera settles.
     //
@@ -303,6 +380,7 @@ export const BEATS: readonly CameraBeat[] = [
     evening: 1,
   },
   {
+    id: 'constellation',
     // CONSTELLATION. The rear three-quarter, craned to 18m and 48m out, holding
     // the estate low-right with the sphere directly above its spire.
     //
@@ -315,27 +393,164 @@ export const BEATS: readonly CameraBeat[] = [
     //
     // The old beat at [0, 16, -24] aimed at [0, 16, -46] and measured mansion
     // coverage 0.000. This is the same chapter with the building still in it.
-    at: 1.0,
-    position: [-24.0, 18.0, -42.0],
-    target: [0.0, 12.8, 0.0],
+    //
+    // No longer the end of the leg: the approach to the door follows it. It is
+    // still where the camera slows almost to rest, which is what makes it the
+    // held frame of its chapter.
+    at: FILM_SHARE,
+    position: grow([-24.0, 18.0, -42.0]),
+    // grown, then lifted 1.3 m with the constellation it frames (see above)
+    target: [0.0, 12.8 * ESTATE_SCALE + 1.3, 0.0],
     // Fog is doing MORE work here than anywhere else on the path, not less. The
     // authored terrain stops dead at +/-120m, and from this vantage the far edge
     // is 149m away and lands at y 453 — a hard line straight across the frame,
     // the single artefact that most reads as a diorama on a table. 60..150
     // takes that edge to 89% haze while leaving the building, whose nearest
     // corner is 39.8m from the eye, completely untouched.
-    fog: [60, 150],
+    fog: growFog([60, 150]),
     keyIntensity: 2.6,
     fov: 37,
     roll: 0.0,
     // Held open rather than closed. The subject is now a PAIR — residence and
     // network — and the pair has to sit in the right of frame together with the
     // text block beside it, which needs more offset than a lone sphere did.
-    frameOffset: 3.6,
+    frameOffset: 3.6 * ESTATE_SCALE,
     // Held, not still climbing. See the note on the beat above.
     evening: 1,
   },
 ];
+
+/**
+ * THE APPROACH — from the constellation down to the front door, as night falls.
+ *
+ * WHY THE LEFT FLANK, AND WHY THAT IS NOT A REWIND. The obvious route is on
+ * round the right side, closing the circle. Measured on the curves, it is 122 m
+ * and 210 degrees of azimuth from the constellation to the door, which at any
+ * page length the film can afford sweeps the house twice as fast as the orbit it
+ * follows. Back down the left is 99 m and 150 degrees. And it does not read as
+ * the revolution played backwards, for two reasons the frame makes obvious: the
+ * revolution flew that flank at noon and nine metres up, and this passes it at
+ * dusk with every window lit, lower and wider; and it ends somewhere the
+ * revolution never went — on the axis, at the door. The film opens on the front
+ * of the house in daylight and comes back to it at night to go inside.
+ *
+ * GEOMETRY. Clearances are in cameraPath.test.ts against the same hulls as the
+ * rest of the path; the tightest is 3.0 m, over the left cypress line at the
+ * forecourt beat. The last two beats are ON the entry axis (x = 0), so the final
+ * stretch is a straight push toward the door rather than a slide onto it —
+ * which matters, because the doorway move continues that push.
+ *
+ * AT VALUES are on the whole exterior leg. The first entry is the constellation
+ * beat itself: this curve starts where the film's ends.
+ */
+const APPROACH_SPAN = 1 - FILM_SHARE;
+
+export const APPROACH_BEATS: readonly CameraBeat[] = [
+  FILM_BEATS[FILM_BEATS.length - 1],
+  {
+    id: 'dusk-flank',
+    // Down off the crane and out along the left flank, wider than the
+    // revolution flew it and three metres lower. The aim drops from the roofline
+    // to the first floor as the camera does, so the house comes back into the
+    // middle of frame and the sphere rides up out of the top of it.
+    at: FILM_SHARE + APPROACH_SPAN * 0.33,
+    // V7: pulled in to x -46, 19 m up. Grown straight it stood at x -57.6, 20 m
+    // up, inside the rain trees planted along the compound wall.
+    position: [-45.7, 18.5, -12.9],
+    target: grow([0.0, 6.4, 0.0]),
+    fog: growFog([40, 160]),
+    keyIntensity: 2.5,
+    fov: 46,
+    // Banking the OTHER way from the revolution: this turn runs the opposite
+    // direction round the house.
+    roll: 0.035,
+    frameOffset: 2.4 * ESTATE_SCALE,
+    evening: 1,
+  },
+  {
+    id: 'forecourt',
+    // Round the front-left corner above the hedge line, the lit facade raking
+    // away to the right. 8.2 m clears the 5.4 m cypresses by 2.8 m.
+    at: FILM_SHARE + APPROACH_SPAN * 0.64,
+    // V7: round the front-left corner of the podium and into the forecourt
+    // between the house and the ring of palms, which is planted only on the
+    // fountain's far side, so the camera comes onto the axis inside the ring
+    // rather than through it. The lit front rakes away to the right.
+    position: [-11.8, 14.5, 20.5],
+    target: [0.0, 4.5, 7.2],
+    fog: growFog([32, 150]),
+    keyIntensity: 2.45,
+    fov: 45,
+    roll: 0.025,
+    frameOffset: 1.4 * ESTATE_SCALE,
+    evening: 1,
+  },
+  {
+    id: 'axis-far',
+    // Swinging onto the axis beyond the fountain. The copy column is closing out
+    // here — the offset falls toward zero — because the subject is about to be a
+    // doorway on the centre line and an off-centre doorway reads as a mistake.
+    at: FILM_SHARE + APPROACH_SPAN * 0.86,
+    // V7: onto the axis over the fountain, short of the palm avenue. The four
+    // approach beats were searched against estateBounds.ts for the pose nearest
+    // the intended shots that clears every palm by more than a metre and keeps
+    // the descent under the path's vertical-kink bound.
+    position: [-5.3, 11.7, 38.1],
+    target: [0.0, 3.4, 8.2],
+    fog: growFog([30, 145]),
+    keyIntensity: 2.4,
+    fov: 36,
+    roll: 0.008,
+    frameOffset: 0.5,
+    evening: 1,
+  },
+  {
+    id: 'axis',
+    at: FILM_SHARE + APPROACH_SPAN * 0.95,
+    position: [0.0, 9.3, 36.7],
+    target: [0.0, 2.9, 8.2],
+    fog: growFog([30, 140]),
+    keyIntensity: 2.4,
+    fov: 32,
+    roll: 0.0,
+    frameOffset: 0.15,
+    evening: 1,
+  },
+  {
+    id: 'door',
+    // THE FRONT DOOR, square on, from beyond the fountain.
+    //
+    // Everything about this frame is decided by the move that follows it. The
+    // doorway (doorway.ts) flies straight down the camera's own view axis and
+    // through the opening, so the door must sit on that axis: camera and aim
+    // both at x = 0, frame offset zero. 17 m back with a 40-degree lens holds
+    // the whole portico and most of the elevation, with the door at a quarter of
+    // frame height — large enough to be the unmistakable subject, small enough
+    // that the flight toward it is a flight and not a lurch.
+    //
+    // 4.6 m up puts the sight line to the door over the fountain: the bowl and
+    // cap sit below the threshold in frame, and only the thin jet crosses the
+    // foot of the doors. The straight line from here to the doorway clears the
+    // jet by 0.7 m — asserted in doorway.test.ts, not assumed.
+    at: 1.0,
+    // V7: the same door, set in a portico twice as deep and a fountain 22 m out
+    // rather than 8. 25.4 m back on a 30-degree lens keeps the door at a quarter
+    // of frame height and the whole portico in shot, and 6 m up keeps the
+    // straight flight to the doorway 1.5 m over the fountain (doorway.test.ts).
+    position: [0.0, 6.0, 33.6],
+    target: [0.0, 2.6, 8.2],
+    fog: growFog([30, 140]),
+    keyIntensity: 2.4,
+    fov: 30,
+    roll: 0.0,
+    frameOffset: 0.0,
+    evening: 1,
+  },
+];
+
+/** Every beat on the exterior leg, in order, each once. The lens and the
+ *  atmosphere read this; the camera reads the two curves below. */
+export const BEATS: readonly CameraBeat[] = [...FILM_BEATS, ...APPROACH_BEATS.slice(1)];
 
 /**
  * Catmull-Rom through the beats, centripetal.
@@ -360,13 +575,17 @@ function curveThrough(points: readonly [number, number, number][]) {
  * orbit, and DOF focuses on it — one shared constant so the lens and the look
  * can never disagree about where the subject is.
  */
-export const SUBJECT: [number, number, number] = [0, 4.0, 0];
+export const SUBJECT: [number, number, number] = grow([0, 4.0, 0]);
 
-export const POSITION_CURVE = curveThrough(BEATS.map((b) => b.position));
-export const TARGET_CURVE = curveThrough(BEATS.map((b) => b.target));
+/** The approved film: hero, revolution, crane, constellation. */
+export const FILM_POSITION_CURVE = curveThrough(FILM_BEATS.map((b) => b.position));
+export const FILM_TARGET_CURVE = curveThrough(FILM_BEATS.map((b) => b.target));
+/** The approach, from the constellation to the front door. */
+export const APPROACH_POSITION_CURVE = curveThrough(APPROACH_BEATS.map((b) => b.position));
+export const APPROACH_TARGET_CURVE = curveThrough(APPROACH_BEATS.map((b) => b.target));
 
 /**
- * Map scroll progress to curve parameter.
+ * Map progress to a parameter on one curve.
  *
  * NOT the identity. The beats sit at uneven `at` values so each lands under its
  * section, but the curve is parameterised 0..1 across its control points. This
@@ -374,18 +593,115 @@ export const TARGET_CURVE = curveThrough(BEATS.map((b) => b.target));
  * beat rather than near it — otherwise the vantage that was rendered and
  * approved is never actually the one on screen.
  */
-export function curveT(scroll: number): number {
-  const s = Math.min(1, Math.max(0, scroll));
-  const n = BEATS.length - 1;
+export function curveTOver(beats: readonly CameraBeat[], swing: number): number {
+  const n = beats.length - 1;
+  const s = Math.min(beats[n].at, Math.max(beats[0].at, swing));
   for (let i = 0; i < n; i += 1) {
-    const a = BEATS[i].at;
-    const b = BEATS[i + 1].at;
+    const a = beats[i].at;
+    const b = beats[i + 1].at;
     if (s <= b) {
       const local = b === a ? 0 : (s - a) / (b - a);
       return (i + local) / n;
     }
   }
   return 1;
+}
+
+/**
+ * The swing: power2.inOut plus a linear pedestal, applied to the CURVE
+ * parameter only. Moved here from WorldCanvas so the path and its tests read the
+ * same function; gsap's power2.inOut is the quadratic below, written out so this
+ * module does not need gsap to be tested.
+ *
+ * Raw scroll progress is linear, so a linear read of it moves the camera at a
+ * constant rate along the whole curve — which is why the dive had no weight.
+ * Momentum is the DERIVATIVE of position, and a linear map has a constant one.
+ * Atmosphere and lens read raw scroll, so fog and FOV stay tied to where the
+ * visitor is on the page rather than lurching with the camera.
+ *
+ * power2.inOut, not power4. Across a single continuous track power4 spends so
+ * much of the range near zero velocity that the middle beats blur past in a
+ * fraction of the scroll and never read; power2 accelerates and decelerates
+ * over the whole journey while still crossing the centre at a real clip.
+ *
+ * PLUS A LINEAR PEDESTAL, because an inOut ease has zero derivative at zero and
+ * the head of the exterior leg is the first thing anyone touches.
+ *
+ * MEASURED at 1440x900 against a 14,014px track, camera travel from rest:
+ *
+ *                        power2.inOut     +0.20 pedestal
+ *   quarter viewport        0.01 m           0.54 m
+ *   half viewport           0.10 m           1.15 m
+ *   one full viewport       0.83 m           2.82 m
+ *
+ * One centimetre. A visitor could scroll a quarter of a screen — the first
+ * flick of a wheel — and the image was pixel-identical, which is the one thing
+ * a camera on a scroll track must never do. It is not a pacing preference; at
+ * 34m from the subject a 1cm dolly is 0.03% of the frame.
+ *
+ * The pedestal is a weighted sum rather than a different ease because it fixes
+ * the derivative at the ends without changing the shape in between: E'(0) is
+ * now LEAD instead of 0, and the mid-leg whip actually calms slightly (peak
+ * 24.8 -> 22.9 m per viewport) because the linear term carries some of the
+ * distance the eased term was cramming into the centre.
+ *
+ * The non-zero derivative at the end of the approach costs nothing: that is the
+ * front door, where a hand-made crossing hands the camera to the doorway.
+ */
+const SWING_LEAD = 0.2;
+function power2InOut(x: number): number {
+  return x < 0.5 ? 2 * x * x : 1 - 2 * (1 - x) * (1 - x);
+}
+export function SWING(s: number): number {
+  const x = Math.min(1, Math.max(0, s));
+  return SWING_LEAD * x + (1 - SWING_LEAD) * power2InOut(x);
+}
+
+/**
+ * Leg progress to "swing space", where the beats' `at` values live.
+ *
+ * ONE EASE PER CURVE, not one across the leg. The film keeps exactly the ease it
+ * was approved with — the same curve, rescaled into FILM_SHARE — so every frame
+ * of the first three chapters is the frame it was. The approach gets its own,
+ * leaving the constellation from near rest: the camera settles onto the sphere
+ * above the house, all but holds, and only then sets off for the door. (Not
+ * from a dead stop — the pedestal keeps a slow drift through the join, for the
+ * same reason it exists at the top of the page: a stretch of scroll that moves
+ * nothing on screen reads as a broken page.)
+ */
+export function exteriorSwing(legProgress: number): number {
+  const s = Math.min(1, Math.max(0, legProgress));
+  if (s <= FILM_SHARE) return FILM_SHARE * SWING(s / FILM_SHARE);
+  return FILM_SHARE + APPROACH_SPAN * SWING((s - FILM_SHARE) / APPROACH_SPAN);
+}
+
+/**
+ * Position and aim at a point in swing space. Picks the curve; the constellation
+ * beat, where they meet, is the same point on both.
+ */
+export function exteriorPoseAtSwing(
+  swing: number,
+  outPosition: THREE.Vector3,
+  outTarget: THREE.Vector3,
+): void {
+  if (swing <= FILM_SHARE) {
+    const u = curveTOver(FILM_BEATS, swing);
+    FILM_POSITION_CURVE.getPoint(u, outPosition);
+    FILM_TARGET_CURVE.getPoint(u, outTarget);
+  } else {
+    const u = curveTOver(APPROACH_BEATS, swing);
+    APPROACH_POSITION_CURVE.getPoint(u, outPosition);
+    APPROACH_TARGET_CURVE.getPoint(u, outTarget);
+  }
+}
+
+/** Where the camera stands, and what it looks at, for exterior leg progress. */
+export function exteriorPoseAt(
+  legProgress: number,
+  outPosition: THREE.Vector3,
+  outTarget: THREE.Vector3,
+): void {
+  exteriorPoseAtSwing(exteriorSwing(legProgress), outPosition, outTarget);
 }
 
 /** Fog and key intensity, interpolated between the surrounding beats. Linear

@@ -1,8 +1,8 @@
 {
   "model": "interior_hall.glb",
-  "size_mb": 16.14,
+  "size_mb": 16.39,
   "loaders_required": {
-    "KTX2Loader": "all 28 textures are KTX2/Basis (KHR_texture_basisu is in extensionsRequired). setTranscoderPath('/basis/') and detectSupport(renderer) before loading; the transcoder is served from apps/public/public/basis/.",
+    "KTX2Loader": "all 37 textures are KTX2/Basis (KHR_texture_basisu is in extensionsRequired). setTranscoderPath('/basis/') and detectSupport(renderer) before loading; the transcoder is served from apps/public/public/basis/.",
     "DRACOLoader": "geometry is Draco compressed. setDecoderPath('/draco/'); the decoder is served from apps/public/public/draco/."
   },
   "lightmap": {
@@ -10,81 +10,80 @@
     "uv": "TEXCOORD_1",
     "atlas_px": 4096,
     "codec": "ETC1S (basis-lz, qlevel 255)",
-    "intensity": 4.6597,
+    "intensity": 3.0801,
     "encoding": "sRGB",
     "note": "glTF has no lightmap slot, so baked GI rides in occlusion. On load promote aoMap -> lightMap and set colorSpace = SRGBColorSpace: the atlas is normalised then sRGB-encoded for precision, because linear 8-bit puts the room near value 13 and bands.",
-    "intensity_note": "4.6597 is carried over from the previous bake and has NOT been re-derived against this rebuild. It has not been shown to be wrong, and it has not been shown to be right."
+    "intensity_note": "RE-DERIVED for the extended hall: the bake normalises the atlas by its own 99.5th percentile and this is that divisor, straight from lightmap_manifest.json. HallModel.tsx carries it as LIGHTMAP_INTENSITY."
   },
   "textures": {
     "count": 37,
     "normal_maps": "UASTC - ETC1S quantises a direction field hard enough to facet across large flat walls",
     "everything_else": "ETC1S - on the 4K atlas it is 1.1MB against 7.1MB for UASTC, on smooth low-frequency light",
     "pbr_max_px": 1024,
-    "BROKEN_2026_08_26": "FOUR images have non-multiple-of-four dimensions and therefore FAIL their compressed upload at runtime: founder_portrait_graded (766x1024), kartikeya_holo_tex (745x725), lucky_holo_tex (1024x607), gayatri_holo_tex (1024x729). Chrome logs 'THREE.KTX2Loader: ETC1S and UASTC textures should use multiple-of-four dimensions' followed by ~80 glCompressedTexSubImage/glTexStorage GL_INVALID_OPERATION per load. Visible consequence: the founder's portrait and ALL THREE project site plans render with no artwork. Fix in the encode step, not in code - pad or resample each to a multiple of four before ktx2 encoding."
+    "ktx2": 37,
+    "multiple_of_four": "Enforced in the pipeline by tools/gltf/round4_textures.py after the resize pass: ETC1S/UASTC upload fails in the browser on any other size, which is how four plates shipped blank in August."
   },
   "geometry": {
-    "drawn_triangles": 507662,
-    "vertices_uploaded": 214328,
-    "vertices_rendered_per_pass": 1438890,
-    "shell_objects_lightmapped": 147,
-    "shell_triangles": 22751,
+    "meshes": 269,
+    "nodes": 663,
+    "materials": 40,
+    "drawn_triangles": 609485,
+    "shell_objects_lightmapped": 160,
+    "shell_triangles": 39471,
     "decimated": [
       {
         "mesh": "KIT_column_M.001",
-        "from": 60000,
+        "from": 10000,
         "to": 10000
       },
       {
         "mesh": "KIT_newel_hi_M",
-        "from": 40000,
+        "from": 6000,
         "to": 6000
       },
       {
         "mesh": "KIT_baluster_hi_M",
-        "from": 4499,
+        "from": 1200,
         "to": 1200
       },
       {
         "mesh": "KIT_anth_M",
-        "from": 2464,
+        "from": 800,
         "to": 800
       },
       {
         "mesh": "ceiling_rosette_M.001",
-        "from": 34794,
+        "from": 8999,
         "to": 8999
       },
       {
         "mesh": "786242_Ampollo_Osgona_Glass_Clear_Fog_0.002",
-        "from": 259998,
+        "from": 62000,
         "to": 62000
       },
       {
         "mesh": "dress_urn_master_M",
-        "from": 29999,
+        "from": 7000,
         "to": 7000
       },
       {
         "mesh": "dress_bench_M",
-        "from": 24999,
+        "from": 7000,
         "to": 7000
       },
       {
         "mesh": "Object_0.001",
-        "from": 18112,
+        "from": 6000,
         "to": 6000
       }
-    ]
+    ],
+    "decimated_note": "from == to: the web budget was already applied to these datablocks in mansion_web.blend, which the extended hall was built from, so the re-bake had nothing left to decimate. The figures are the shipped triangle counts."
   },
   "not_lightmapped": "Instanced ornament (153 anthemions, 54 balusters, 11 capitals, 6 newels) and props/emitters. A lightmap needs per-placement UVs, which would cost the instancing that keeps the upload at 214k vertices.",
   "rebuild": [
-    "blender --background mansion_exterior.blend --python tools/blender/bake_lightmap.py -- out/web 4096 1024 1800",
-    "blender --background mansion_web.blend --python tools/blender/export_web_interior.py -- out/web/lightmap_manifest.json _raw.glb",
-    "gltf-transform dedup _raw.glb _a.glb && gltf-transform prune _a.glb _b.glb && gltf-transform copy _b.glb ex/scene.gltf",
-    "python tools/gltf/fix_ranges.py ex/scene.gltf",
-    "python tools/gltf/optimize_textures.py ex/scene.gltf 1024 4096 png",
-    "python tools/gltf/encode_ktx2.py ex/scene.gltf",
-    "gltf-transform copy ex/scene.gltf _k.glb && gltf-transform draco _k.glb interior_hall.glb"
+    "blender --background C:/dev/Blender/mansion_web.blend --python tools/blender/extend_hall_v7.py -- C:/dev/Blender/mansion_web_V7HALL.blend",
+    "blender --background C:/dev/Blender/mansion_web_V7HALL.blend --python tools/blender/bake_lightmap.py -- <bake> 4096 512 1500 C:/dev/Blender/mansion_web_V7HALL.blend 2048",
+    "BAKE=<bake> bash tools/gltf/ship_hall_v7.sh"
   ],
   "validation": {
     "validator": "Khronos glTF-Validator 2.0.0-dev.3.9",
@@ -101,5 +100,11 @@
     "shipped": "STATION_Sn -> { HOLO_Sn, projector_Sn -> projlens_Sn, TURNTABLE_Sn -> { table_base_Sn, table_inlay_Sn, table_top_Sn } }",
     "stations": 4,
     "note": "The projector sits OUTSIDE TURNTABLE_Sn deliberately: dragging the table must not swing the projector. ProjectStation.tsx binds to TURNTABLE_Sn by name and rotates only that."
+  },
+  "built_from": {
+    "scene": "C:/dev/Blender/mansion_web_V7HALL.blend",
+    "built_by": "tools/blender/extend_hall_v7.py (the client review: bigger, taller, wider, longer)",
+    "shipped_by": "tools/gltf/ship_hall_v7.sh",
+    "room_metres": "19.8 x 15.4 x 8.0 (was 15.0 x 10.6 x 6.4)"
   }
 }

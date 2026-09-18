@@ -25,40 +25,84 @@
 // first frame would expose.
 //
 // So the transition is honest about being a transition, and hides the seam the
-// way film does: the camera drives INTO the portico until the doorway fills the
-// frame, the frame goes to black through the last metre, and it opens again
-// standing inside on the threshold. Same axis, same direction of travel, same
-// eye height either side of the cut. That is a match cut, not a hard cut, and
-// it is the only construction available that does not require the two models to
-// be one model.
+// way film does — through the front door. The exterior leg ends square on the
+// doors (cameraPath.ts, the approach); a crossing made by hand plays the
+// doorway (doorway.ts): the leaves open, the camera accelerates through them
+// into light, and under full white the models swap and the page lands inside,
+// where the camera comes through the hall's own doorway and settles. Same axis,
+// same direction of travel either side of the swap.
 //
-// The model swap happens at the darkest instant, where nothing is on screen to
-// see it. VEIL_HALF_BAND is deliberately wide enough that the swap cannot be
-// caught by scrubbing the scrollbar quickly.
+// WHAT THIS REPLACED, BY CLIENT REVIEW. The swap used to happen under a black
+// veil scrubbed by scroll, closing over the constellation — a crane shot behind
+// the house. The review rejected it in so many words: the transition must open
+// from the actual door. The scrubbed veil survives only for visitors who have
+// asked for reduced motion; everyone else gets the doorway, or, for a jump
+// nobody made by hand, a placed camera under a brief dip from black.
 
 /**
- * Scroll progress at which the interior takes over.
+ * The scroll track's length, in viewport heights. Every fraction in this file
+ * is a fraction of it, and the home page sizes its chapter sections from it.
  *
- * Slightly past half: the exterior carries the hero, the revolution and the
- * constellation — three chapters — while the interior carries the establishing
- * shot, the stations and the portrait. The interior needs more page per beat
- * because its beats are reading beats, where a visitor stops to look at a plan.
+ * DERIVED, NOT CHOSEN. It was 1700 with the crossover at 0.46. The approach to
+ * the front door added 0.6 of the first three chapters' page (FILM_SHARE in
+ * cameraPath.ts), and the doorway takes one viewport of its own (DOOR_BAND
+ * below). The track grew by exactly those two amounts, so no chapter that
+ * existed before lost a pixel of the scroll it was paced against:
+ *
+ *   exterior leg   782vh x 1.6  = 1251.2vh    hero ... approach to the door
+ *   the doorway                    100.0vh    one viewport, see DOOR_BAND
+ *   interior leg                   748.0vh    (0.90 - 0.46) x 1700
+ *   journey                       2099.2vh =  JOURNEY_END x 2332vh
  */
-export const CROSSOVER = 0.46;
+export const TRACK_VH = 2332;
+
+/** The exterior leg in viewport heights: the approved 782vh of the first three
+ *  chapters, grown by the approach (FILM_SHARE is their share of the leg). */
+const EXTERIOR_VH = 782 / FILM_SHARE;
 
 /**
- * Half-width of the blackout, in scroll units.
+ * THE DOORWAY'S OWN VIEWPORT OF SCROLL, between the last frame outside and the
+ * first frame inside.
  *
- * At 10,000px of track this is ~360px of scroll fully or partly veiled, which
- * is about a third of a viewport — long enough to read as a deliberate passage
- * through a doorway, short enough not to feel like a loading screen.
+ * WHY THE PAGE HAS A GAP THE CAMERA NEVER USES. Each chapter's copy is a pane
+ * pinned for the length of its section, and a pinned pane takes a full viewport
+ * of scroll to leave. Without this band the approach's pane — "The door is
+ * open" — was still pinned, measured, when the doorway had already landed the
+ * visitor inside the hall; and the hall's own copy was still below the fold.
+ * With it, the approach pane is pinned up to the very frame the doors open
+ * from, and the hall's pane pins on the very frame the passage lands on. The
+ * passage jumps the page across the band; nobody scrolls through it except a
+ * visitor who has asked for reduced motion, for whom it is the old dissolve.
+ */
+export const DOOR_BAND = 100 / TRACK_VH;
+
+/** The last frame outside: the front door, square on. */
+export const DOOR_OUT = EXTERIOR_VH / TRACK_VH;
+
+/** The first frame inside: the threshold. */
+export const DOOR_IN = DOOR_OUT + DOOR_BAND;
+
+/**
+ * Where the scene swaps models, for anything that crosses the band without a
+ * passage — a deep link, a chapter address, reduced motion. The middle of the
+ * band, so neither side's copy is on screen when it happens.
+ */
+export const CROSSOVER = (DOOR_OUT + DOOR_IN) / 2;
+
+/**
+ * Half-width of the blackout, in scroll units — REDUCED MOTION ONLY.
+ *
+ * Everyone else crosses through the doorway (doorway.ts). A visitor who has
+ * asked the system for less motion gets no timed camera move at all, so for
+ * them the swap is still hidden the old way: a black veil scrubbed by scroll,
+ * about a third of a viewport either side of the crossover.
  */
 export const VEIL_HALF_BAND = 0.036;
 
 /**
  * How far before the crossover the interior model starts loading.
  *
- * interior_hall.glb is 15MB with Draco geometry and 28 KTX2 textures, so it is
+ * interior_hall.glb is 16.4MB with Draco geometry and 37 KTX2 textures, so it is
  * seconds of work on a phone. Mounting it at the crossover would put that stall
  * exactly where the veil is meant to be a dissolve. Arming it a fifth of the
  * page early means the download, the transcode and the GPU upload all happen
@@ -66,9 +110,15 @@ export const VEIL_HALF_BAND = 0.036;
  *
  * Once armed it stays armed. Scrolling back up hides the hall rather than
  * unmounting it — a visitor moving up and down across the crossover must not
- * re-pay for a 15MB parse each time.
+ * re-pay for a 16MB parse each time.
+ *
+ * 0.2 -> 0.25 with the approach chapter. Measured in document progress the lead
+ * was about to shrink as a share of the film, and the doorway now HOLDS its
+ * white for a hall that has not arrived — so the earlier the parse starts, the
+ * less likely a visitor ever sees that hold. Armed at 0.31, the hall loads
+ * across the constellation and the whole approach.
  */
-export const PRELOAD_LEAD = 0.2;
+export const PRELOAD_LEAD = 0.25;
 
 /**
  * Where the CAMERA journey finishes, as a fraction of document scroll.
@@ -89,6 +139,7 @@ export const PRELOAD_LEAD = 0.2;
 export const JOURNEY_END = 0.9;
 
 import { CHAPTER_WEIGHTS } from './interiorPath';
+import { FILM_SHARE } from './cameraPath';
 
 export type Leg = 'exterior' | 'interior';
 
@@ -151,14 +202,16 @@ export function readJourney(scroll: number, out: JourneyState): JourneyState {
 
   if (s < CROSSOVER) {
     out.leg = 'exterior';
-    out.legProgress = s / CROSSOVER;
+    // Holds the door frame through the first half of the doorway band.
+    out.legProgress = Math.min(1, s / DOOR_OUT);
   } else {
     out.leg = 'interior';
-    // Clamped at JOURNEY_END, so scrolling into the footer holds the final
-    // composition rather than pushing the camera past it.
+    // Holds the threshold through the second half of the band, and is clamped
+    // at JOURNEY_END, so scrolling into the footer holds the final composition
+    // rather than pushing the camera past it.
     out.legProgress = Math.min(
       1,
-      (s - CROSSOVER) / Math.max(1e-6, JOURNEY_END - CROSSOVER),
+      Math.max(0, (s - DOOR_IN) / Math.max(1e-6, JOURNEY_END - DOOR_IN)),
     );
   }
 
@@ -189,17 +242,31 @@ export interface Chapter {
 
 export function chapters(stationCount: number): Chapter[] {
   const n = Math.max(0, Math.min(4, stationCount));
-  const ext = CROSSOVER;
-  const int = JOURNEY_END - CROSSOVER;
+  const ext = DOOR_OUT;
+  const int = JOURNEY_END - DOOR_IN;
   const W = CHAPTER_WEIGHTS;
 
-  // Exterior thirds: hero, revolution, constellation. The constellation gets
-  // the largest share because it is the only chapter with an interaction the
-  // visitor is meant to discover rather than watch.
+  // Exterior: hero, revolution, constellation — their original proportions,
+  // inside the first FILM_SHARE of the leg — then the approach to the door. The
+  // constellation gets the largest share of the three because it is the only
+  // chapter with an interaction the visitor is meant to discover rather than
+  // watch.
+  //
+  // The constellation's chapter runs a little PAST its beat. The camera slows
+  // almost to rest on the sphere at FILM_SHARE and the approach leaves it
+  // slowly, so for the first stretch of that departure the frame is still the
+  // constellation; the copy beside it stays until the house has visibly begun
+  // to turn.
+  const film = ext * FILM_SHARE;
+  const holdEnd = ext * (FILM_SHARE + (1 - FILM_SHARE) * 0.15);
+  // The approach's chapter INCLUDES the doorway band: its section is one
+  // viewport longer than its camera move, which is what keeps its pane pinned
+  // until the doors open (see DOOR_BAND).
   const out: Chapter[] = [
-    { id: 'hero', from: 0, to: ext * 0.3 },
-    { id: 'revolution', from: ext * 0.3, to: ext * 0.62 },
-    { id: 'constellation', from: ext * 0.62, to: ext },
+    { id: 'hero', from: 0, to: film * 0.3 },
+    { id: 'revolution', from: film * 0.3, to: film * 0.62 },
+    { id: 'constellation', from: film * 0.62, to: holdEnd },
+    { id: 'approach', from: holdEnd, to: DOOR_IN },
   ];
 
   // Interior: establish, one per station, the portrait, then the threshold.
@@ -208,7 +275,7 @@ export function chapters(stationCount: number): Chapter[] {
   // were duplicated once and immediately drifted; see the note on
   // CHAPTER_WEIGHTS.
   const span = W.establish + n * W.station + W.portrait + W.city;
-  let cursor = CROSSOVER;
+  let cursor = DOOR_IN;
   const push = (id: string, frac: number) => {
     const width = (frac / span) * int;
     out.push({ id, from: cursor, to: cursor + width });

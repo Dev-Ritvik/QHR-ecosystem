@@ -14,17 +14,22 @@
 // hand from Blender. The numbers that matter are restated here so a future edit
 // can be checked without re-parsing the file:
 //
-//   room shell        x -7.50..7.50   y 0..6.40      z -5.30..5.30
-//   entry doors       x -1.30..1.30   y 0..3.70      z  5.19..5.29
-//   staircase         x -2.60..2.60   z -0.63..-4.71, rising y 0 -> 2.64
-//   stair runner      x -1.90..1.90   (carpet inside the stone treads)
-//   landing           x -2.60..2.60   y 2.64..2.76   z -4.68..-5.98
-//   balustrade        x  2.35..2.55 (mirrored)  y 0.10..2.79  z -4.42..-0.45
-//   newel posts       x  2.35..2.54 (mirrored)  y 0..1.40     z -0.50..-0.30
-//   portrait          x -1.00..1.00  y 2.90..5.70   z -5.19..-5.16
-//   chandelier        x -0.77..0.77  y 4.71..6.25   z -0.17..1.37
-//   urns (eye level)  x  3.01..3.83 (mirrored)  y 0.57..1.56  z -0.90..-0.07
-//   pedestals S1..S4  centres below; cap top at y 0.96
+// THE HALL WAS EXTENDED BY BAYS for the client review — "bigger, taller,
+// wider, and importantly longer" — by tools/blender/extend_hall_v7.py, so every
+// number
+// here changed with it. Re-measured from the re-exported GLB:
+//
+//   room shell        x -9.90..9.90   y 0..8.00      z -7.70..7.70
+//   entry doors       x -1.50..1.50   y 0..4.26      z  7.57..7.69
+//   staircase         x -3.25..3.25   z -1.86..-6.96, rising y 0 -> 3.30
+//   stair runner      x -2.38..2.38   (carpet inside the stone treads)
+//   landing           x -3.25..3.25   y 3.30..3.47   z -6.93..-8.55
+//   balustrade        x  2.94..3.19 (mirrored)  y 0.13..4.72  z -7.70..-1.64
+//   newel posts       x  2.94..3.18 (mirrored)  y 0..1.76     z -1.70..-1.46
+//   portrait          x -1.21..1.21  y 3.95..7.21   z -7.70..-7.57
+//   chandelier        x -1.01..1.01  y 5.85..7.85   z -0.14..1.88
+//   urns (above eye)  x  4.21..5.19 (mirrored)  y 0.68..1.87  z -2.05..-1.05
+//   tables S1..S4     centres below; table top at y 0.80
 //
 // THE TWO OBSTACLES THAT SHAPE THIS PATH
 //
@@ -35,9 +40,10 @@
 //    That is also the better shot: the stair sweeps across frame as the camera
 //    passes its foot.
 //
-// 2. The two dressing URNS stand at x +/-3.0..3.8, z -0.9..-0.07, and their
-//    tops reach y 1.56 — above the 1.64 eye line by only 8cm. Every beat keeps
-//    clear of that z band on both sides rather than relying on the margin.
+// 2. The two dressing URNS moved out to the foot of the wider stair and grew a
+//    fifth with it: x +/-4.21..5.19, z -2.05..-1.05, tops at y 1.87 — now ABOVE
+//    the eye line rather than just under it. Every beat keeps clear of that z
+//    band on both sides rather than relying on a margin.
 
 import * as THREE from 'three';
 
@@ -86,27 +92,27 @@ export interface StationAnchor {
 }
 
 export const STATION_ANCHORS: readonly StationAnchor[] = [
-  // LEFT FRONT. Clear floor: the nearest obstruction is urn_0 at z -0.90, more
-  // than two metres behind the camera.
-  { id: 'S1', position: [-5.95, 0, 1.9], inward: [1, 0], standoff: 2.4, dz: 0.4, laneX: -3.4, holoY: 1.505 },
+  // LEFT FRONT. Clear floor: the nearest obstruction is urn_0 at z -1.05, more
+  // than three metres behind the camera.
+  { id: 'S1', position: [-7.85, 0, 2.76], inward: [1, 0], standoff: 2.4, dz: 0.4, laneX: -4.6, holoY: 1.505 },
   // LEFT BACK. Approached axially down the left lane rather than from the
-  // middle of the room: the balustrade begins at x -2.35 and this keeps the
-  // whole move outside it. laneX matches the pedestal's own x, so the descent
-  // is a straight run at x -4.60 — outside urn_0 (which ends at x -3.01) for
-  // its whole length.
-  { id: 'S2', position: [-4.6, 0, -3.8], inward: [0, 1], standoff: 2.3, dz: 0, laneX: -4.6, holoY: 1.401 },
+  // middle of the room: the balustrade begins at x -2.94 and this keeps the
+  // whole move outside it. laneX matches the table's own x, so the descent is a
+  // straight run at x -6.07 — outside urn_0 (which ends at x -5.19) for its
+  // whole length.
+  { id: 'S2', position: [-6.07, 0, -5.52], inward: [0, 1], standoff: 2.3, dz: 0, laneX: -6.07, holoY: 1.401 },
   // RIGHT BACK. The hard one.
   //
   // inward was [-1, -0.35], which stands the camera at z -1.74 and puts the
   // descent from the promenade straight through urn_1. Pitched to [-0.8, -0.6]
-  // it stands at z -2.43 instead, and the run down from laneX 5.20 clears the
-  // urn's x by 0.86m at the moment it crosses the urn's z band. Same subject
-  // distance (2.55m), same framing, a metre of clearance instead of none.
-  { id: 'S3', position: [5.95, 0, -0.9], inward: [-0.8, -0.6], standoff: 2.55, dz: 0, laneX: 5.2, holoY: 1.441 },
+  // it stands off the urn's corner instead, and the run down from laneX 6.90
+  // clears the urn's x by 0.98m at the moment it crosses the urn's z band. Same
+  // subject distance (2.55m), same framing, clearance instead of none.
+  { id: 'S3', position: [7.85, 0, -1.31], inward: [-0.8, -0.6], standoff: 2.55, dz: 0, laneX: 6.9, holoY: 1.441 },
   // RIGHT FRONT. No project is published for this pedestal today, so it stays
   // dark furniture until one is. Described here so a fourth project lights it
   // up with no code change.
-  { id: 'S4', position: [5.95, 0, 3.4], inward: [-1, 0], standoff: 2.4, dz: -0.35, laneX: 4.2, holoY: 1.441 },
+  { id: 'S4', position: [7.85, 0, 4.94], inward: [-1, 0], standoff: 2.4, dz: -0.35, laneX: 5.6, holoY: 1.441 },
 ] as const;
 
 /**
@@ -157,18 +163,19 @@ const EYE = 1.7;
  * mistake. Travelling directly between two station viewpoints looks correct
  * beat-to-beat and is not, because:
  *
- *   the URNS occupy z -0.90..-0.07 either side at x +/-3.0..3.8 and stand to
- *   y 1.56, which is 14cm under the eye line, and
- *   the BALUSTRADE occupies z -4.52..-0.30 at x +/-2.35..2.55 and stands to
- *   y 4.16, which is above it entirely.
+ *   the URNS occupy z -2.05..-1.05 either side at x +/-4.21..5.19 and stand to
+ *   y 1.87, which is ABOVE the eye line, and
+ *   the BALUSTRADE occupies z -7.70..-1.64 at x +/-2.94..3.19 and stands to
+ *   y 4.72, which is above it entirely.
  *
- * Between them those two leave no lane across the middle of the room. z +1.75
- * is clear of both by more than 1.8m, clear of the newels (which end at
- * z -0.30), and above the bench (y 0.53) and the rug. Every move between
- * stations goes out to this lane, along it, and back in — which is also simply
- * how a camera operator crosses a room they are not allowed to walk through.
+ * Between them those two leave no lane across the middle of the room. z +2.60
+ * — the old z +1.75 carried out with the extended room — is clear of both by
+ * more than 3.6m, clear of the newels (which end at z -1.46), and above the
+ * bench (y 0.53) and the rug. Every move between stations goes out to this
+ * lane, along it, and back in — which is also simply how a camera operator
+ * crosses a room they are not allowed to walk through.
  */
-const PROMENADE_Z = 1.75;
+const PROMENADE_Z = 2.6;
 
 /** Height on the promenade. Slightly above the station eye line so the travel
  *  beats look down the room a little and the turn-in reads as a settle. */
@@ -206,7 +213,7 @@ export interface InteriorBeat {
  *   establish  56  the room must read whole, including both side walls
  *   traverse   44  moving shots stay wider so architecture keeps its parallax
  *   station    30  compressed, subject isolated — the brief's telephoto
- *   portrait   32  wide enough to hold 2.8m of canvas from 7m back
+ *   portrait   32  wide enough to hold 3.26m of canvas from 8m back
  */
 const LENS = { establish: 56, traverse: 44, station: 30, portrait: 32 } as const;
 
@@ -240,7 +247,7 @@ export const CHAPTER_WEIGHTS = {
    * outright: no city plane, no beacons, no dive. It is placed here, after the
    * portrait, because the hall has NO WINDOW — parsed from the delivered GLB,
    * the only opening in 545 nodes is `int_door_arch` with `int_doors` in it, on
-   * the entry axis at z 5.25. So the region is revealed through the door the
+   * the entry axis at z 7.63. So the region is revealed through the door the
    * visitor came in by, which is both the model's only aperture and the right
    * sentence: the film ends by turning round and looking out at the land the
    * house is here to sell.
@@ -287,8 +294,8 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
   beats.push({
     id: 'threshold',
     at: 0,
-    position: [0, 1.58, 4.5],
-    target: [0, 2.5, -3.4],
+    position: [0, 1.58, 6.7],
+    target: [0, 3.1, -5.0],
     fov: LENS.establish,
     roll: 0,
   });
@@ -315,7 +322,7 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
   // have at any exposure.
   //
   // AND WHAT IT DELIBERATELY DOES NOT DO: get a project station into this
-  // frame. The room is 15m wide and 11m deep and the camera stands near its
+  // frame. The room is 19.8m wide and 15.4m deep and the camera stands near its
   // front wall, so from any vantage that holds the stair, S1 sits 54 degrees
   // off axis against a 40-degree half-angle. Fitting both would need an
   // 80-degree lens — a fisheye in a classical hall. The establishing CHAPTER
@@ -323,8 +330,8 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
   beats.push({
     id: 'establish',
     at: CHAPTER_WEIGHTS.establish * 0.33,
-    position: [2.35, 2.5, 4.2],
-    target: [-0.85, 2.55, -4.6],
+    position: [3.1, 3.1, 6.1],
+    target: [-1.1, 3.2, -6.7],
     fov: LENS.establish,
     roll: 0,
   });
@@ -339,8 +346,8 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
     beats.push({
       id: 'turn-left',
       at: W.establish * 0.66,
-      position: [-2.1, 1.78, 3.5],
-      target: [-5.6, 1.7, 2.4],
+      position: [-2.8, 1.8, 5.1],
+      target: [-7.4, 1.7, 3.5],
       fov: LENS.traverse,
       roll: -0.015,
     });
@@ -411,7 +418,7 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
           id: `exit-${prev.id}`,
           at: W.establish + (i - 1) * W.station + W.station * 0.72,
           position: [prev.laneX, PROMENADE_Y, PROMENADE_Z],
-          target: [prev.position[0] * 0.3, 2.2, -3.2],
+          target: [prev.position[0] * 0.3, 2.6, -4.6],
           fov: LENS.traverse,
           roll: 0.008,
         });
@@ -419,7 +426,7 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
           id: 'cross-hall',
           at: W.establish + (i - 1) * W.station + W.station * 0.82,
           position: [((prev.position[0] + a.position[0]) / 2) * 0.35, PROMENADE_Y, PROMENADE_Z],
-          target: [0.9, 1.9, -2.6],
+          target: [1.2, 2.2, -3.8],
           fov: LENS.traverse,
           roll: 0.022,
         });
@@ -449,14 +456,25 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
   }
 
   // BACK TO THE PROMENADE. The last station is left the same way every other
-  // one is, so the exit from the commercial sequence matches its entries.
+  // one is, so the exit from the commercial sequence matches its entries: out
+  // along the station's OWN lane, drifting a metre toward the middle of the
+  // room as it goes.
+  //
+  // IT USED TO CUT THE CORNER — `last.position[0] * 0.4`, straight from the
+  // station toward the centre line — and in the extended hall the collision
+  // test failed on it at both ends of the room: the urns moved out to the foot
+  // of the wider stair and grew a fifth with it, so their tops now stand at
+  // y 1.87, ABOVE the travelling eye line instead of 14cm under it. A diagonal
+  // that used to pass over an urn now passes through it (measured: 13cm inside
+  // urn_l leaving S2, 13cm inside urn_r leaving S3). Leaving along the lane
+  // keeps the whole move outside the urns' x, which is what the lane is for.
   if (n > 0) {
     const last = STATION_ANCHORS[n - 1];
     beats.push({
       id: 'withdraw',
       at: W.establish + n * W.station - W.station * 0.18,
-      position: [last.position[0] * 0.4, PROMENADE_Y, PROMENADE_Z],
-      target: [0, 2.6, -4.0],
+      position: [last.laneX - Math.sign(last.laneX) * 0.9, PROMENADE_Y, PROMENADE_Z],
+      target: [0, 3.2, -5.8],
       fov: LENS.traverse,
       roll: 0.014,
     });
@@ -468,25 +486,24 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
   beats.push({
     id: 'stair-foot',
     at: W.establish + n * W.station,
-    position: [0.9, 1.86, 2.6],
-    target: [0, 3.1, -4.2],
+    position: [1.2, 1.9, 3.9],
+    target: [0, 3.9, -6.1],
     fov: LENS.traverse,
     roll: 0.02,
   });
 
   // PORTRAIT. On the axis, lifted, 7m out.
   //
-  // z +1.70 is chosen against the CHANDELIER, which hangs x +/-0.77,
-  // y 4.71..6.25, z -0.17..1.37. Standing at z 1.70 puts the camera just
-  // outside that volume in z, so the fixture sits behind the lens rather than
-  // clipping through the top of frame. At FOV 32 and 6.98m the frame is 4.0m
-  // tall, so the 2.8m canvas holds 70% of it with the stair and landing
-  // beneath.
+  // The CHANDELIER now hangs x +/-1.01, y 5.85..7.85, z -0.14..1.88 — a metre
+  // above the raised camera rather than in front of it, so what decides this
+  // beat is the frame: at FOV 32 and 8.02m it is 4.69m tall against a 3.26m
+  // canvas, so the portrait holds 70% of frame with the landing and the newels
+  // beneath it, exactly the proportion it held in the smaller room.
   beats.push({
     id: 'portrait',
     at: W.establish + n * W.station + W.portrait,
-    position: [0, 3.05, 1.7],
-    target: [0, 4.3, -5.15],
+    position: [0, 4.1, 0.45],
+    target: [0, 5.55, -7.6],
     fov: LENS.portrait,
     roll: 0,
   });
@@ -498,35 +515,34 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
   beats.push({
     id: 'turn-out',
     at: W.establish + n * W.station + W.portrait + W.city * 0.45,
-    position: [0, 2.5, -1.2],
-    target: [0, 2.6, 5.3],
+    position: [0, 2.9, -1.4],
+    target: [0, 2.8, 7.7],
     fov: LENS.traverse,
     roll: 0,
   });
 
   // THE THRESHOLD. Square onto the entry doors, framing the opening.
   //
-  // z 3.50 is derived, and the first attempt at 1.65 is why it is stated.
+  // z 5.70 is derived, and the first attempt — standing far enough back to hold
+  // the whole opening — is why it is stated: that frame was a keyhole, a doorway
+  // seen from across the room with the region a slot in the middle of a wall.
+  // The chapter is supposed to be a revelation, not a peephole.
   //
-  // 1.65 holds the whole opening in frame — 3.6m of throw for a 3.74m-tall
-  // door at 56 degrees — and the frame it produced was a keyhole: a 2.68m
-  // doorway seen from across the room, with the region a slot in the middle of
-  // a wall. The chapter is supposed to be a revelation, not a peephole.
+  // So the standoff comes from the opening instead. 1.95m back from a doorway
+  // that is now 2.99m wide (it grew with the room), the jambs subtend 75
+  // degrees against the frame's own 80 — they sit at the extreme edges and
+  // everything between them is region. The visitor is standing IN the doorway
+  // rather than looking at it, and the head and sill leave frame, which is what
+  // they do when you step into a door.
   //
-  // At 1.75m back the opening subtends 75 degrees horizontally against the
-  // frame's own 80, so the jambs sit at the extreme edges and everything
-  // between them is region — the visitor is standing IN the doorway rather than
-  // looking at it. The head and sill leave frame, which is what they do when
-  // you step into a door.
-  //
-  // Eye height 2.05, and the aim dropped to 1.35, so the horizon sits a little
-  // above centre: the sight line to the field's ground at y -2.4 first meets it
-  // about 7m beyond the threshold, which is why FIELD.near is 20 and not less.
+  // Eye height 2.30, and the aim at 1.60, so the horizon sits a little above
+  // centre: the sight line to the field's ground at y -2.4 first meets it about
+  // 7.6m beyond the camera, which is why FIELD.near is 26 and not less.
   beats.push({
     id: 'city',
     at: W.establish + n * W.station + W.portrait + W.city,
-    position: [0, 2.05, 3.5],
-    target: [0, 1.35, 14.0],
+    position: [0, 2.3, 5.7],
+    target: [0, 1.6, 16.5],
     fov: LENS.establish,
     roll: 0,
   });

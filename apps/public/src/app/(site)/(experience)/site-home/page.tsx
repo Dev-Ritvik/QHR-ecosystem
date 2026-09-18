@@ -31,12 +31,14 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getPublishedProjects } from '@/lib/projection';
 import { ProjectCard } from '@/components/site/ProjectCard';
+import { StationText } from '@/components/site/StationText';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 import { PublishSceneCards } from '@/components/experience/PublishSceneCards';
 import { CityLink } from '@/components/site/CityLink';
-import { chapters, type Chapter } from '@/components/experience/journey';
+import { chapters, TRACK_VH, type Chapter } from '@/components/experience/journey';
 import { ChapterUrl } from '@/components/experience/ChapterUrl';
 import { ChapterFade } from '@/components/experience/ChapterFade';
+import { EnterLink } from '@/components/experience/EnterLink';
 
 // ISR: Background revalidation every hour, unless manually cleared by the webhook (T37)
 export const revalidate = 3600;
@@ -48,19 +50,22 @@ export const metadata: Metadata = {
 };
 
 /**
- * Total scrollable height, in viewport heights.
+ * TRACK_VH — total scrollable height of the film, in viewport heights — is
+ * imported from journey.ts, where its derivation lives.
  *
- * The camera's whole journey is mapped onto this, so it sets the pacing of
- * every chapter at once. Twelve viewports of travel for nine chapters is about
- * 1.3 screens of wheel per chapter, which is slow enough that a composition
- * resolves and holds before the next one starts and fast enough that the page
- * does not feel like a chore. The reference build runs fifteen for a shorter
- * sequence.
+ * The camera's whole journey is mapped onto it, so it sets the pacing of every
+ * chapter at once. Everything below is a FRACTION of it, never an absolute — so
+ * retuning the pacing is one number, and it cannot desynchronise the copy from
+ * the camera.
  *
- * Everything below is a FRACTION of this, never an absolute — so retuning the
- * pacing is one number, and it cannot desynchronise the copy from the camera.
+ * It lives beside the chapter table rather than here because the doorway's
+ * band is exactly one viewport OF THE TRACK, and a constant the scene reads
+ * cannot be declared in a page the scene does not import.
+ *
+ * WHERE THE TRACK ENDS is marked in the markup (`data-film-end`), and the camera
+ * measures its fractions against that point rather than against the whole
+ * document — see filmTrack.ts for the desync the document measure produced.
  */
-const TRACK_VH = 1700;
 
 /**
  * WHY EVERY CHAPTER'S COPY IS A FULL-VIEWPORT STICKY PANE.
@@ -144,6 +149,29 @@ function vh(from: number, to: number): string {
   return `${((to - from) * TRACK_VH).toFixed(2)}vh`;
 }
 
+/**
+ * A chapter's section height with its pane's viewport of exit moved in or out.
+ *
+ * WHY SOME SECTIONS ARE A VIEWPORT LONGER THAN THEIR CHAPTER, AND THE NEXT ONE A
+ * VIEWPORT SHORTER. A pinned pane leaves over the LAST viewport of its section.
+ * Where a chapter's camera beat sits at the chapter's START (every station,
+ * where the camera arrives and dwells), that is right. Where the beat sits at
+ * the END — the portrait, which the camera climbs to across its whole chapter,
+ * and the constellation, which it settles on at the end of the revolution — the
+ * pane was already riding out when the camera arrived, and the next chapter's
+ * copy was on screen beside the wrong picture. Measured on the production build:
+ * at the portrait beat, "Out the front door" was pinned and "At the top of the
+ * stairs" had gone.
+ *
+ * So those two sections carry their exit viewport past the end of the chapter,
+ * and the section after each gives the same viewport back — the film-end
+ * markers stay exactly where the camera measures them, and so does every
+ * chapter boundary the address bar and the camera read.
+ */
+function held(from: number, to: number, viewports: 1 | -1): string {
+  return `calc(${vh(from, to)} ${viewports > 0 ? '+' : '-'} 100vh)`;
+}
+
 export default async function SiteHomePage() {
   // The home page must render even when the database does not.
   //
@@ -191,6 +219,7 @@ export default async function SiteHomePage() {
   const hero = at('hero');
   const revolution = at('revolution');
   const constellation = at('constellation');
+  const approach = at('approach');
   const establish = at('establish');
   const portrait = at('portrait');
   const city = at('city');
@@ -385,7 +414,7 @@ export default async function SiteHomePage() {
       <section
         id="constellation"
         className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
-        style={{ minHeight: vh(constellation.from, constellation.to) }}
+        style={{ minHeight: held(constellation.from, constellation.to, 1) }}
       >
         <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
           <div
@@ -435,6 +464,49 @@ export default async function SiteHomePage() {
         </div>
       </section>
 
+      {/* ── CHAPTER 4 · THE APPROACH ──────────────────────────────────────
+          Night falls as the camera comes down the flank and onto the entry
+          axis, and the chapter ends square on the front door. Scrolling on
+          opens it: the doors part, the camera goes through them into light, and
+          the hall resolves out of it (doorway.ts).
+
+          The copy is CENTRED and LOW, unlike every other chapter's left column,
+          because this is the one frame in the film that is symmetrical — a door
+          on the axis — and a column of type down the left would sit on top of
+          the composition it is inviting the visitor into. Two lines, and a
+          control that does what scrolling does, for anyone who would rather
+          click than wheel. */}
+      <section
+        id="approach"
+        className={`relative scroll-mt-[62px] ${TRACK_TRANSPARENT}`}
+        style={{ minHeight: held(approach.from, approach.to, -1) }}
+      >
+        {/* Where the exterior's track ends, for a page with nothing inside. The
+            camera measures its fractions from the furthest marker on the page.
+            A viewport short of the chapter's height because this section starts
+            a viewport late — the constellation holds its pane past its beat
+            (see held()). */}
+        <div
+          aria-hidden
+          data-film-end={approach.to}
+          className="pointer-events-none absolute left-0 h-px w-px"
+          style={{ top: held(approach.from, approach.to, -1) }}
+        />
+        <div
+          className={`sticky top-0 flex h-screen flex-col items-center justify-end px-6 pb-[9vh] text-center ${PANE_CONTENT_INTERACTIVE}`}
+          data-chapter-fade
+        >
+          <p className="t-eyebrow text-[#F2EDE4]/55">The residence</p>
+          <p className="t-h3 mt-5 text-[#F2EDE4]/90">The door is open.</p>
+          <EnterLink className="tap-target t-eyebrow group mt-8 inline-flex items-center gap-2 text-[#E8B98A] transition-colors hover:text-[#F2EDE4]">
+            Step inside
+            <span aria-hidden className="transition-transform group-hover:translate-x-1">
+              &rarr;
+            </span>
+          </EnterLink>
+        </div>
+      </section>
+
       {list.length === 0 ? (
         <div className="pointer-events-auto mx-auto max-w-6xl px-6 pt-[20vh]">
           <p className="t-h3 text-[#F2EDE4]/70">No layouts are open right now.</p>
@@ -445,11 +517,12 @@ export default async function SiteHomePage() {
         </div>
       ) : (
         <>
-          {/* ── CHAPTER 4 · THE HALL ────────────────────────────────────────
-              The veil closes over the last metre of the approach and opens
-              inside. This section is the establishing shot: the camera holds
-              the whole room with the staircase on axis, so the copy is one
-              line and gets out of the way. */}
+          {/* ── CHAPTER 5 · THE HALL ────────────────────────────────────────
+              The camera has come through the front door and out of the light
+              onto the threshold. This section is the establishing shot: the
+              camera holds the whole room with the staircase on axis, so the
+              copy is one line and gets out of the way. It is also where the
+              doorway lands the page, and where "Step inside" points. */}
           <section
             id="establish"
             className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
@@ -474,14 +547,15 @@ export default async function SiteHomePage() {
             ── CHAPTERS 5..n · THE STATIONS ──────────────────────────────────
 
             One section per lit table, in the order the camera visits them, each
-            sized to its chapter. The card is STICKY, so it holds still in the
+            sized to its chapter. The copy is STICKY, so it holds still in the
             left half while the camera crosses the room behind it.
 
-            THESE CARDS ARE NOT DECORATION. They are the keyboard and
-            screen-reader equivalent of the holograms: the canvas above them is
-            aria-hidden, so this link is the only way a non-pointer user reaches
-            the project. Removing them to "let the 3D speak" would take three
-            products off the site for everyone who does not use a mouse.
+            TEXT ONLY, BY CLIENT REVIEW. These were image cards - a boxed plan
+            with badges laid over the hall beside the hologram that already
+            shows that plan - and every overlay inside the mansion was asked to
+            go. The link stays: the canvas above is aria-hidden, so this name is
+            the only way a keyboard or screen-reader visitor reaches the project
+            from the hall.
           */}
           {stationProjects.map((project: any, i: number) => {
             const c = at(`station-${i + 1}`);
@@ -501,7 +575,7 @@ export default async function SiteHomePage() {
                       {String(i + 1).padStart(2, '0')} &nbsp;/&nbsp;{' '}
                       {String(stationProjects.length).padStart(2, '0')}
                     </p>
-                    <ProjectCard project={project} />
+                    <StationText project={project} />
                   </div>
                 </div>
               </section>
@@ -516,7 +590,7 @@ export default async function SiteHomePage() {
           <section
             id="portrait"
             className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
-            style={{ minHeight: vh(portrait.from, portrait.to) }}
+            style={{ minHeight: held(portrait.from, portrait.to, 1) }}
           >
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
               <div
@@ -555,11 +629,25 @@ export default async function SiteHomePage() {
               no sight reaches every project from here, in the same order, with
               the same numbers. The 3D enhances these links — it does not
               replace them, and it never becomes the only way to a project. */}
+          {/* EXACTLY ITS CHAPTER'S HEIGHT, starting a viewport late, with the
+              film's end marked a viewport before its foot. The portrait section
+              above holds its pane a viewport past its beat (see held()), so this
+              one begins that much later; the marker is pulled up by the same
+              amount so it stays where the camera's journey ends (JOURNEY_END).
+              What is left after the marker is the viewport this pane needs to
+              leave — without it the project list would go at the very frame the
+              district field finishes opening, the one frame the list is for. */}
           <section
             id="city"
-            className={`mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
+            className={`relative mx-auto grid max-w-6xl scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
             style={{ minHeight: vh(city.from, city.to) }}
           >
+            <div
+              aria-hidden
+              data-film-end={city.to}
+              className="pointer-events-none absolute left-0 h-px w-px"
+              style={{ top: held(city.from, city.to, -1) }}
+            />
             {/* col-span-5 / 36vw, the same measure every other chapter uses.
                 It was 6 / 42vw, which reached x 720 of 1440 — far enough right
                 that the leftmost marker projected BEHIND the list and a click

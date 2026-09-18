@@ -59,6 +59,8 @@ export function chapterLabel(id: string): string {
       return 'the house';
     case 'constellation':
       return 'the constellation';
+    case 'approach':
+      return 'the front door';
     case 'establish':
       return 'the hall';
     case 'portrait':

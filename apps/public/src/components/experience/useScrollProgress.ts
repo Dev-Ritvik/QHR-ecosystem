@@ -38,11 +38,13 @@
 import { useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { lenisInstance } from './SmoothScroll';
+import { measureFilmSpan } from './filmTrack';
 
 /** Published 0..1 scroll progress. Written only by <ScrollProgressDriver>. */
 const progress = { current: 0 };
 
-/** The distance the document can actually travel, remeasured on layout changes. */
+/** The scroll distance progress 1.0 stands for — the film's track on the film,
+ *  the document's travel elsewhere (filmTrack.ts). Remeasured on layout changes. */
 const maxScroll = { current: 1 };
 
 /**
@@ -82,10 +84,10 @@ export function ScrollProgressDriver() {
     const measure = () => {
       // Guarded to 1 so a page shorter than the viewport reports 0 rather than
       // dividing by zero and pinning the camera at the end of its path.
-      maxScroll.current = Math.max(
-        1,
-        document.documentElement.scrollHeight - window.innerHeight,
-      );
+      //
+      // Measured against the FILM on the page that is one, not against the
+      // document — see filmTrack.ts for the desync the document measure caused.
+      maxScroll.current = Math.max(1, measureFilmSpan());
       publish();
     };
 
@@ -115,4 +117,25 @@ export function ScrollProgressDriver() {
  */
 export function useScrollProgress() {
   return progress;
+}
+
+/**
+ * Re-sample NOW, outside the frame's own publish.
+ *
+ * For the one writer that moves the scroll inside a frame — the doorway, which
+ * holds the page at the door and lands it inside — so that everything later in
+ * the same frame reads where the page is rather than where it was.
+ */
+export function syncScrollProgress() {
+  publish();
+}
+
+/** The published value, for code outside the canvas tree. */
+export function readScrollProgress(): number {
+  return progress.current;
+}
+
+/** The scroll distance progress 1.0 stands for, in pixels, as last measured. */
+export function scrollExtent(): number {
+  return maxScroll.current;
 }

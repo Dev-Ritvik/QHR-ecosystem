@@ -79,8 +79,9 @@ export interface Beacon {
 /**
  * The field, in hall metres, measured against the geometry it is seen through.
  *
- * The hall's front wall stands at z 5.3 with `int_door_arch` at z 5.25 spanning
- * roughly 3.6m of width and 3.85m of height. The camera reads the field through
+ * The hall's front wall stands at z 7.7 with `int_door_arch` at z 7.63 spanning
+ * roughly 4.1m of width and 4.4m of height, the extended hall's doorway. The
+ * camera reads the field through
  * that opening from inside, so the field starts far enough beyond the threshold
  * that the doorway crops it — which is what makes the opening read as a frame
  * rather than as a hole cut in a backdrop.
@@ -90,16 +91,15 @@ export const FIELD = {
    * Nearest and furthest z of the populated band, and the half-width — all
    * three set by what the DOORWAY can actually frame rather than by taste.
    *
-   * The opening is 2.68m wide and the camera stands 1.75m back from it, so the
-   * view through it is a cone of +/-37.6 degrees. At the nearest beacon that is
-   * +/-12.7m of half-width; the first version put the field at +/-34m and two of
-   * the three beacons fell outside the jamb, which is a beacon system that
-   * cannot be seen. 20..54 and +/-15 keeps every marker inside the frame at
-   * every depth, with the band margins below leaving 9.5m of usable width per
-   * district.
+   * The opening is 2.99m wide and the camera stands 1.95m back from it, so the
+   * view through it is a cone of +/-37.5 degrees — the same cone as before the
+   * hall was extended, because the standoff grew with the doorway. The band is
+   * carried out with that doorway, which moved 2.4m toward the field: 26..58 and
+   * +/-15 keeps every marker inside the frame at every depth, with the band
+   * margins below leaving 9.5m of usable width per district.
    */
-  near: 24,
-  far: 56,
+  near: 26,
+  far: 58,
   halfWidth: 15,
   /**
    * Where the populated band is CENTRED, and why it is not on the axis.

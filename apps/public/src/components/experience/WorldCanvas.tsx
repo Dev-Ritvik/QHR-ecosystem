@@ -38,16 +38,20 @@ import { ExteriorModel } from './ExteriorModel';
 import { useDeviceTier } from './useDeviceTier';
 import { poseFor, setFor, type SceneSet } from './poses';
 import {
-  POSITION_CURVE,
-  TARGET_CURVE,
-  curveT,
+  exteriorPoseAt,
   atmosphereAt,
   lensAt,
   CONSTELLATION,
   CONSTELLATION_RADIUS,
+  FILM_SHARE,
 } from './cameraPath';
-import gsap from 'gsap';
-import { ScrollProgressDriver, useScrollProgress } from './useScrollProgress';
+import {
+  ScrollProgressDriver,
+  readScrollProgress,
+  scrollExtent,
+  syncScrollProgress,
+  useScrollProgress,
+} from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { PostFX } from './PostFX';
 import { Motes } from './Motes';
@@ -61,7 +65,19 @@ import {
   CHAPTER_WEIGHTS,
 } from './interiorPath';
 import { CROSSOVER, journeyState, readJourney } from './journey';
-import { cancelDive, diveProgress, diveState } from './dive';
+import { cancelDive, diveProgress, diveState, prefersReducedMotion } from './dive';
+import {
+  CUT_MS,
+  DOORWAY,
+  cancelDoorway,
+  doorwayState,
+  noteDoorwayInput,
+  setDoorwayHost,
+  stepDoorway,
+  whiteGradient,
+} from './doorway';
+import { ExteriorDoorway } from './DoorwayRig';
+import { lenisInstance } from './SmoothScroll';
 import { Constellation } from './Constellation';
 import { InteriorStage } from './InteriorStage';
 import { CityField } from './CityField';
@@ -104,54 +120,13 @@ const FRAME_OFFSET = 7.4;
 // exactly once regardless of how many lights mount.
 RectAreaLightUniformsLib.init();
 
-/**
- * power4.inOut, resolved once at module load.
- *
- * Raw scroll progress is linear, so a linear read of it moves the camera at a
- * constant rate along the whole curve — which is why the dive had no weight.
- * Momentum is the DERIVATIVE of position, and a linear map has a constant one.
- *
- * power4 is aggressive on purpose: it holds near the beat for the first and
- * last fifth of each leg and covers the middle fast, so the camera loads up,
- * whips through the fastest part of the descent, and settles as it banks into
- * each viewing angle. That acceleration profile is the swing.
- *
- * Applied to the CURVE parameter only. Atmosphere and lens read raw scroll, so
- * fog and FOV stay tied to where the visitor is on the page rather than
- * lurching with the camera.
- */
-// power2.inOut, not power4. Across a single continuous track power4 spends so
-// much of the range near zero velocity that the middle beats blur past in a
-// fraction of the scroll and never read; power2 accelerates and decelerates
-// over the whole journey while still crossing the centre at a real clip.
-//
-// PLUS A LINEAR PEDESTAL, because an inOut ease has zero derivative at zero and
-// the head of the exterior leg is the first thing anyone touches.
-//
-// MEASURED at 1440x900 against a 14,014px track, camera travel from rest:
-//
-//                        power2.inOut     +0.20 pedestal
-//   quarter viewport        0.01 m           0.54 m
-//   half viewport           0.10 m           1.15 m
-//   one full viewport       0.83 m           2.82 m
-//
-// One centimetre. A visitor could scroll a quarter of a screen — the first
-// flick of a wheel — and the image was pixel-identical, which is the one thing
-// a camera on a scroll track must never do. It is not a pacing preference; at
-// 34m from the subject a 1cm dolly is 0.03% of the frame.
-//
-// The pedestal is a weighted sum rather than a different ease because it fixes
-// the derivative at the ends without changing the shape in between: E'(0) is
-// now LEAD instead of 0, and the mid-leg whip actually calms slightly (peak
-// 24.8 -> 22.9 m per viewport) because the linear term carries some of the
-// distance the eased term was cramming into the centre.
-//
-// The non-zero derivative at s = 1 costs nothing: the end of the exterior leg
-// IS the crossover, where the veil is fully closed.
-const SWING_EASE = gsap.parseEase('power2.inOut');
-const SWING_LEAD = 0.2;
-const SWING = (s: number) => SWING_LEAD * s + (1 - SWING_LEAD) * SWING_EASE(s);
+// THE SWING EASE now lives in cameraPath.ts (SWING, exteriorSwing), with its
+// history, beside the beats it paces — the approach chapter gave the exterior
+// leg two curves, and the ease has to know where one hands over to the other.
 
+/** Extra intensity on the entry bay's area light with the front doors fully
+ *  open and lit — the spill from the doorway onto the portico and the steps. */
+const PORTICO_GLOW = 7;
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -363,9 +338,7 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
         offset = 0.55;
       } else {
         const s = journeyState.legProgress;
-        const u = curveT(SWING(s));
-        POSITION_CURVE.getPoint(u, desired.current);
-        TARGET_CURVE.getPoint(u, look.current);
+        exteriorPoseAt(s, desired.current, look.current);
         offset = lensAt(s).frameOffset;
       }
     } else {
@@ -397,12 +370,66 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
     right.current.crossVectors(fwd.current, UP).normalize();
     look.current.addScaledVector(right.current, -offset);
 
+    const cam = camera as THREE.PerspectiveCamera;
+    const lens = p.path
+      ? journeyState.leg === 'interior'
+        ? interiorLensAt(interior.beats, journeyState.legProgress)
+        : lensAt(journeyState.legProgress)
+      : null;
+
+    // THE DOORWAY. A passage through the front door owns the camera for its
+    // length (doorway.ts has the whole account). It runs on its own clock, not
+    // the scroll, because acceleration is a shape in time.
+    //
+    // Near side — the model the camera is leaving — blends from where the camera
+    // ACTUALLY was when the passage began (captured here on its first frame, so a
+    // parallax offset or an unsettled scroll starts the move from the frame on
+    // screen) to a point through the doorway. Far side — after the swap — blends
+    // from a point outside the other model's doorway onto the pose the scroll
+    // gives on this very frame, which is what makes the hand-back exact: when
+    // the clock reaches 1 the override and the film are the same pose.
+    let doorFov: number | null = null;
+    let rollScale = 1;
+    const door = doorwayState;
+    const passage = p.path && door.mode === 'running';
+    if (passage) {
+      const c = door.channels;
+      if (!door.captured) {
+        door.fromPos = [camera.position.x, camera.position.y, camera.position.z];
+        door.fromLook = [target.current.x, target.current.y, target.current.z];
+        door.fromFov = cam.fov;
+        door.captured = true;
+      }
+      const entering = door.dir === 'enter';
+      if (c.side === 'near') {
+        const pass = entering ? DOORWAY.exteriorPass : DOORWAY.hallPass;
+        const gaze = entering ? DOORWAY.exteriorGaze : DOORWAY.hallGaze;
+        desired.current.set(...door.fromPos).lerp(TMP.set(...pass), c.leave);
+        look.current.set(...door.fromLook).lerp(TMP.set(...gaze), c.aim);
+        doorFov = door.fromFov + (DOORWAY.warpFov - door.fromFov) * c.warp;
+        rollScale = 1 - c.aim;
+      } else {
+        const start = entering ? DOORWAY.hallStart : DOORWAY.exteriorStart;
+        const gaze = entering ? DOORWAY.hallGaze : DOORWAY.exteriorGaze;
+        TMP.copy(desired.current);
+        desired.current.set(...start).lerp(TMP, c.arrive);
+        TMP.copy(look.current);
+        look.current.set(...gaze).lerp(TMP, c.settle);
+        const live = lens ? lens.fov : cam.fov;
+        doorFov = live + (DOORWAY.warpFov - live) * c.warp;
+        rollScale = c.settle;
+      }
+    }
+
     // Cursor parallax. A few centimetres of camera offset across the whole
     // viewport — deliberately tiny. The scene is a backdrop that text sits on,
     // and a camera that swings to the pointer makes the copy above it feel
     // unstable. Enough to make the canvas feel alive to the hand, not enough to
     // be read as a control.
-    if (pointer.current.lengthSq() > 0) {
+    //
+    // Off during a passage: a camera flying through a doorway that also leans
+    // toward the cursor is two moves at once.
+    if (!passage && pointer.current.lengthSq() > 0) {
       desired.current.x += pointer.current.x * PARALLAX;
       desired.current.y += pointer.current.y * PARALLAX * 0.6;
     }
@@ -429,19 +456,22 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
     // which is pointer-parallax scale, i.e. a dive the visitor cannot see. A
     // 0.11s constant lands it inside the handoff while still damping the
     // pointer jitter the raw pose carries.
+    //
+    // A PASSAGE, AND A CUT, BYPASS IT. The doorway's curves are already the
+    // motion, eased to the millisecond, and a lag laid over them would round the
+    // acceleration off into the same soft move the review rejected. A cut — a
+    // crossing nobody made by hand — places the camera outright: damping from
+    // one model's coordinates to the other's would fly it through the walls of
+    // both, under a dip from black that is too short to hide it.
     const tau = diveState.active ? 0.11 : Math.max(0.05, p.ease * SCRUB);
-    const k = 1 - Math.exp(-delta / tau);
+    const placed = passage || (p.path && door.snap);
+    if (door.snap) door.snap = false;
+    const k = placed ? 1 : 1 - Math.exp(-delta / tau);
     camera.position.lerp(desired.current, k);
     target.current.lerp(look.current, k);
     camera.lookAt(target.current);
 
-    if (p.path) {
-      const lens =
-        journeyState.leg === 'interior'
-          ? interiorLensAt(interior.beats, journeyState.legProgress)
-          : lensAt(journeyState.legProgress);
-      const cam = camera as THREE.PerspectiveCamera;
-
+    if (lens) {
       // FOV WARP. 50 at the top, 68 through the dive, 44 crossing the fountain.
       // Widening on the fast leg stretches the near geometry and exaggerates
       // parallax, which the eye reads as speed; narrowing on arrival compresses
@@ -449,8 +479,9 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
       // changed — updateProjectionMatrix rebuilds the matrix and dirties every
       // frustum test downstream, so calling it unconditionally every frame is
       // real cost for nothing.
-      if (Math.abs(cam.fov - lens.fov) > 0.01) {
-        cam.fov = lens.fov;
+      const fov = doorFov ?? lens.fov;
+      if (Math.abs(cam.fov - fov) > 0.01) {
+        cam.fov = fov;
         cam.updateProjectionMatrix();
       }
 
@@ -458,7 +489,8 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
       // the full orientation with zero roll, so any roll set before it is
       // discarded. rotateZ post-multiplies about the view axis, which leans the
       // horizon into the turn instead of skewing the aim off the subject.
-      if (lens.roll !== 0) camera.rotateZ(lens.roll);
+      const roll = lens.roll * rollScale;
+      if (roll !== 0) camera.rotateZ(roll);
     }
   });
 
@@ -635,6 +667,33 @@ function JourneyDriver({
   const armedOnce = useRef(false);
   const shownVeil = useRef(0);
 
+  // Read once and on change rather than per frame: matchMedia is not free, and
+  // the setting changes about never.
+  const reduced = useRef(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => {
+      reduced.current = mq.matches;
+    };
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  // A passage must never outlive the film it belongs to: leaving the journey
+  // mid-passage — a navigation, a route with no path — releases the page and
+  // clears the white, and so does the canvas going away.
+  useEffect(() => {
+    if (!active) {
+      cancelDoorway();
+      paintDoorway();
+    }
+    return () => {
+      cancelDoorway();
+      paintDoorway();
+    };
+  }, [active]);
+
   useEffect(() => {
     if (active) return;
     // Off the journey (any route that is not a path pose), the state must be
@@ -652,6 +711,13 @@ function JourneyDriver({
 
   useFrame(() => {
     if (!active) return;
+    const now = performance.now();
+    // FIRST, before the journey is read: the doorway can move the scroll. It
+    // holds the page at the door the moment a passage starts — so the leg does
+    // not flip under a camera that is still outside — and lands it inside at
+    // the swap. Everything below then reads where the page now is.
+    stepDoorway(now);
+    paintDoorway();
     readJourney(scroll.current, journeyState);
 
     if (journeyState.armed && !armedOnce.current) {
@@ -679,11 +745,20 @@ function JourneyDriver({
     //
     // 0.58..0.78 lights it during the crane and holds it lit for the whole of
     // the frame the visitor actually stops on.
+    //
+    // Those numbers are on the FILM's clock, which is now the first FILM_SHARE
+    // of the leg (cameraPath.ts). The approach then carries the sphere down the
+    // flank with it — it crowns the house the camera is circling — and lets it
+    // go as the camera turns onto the axis, where it would only be a glow above
+    // the top of frame. No veil term: the sphere is out long before the door.
     const s = journeyState.legProgress;
-    reveal.current =
-      journeyState.leg === 'exterior'
-        ? smooth01((s - 0.58) / 0.2) * (1 - journeyState.veil)
-        : 0;
+    if (journeyState.leg === 'exterior') {
+      const film = Math.min(1, s / FILM_SHARE);
+      const approach = Math.max(0, (s - FILM_SHARE) / (1 - FILM_SHARE));
+      reveal.current = smooth01((film - 0.58) / 0.2) * (1 - smooth01((approach - 0.55) / 0.3));
+    } else {
+      reveal.current = 0;
+    }
 
     interiorLeg.current = journeyState.leg === 'interior' ? s : 0;
 
@@ -720,7 +795,18 @@ function JourneyDriver({
     //
     // Damped rather than assigned, so a fast scrub through the crossover still
     // closes and opens the veil over a few frames instead of strobing.
-    shownVeil.current += (journeyState.veil - shownVeil.current) * 0.35;
+    //
+    // SCRUBBED ONLY UNDER REDUCED MOTION. Everyone else goes through the door
+    // (doorway.ts), and a black veil drawn over the approach would dim the very
+    // frame the visitor is walking toward. What remains for them is the CUT: a
+    // crossing nobody made by hand places the camera, and this dips from black
+    // over it so a model swap is never a bare hard cut.
+    if (reduced.current) {
+      shownVeil.current += (journeyState.veil - shownVeil.current) * 0.35;
+    } else {
+      const since = now - doorwayState.cutAt;
+      shownVeil.current = since >= 0 && since < CUT_MS ? (1 - since / CUT_MS) ** 2 : 0;
+    }
     if (veil.current) {
       const v = shownVeil.current;
       veil.current.style.opacity = v.toFixed(3);
@@ -737,6 +823,112 @@ function JourneyDriver({
 function smooth01(x: number): number {
   const t = Math.min(1, Math.max(0, x));
   return t * t * (3 - 2 * t);
+}
+
+/**
+ * The page-side surfaces the doorway draws on: the white layer, the canvas
+ * frame it blurs, and the renderer whose exposure it lifts. Registered by the
+ * components that own them; painted by the journey driver every frame.
+ *
+ * Module-level like the rest of the journey's per-frame state, and for the same
+ * reason — written at frame rate, so it must never pass through React.
+ *
+ * THE WHITE LAYER EXISTS ONLY WHILE A PASSAGE RUNS, and that is a defect fix.
+ * It was a permanent portal at the end of <body>, and MEASURED in the keyboard
+ * E2E case, its mere presence broke the skip link: after the consent dialog
+ * unmounts, Chrome resumes sequential focus from where the dialog was, and with
+ * a node after that point Tab searched forward, found nothing focusable, and
+ * left the document — the first Tab on the page focused nothing. Removing the
+ * node, or never adding it, restores Tab to the skip link; hiding it did not.
+ * So the layer is created at the start of a passage and removed at its end, and
+ * the state the tests read lives on <html data-doorway>, which is always there.
+ */
+const doorwaySurfaces = {
+  white: null as HTMLDivElement | null,
+  frame: null as HTMLDivElement | null,
+  gl: null as THREE.WebGLRenderer | null,
+  /** The exposure ColorPipeline set, which the passage multiplies. */
+  exposure: 1,
+  /** CSS blur costs a full-screen filter pass; phones do without it. */
+  blur: true,
+  // Last written values, so an idle frame writes nothing to the DOM.
+  paintedBackground: '',
+  paintedFilter: '',
+  paintedState: '',
+  exposureDirty: false,
+};
+
+function paintDoorway() {
+  const st = doorwayState;
+  const c = st.channels;
+  const s = doorwaySurfaces;
+  const running = st.mode === 'running';
+
+  const state = running ? st.dir : 'idle';
+  const background = running && c.white > 0.0005 ? whiteGradient(c.whiteShape, c.white) : 'none';
+
+  if (running && !s.white) {
+    // z-index 75: over the header (40), the skip link (50) and the preloader
+    // (60), under the route veil (80), which must always be able to close over
+    // anything. Over the header and the copy on purpose — a passage into light
+    // with a navigation bar printed across it is a web page, not a doorway.
+    // Pointer events on: nothing may be clicked through the light, and the page
+    // underneath is held still for the whole passage.
+    const el = document.createElement('div');
+    el.setAttribute('aria-hidden', 'true');
+    el.style.cssText =
+      'position:fixed;inset:0;z-index:75;pointer-events:auto;touch-action:none;' +
+      'background:none;opacity:0;transition:none';
+    document.body.appendChild(el);
+    s.white = el;
+    s.paintedBackground = '';
+  }
+  if (s.white) {
+    if (!running) {
+      s.white.remove();
+      s.white = null;
+      s.paintedBackground = '';
+    } else if (background !== s.paintedBackground) {
+      s.white.style.background = background;
+      s.white.style.opacity = background === 'none' ? '0' : '1';
+      s.paintedBackground = background;
+    }
+  }
+
+  const root = document.documentElement;
+  if (state !== s.paintedState) {
+    root.dataset.doorway = state;
+    s.paintedState = state;
+  }
+  const coverage = running ? c.white.toFixed(3) : '0';
+  if (root.dataset.doorwayCoverage !== coverage) root.dataset.doorwayCoverage = coverage;
+
+  if (s.frame) {
+    const px = running && s.blur ? c.blur * DOORWAY.blurPx : 0;
+    const filter = px > 0.05 ? `blur(${px.toFixed(2)}px)` : '';
+    if (filter !== s.paintedFilter) {
+      s.frame.style.filter = filter;
+      // A CSS blur averages the edge pixels with transparency beyond the
+      // element, so on its own it rings the frame with the page's navy — seen
+      // in a captured frame as a dark vignette the passage never asked for.
+      // Scaling the layer by a little more than the blur radius puts that soft
+      // edge off screen.
+      s.frame.style.transform = filter
+        ? `scale(${(1 + (4 * px) / Math.max(1, window.innerHeight)).toFixed(4)})`
+        : '';
+      s.paintedFilter = filter;
+    }
+  }
+
+  if (s.gl) {
+    if (running) {
+      s.gl.toneMappingExposure = s.exposure * c.exposure;
+      s.exposureDirty = true;
+    } else if (s.exposureDirty) {
+      s.gl.toneMappingExposure = s.exposure;
+      s.exposureDirty = false;
+    }
+  }
 }
 
 /** A GLB that fails to parse throws inside Suspense, where React swallows it and
@@ -807,11 +999,26 @@ const LOOK: Record<SceneSet, { exposure: number; env: number; ambient: number }>
     // So there is nothing left to compensate for. The lightmap gain is the
     // bake's own normalisation divisor, the scene is otherwise lit by a low
     // ambient, and the honest exposure for that is 1.0.
-    exposure: 1.0,
-    /** scene.environmentIntensity — specular response only, never a light source. */
-    env: 0.1,
-    /** Lifts the instanced ornament, which carries no lightmap. Nothing more. */
-    ambient: 0.12,
+    //
+    // THE CLIENT REVIEW MOVED ALL THREE, and for a reason unity never saw. At
+    // 1.0 / 0.1 / 0.12 the room was correctly exposed for the textures it had —
+    // granite trims, damp grey plaster, black panelling — and the review called
+    // that room "cheap" and "worn out". hallFinish.ts now paints it what the
+    // approved Cycles renders show: ivory, walnut, white marble, gilt. A light
+    // room under a dark grade is a grey room, so the grade follows the finishes:
+    //
+    //   exposure 1.0  -> 1.35  the ivory reads ivory; above ~1.5 the lightmapped
+    //                          stair stringer clips to paper white
+    //   env      0.1  -> 0.3   the walnut, the gilt and the marble are the
+    //                          surfaces that make a room look expensive, and all
+    //                          three live on reflection
+    //   ambient  0.12 -> 0.4   the unbaked joinery (balusters, newels, panelling)
+    //                          otherwise sits a stop below the baked walls
+    exposure: 1.35,
+    /** scene.environmentIntensity — the polish on the walnut, gilt and marble. */
+    env: 0.3,
+    /** Lifts the joinery and ornament, which carry no lightmap, to the walls. */
+    ambient: 0.4,
   },
   exterior: {
     // Unit exposure, because there is no lightmap gain to undo here. The
@@ -870,8 +1077,8 @@ const CLIP: Record<SceneSet, { near: number; far: number }> = {
  * white text on a lit lawn without also ruining the lawn. That residue is the
  * honest minimum, not a substitute for grading the scene.
  *
- * The interior keeps the heavier pass. It is a lightmapped room with bright
- * marble and brass and no sky to sit copy against.
+ * The interior used to keep the heavier pass; since the finishes changed it
+ * keeps a warm, local one — see the interior entry.
  *
  * Deliberately NOT frosted panels behind each block. Glassmorphism reads as
  * 2021 SaaS and fights the material language of the rest of this build: it
@@ -885,11 +1092,15 @@ const SCRIM: Record<SceneSet, { linear: string; radial: string }> = {
     radial:
       'radial-gradient(130% 88% at 50% 42%, rgba(6,10,20,0) 0%, rgba(6,10,20,0) 62%, rgba(6,10,20,0.22) 100%)',
   },
+  // Warm, and a fraction of what it was. The navy 0.80/0.88 bands were tuned for
+  // the dark hall; over the ivory room they read as grime at the top and bottom
+  // of every frame. The copy now gets a soft warm pool under the left column,
+  // where it sits, instead of a whole-frame darkening.
   interior: {
     linear:
-      'linear-gradient(to bottom, rgba(6,10,20,0.80) 0%, rgba(6,10,20,0.10) 22%, rgba(6,10,20,0.10) 58%, rgba(6,10,20,0.88) 100%)',
+      'linear-gradient(to bottom, rgba(18,12,8,0.42) 0%, rgba(18,12,8,0) 15%, rgba(18,12,8,0) 72%, rgba(18,12,8,0.42) 100%)',
     radial:
-      'radial-gradient(126% 82% at 50% 44%, rgba(6,10,20,0) 0%, rgba(6,10,20,0.12) 58%, rgba(6,10,20,0.46) 100%)',
+      'radial-gradient(60% 55% at 18% 52%, rgba(18,12,8,0.5) 0%, rgba(18,12,8,0.3) 45%, rgba(18,12,8,0) 100%)',
   },
 };
 
@@ -990,7 +1201,7 @@ const DAYLIGHT_COLUMN_SCRIM =
 export type Grade = 'dusk' | 'daylight';
 
 /** Sky/clear colour per grade. Dusk's is also the fog colour. */
-const GRADE_BG: Record<Grade, string> = { dusk: '#0A1120', daylight: '#6D7F6A' };
+const GRADE_BG: Record<Grade, string> = { dusk: '#0A1120', daylight: '#9FB9D2' };
 
 /** Exterior LOOK deltas for daylight. Dusk (the rollback) is LOOK.exterior unmodified. */
 const GRADE_LOOK: Record<Grade, Partial<(typeof LOOK)['exterior']>> = {
@@ -1035,7 +1246,10 @@ const GRADE_RIG: Record<Grade, { key: number; hemi: number }> = {
   // Dropping the fill roughly 4x and taking the key from 3.0 to 5.9 keeps the
   // lit facade at the same place it already matched (p95 159.2 against 159.7)
   // while letting the shadows fall to where the reference puts them.
-  daylight: { key: 5.9, hemi: 0.18 },
+  // V7: 5.9 -> 3.4. 5.9 was fitted to a 14-degree sun BEHIND the house, lighting
+  // edges and roof; the v7 sun is high and in front (see the key light), lands
+  // square on the facade, and at 5.9 blew the limestone to paper white.
+  daylight: { key: 3.4, hemi: 0.18 },
 };
 
 function useLook(set: SceneSet) {
@@ -1101,10 +1315,19 @@ function useLook(set: SceneSet) {
  * is a sun near the horizon, and its light has come through enough air to lose
  * its blue; the shipped #FFF0DB is that sun at noon.
  */
-const DAY_FOG: readonly [number, number] = [60, 220];
-const EVENING_FOG_FAR = 150;
+// V7: [60, 220] -> [110, 520], evening 150 -> 300. The old pair was set for a
+// 19 m house on +/-120 m of terrain, where it had to bury the terrain's edge by
+// 150 m; the estate is 1.6x larger, its horizon is a planted belt 80-180 m out,
+// and at the old pair that belt arrived as a milky wall across the top of the
+// hero.
+const DAY_FOG: readonly [number, number] = [110, 520];
+const EVENING_FOG_FAR = 300;
+/** Emissive strength of the curtained windows at full evening (see ExteriorLighting). */
+const WINDOW_EVENING_GLOW = 0.7;
 /** Aerial-perspective colour, sampled from the approved render's own horizon band. */
-const DAYLIGHT_HAZE = '#5E6147';
+// V7: the painted sky's horizon haze, so the tree belt fades into the sky it
+// stands against rather than into the olive of the old meadow hills.
+const DAYLIGHT_HAZE = '#C3CCC9';
 const HAZE_DAY = new THREE.Color(DAYLIGHT_HAZE);
 /**
  * The film's navy, LIFTED — and lifted by measurement rather than by eye.
@@ -1138,6 +1361,10 @@ function ExteriorLighting({
   const scene = useThree((s) => s.scene);
   const key = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
+  const entry = useRef<THREE.RectAreaLight>(null);
+  // The curtained windows, found once the estate has loaded (see the evening
+  // glow below). Re-scanned on a slow cadence until they exist.
+  const windowGlow = useRef<{ mats: THREE.MeshStandardMaterial[]; nextScan: number }>({ mats: [], nextScan: 0 });
 
   useEffect(() => {
     const prev = scene.fog;
@@ -1184,13 +1411,24 @@ function ExteriorLighting({
   );
 
   useFrame(() => {
+    // THE DOORWAY'S LIGHT ON THE PORTICO. When the front doors open, the light
+    // behind them has to land on something or it reads as a lamp inside a box:
+    // the entry bay's own area light — already sized to the opening and already
+    // facing out of it — carries it onto the columns, the steps and the
+    // fountain. An existing light, so a passage adds no light to the scene and
+    // recompiles no shader.
+    if (entry.current) {
+      entry.current.intensity =
+        (day ? 0.25 : 2.2) + doorwayState.channels.exteriorGlow * PORTICO_GLOW;
+    }
+
     if (!driveByScroll) return;
 
     // LEG progress, not document scroll — and that is a fix, not a detail.
     //
-    // BEATS[].at are fractions of the EXTERIOR LEG, which is the first 46% of
+    // BEATS[].at are fractions of the EXTERIOR LEG, which is the first part of
     // the document (journey.ts, CROSSOVER). The camera has always read them
-    // that way: the rig calls curveT(SWING(legProgress)) and lensAt(legProgress).
+    // that way: the rig calls exteriorPoseAt(legProgress) and lensAt(legProgress).
     // This call read `scroll.current`, which is DOCUMENT scroll, so the
     // atmosphere has been sampling the path at less than half the parameter the
     // camera was at — at the constellation beat, where legProgress is 1.0, it
@@ -1260,6 +1498,24 @@ function ExteriorLighting({
     // which is what dusk looks like — and it means the frame still has real
     // landscape in it rather than a flat colour where a landscape was.
     scene.backgroundIntensity = 1 - 0.9 * e;
+
+    // THE ROOMS LIGHT UP AS EVENING FALLS. Every window of the v7 house is glass
+    // over a drawn curtain (MAT_Window_Interior); by day the curtain is cream in
+    // the shade of the reveal, and as the approach turns to dusk it glows warm,
+    // so the house the camera walks up to at night is one with its lamps on.
+    // Emissive colour is set by the grade (applyGrade); only the strength
+    // follows the evening here.
+    const glow = windowGlow.current;
+    if (!glow.mats.length && performance.now() > glow.nextScan) {
+      glow.nextScan = performance.now() + 1500;
+      const found = new Set<THREE.MeshStandardMaterial>();
+      scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        if (m && !Array.isArray(m) && m.name === 'MAT_Window_Interior' && m.emissive) found.add(m);
+      });
+      glow.mats = [...found];
+    }
+    for (const m of glow.mats) m.emissiveIntensity = WINDOW_EVENING_GLOW * e;
   });
 
   return (
@@ -1307,7 +1563,11 @@ function ExteriorLighting({
         // is (-0.857, +0.456, +0.242) - an elevation of 14 degrees, not the
         // 34.9 a previous pass used. Converted (x,y,z)->(x,z,-y) and taken out
         // to 89m that is [-76.2, 21.5, -40.5].
-        position={day ? [-76.2, 21.5, -40.5] : [30, 15, -80]}
+        // V7: daylight moves to a high front-left sun, on the bearing the
+        // painted sky's glow is drawn at, so the hero and the approach see the
+        // lit faces of the house and the palms throw their shadows across the
+        // lawns. Dusk's is the old bearing grown with the estate.
+        position={day ? [-60, 52, 58] : [48, 24, -128]}
         intensity={keyIntensity}
         color={day ? '#FFF0DB' : '#FFB264'}
         castShadow
@@ -1315,12 +1575,12 @@ function ExteriorLighting({
         // Tight ortho box around the building. The default frustum spans the
         // whole scene including a 450m ground plane, which spreads 2048px
         // across ~450m and gives shadows the resolution of a thumbnail.
-        shadow-camera-left={-26}
-        shadow-camera-right={26}
-        shadow-camera-top={26}
-        shadow-camera-bottom={-14}
+        shadow-camera-left={-48}
+        shadow-camera-right={48}
+        shadow-camera-top={48}
+        shadow-camera-bottom={-40}
         shadow-camera-near={1}
-        shadow-camera-far={140}
+        shadow-camera-far={240}
         shadow-bias={-0.0006}
         shadow-normalBias={0.03}
       />
@@ -1418,28 +1678,32 @@ function ExteriorLighting({
           flat where the roof overhangs it, which is the one place the key
           genuinely cannot reach. The side and fountain lights go out entirely —
           in daylight both surfaces are lit by the sky. */}
+      {/* V7: at the new frontispiece — the arched windows either side of the
+          door under the portico, and the door itself, 0.35 m out from the
+          wall face at z 8.40. */}
       <rectAreaLight
-        position={[-6.2, 2.3, 6.35]} width={2.1} height={3.0}
+        position={[-2.95, 2.6, 8.75]} width={1.4} height={2.9}
         intensity={day ? 0 : 1.8} color="#FFAA55"
       />
       <rectAreaLight
-        position={[0, 2.2, 6.35]} width={3.0} height={3.4}
+        ref={entry}
+        position={[0, 2.3, 8.75]} width={2.6} height={3.4}
         intensity={day ? 0.25 : 2.2} color={day ? '#FFE2C4' : '#FFB068'}
       />
       <rectAreaLight
-        position={[6.2, 2.3, 6.35]} width={2.1} height={3.0}
+        position={[2.95, 2.6, 8.75]} width={1.4} height={2.9}
         intensity={day ? 0 : 1.8} color="#FFAA55"
       />
       {/* The side elevation — what the camera faces from theta 70 onward.
           Without it the last third of the orbit plays against an unlit wall. */}
       <pointLight
-        position={[10.9, 2.5, 0]} intensity={day ? 0 : 5.6}
-        distance={18} decay={2} color="#FFAA55"
+        position={[14.4, 2.8, 0]} intensity={day ? 0 : 5.6}
+        distance={22} decay={2} color="#FFAA55"
       />
       {/* Uplight on the fountain, so the centre of the composition has a source
           of its own rather than borrowing from the windows either side. */}
       <pointLight
-        position={[0, 1.1, 13.2]} intensity={day ? 0 : 4.4}
+        position={[0, 1.3, 30]} intensity={day ? 0 : 4.4}
         distance={14} decay={2} color="#FFC98A"
       />
 
@@ -1495,8 +1759,10 @@ function ExteriorLighting({
  * picture light is not a trade worth making.
  */
 const PORTRAIT_LIGHT = {
-  position: [0, 5.88, -4.98] as [number, number, number],
-  aim: [0, 4.15, -5.24] as [number, number, number],
+  // V7: LGT_portrait's own place, carried with the portrait when the hall was
+  // extended — hung 1.28m higher and 2.4m further back, 5% larger.
+  position: [0, 7.24, -7.41] as [number, number, number],
+  aim: [0, 5.42, -7.64] as [number, number, number],
   angle: 0.9076,
   colour: '#FFE6C6',
 };
@@ -1615,7 +1881,18 @@ function ColorPipeline({ exposure, tier }: { exposure: number; tier: DeviceTier 
     gl.toneMapping = THREE.ACESFilmicToneMapping;
     gl.toneMappingExposure = exposure;
     gl.transmissionResolutionScale = TRANSMISSION_SCALE[tier];
+    // The doorway lifts exposure through its peak — the eye adjusting to the
+    // light — as a MULTIPLE of this value, so it has to know what this value is.
+    doorwaySurfaces.gl = gl;
+    doorwaySurfaces.exposure = exposure;
+    doorwaySurfaces.blur = tier !== 'low';
   }, [gl, exposure, tier]);
+  useEffect(
+    () => () => {
+      if (doorwaySurfaces.gl === gl) doorwaySurfaces.gl = null;
+    },
+    [gl],
+  );
   return null;
 }
 
@@ -1731,7 +2008,12 @@ function RoomEnvironmentMap({ intensity }: { intensity: number }) {
  * environment is tuned for the metals and the glass, and binding this to it
  * would silently re-light every material in the scene.
  */
-const SKY_EQUIRECT_URL = '/textures/env_meadow_bg_2k.jpg';
+// V7: SKY ONLY. The meadow HDRI above carried forested hills and a village on
+// its horizon, which the client review called "cheap" and "a slum". The estate
+// now supplies its own horizon (a planted berm and tree belt), so the panorama
+// is painted by tools/gltf/make_sky_v7.py: tropical blue, horizon haze matched
+// by DAYLIGHT_HAZE, a sun glow on the daylight key's bearing, soft cumulus.
+const SKY_EQUIRECT_URL = '/textures/sky_estate_v7_4k.jpg';
 
 function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
   const scene = useThree((s) => s.scene);
@@ -1814,12 +2096,107 @@ export function WorldCanvas() {
   }, [onJourney]);
 
   const onLeg = useCallback((l: 'exterior' | 'interior') => setLeg(l), []);
+
+  // What the scene is ACTUALLY showing, once React has committed it. The
+  // doorway will not clear its white until this names the far model and the
+  // scene has drawn it (doorway.ts, FAR_FRAMES).
+  useEffect(() => {
+    doorwayState.sceneLeg = set;
+  }, [set]);
   const onArmed = useCallback(() => setInteriorArmed(true), []);
 
   // The loaded hall, handed up so the interaction layer can adopt its
   // pedestals. State rather than a ref because <InteriorStage> has to re-run
   // its surgery when it arrives, and a ref would not tell it that it had.
   const [hallRoot, setHallRoot] = useState<THREE.Object3D | null>(null);
+  /** The loaded exterior, for the front doors to adopt. */
+  const [exteriorRoot, setExteriorRoot] = useState<THREE.Object3D | null>(null);
+
+  // The doorway holds its white for a hall that has not finished loading, so
+  // it has to know when the hall has.
+  useEffect(() => {
+    doorwayState.hallReady = hallRoot !== null;
+  }, [hallRoot]);
+
+  // THE DOORWAY'S HOLD ON THE PAGE. Registered here because this is the client
+  // component that already owns both ends of it — the scroll library and the
+  // published scroll value — and doorway.ts is kept free of either so its
+  // choreography can be tested as arithmetic.
+  useEffect(() => {
+    const coarse = window.matchMedia('(pointer: coarse)');
+    setDoorwayHost({
+      progress: () => {
+        syncScrollProgress();
+        return readScrollProgress();
+      },
+      jumpTo: (p) => {
+        const y = Math.round(Math.min(1, Math.max(0, p)) * scrollExtent());
+        if (lenisInstance) lenisInstance.scrollTo(y, { immediate: true, force: true });
+        else window.scrollTo(0, y);
+        syncScrollProgress();
+      },
+      hold: (on) => {
+        if (lenisInstance) {
+          if (on) lenisInstance.stop();
+          else lenisInstance.start();
+        }
+        // Lenis stops the wheel and the touch gesture, but not the momentum a
+        // phone carries after the finger lifts; only the document refusing to
+        // scroll stops that. Not on a desktop, where hiding the scrollbar would
+        // shift the whole page sideways by its width.
+        if (coarse.matches) document.documentElement.style.overflow = on ? 'hidden' : '';
+      },
+      glideTo: (p, seconds, done) => {
+        const y = Math.round(Math.min(1, Math.max(0, p)) * scrollExtent());
+        if (!lenisInstance) {
+          window.scrollTo(0, y);
+          done();
+          return;
+        }
+        lenisInstance.scrollTo(y, {
+          duration: seconds,
+          easing: (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2),
+          lock: true,
+          onComplete: () => done(),
+        });
+      },
+      canAnimate: () => lenisInstance !== null && !prefersReducedMotion(),
+    });
+
+    // A crossing only becomes a passage if the visitor made it. The scroll keys
+    // are the ones a browser scrolls with; anything else is typing.
+    const SCROLL_KEYS = new Set([
+      'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' ', 'Spacebar',
+    ]);
+    const onGesture = () => noteDoorwayInput(performance.now());
+    const onKey = (e: KeyboardEvent) => {
+      if (!SCROLL_KEYS.has(e.key)) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      // While the page is held, a scroll key must not scroll it underneath the
+      // passage either — Lenis does not intercept the keyboard.
+      if (doorwayState.mode === 'running') {
+        e.preventDefault();
+        return;
+      }
+      noteDoorwayInput(performance.now());
+    };
+    window.addEventListener('wheel', onGesture, { passive: true });
+    window.addEventListener('touchmove', onGesture, { passive: true });
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => {
+      window.removeEventListener('wheel', onGesture);
+      window.removeEventListener('touchmove', onGesture);
+      window.removeEventListener('keydown', onKey, { capture: true });
+      cancelDoorway();
+      setDoorwayHost(null);
+    };
+  }, []);
+
+  const onFrame = useCallback((el: HTMLDivElement | null) => {
+    doorwaySurfaces.frame = el;
+    doorwaySurfaces.paintedFilter = '';
+  }, []);
 
   // Per-frame channels out of the journey. Refs, not state, for the usual
   // reason — these change 60 times a second and re-rendering the canvas tree on
@@ -1926,6 +2303,7 @@ export function WorldCanvas() {
     // below — otherwise the frame the GLB has not painted yet shows navy under
     // a daylight scene. Same rule, same source of truth.
     <div
+      ref={onFrame}
       aria-hidden="true"
       className="fixed inset-0 z-0"
       style={{ background: set === 'exterior' ? GRADE_BG[look.grade] : GRADE_BG.dusk }}
@@ -2039,17 +2417,36 @@ export function WorldCanvas() {
 
                 Off the journey, the old behaviour is unchanged. */}
             <group visible={set === 'exterior'}>
-              <ExteriorModel grade={look.grade} />
+              <ExteriorModel grade={look.grade} onRoot={setExteriorRoot} />
+              {/* The front doors, cut into two leaves that can open. Closed,
+                  they are the shipped geometry exactly; only a passage through
+                  the doorway moves them. */}
+              <ExteriorDoorway root={exteriorRoot} />
             </group>
-            {onJourney ? (
-              interiorArmed ? (
-                <group visible={set === 'interior'}>
-                  <HallModel onRoot={setHallRoot} />
-                </group>
-              ) : null
-            ) : set === 'interior' ? (
-              <HallModel />
-            ) : null}
+            {/* ITS OWN SUSPENSE BOUNDARY, and that is a defect fix.
+
+                When the hall is armed mid-film, HallModel suspends while its
+                15MB parse runs — and a component that suspends during an
+                update makes React HIDE everything already shown inside the
+                same boundary; r3f's hideInstance does it by setting
+                `visible = false`. With one boundary around both sets, arming
+                the hall switched the whole exterior off: MEASURED from the
+                live scene at the front door, `mansion_walls` was invisible for
+                the six seconds the hall took to load, leaving the sky and the
+                motes on screen where the house had been. Nested, the only
+                thing a loading hall can hide is itself — which is already
+                hidden. */}
+            <Suspense fallback={null}>
+              {onJourney ? (
+                interiorArmed ? (
+                  <group visible={set === 'interior'}>
+                    <HallModel onRoot={setHallRoot} />
+                  </group>
+                ) : null
+              ) : set === 'interior' ? (
+                <HallModel onRoot={setHallRoot} />
+              ) : null}
+            </Suspense>
             {/* Metals need something to reflect or they read as flat paint;
                 outside, the glass and fountain water need it to refract. */}
             <RoomEnvironmentMap intensity={look.env} />
@@ -2068,6 +2465,19 @@ export function WorldCanvas() {
               projects={sceneCards}
               legProgress={interiorLeg}
               onOpen={openHref}
+            />
+          ) : null}
+          {/* /hall is inside the mansion too. It has no scroll film, so the
+              stage runs 'still': every table turns from anywhere in the room,
+              the projectors sit on their tables, and the holograms hold the
+              strength the GLB shipped. */}
+          {!onJourney && set === 'interior' ? (
+            <InteriorStage
+              root={hallRoot}
+              projects={sceneCards}
+              legProgress={interiorLeg}
+              onOpen={openHref}
+              mode="still"
             />
           ) : null}
           {/* THE DISTRICT FIELD, beyond the entry doors. Mounted with the

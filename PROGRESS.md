@@ -622,6 +622,13 @@ Still open on the 3D set (unchanged from before this session):
 
 `apps/public/public/models/interior_hall.glb` — **14.4 MB**, down from a 235 MB raw export.
 
+> **SUPERSEDED 2026-09-18 by the client review.** The hall was extended by bays — 19.8 x 15.4 x
+> 8.0 m against the 15.0 x 10.6 x 6.4 m recorded below — and re-baked, so the shipped file is now
+> **16.4 MB**, 160 lightmapped shell objects, 37 KTX2 textures, and the normalisation divisor is
+> **3.0801**, not 4.6597. The contract below is unchanged in every other respect; the current
+> numbers live in `interior_hall.manifest.json` and the rebuild is
+> `tools/blender/extend_hall_v7.py` -> `bake_lightmap.py` -> `tools/gltf/ship_hall_v7.sh`.
+
 | | |
 |---|---|
 | Drawn triangles | **480k** (was 2.01M) |
@@ -653,7 +660,7 @@ gltf.scene.traverse((o) => {
   if (!m?.aoMap) return;
   m.lightMap = m.aoMap;
   m.lightMap.colorSpace = THREE.SRGBColorSpace;   // required — see below
-  m.lightMapIntensity = 4.6597;                   // the bake's normalisation divisor
+  m.lightMapIntensity = 3.0801;                   // the bake's normalisation divisor
   m.aoMap = null;
   m.needsUpdate = true;
 });

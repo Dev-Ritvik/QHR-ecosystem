@@ -26,27 +26,39 @@
 // 3D interactions are an enhancement over a page that works without them.
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useFrame, type ThreeEvent } from '@react-three/fiber';
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ProjectStation, tickStations, type StationProject } from './ProjectStation';
+import { journeyState } from './journey';
+import {
+  clicksSuppressed,
+  lockCanvasScroll,
+  setCanvasTouchBase,
+  stationControls,
+  suppressClicks,
+  type StationControl,
+} from './stationControls';
 import {
   STATION_ANCHORS,
   buildInteriorBeats,
   stationEmphasis,
   type InteriorBeat,
 } from './interiorPath';
+import { PortraitNameplate } from './PortraitNameplate';
 
 /**
  * The portrait, measured from the GLB.
  *
- * portrait_canvas spans x -1.00..1.00, y 2.90..5.70, z -5.19..-5.16 — a 2.0 x
- * 2.8m canvas on the back wall above the landing, with portrait_frame_outer,
- * portrait_rebate and portrait_glass around it and a dedicated spot (LGT_
- * portrait) that the bake already contains.
+ * Since the hall was extended by bays, portrait_canvas spans x -1.05..1.05,
+ * y 4.10..7.04, with portrait_frame_outer at x -1.21..1.21, y 3.95..7.21 and its
+ * back on the wall face at z -7.70 — a 2.1 x 2.94m canvas hung higher over a
+ * landing that is now 3.47m up, with portrait_rebate and portrait_glass around
+ * it, the nameplate below it (PortraitNameplate.tsx) and a dedicated spot
+ * (LGT_portrait) that the bake already contains.
  */
 const PORTRAIT = {
-  centre: [0, 4.3, -5.1] as [number, number, number],
-  size: [2.3, 3.1, 0.24] as [number, number, number],
+  centre: [0, 5.58, -7.58] as [number, number, number],
+  size: [2.42, 3.26, 0.24] as [number, number, number],
 };
 
 /** Materials whose emissive strength is driven by station emphasis. The
@@ -54,6 +66,153 @@ const PORTRAIT = {
  *  low idle glow otherwise — a room with four holograms all at full output
  *  reads as a server rack, not as a showroom. */
 const HOLO_MATERIALS = /^MAT_Holo/;
+
+/**
+ * Emphasis every station holds on a page with no scroll choreography (/hall).
+ * Chosen so a hologram's emissive lands exactly where the GLB shipped it
+ * (0.42 + 0.78 x 0.74 = 1.0), which is how /hall looked before the interaction
+ * layer was mounted there, and clears the ACTIVE gate so its hologram answers.
+ */
+const STILL_EMPHASIS = 0.74;
+
+/**
+ * DRAG ANYWHERE IN THE ROOM TO TURN A TABLE.
+ *
+ * The client review turned a table from across the hall, got nothing, and only
+ * found the rotation after walking up to it. A drag that starts on a table's own
+ * proxy is still handled by the station; this picks up every horizontal drag
+ * that starts anywhere else on the canvas while the visitor is inside, and hands
+ * it to one table:
+ *
+ *   - the station the camera is on, when it has the camera's attention;
+ *   - otherwise the table whose top projects nearest the point where the drag
+ *     began, among the tables actually in front of the camera.
+ *
+ * It only claims a gesture once it is clearly horizontal (8 px, and wider than
+ * tall), so a click still clicks and a vertical swipe still scrolls: the canvas
+ * sits at touch-action pan-y while this is mounted. A drag it claims suppresses
+ * the click r3f would report at its end, so letting go over a hologram or the
+ * portrait does not open a page.
+ */
+function useDragAnywhere(mode: 'journey' | 'still') {
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+
+  useEffect(() => {
+    const el = gl.domElement;
+    setCanvasTouchBase(el, 'pan-y');
+    const P = new THREE.Vector3();
+
+    let start: { id: number; x: number; y: number } | null = null;
+    let claim: { ctl: StationControl; from: number } | null = null;
+
+    const inside = () => mode === 'still' || journeyState.leg === 'interior';
+
+    const pick = (x: number, y: number): StationControl | null => {
+      let focus: StationControl | null = null;
+      let focusE = 0.15;
+      if (mode === 'journey') {
+        for (const c of stationControls.values()) {
+          if (c.turntable.current && c.emphasis.current >= focusE) {
+            focus = c;
+            focusE = c.emphasis.current;
+          }
+        }
+        if (focus) return focus;
+      }
+      const r = el.getBoundingClientRect();
+      let nearest: StationControl | null = null;
+      let best = Infinity;
+      for (const c of stationControls.values()) {
+        if (!c.turntable.current) continue;
+        P.copy(c.centre).project(camera);
+        // Behind the camera, or well outside the frame: not a table anyone is
+        // looking at.
+        if (P.z > 1 || Math.abs(P.x) > 1.15 || Math.abs(P.y) > 1.15) continue;
+        const sx = r.left + ((P.x + 1) / 2) * r.width;
+        const sy = r.top + ((1 - P.y) / 2) * r.height;
+        const d = Math.hypot(sx - x, sy - y);
+        if (d < best) {
+          best = d;
+          nearest = c;
+        }
+      }
+      return nearest;
+    };
+
+    const onDown = (e: PointerEvent) => {
+      if (!inside() || !e.isPrimary) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      start = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      claim = null;
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      if (!claim) {
+        // A drag that began on a table's own proxy belongs to that station.
+        for (const c of stationControls.values()) {
+          if (c.proxyDrag.current) {
+            start = null;
+            return;
+          }
+        }
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
+        if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.2) {
+          // Clearly vertical: that is a scroll, not a turn. Let it go.
+          if (Math.abs(dy) > 14) start = null;
+          return;
+        }
+        const ctl = pick(start.x, start.y);
+        const g = ctl?.turntable.current;
+        if (!ctl || !g) {
+          start = null;
+          return;
+        }
+        claim = { ctl, from: g.rotation.y };
+        ctl.held.current = true;
+        ctl.spin.current = 0;
+        el.setPointerCapture?.(e.pointerId);
+        lockCanvasScroll(el, true);
+        document.body.style.cursor = 'grabbing';
+      }
+      const g = claim.ctl.turntable.current;
+      if (!g) return;
+      // Same ratio as a drag on the table itself: ~260 px for a half turn.
+      const next = claim.from + (e.clientX - start.x) * 0.006;
+      claim.ctl.spin.current = next - g.rotation.y;
+      g.rotation.y = next;
+    };
+
+    const onEnd = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      if (claim) {
+        el.releasePointerCapture?.(e.pointerId);
+        claim.ctl.held.current = false;
+        lockCanvasScroll(el, false);
+        document.body.style.cursor = '';
+        suppressClicks();
+      }
+      start = null;
+      claim = null;
+    };
+
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onEnd);
+    el.addEventListener('pointercancel', onEnd);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onEnd);
+      el.removeEventListener('pointercancel', onEnd);
+      if (claim) claim.ctl.held.current = false;
+      setCanvasTouchBase(el, '');
+      document.documentElement.style.overscrollBehavior = '';
+    };
+  }, [gl, camera, mode]);
+}
 
 interface HoloTarget {
   mat: THREE.MeshStandardMaterial;
@@ -69,11 +228,15 @@ export function InteriorStage({
    *  the only place that knows how the whole journey is divided. */
   legProgress,
   onOpen,
+  mode = 'journey',
 }: {
   root: THREE.Object3D | null;
   projects: StationProject[];
   legProgress: React.MutableRefObject<number>;
   onOpen: (href: string) => void;
+  /** 'journey' on the home page's scroll film; 'still' on /hall, where there is
+   *  no choreography for a station to take emphasis from. */
+  mode?: 'journey' | 'still';
 }) {
   const beats: InteriorBeat[] = useMemo(
     () => buildInteriorBeats(projects.length),
@@ -87,6 +250,8 @@ export function InteriorStage({
   for (const a of STATION_ANCHORS) {
     if (!emphasis.current[a.id]) emphasis.current[a.id] = { current: 0 };
   }
+
+  useDragAnywhere(mode);
 
   const portraitEmphasis = useRef(0);
   const portraitHover = useRef(0);
@@ -142,6 +307,44 @@ export function InteriorStage({
     };
   }, [root]);
 
+  // ── THE PROJECTORS SIT ON THEIR TABLES ───────────────────────────────────
+  //
+  // Measured from the GLB: every table top is at y 0.80, and every projector_Sn
+  // spans y 0.955..1.045 with its lens above - a 9 cm puck hanging 15.5 cm over
+  // the table. The client review read it, correctly, as a second floating object
+  // under the hologram. The hologram is meant to be the only thing in the air.
+  //
+  // So each projector is lowered until its base rests on its own table top,
+  // measured per station from the loaded meshes rather than assumed. It stays
+  // outside the turntable, as the rig was built: the client's own brief is that
+  // only the table turns and the rest of the system holds still. Restored on
+  // unmount, because the hall's node instances outlive this component.
+  useEffect(() => {
+    if (!root) return;
+    root.updateMatrixWorld(true);
+    const moved: { node: THREE.Object3D; y: number }[] = [];
+    const box = new THREE.Box3();
+    for (const a of STATION_ANCHORS) {
+      const projector = root.getObjectByName(`projector_${a.id}`);
+      const top = root.getObjectByName(`table_top_${a.id}`);
+      if (!projector || !top) continue;
+      const surface = box.setFromObject(top).max.y;
+      const base = box.setFromObject(projector).min.y;
+      const dy = surface - base;
+      if (Math.abs(dy) < 0.002) continue;
+      moved.push({ node: projector, y: projector.position.y });
+      // STATION_Sn carries no rotation or scale, so a world offset is a local one.
+      projector.position.y += dy;
+      projector.updateMatrixWorld(true);
+    }
+    return () => {
+      for (const m of moved) {
+        m.node.position.y = m.y;
+        m.node.updateMatrixWorld(true);
+      }
+    };
+  }, [root]);
+
   // ── STATIONS WITH NO PROJECT ─────────────────────────────────────────────
   //
   // Four stations ship; three projects are published. The delivery disables the
@@ -165,7 +368,9 @@ export function InteriorStage({
   // the architectural breathing point the brief asks for rather than an error
   // state. Publish a fourth project and it lights up with no code change.
   useEffect(() => {
-    if (!root) return;
+    // /hall shows the room exactly as delivered; only the journey knows how many
+    // projects are live.
+    if (!root || mode === 'still') return;
     const hidden: THREE.Object3D[] = [];
     for (let i = projects.length; i < STATION_ANCHORS.length; i += 1) {
       const holo = root.getObjectByName(`HOLO_${STATION_ANCHORS[i].id}`);
@@ -177,14 +382,15 @@ export function InteriorStage({
     return () => {
       for (const h of hidden) h.visible = true;
     };
-  }, [root, projects.length]);
+  }, [root, projects.length, mode]);
 
   // ── THE ONE LOOP ─────────────────────────────────────────────────────────
   useFrame((_, delta) => {
     const s = legProgress.current;
 
     for (const a of STATION_ANCHORS) {
-      emphasis.current[a.id].current = stationEmphasis(beats, s, a.id);
+      emphasis.current[a.id].current =
+        mode === 'still' ? STILL_EMPHASIS : stationEmphasis(beats, s, a.id);
     }
 
     // The portrait is the last beat, so its emphasis is simply how far into the
@@ -192,10 +398,10 @@ export function InteriorStage({
     const portraitBeat = beats[beats.length - 1];
     const prev = beats[beats.length - 2];
     const from = prev ? prev.at : 0.85;
-    portraitEmphasis.current = Math.min(
-      1,
-      Math.max(0, (s - from) / Math.max(1e-3, portraitBeat.at - from)),
-    );
+    portraitEmphasis.current =
+      mode === 'still'
+        ? 0
+        : Math.min(1, Math.max(0, (s - from) / Math.max(1e-3, portraitBeat.at - from)));
 
     // Hologram output. A station's plan sits at a low idle and lifts to the
     // strength the GLB shipped as the camera arrives, so the room has one
@@ -253,7 +459,7 @@ export function InteriorStage({
 
   const portraitClick = useCallback(
     (e: ThreeEvent<MouseEvent>) => {
-      if (portraitEmphasis.current < 0.15) return;
+      if (portraitEmphasis.current < 0.15 || clicksSuppressed()) return;
       e.stopPropagation();
       document.body.style.cursor = '';
       onOpen('/about');
@@ -266,20 +472,27 @@ export function InteriorStage({
     [onOpen],
   );
 
+  // On the journey a station exists for each published project. On /hall every
+  // delivered table turns, whether or not a project is published behind it.
+  const stations =
+    mode === 'still'
+      ? STATION_ANCHORS.map((a, i) => ({ anchor: a, project: projects[i] ?? null }))
+      : projects
+          .slice(0, STATION_ANCHORS.length)
+          .map((p, i) => ({ anchor: STATION_ANCHORS[i], project: p as StationProject | null }));
+
   return (
     <>
-      {projects.map((p, i) =>
-        i < STATION_ANCHORS.length ? (
-          <ProjectStation
-            key={p.slug}
-            root={root}
-            anchor={STATION_ANCHORS[i]}
-            project={p}
-            emphasis={emphasis.current[STATION_ANCHORS[i].id]}
-            onOpen={openProject}
-          />
-        ) : null,
-      )}
+      {stations.map(({ anchor, project }) => (
+        <ProjectStation
+          key={anchor.id}
+          root={root}
+          anchor={anchor}
+          project={project}
+          emphasis={emphasis.current[anchor.id]}
+          onOpen={openProject}
+        />
+      ))}
 
       {/* PORTRAIT — hit volume and light response.
           The hit box stands 12cm proud of the wall so a click near the frame
@@ -294,13 +507,19 @@ export function InteriorStage({
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
+      {/* THE NAMEPLATE — the client review asked for the portrait to carry
+          "respect and authority", and the answer agreed was a nameplate with
+          the name and title. Built here rather than in the GLB so the wording
+          can change without a re-export and a re-bake. */}
+      <PortraitNameplate />
+
       {/* The response itself: a soft warm plane just in front of the canvas,
           additively blended. Not a scale, not an outline — the brief is
           explicit that hover should read as light and focus rather than as a
           CSS transform, and additive light over a painting is what a gallery
           does. depthWrite off so it never occludes the frame it sits on. */}
-      <mesh ref={portraitFrame} position={[0, 4.3, -5.08]} renderOrder={2}>
-        <planeGeometry args={[2.5, 3.35]} />
+      <mesh ref={portraitFrame} position={[0, 5.58, -7.55]} renderOrder={2}>
+        <planeGeometry args={[2.63, 3.52]} />
         <meshBasicMaterial
           color="#F2D9A8"
           transparent

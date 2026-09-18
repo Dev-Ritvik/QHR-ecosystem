@@ -19,19 +19,34 @@
 // THE BOUNDS BELOW ARE MEASURED, not estimated. They come from parsing the two
 // GLBs' POSITION accessor min/max through each node's world matrix. If a model
 // is re-exported these numbers must be re-derived, and this test is where that
-// obligation is recorded.
+// obligation is recorded. The exterior's are generated into estateBounds.ts by
+// tools/gltf/estate_bounds_v7.py — every solid, and every palm and tree.
 
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   BEATS,
-  POSITION_CURVE,
-  TARGET_CURVE,
-  curveT,
+  APPROACH_BEATS,
+  FILM_BEATS,
+  FILM_SHARE,
+  FILM_POSITION_CURVE,
+  FILM_TARGET_CURVE,
+  APPROACH_POSITION_CURVE,
+  APPROACH_TARGET_CURVE,
+  exteriorPoseAtSwing,
+  exteriorSwing,
   lensAt,
   CONSTELLATION,
   CONSTELLATION_RADIUS,
+  ESTATE_SCALE,
 } from './cameraPath';
+import {
+  ESTATE_ARCHITECTURE,
+  ESTATE_DOOR,
+  ESTATE_PLANTING,
+  ESTATE_PORTICO,
+  ESTATE_SPIRE_TIP,
+} from './estateBounds';
 import {
   buildInteriorBeats,
   interiorCurves,
@@ -43,28 +58,15 @@ import {
 type Box = { name: string; min: [number, number, number]; max: [number, number, number] };
 
 /**
- * Solid volumes in exterior_mansion.glb the camera must stay outside.
+ * Solid volumes in exterior_estate_v7.glb the camera must stay outside: the
+ * house, its podium and portico, the cupola and spire, the fountain, the canal,
+ * the compound wall and hedges cell by cell, and every palm and tree on its own.
  *
- * Deliberately CONSERVATIVE — each is the axis-aligned hull of a family of
- * meshes, so a pass here is stronger than the geometry strictly requires. The
- * terrain is included as a half-space check rather than a box, below.
+ * Deliberately CONSERVATIVE — each is an axis-aligned hull, so a pass here is
+ * stronger than the geometry strictly requires. The terrain is included as a
+ * height check rather than a box, below.
  */
-const EXTERIOR_SOLIDS: Box[] = [
-  // mansion_walls + rustic base course + terrace, hulled together.
-  { name: 'mansion', min: [-9.64, 0, -6.54], max: [9.64, 6.95, 8.34] },
-  // roof_peak, cupola, finials and the spire, as one stack over the centre.
-  { name: 'roofstack', min: [-2.22, 6.83, -2.22], max: [2.22, 9.19, 2.22] },
-  { name: 'spire', min: [-1.74, 7.6, -1.74], max: [1.74, 11.72, 1.74] },
-  // fount_apron through fountain_jet.
-  { name: 'fountain', min: [-4.2, 0, 9.0], max: [4.2, 2.67, 17.4] },
-  { name: 'hedge_l', min: [-16.3, 0, -11.8], max: [-15.5, 0.95, 19.0] },
-  { name: 'hedge_r', min: [15.5, 0, -11.8], max: [16.3, 0.95, 19.0] },
-  { name: 'hedge_b', min: [-16.3, 0, -11.8], max: [16.3, 0.95, -11.0] },
-  // The cypress rows, hulled per row rather than per tree.
-  { name: 'cyp_left', min: [-27.52, 0, -12.49], max: [-26.48, 5.4, 20.49] },
-  { name: 'cyp_right', min: [26.48, 0, -12.49], max: [27.52, 5.4, 20.49] },
-  { name: 'cyp_back', min: [-18.52, 0, -16.49], max: [18.52, 5.4, -15.51] },
-];
+const EXTERIOR_SOLIDS: Box[] = [...ESTATE_ARCHITECTURE, ...ESTATE_PLANTING];
 
 /**
  * Solid volumes in interior_hall.glb.
@@ -74,23 +76,25 @@ const EXTERIOR_SOLIDS: Box[] = [
  * y 1.56, which is 8cm under the camera's eye line.
  */
 const INTERIOR_SOLIDS: Box[] = [
-  { name: 'wall_left', min: [-7.8, 0, -5.6], max: [-7.5, 6.4, 5.6] },
-  { name: 'wall_right', min: [7.5, 0, -5.6], max: [7.8, 6.4, 5.6] },
-  { name: 'wall_back', min: [-7.8, 0, -5.6], max: [7.8, 6.4, -5.3] },
-  { name: 'wall_front', min: [-7.8, 0, 5.3], max: [7.8, 6.4, 5.6] },
-  { name: 'ceiling', min: [-7.5, 6.4, -5.3], max: [7.5, 6.5, 5.3] },
+  // V7: the hall extended by bays (tools/blender/extend_hall_v7.py) — the room
+  // is 19.8 x 15.4 x 8.0m, and every solid in it moved with the walls.
+  { name: 'wall_left', min: [-10.2, 0, -8.0], max: [-9.9, 8.0, 8.0] },
+  { name: 'wall_right', min: [9.9, 0, -8.0], max: [10.2, 8.0, 8.0] },
+  { name: 'wall_back', min: [-10.2, 0, -8.0], max: [10.2, 8.0, -7.7] },
+  { name: 'wall_front', min: [-10.2, 0, 7.7], max: [10.2, 8.0, 8.0] },
+  { name: 'ceiling', min: [-9.9, 8.0, -7.7], max: [9.9, 8.1, 7.7] },
   // stair_step_0..11 plus the landing, as one wedge-free hull. Conservative:
   // the real stair is a ramp, so this box also covers the air above the lower
   // treads, and a camera is allowed there. Handled by the ramp test below.
-  { name: 'stair_solid', min: [-2.6, 0, -5.98], max: [2.6, 2.76, -0.63] },
-  { name: 'balustrade_r', min: [2.35, 0.1, -4.52], max: [2.55, 4.16, -0.3] },
-  { name: 'balustrade_l', min: [-2.55, 0.1, -4.52], max: [-2.35, 4.16, -0.3] },
-  { name: 'urn_l', min: [-3.83, 0, -0.9], max: [-3.01, 1.56, -0.07] },
-  { name: 'urn_r', min: [3.01, 0, -0.9], max: [3.83, 1.56, -0.07] },
-  { name: 'chandelier', min: [-0.77, 4.71, -0.17], max: [0.77, 6.25, 1.37] },
-  { name: 'column_l', min: [-7.58, 0, -5.08], max: [-7.02, 5.96, 5.08] },
-  { name: 'column_r', min: [7.02, 0, -5.08], max: [7.58, 5.96, 5.08] },
-  { name: 'portrait', min: [-1.15, 2.75, -5.3], max: [1.15, 5.85, -5.1] },
+  { name: 'stair_solid', min: [-3.25, 0, -8.55], max: [3.25, 3.47, -1.86] },
+  { name: 'balustrade_r', min: [2.94, 0.13, -7.7], max: [3.19, 4.72, -1.64] },
+  { name: 'balustrade_l', min: [-3.19, 0.13, -7.7], max: [-2.94, 4.72, -1.64] },
+  { name: 'urn_l', min: [-5.19, 0, -2.05], max: [-4.21, 1.87, -1.05] },
+  { name: 'urn_r', min: [4.21, 0, -2.05], max: [5.19, 1.87, -1.05] },
+  { name: 'chandelier', min: [-1.01, 5.85, -0.14], max: [1.01, 7.85, 1.88] },
+  { name: 'column_l', min: [-10.1, 0, -7.55], max: [-9.2, 7.46, 7.55] },
+  { name: 'column_r', min: [9.2, 0, -7.55], max: [10.1, 7.46, 7.55] },
+  { name: 'portrait', min: [-1.21, 3.95, -7.7], max: [1.21, 7.21, -7.5] },
   // TABLES, re-measured against the final delivery. The Ø0.58m pedestals
   // (half-extent 0.29, top 0.96) were replaced by Ø1.15m turned tables:
   // table_top_S1 spans x -6.52..-5.37 about a centre of -5.95, so a half-extent
@@ -100,10 +104,10 @@ const INTERIOR_SOLIDS: Box[] = [
   //
   // This is the one obstacle in the room that changed. Every other bound below
   // was re-parsed from the new GLB and is identical.
-  { name: 'table_S1', min: [-6.57, 0, 1.28], max: [-5.33, 0.85, 2.52] },
-  { name: 'table_S2', min: [-5.22, 0, -4.42], max: [-3.98, 0.85, -3.18] },
-  { name: 'table_S3', min: [5.33, 0, -1.52], max: [6.57, 0.85, -0.28] },
-  { name: 'table_S4', min: [5.33, 0, 2.78], max: [6.57, 0.85, 4.02] },
+  { name: 'table_S1', min: [-8.47, 0, 2.14], max: [-7.23, 0.85, 3.38] },
+  { name: 'table_S2', min: [-6.69, 0, -6.14], max: [-5.45, 0.85, -4.9] },
+  { name: 'table_S3', min: [7.23, 0, -1.93], max: [8.47, 0.85, -0.69] },
+  { name: 'table_S4', min: [7.23, 0, 4.32], max: [8.47, 0.85, 5.56] },
 ];
 
 /** Signed distance from a point to the outside of an axis-aligned box.
@@ -128,9 +132,9 @@ function distanceToBox(p: THREE.Vector3, b: Box): number {
  *  height at a given z, from stair_step_0 (z -0.63, y 0.22) to stair_step_11
  *  (z -4.37, y 2.64), then the landing at 2.76. */
 function stairSurfaceY(z: number): number {
-  if (z > -0.63) return 0;
-  if (z < -4.71) return 2.76;
-  return 0.22 + ((-0.63 - z) / (4.71 - 0.63)) * (2.64 - 0.22);
+  if (z > -1.86) return 0;
+  if (z < -6.96) return 3.47;
+  return 0.275 + ((-1.86 - z) / (6.96 - 1.86)) * (3.3 - 0.275);
 }
 
 function sampleCurve(curve: THREE.CatmullRomCurve3, n: number): THREE.Vector3[] {
@@ -162,10 +166,11 @@ const NEAR_INTERIOR = 0.1;
 /** The reference frame these compositions were authored against. */
 const FRAME: readonly [number, number] = [1440, 900];
 
+const HOUSE = ESTATE_ARCHITECTURE.find((b) => b.name === 'mansion')!;
 const SUBJECT_BOUNDS = {
-  // The mansion shell with its rustic base and the spire that tops it.
-  mansion: { min: [-9.64, 0, -6.54], max: [9.64, 11.72, 8.34] },
-  spire: { min: [-0.18, 9.19, -0.18], max: [0.18, 11.72, 0.18] },
+  // The house on its podium, and the spire that tops it.
+  mansion: { min: HOUSE.min, max: [HOUSE.max[0], ESTATE_SPIRE_TIP, HOUSE.max[2]] },
+  spire: { min: [-0.3, ESTATE_SPIRE_TIP - 1.2, -0.3], max: [0.3, ESTATE_SPIRE_TIP, 0.3] },
 } as const;
 
 function frameAt(beat: (typeof BEATS)[number]) {
@@ -226,6 +231,7 @@ function frameAt(beat: (typeof BEATS)[number]) {
   const conBox = [c.sx - rPx, c.sy - rPx, c.sx + rPx, c.sy + rPx];
 
   return {
+    boxOf,
     mansion: boxOf(SUBJECT_BOUNDS.mansion),
     spire: boxOf(SUBJECT_BOUNDS.spire),
     constellation: {
@@ -240,17 +246,24 @@ function frameAt(beat: (typeof BEATS)[number]) {
 }
 
 describe('exterior camera path', () => {
-  const samples = sampleCurve(POSITION_CURVE, 600);
+  // TWO CURVES since the approach to the front door was added — the approved
+  // film, and the descent from the constellation to the door — meeting at the
+  // constellation beat. Every contract below is held by both.
+  const CURVES = [
+    { name: 'film', position: FILM_POSITION_CURVE, target: FILM_TARGET_CURVE },
+    { name: 'approach', position: APPROACH_POSITION_CURVE, target: APPROACH_TARGET_CURVE },
+  ];
+  const samples = CURVES.flatMap((c) =>
+    sampleCurve(c.position, 600).map((p, i) => ({ curve: c.name, t: i / 600, p })),
+  );
 
   it('never enters the estate geometry', () => {
     const hits: string[] = [];
-    for (let i = 0; i < samples.length; i += 1) {
+    for (const { curve, t, p } of samples) {
       for (const solid of EXTERIOR_SOLIDS) {
-        const d = distanceToBox(samples[i], solid);
+        const d = distanceToBox(p, solid);
         if (d < NEAR_EXTERIOR) {
-          hits.push(
-            `t=${(i / (samples.length - 1)).toFixed(3)} ${solid.name} d=${d.toFixed(2)}`,
-          );
+          hits.push(`${curve} t=${t.toFixed(3)} ${solid.name} d=${d.toFixed(2)}`);
         }
       }
     }
@@ -258,16 +271,16 @@ describe('exterior camera path', () => {
   });
 
   it('stays above the terrain by a usable margin', () => {
-    // The delivered ground is authored terrain, not a plane: it undulates from
-    // y -2.97 to +0.97 across +/-120m. So the floor this path has to clear is
-    // 0.97, not 0, and "a usable margin" above the highest ground is 2.0.
+    // The v7 ground is flat inside the compound wall and rises to a 2.6 m
+    // planted berm outside it. Every beat is inside the wall, where the floor
+    // is 0, and "a usable margin" above the ground and the hedges is 2.0.
     //
     // The old assertion used 1.0 against a flat plane at y 0. Carrying it
     // forward unchanged would have passed a camera flying a few centimetres
     // over a rise.
     const low = samples
-      .map((p, i) => ({ t: i / (samples.length - 1), y: p.y }))
-      .filter((s) => s.y < 2.0);
+      .filter((s) => s.p.y < 2.0)
+      .map((s) => `${s.curve} t=${s.t.toFixed(3)} y=${s.p.y.toFixed(2)}`);
     expect(low).toEqual([]);
   });
 
@@ -275,28 +288,61 @@ describe('exterior camera path', () => {
     // Catmull-Rom overshoot shows up first as a local extremum that is not a
     // beat. Sampling the second difference catches a bulge the box tests miss
     // because it happens in open air but still reads as a lurch.
-    let worst = 0;
-    for (let i = 1; i < samples.length - 1; i += 1) {
-      const d2 =
-        samples[i + 1].y - 2 * samples[i].y + samples[i - 1].y;
-      worst = Math.max(worst, Math.abs(d2));
+    // Per curve: the join between them is a near-stop at the constellation,
+    // not a point either curve has to be smooth across.
+    for (const c of CURVES) {
+      const pts = sampleCurve(c.position, 600);
+      let worst = 0;
+      for (let i = 1; i < pts.length - 1; i += 1) {
+        const d2 = pts[i + 1].y - 2 * pts[i].y + pts[i - 1].y;
+        worst = Math.max(worst, Math.abs(d2));
+      }
+      // 600 samples over ~90m of arc: a smooth curve keeps this in the
+      // thousandths. A visible kink is an order of magnitude above. The second
+      // difference scales with the path, so the bound grows with the estate.
+      expect(worst, c.name).toBeLessThan(0.01 * ESTATE_SCALE);
     }
-    // 600 samples over ~90m of arc: a smooth curve keeps this in the
-    // thousandths. A visible kink is an order of magnitude above.
-    expect(worst).toBeLessThan(0.01);
   });
 
   it('lands each beat exactly where it was authored', () => {
     // curveT is the whole reason the approved vantage is the one on screen. If
     // the remap and the curve ever disagree, every beat is "near" its pose and
     // none of them is it.
+    const p = new THREE.Vector3();
+    const a = new THREE.Vector3();
     for (const beat of BEATS) {
-      const p = POSITION_CURVE.getPoint(curveT(beat.at));
-      expect(p.distanceTo(new THREE.Vector3(...beat.position))).toBeLessThan(0.02);
+      exteriorPoseAtSwing(beat.at, p, a);
+      expect(p.distanceTo(new THREE.Vector3(...beat.position)), beat.id).toBeLessThan(0.02);
+      expect(a.distanceTo(new THREE.Vector3(...beat.target)), beat.id).toBeLessThan(0.02);
     }
   });
 
-  it('finishes with the residence AND the network in one frame', () => {
+  it('keeps the approved film exactly where it was, inside the first FILM_SHARE', () => {
+    // The approach was ADDED, not blended in. The approved beats keep their
+    // positions and their spacing, rescaled into the film's share of the leg, so
+    // every frame of the hero, the revolution and the constellation is the frame
+    // that was signed off — at the same number of viewports of scroll.
+    const approved = [0, 0.3, 0.58, 0.82, 1.0];
+    expect(FILM_BEATS.map((b) => b.id)).toEqual([
+      'hero', 'quarter', 'three-quarter', 'crane', 'constellation',
+    ]);
+    FILM_BEATS.forEach((b, i) => expect(b.at).toBeCloseTo(approved[i] * FILM_SHARE, 9));
+    // Leg progress through the film maps onto swing space exactly as the old
+    // single leg did, scaled.
+    for (const s of [0.1, 0.3, 0.5, 0.8, 1]) {
+      const old = 0.2 * s + 0.8 * (s < 0.5 ? 2 * s * s : 1 - 2 * (1 - s) * (1 - s));
+      expect(exteriorSwing(s * FILM_SHARE)).toBeCloseTo(old * FILM_SHARE, 9);
+    }
+    // The two curves share the constellation beat and nothing else.
+    expect(APPROACH_BEATS[0]).toBe(FILM_BEATS[FILM_BEATS.length - 1]);
+  });
+
+  it('holds the residence AND the network in one frame at the constellation', () => {
+    // WAS "finishes with ...", when the constellation was the last beat. It is
+    // now the held frame of its own chapter, with the approach to the door after
+    // it (the client review required the film to reach the actual door), and
+    // the composition contract below is unchanged — only which beat carries it.
+    //
     // THIS REPLACES "finishes aimed at the constellation, not past it", which
     // asserted that the final target IS the sphere centre.
     //
@@ -311,8 +357,8 @@ describe('exterior camera path', () => {
     // The contract this chapter actually has is compositional, so the test is:
     // both subjects in frame, the sphere above the roof, and the left of frame
     // left clear for the copy column that sits beside them.
-    const last = BEATS[BEATS.length - 1];
-    const shot = frameAt(last);
+    const held = BEATS.find((b) => b.id === 'constellation')!;
+    const shot = frameAt(held);
 
     expect(shot.mansion.inFrame, 'the residence is in the final frame').toBe(true);
     expect(shot.constellation.inFrame, 'so is the network above it').toBe(true);
@@ -334,6 +380,39 @@ describe('exterior camera path', () => {
     expect(Math.min(shot.mansion.box[0], shot.constellation.box[0])).toBeGreaterThan(
       FRAME[0] * 0.25,
     );
+  });
+
+  it('ends square on the front door, on the entry axis', () => {
+    // BY CLIENT REVIEW: the passage inside "must open from the actual door".
+    // The doorway (doorway.ts) flies straight down the camera's view axis, so
+    // the last frame of the exterior has to have the door ON that axis — not
+    // near it, not framed right of a copy column.
+    const last = BEATS[BEATS.length - 1];
+    expect(last.id).toBe('door');
+    expect(last.position[0]).toBe(0);
+    expect(last.target[0]).toBe(0);
+    expect(last.frameOffset).toBe(0);
+    expect(last.roll).toBe(0);
+
+    const shot = frameAt(last);
+    // mansion_doors + door_relief, and the whole portico with its balcony.
+    const door = shot.boxOf(ESTATE_DOOR);
+    const portico = shot.boxOf(ESTATE_PORTICO);
+
+    expect(door.inFrame).toBe(true);
+    const [dx0, dy0, dx1, dy1] = door.box;
+    // Centred left to right within 2% of the frame.
+    expect(Math.abs((dx0 + dx1) / 2 - FRAME[0] / 2)).toBeLessThan(FRAME[0] * 0.02);
+    // The unmistakable subject, not a detail and not a wall of wood.
+    const doorHeightPct = ((dy1 - dy0) / FRAME[1]) * 100;
+    expect(doorHeightPct).toBeGreaterThan(18);
+    expect(doorHeightPct).toBeLessThan(40);
+    // And the whole portico holds in frame around it.
+    const [px0, py0, px1, py1] = portico.box;
+    expect(px0).toBeGreaterThan(0);
+    expect(px1).toBeLessThan(FRAME[0]);
+    expect(py0).toBeGreaterThan(0);
+    expect(py1).toBeLessThan(FRAME[1]);
   });
 
   it('keeps the lens inside a believable range across the whole track', () => {
@@ -361,16 +440,21 @@ describe('exterior camera path', () => {
     // What actually goes wrong, and what poses.ts records going wrong twice, is
     // an aim below the ground (the camera pitches into the lawn) or a subject
     // distance outside the range a lens can hold.
-    const aims = sampleCurve(TARGET_CURVE, 200);
-    const eyes = sampleCurve(POSITION_CURVE, 200);
     const bad: string[] = [];
-    for (let i = 0; i < aims.length; i += 1) {
-      const a = aims[i];
-      if (a.y < 1.0) bad.push(`aim below the estate at y=${a.y.toFixed(2)}`);
-      const d = eyes[i].distanceTo(a);
-      // Under 8m the 19m-wide facade cannot fit any lens in the sequence; past
-      // 70m it is a dot on a 450m plane.
-      if (d < 8 || d > 70) bad.push(`subject distance ${d.toFixed(1)}m at t=${(i / 200).toFixed(2)}`);
+    for (const c of CURVES) {
+      const aims = sampleCurve(c.target, 200);
+      const eyes = sampleCurve(c.position, 200);
+      for (let i = 0; i < aims.length; i += 1) {
+        const a = aims[i];
+        if (a.y < 1.0) bad.push(`${c.name}: aim below the estate at y=${a.y.toFixed(2)}`);
+        const d = eyes[i].distanceTo(a);
+        // Under 8m the 19m-wide facade cannot fit any lens in the sequence; past
+        // 70m it is a dot on a 450m plane. Both grow with the estate: the house
+        // is 31 m across now, and the approved frames were grown with it.
+        if (d < 8 || d > 70 * ESTATE_SCALE) {
+          bad.push(`${c.name}: subject distance ${d.toFixed(1)}m at t=${(i / 200).toFixed(2)}`);
+        }
+      }
     }
     expect(bad).toEqual([]);
   });
@@ -407,14 +491,14 @@ describe('interior camera path', () => {
         const bad: string[] = [];
         for (let i = 0; i < samples.length; i += 1) {
           const p = samples[i];
-          if (Math.abs(p.x) <= 2.6 && p.z <= -0.63) {
+          if (Math.abs(p.x) <= 3.25 && p.z <= -1.86) {
             const floor = stairSurfaceY(p.z);
             if (p.y < floor + 0.6) {
               bad.push(`t=${(i / (samples.length - 1)).toFixed(3)} y=${p.y.toFixed(2)} tread=${floor.toFixed(2)}`);
             }
           }
           if (p.y < 0.5) bad.push(`below floor at ${p.y.toFixed(2)}`);
-          if (p.y > 6.2) bad.push(`through ceiling at ${p.y.toFixed(2)}`);
+          if (p.y > 7.8) bad.push(`through ceiling at ${p.y.toFixed(2)}`);
         }
         expect(bad).toEqual([]);
       });

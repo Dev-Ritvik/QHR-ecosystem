@@ -62,10 +62,16 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
   // ever looked through: it stands beside the staircase with the treads and
   // balusters filling the entire frame, which is exactly what the first device
   // test showed. The model, the scale and the loader were all fine.
+  //
+  // CARRIED OUT WITH THE ROOM when the hall was extended by bays for the client
+  // review (tools/blender/extend_hall_v7.py): the walls went from x +/-7.50 to
+  // +/-9.90 and z +/-5.30 to +/-7.70, so a pose left where it was would stand a
+  // third of the way into the floor it used to command. Same framing, same
+  // distance from the wall it stands against, same sight line across the room.
   hall: {
     set: 'interior',
-    position: [6.4, 1.65, 0.25],
-    target: [-5.27, 2.04, -0.95],
+    position: [8.45, 1.7, 0.35],
+    target: [-6.96, 2.3, -1.4],
     // Scrolling walks the length of the room. A dolly, not an orbit: the room
     // is architecture, and architecture reads through parallax between near and
     // far columns, which a rotation destroys.
@@ -81,12 +87,12 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
     // This one travels ALONG the sight-line the arrival pose already looks
     // down, so the framing is the one that was verified — just closer. A dolly
     // that keeps its subject cannot land in a wall.
-    to: { position: [1.95, 1.72, -0.2], target: [-5.27, 1.85, -0.95] },
+    to: { position: [2.6, 1.8, -0.3], target: [-6.96, 2.1, -1.4] },
     ease: 1.1,
   },
 
-  // Reading distance at the Kartikeya table (S1). Blender (-3.40,-1.90,1.60).
-  table: { set: 'interior', position: [-3.4, 1.6, 1.9], target: [-5.95, 1.45, 1.9], ease: 0.9 },
+  // Reading distance at the Kartikeya table (S1), which now stands at x -7.85.
+  table: { set: 'interior', position: [-5.3, 1.6, 2.76], target: [-7.85, 1.45, 2.76], ease: 0.9 },
 
   // OUTSIDE, three-quarter. Reads /about, /why-us and /testimonials — the pages
   // about the company rather than a plot, so the building is seen whole and at
@@ -148,13 +154,13 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
 
   // Facing the Lucky Garden table, which is the closest thing the built hall
   // has to a map surface.
-  window: { set: 'interior', position: [-4.6, 1.58, -1.5], target: [-4.6, 1.42, -3.8], ease: 1.0 },
+  window: { set: 'interior', position: [-6.07, 1.58, -3.2], target: [-6.07, 1.42, -5.52], ease: 1.0 },
 
   // Facing the Gayatri table — papers on a surface, which is what the study is.
-  study: { set: 'interior', position: [3.4, 1.6, -0.9], target: [5.95, 1.42, -0.9], ease: 0.8 },
+  study: { set: 'interior', position: [5.3, 1.6, -1.31], target: [7.85, 1.42, -1.31], ease: 0.8 },
 
   // Turned toward the room rather than a table: where you speak to someone.
-  desk: { set: 'interior', position: [1.6, 1.6, 1.2], target: [-1.0, 1.5, -1.4], ease: 0.9 },
+  desk: { set: 'interior', position: [2.1, 1.6, 1.75], target: [-1.3, 1.5, -2.0], ease: 0.9 },
 };
 
 /** Which model this route needs loaded. Drives both the GLB and the lighting
