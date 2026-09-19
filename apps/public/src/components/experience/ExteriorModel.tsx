@@ -24,10 +24,10 @@
 // here, would be a silent mis-grade of the kind this project has already paid
 // for twice. The shared part — Draco and KTX2 loader wiring — is imported.
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { Grade } from './WorldCanvas';
 import { useGLTF } from '@react-three/drei';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { attachLoaders } from './HallModel';
@@ -1101,6 +1101,144 @@ const EMISSIVE: Record<Grade, EmissiveSpec> = {
  * decision to make against a rendered frame rather than in Blender.
  */
 
+/**
+ * THE POLISH PASS: what the golden hour needs from the materials that the
+ * exporter cannot know.
+ *
+ * The client's verdict on the first estate was that it "looks like another 3D
+ * build", and three material facts were doing most of that work:
+ *
+ *   THE ROOF WAS A BLACK VOID. MAT_Roof_Slate carries the P4C slate maps, which
+ *   were authored against a scene with an environment and a fill that no longer
+ *   exist; under a 13-degree sun the roof is the largest surface in the hero and
+ *   it returned near-black, so the building read as a pale box with a hole cut
+ *   out of the top of it. Real slate at this hour is a blue-grey that carries
+ *   the sky — so it is lifted, and given the sky to carry.
+ *
+ *   NOTHING REFLECTED ANYTHING. Outside, scene.environment was a grey studio
+ *   box (RoomEnvironment) until this pass; now that it is the estate's own sky,
+ *   the surfaces that live on reflection — water, glass, gilt, chrome, polished
+ *   stone — have to be told to take more of it than a wall does. envMapIntensity
+ *   is per material, so this reaches exactly those and cannot touch the stone.
+ *
+ *   THE LAWN WAS A FLAT FIELD. Grass at a low sun has a strong forward sheen;
+ *   at roughness 0.92 it had none, and read as painted card.
+ *
+ * Applied to the CLONED graph on load, like every other pass here, and keyed by
+ * material name so a re-export that renames a material fails loudly (the count
+ * in the ready log drops) rather than quietly rendering the old look.
+ */
+const POLISH: Record<string, { colour?: number; rough?: number; env?: number; metal?: number }> = {
+  MAT_Roof_Slate: { colour: 1.85, rough: 0.82, env: 1.35 },
+  MAT_Roof: { colour: 1.7, rough: 0.85, env: 1.3 },
+  MAT_Lawn: { colour: 1.28, rough: 0.72, env: 1.0 },
+  MAT_Water: { env: 2.0 },
+  MAT_Water_Pool: { env: 3.0 },
+  MAT_Glass_Window: { env: 2.2 },
+  MAT_Glass_Rail: { env: 2.4 },
+  MAT_Car_Glass: { env: 2.4 },
+  MAT_Car_Paint: { env: 2.2 },
+  MAT_Car_Paint_Pale: { env: 2.0 },
+  MAT_Chrome: { env: 2.2 },
+  MAT_Steel: { env: 1.9 },
+  MAT_Gold: { env: 1.9 },
+  MAT_Stone_Terrace: { env: 1.5 },
+  MAT_Stone_Paving: { env: 0.9 },
+  MAT_Pool_Shell: { env: 1.2 },
+};
+
+/**
+ * MOVING WATER, WHICH IS THE POINT OF WATER.
+ *
+ * Every sheet of water on the estate — the fountain basins, the canal, the new
+ * pool — was a mirror-flat plane, and a mirror that never moves does not read as
+ * water. It reads as glass, or worse, as the painted blue rectangle a site plan
+ * uses. Now that the sky is bound as the environment there is something in those
+ * reflections worth disturbing, and disturbing them is what makes the surface
+ * legible AS a surface.
+ *
+ * TWO CROSSED WAVE TRAINS, IN THE NORMAL ONLY. No vertex displacement (the sheet
+ * is a flat quad with four corners — there is nothing to displace) and no
+ * texture (a 1 KB shader chunk against a 300 KB normal map). Two sine trains at
+ * different frequencies, angles and speeds sum into something that does not
+ * visibly repeat at the distances the film holds; the amplitude is deliberately
+ * tiny — 0.02 in the normal — because water at 40 m is a slight unsettling of
+ * a reflection, not a choppy sea.
+ *
+ * ONE UNIFORM OBJECT, SHARED. Every water material gets the same `uTime`
+ * reference, so the per-frame cost is a single assignment rather than a
+ * traversal.
+ */
+const WATER_RE = /^MAT_Water/;
+
+function animateWater(root: THREE.Object3D, clock: { value: number }): number {
+  const done = new Set<THREE.Material>();
+  let count = 0;
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) {
+      const mat = m as THREE.MeshStandardMaterial & { __ripple?: boolean };
+      if (!mat || mat.__ripple || !WATER_RE.test(mat.name)) continue;
+      mat.__ripple = true;
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = clock;
+        shader.vertexShader = shader.vertexShader
+          .replace('void main() {', `varying vec3 vRipplePos;
+             void main() {`)
+          .replace(
+            '#include <begin_vertex>',
+            `#include <begin_vertex>
+             vRipplePos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+          );
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', `uniform float uTime;
+             varying vec3 vRipplePos;
+             void main() {`)
+          .replace(
+            '#include <normal_fragment_maps>',
+            `#include <normal_fragment_maps>
+             {
+               vec2 p = vRipplePos.xz;
+               float a = sin(p.x * 0.9 + p.y * 0.35 + uTime * 0.85);
+               float b = sin(p.x * -0.42 + p.y * 1.15 + uTime * 0.62);
+               normal = normalize(normal + vec3(a * 0.02, 0.0, b * 0.02));
+             }`,
+          );
+      };
+      mat.customProgramCacheKey = () => `water-ripple-${mat.name}`;
+      mat.needsUpdate = true;
+      count += 1;
+    }
+  });
+  return count;
+}
+
+function polishSurfaces(root: THREE.Object3D): number {
+  const done = new Set<THREE.Material>();
+  let touched = 0;
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) {
+      const mat = m as THREE.MeshStandardMaterial;
+      if (!mat || done.has(mat)) continue;
+      const rule = POLISH[mat.name];
+      if (!rule) continue;
+      done.add(mat);
+      if (rule.colour !== undefined) mat.color.multiplyScalar(rule.colour);
+      if (rule.rough !== undefined) mat.roughness *= rule.rough;
+      if (rule.metal !== undefined) mat.metalness = rule.metal;
+      if (rule.env !== undefined) mat.envMapIntensity = rule.env;
+      mat.needsUpdate = true;
+      touched += 1;
+    }
+  });
+  return touched;
+}
+
 function applyGrade(root: THREE.Object3D, grade: Grade): string[] {
   const touched: string[] = [];
 
@@ -1377,12 +1515,26 @@ export function ExteriorModel({
 
   const root = useMemo(() => scene.clone(true), [scene]);
 
+  // The water's clock. One object, handed to every water material's shader, so
+  // the per-frame cost of moving every sheet of water on the estate is a single
+  // assignment. A ref rather than state: it is written sixty times a second and
+  // must never re-render anything.
+  const waterClock = useRef({ value: 0 });
+  useFrame((_, delta) => {
+    waterClock.current.value += delta;
+  });
+
   useEffect(() => {
     // BEFORE the grade, and before anything reads the frame: an anisotropic
     // material with no tangents writes NaN, and one NaN fragment takes the
     // whole bloom chain — and therefore the whole screen — to black.
     const disarmed = guardAnisotropy(root);
     const graded = applyGrade(root, grade);
+    // AFTER the grade (which clones the paving materials) and BEFORE the merge
+    // (which is by material identity): a pass that changed a material after the
+    // merge keyed on it would be graded into one batch and not the other.
+    const polished = polishSurfaces(root);
+    const rippled = animateWater(root, waterClock.current);
 
     // AFTER the grade, and that ordering is load-bearing: applyGrade swaps the
     // paving materials per grade and looks its targets up BY NAME, so merging
@@ -1445,8 +1597,8 @@ export function ExteriorModel({
 
     // eslint-disable-next-line no-console
     console.info(
-      '[exterior_ready] url=%s meshes=%d tris=%d graded=[%s] anisotropyDisarmed=[%s] | size %sx%sx%s | y %s..%s',
-      url, meshes, Math.round(tris), graded.join(','), disarmed.join(','),
+      '[exterior_ready] url=%s meshes=%d tris=%d graded=[%s] polished=%d water=%d anisotropyDisarmed=[%s] | size %sx%sx%s | y %s..%s',
+      url, meshes, Math.round(tris), graded.join(','), polished, rippled, disarmed.join(','),
       size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2),
       box.min.y.toFixed(2), box.max.y.toFixed(2),
     );

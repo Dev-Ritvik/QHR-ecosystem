@@ -123,16 +123,48 @@ colour_map((196, 178, 150), tone + 0.015 * pmid + 0.02 * pgrain - 0.55 * joint -
 report["paving_tilt95"] = normal_map(0.5 * pgrain - 6.0 * joint - 1.2 * arris, 0.12, "v7_paving_normal.png")
 grey_map(0.82 + 0.04 * pgrain + 0.1 * joint, "v7_paving_roughness.png")
 
+# --- TERRACE (pool terrace). Polished veined stone, 1.2 m slabs on 2.4 m. -----
+# The one POLISHED surface on the estate, and it is there for what it does to
+# light rather than for what it is: roughness 0.2 against the walls' 0.8 means
+# it carries the sky, the house and the pool as reflections, which is the
+# difference between stone that was quarried and stone that was rendered.
+tcell = N // 2
+ttone = np.zeros((N, N))
+for j in range(2):
+    for i in range(2):
+        ttone[j * tcell:(j + 1) * tcell, i * tcell:(i + 1) * tcell] = RNG.uniform(-0.016, 0.016)
+tjd = np.minimum(np.minimum(xx % tcell, tcell - xx % tcell), np.minimum(yy % tcell, tcell - yy % tcell))
+tjoint = np.clip(1.0 - tjd / 2.0, 0, 1)        # ~5 mm at 2.4 m / 1024 px
+swirl = periodic_noise(N, 2.7, 2, 20)
+fil = periodic_noise(N, 1.5, 18, 110)
+# Thin dark filaments where the low-frequency field crosses zero: veining.
+veins = np.clip(1.0 - np.abs(swirl) / 0.22, 0, 1) ** 2
+colour_map((214, 206, 193), ttone + 0.03 * swirl + 0.012 * fil - 0.075 * veins - 0.4 * tjoint,
+           "v7_terrace_basecolor.png")
+report["terrace_tilt95"] = normal_map(0.3 * fil - 4.0 * tjoint - 1.2 * veins, 0.06, "v7_terrace_normal.png")
+grey_map(0.2 + 0.05 * fil + 0.06 * veins + 0.45 * tjoint, "v7_terrace_roughness.png")
+
 # --- LAWN. A 6 m tile: two 3 m mowing stripes and fine turf. -----------------
-stripe = np.where((xx // (N // 2)) % 2 == 0, 1.0, -1.0)
+# FOUR stripes on the tile rather than two, and three times the contrast.
+#
+# The client's verdict on the estate was that it "looks like another 3D build",
+# and at the hero the lawn is 45% of the frame: a single flat green is the
+# largest cheap surface in the picture. A mown lawn is not one colour — it is
+# alternating bands where the blades were laid toward and away from the mower,
+# and the band that leans away is visibly lighter. At 6 m the tile now carries
+# 1.5 m bands, which is what a domestic mower actually cuts and what reads at
+# the 40-80 m the film sees this ground from.
+stripe = np.where((xx // (N // 4)) % 2 == 0, 1.0, -1.0)
 # Soften the stripe edge over ~10 cm so it reads as mown grass, not paint.
 stripe = np.array(Image.fromarray(((stripe * 0.5 + 0.5) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(4))) / 255.0 * 2 - 1
 turf = periodic_noise(N, 0.4, 200, 512)
 tmid = periodic_noise(N, 1.4, 8, 80)
 tlf = periodic_noise(N, 2.2, 1, 6)
-colour_map((92, 124, 62), 0.035 * stripe + 0.05 * tmid + 0.08 * turf + 0.05 * tlf, "v7_lawn_basecolor.png")
-report["lawn_tilt95"] = normal_map(1.2 * turf, 0.35, "v7_lawn_normal.png")
-grey_map(0.92 + 0.04 * turf, "v7_lawn_roughness.png")
+# Warmer and a shade lighter as well: grass under a low sun is olive-gold, and
+# the cool 92,124,62 was reading as a snooker table under the graded key.
+colour_map((104, 132, 64), 0.1 * stripe + 0.07 * tmid + 0.09 * turf + 0.075 * tlf, "v7_lawn_basecolor.png")
+report["lawn_tilt95"] = normal_map(1.2 * turf + 0.5 * stripe, 0.35, "v7_lawn_normal.png")
+grey_map(0.9 + 0.05 * turf - 0.03 * stripe, "v7_lawn_roughness.png")
 
 # --- PALM FROND. A dense pinnate leaf on a transparent ground, rachis along u.
 # Real pinnae are narrow, but at every distance this film sees a palm from they

@@ -320,3 +320,40 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-\[scrollcue_2\.2s_ease-in-out_infinite\] { animation: none; }
 }
+
+
+/* THE GRAIN (CinemaOverlay.tsx).
+
+   A 180px turbulence tile, stepped through eight offsets a second so the field
+   moves the way film grain does rather than sitting still like a texture. It is
+   drawn in `overlay` at 3.5%, which leaves the midtones where the renderer put
+   them and works into the shadows and the highlights — and, incidentally, is
+   the cheapest fix there is for the banding a smooth 8-bit sky gradient shows
+   on a wide display.
+
+   `will-change: background-position` keeps it on the compositor: the layer is
+   never repainted, only re-offset. Under reduced motion the grain stays, still:
+   the texture is part of the image, the flicker is the part that is motion. */
+.estate-grain {
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-repeat: repeat;
+  will-change: background-position;
+  animation: estate-grain 1s steps(8) infinite;
+}
+
+@keyframes estate-grain {
+  0%   { background-position: 0 0; }
+  12%  { background-position: -14px 9px; }
+  25%  { background-position: 11px -17px; }
+  37%  { background-position: -21px -6px; }
+  50%  { background-position: 7px 15px; }
+  62%  { background-position: -9px 22px; }
+  75%  { background-position: 18px 4px; }
+  87%  { background-position: -6px -12px; }
+  100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .estate-grain { animation: none; }
+}

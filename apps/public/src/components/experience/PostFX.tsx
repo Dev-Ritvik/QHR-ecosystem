@@ -66,8 +66,45 @@
 // should come back — cameraPath still exports SUBJECT for exactly that.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
+import {
+  EffectComposer,
+  Bloom,
+  BrightnessContrast,
+  ChromaticAberration,
+  HueSaturation,
+  Noise,
+  Vignette,
+} from '@react-three/postprocessing';
+import { BlendFunction } from 'postprocessing';
+import { Vector2 } from 'three';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
+
+/**
+ * THE GRADE, AND WHY A RENDER NEEDS ONE.
+ *
+ * The client's verdict on the first estate was that it "looks like another 3D
+ * build" — and the honest reading of that is not geometry, it is that nothing
+ * had happened to the image after the renderer was finished with it. A
+ * photograph of a house has been through a lens and a grade: it has grain, it
+ * has a little more contrast than the scene did, its colour is pushed, and its
+ * corners fall off. A raw framebuffer has none of that, and the eye reads the
+ * absence instantly even when it cannot name it.
+ *
+ * Every effect below is SCREEN SPACE and depth-free, which is the constraint
+ * the investigation at the top of this file established: anything that asks the
+ * composer for a DepthTexture (depth of field, SSAO, god rays) makes the resolve
+ * blit read and write the same image and produces garbage. Nothing here does.
+ *
+ *   contrast   +0.055   the shadow side of the stone gets its weight back
+ *   saturation +0.09    warm light on limestone, not on beige
+ *   grain      0.028    at 45% opacity in overlay: a film stock's noise floor,
+ *                       which is what stops a flat sky reading as a gradient
+ *   aberration 0.4 px   only at the corners, under the vignette, where a real
+ *                       lens actually has it
+ */
+const GRADE = { contrast: 0.055, saturation: 0.09, grain: 0.028 } as const;
+/** Sub-pixel, and deliberately: visible fringing is a filter, not a lens. */
+const ABERRATION = new Vector2(0.00042, 0.00042);
 
 /**
  * MULTISAMPLING OFF.
@@ -84,9 +121,17 @@ import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 const MULTISAMPLING = 0;
 
 export function PostFX({ tier }: { tier: DeviceTier }) {
+  // Grain and aberration are the two passes that buy the least per millisecond,
+  // so they are the two a mid-tier device does without: it keeps the bloom, the
+  // grade and the vignette, which carry the look.
+  const lens = tier === 'high';
   if (tier === 'low') {
+    // A phone gets the grade but not the passes that cost a full-screen blur:
+    // contrast, saturation and the vignette are one shader between them.
     return (
       <EffectComposer multisampling={MULTISAMPLING}>
+        <BrightnessContrast brightness={0} contrast={GRADE.contrast} />
+        <HueSaturation hue={0} saturation={GRADE.saturation} />
         <Vignette offset={0.32} darkness={0.62} eskil={false} />
       </EffectComposer>
     );
@@ -100,12 +145,27 @@ export function PostFX({ tier }: { tier: DeviceTier }) {
           a lamp — which is the failure mode this build has already shipped
           once. */}
       <Bloom
-        intensity={0.62}
-        luminanceThreshold={0.85}
-        luminanceSmoothing={0.28}
+        intensity={0.74}
+        luminanceThreshold={0.82}
+        luminanceSmoothing={0.3}
         mipmapBlur
       />
-      <Vignette offset={0.3} darkness={0.66} eskil={false} />
+      <BrightnessContrast brightness={0} contrast={GRADE.contrast} />
+      <HueSaturation hue={0} saturation={GRADE.saturation} />
+      {lens ? (
+        <ChromaticAberration offset={ABERRATION} radialModulation modulationOffset={0.35} />
+      ) : (
+        <></>
+      )}
+      {/* OVERLAY, not screen: overlay leaves the midtones where they are and
+          works into the shadows and highlights, which is how grain sits on an
+          image instead of fogging it. */}
+      {lens ? (
+        <Noise premultiply={false} blendFunction={BlendFunction.OVERLAY} opacity={GRADE.grain} />
+      ) : (
+        <></>
+      )}
+      <Vignette offset={0.28} darkness={0.7} eskil={false} />
     </EffectComposer>
   );
 }

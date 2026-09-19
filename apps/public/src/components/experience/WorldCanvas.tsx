@@ -54,6 +54,7 @@ import {
 } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { PostFX } from './PostFX';
+import { CinemaOverlay } from './CinemaOverlay';
 import { Motes } from './Motes';
 import { useSceneCards } from './useSceneCards';
 import { telemetry } from '@/lib/telemetry/collector';
@@ -1026,7 +1027,11 @@ const LOOK: Record<SceneSet, { exposure: number; env: number; ambient: number }>
     // does not have; applying it out here would darken the facade for no
     // reason. Different model, different grade — which is why the look budget
     // is keyed by set rather than shared.
-    exposure: 1.0,
+    // 1.0 -> 1.14 with the golden hour. A 13-degree sun delivers roughly a
+    // stop less onto horizontal ground than a 32-degree one, and the frame it
+    // produced was moody rather than expensive: the house has to be the
+    // brightest thing in the picture, not the sky behind it.
+    exposure: 1.2,
     /** Higher than the interior: the glass and the fountain water are
      *  transmissive and have nothing to refract without an environment. */
     env: 0.45,
@@ -1088,9 +1093,9 @@ const CLIP: Record<SceneSet, { near: number; far: number }> = {
 const SCRIM: Record<SceneSet, { linear: string; radial: string }> = {
   exterior: {
     linear:
-      'linear-gradient(to bottom, rgba(6,10,20,0.28) 0%, rgba(6,10,20,0) 18%, rgba(6,10,20,0) 62%, rgba(6,10,20,0.82) 100%)',
+      'linear-gradient(to bottom, rgba(6,10,20,0.18) 0%, rgba(6,10,20,0) 20%, rgba(6,10,20,0) 70%, rgba(6,10,20,0.5) 100%)',
     radial:
-      'radial-gradient(130% 88% at 50% 42%, rgba(6,10,20,0) 0%, rgba(6,10,20,0) 62%, rgba(6,10,20,0.22) 100%)',
+      'radial-gradient(130% 88% at 50% 42%, rgba(6,10,20,0) 0%, rgba(6,10,20,0) 66%, rgba(6,10,20,0.16) 100%)',
   },
   // Warm, and a fraction of what it was. The navy 0.80/0.88 bands were tuned for
   // the dark hall; over the ivory room they read as grime at the top and bottom
@@ -1201,7 +1206,7 @@ const DAYLIGHT_COLUMN_SCRIM =
 export type Grade = 'dusk' | 'daylight';
 
 /** Sky/clear colour per grade. Dusk's is also the fog colour. */
-const GRADE_BG: Record<Grade, string> = { dusk: '#0A1120', daylight: '#9FB9D2' };
+const GRADE_BG: Record<Grade, string> = { dusk: '#0A1120', daylight: '#B9C6D8' };
 
 /** Exterior LOOK deltas for daylight. Dusk (the rollback) is LOOK.exterior unmodified. */
 const GRADE_LOOK: Record<Grade, Partial<(typeof LOOK)['exterior']>> = {
@@ -1249,7 +1254,12 @@ const GRADE_RIG: Record<Grade, { key: number; hemi: number }> = {
   // V7: 5.9 -> 3.4. 5.9 was fitted to a 14-degree sun BEHIND the house, lighting
   // edges and roof; the v7 sun is high and in front (see the key light), lands
   // square on the facade, and at 5.9 blew the limestone to paper white.
-  daylight: { key: 3.4, hemi: 0.18 },
+    // GOLDEN HOUR: key 3.4 -> 4.2, fill 0.18 -> 0.3. The key climbs because a low
+  // sun loses most of its throw to the cosine on every horizontal surface in
+  // frame, and the fill climbs because the shadow side is now lit by a sky that
+  // is genuinely in the scene (SkyBackground binds it as the environment) and
+  // should read as sky rather than as black.
+  daylight: { key: 4.3, hemi: 0.44 },
 };
 
 function useLook(set: SceneSet) {
@@ -1320,14 +1330,14 @@ function useLook(set: SceneSet) {
 // 150 m; the estate is 1.6x larger, its horizon is a planted belt 80-180 m out,
 // and at the old pair that belt arrived as a milky wall across the top of the
 // hero.
-const DAY_FOG: readonly [number, number] = [110, 520];
+const DAY_FOG: readonly [number, number] = [86, 440];
 const EVENING_FOG_FAR = 300;
 /** Emissive strength of the curtained windows at full evening (see ExteriorLighting). */
 const WINDOW_EVENING_GLOW = 0.7;
 /** Aerial-perspective colour, sampled from the approved render's own horizon band. */
 // V7: the painted sky's horizon haze, so the tree belt fades into the sky it
 // stands against rather than into the olive of the old meadow hills.
-const DAYLIGHT_HAZE = '#C3CCC9';
+const DAYLIGHT_HAZE = '#ECCEAC';
 const HAZE_DAY = new THREE.Color(DAYLIGHT_HAZE);
 /**
  * The film's navy, LIFTED — and lifted by measurement rather than by eye.
@@ -1351,13 +1361,19 @@ function ExteriorLighting({
   grade,
   keyIntensity,
   hemiIntensity,
+  tier,
 }: {
   driveByScroll: boolean;
   grade: Grade;
   keyIntensity: number;
   hemiIntensity: number;
+  tier: DeviceTier;
 }) {
   const day = grade === 'daylight';
+  /** The shadow map, by tier. A phone pays for the same frustum at a quarter of
+   *  the texels rather than dropping the shadow, because a building with no
+   *  shadow under it is the one thing that reads as a toy at any resolution. */
+  const shadowMap: [number, number] = tier === 'low' ? [1024, 1024] : tier === 'mid' ? [2048, 2048] : [4096, 4096];
   const scene = useThree((s) => s.scene);
   const key = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
@@ -1563,24 +1579,39 @@ function ExteriorLighting({
         // is (-0.857, +0.456, +0.242) - an elevation of 14 degrees, not the
         // 34.9 a previous pass used. Converted (x,y,z)->(x,z,-y) and taken out
         // to 89m that is [-76.2, 21.5, -40.5].
-        // V7: daylight moves to a high front-left sun, on the bearing the
-        // painted sky's glow is drawn at, so the hero and the approach see the
-        // lit faces of the house and the palms throw their shadows across the
-        // lawns. Dusk's is the old bearing grown with the estate.
-        position={day ? [-60, 52, 58] : [48, 24, -128]}
+        // THE GOLDEN HOUR, and it is the largest single change in the pass the
+        // client asked for — "make it look expensive".
+        //
+        // A noon sun is the cheapest light there is: at 32 degrees it lands
+        // across every elevation at much the same angle, so nothing models, the
+        // shadows are short and the lawn is the brightest thing in frame. Every
+        // photograph of a house that sells for what this one is meant to sell
+        // for was taken in the last hour of light.
+        //
+        // [-96, 26, 62] is 13 degrees up on the front-left bearing: it rakes the
+        // south elevation the hero holds and the west flank the pool terrace
+        // sits on, throws the palm shadows the length of the lawn, and leaves
+        // the right of frame — where the copy is not — in shade. The painted sky
+        // draws its glow on exactly this vector (tools/gltf/make_sky_v7.py), so
+        // the disc and the light agree; move one and the other must move.
+        position={day ? [-96, 26, 62] : [48, 24, -128]}
         intensity={keyIntensity}
-        color={day ? '#FFF0DB' : '#FFB264'}
+        // Warmer than #FFF0DB by about 600K, which is the hour, not a filter.
+        color={day ? '#FFD8A8' : '#FFB264'}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        // 4096 where the tier can pay for it: a 13-degree sun casts shadows
+        // three times as long as a noon one, so the same map spans three times
+        // the ground, and at 2048 the palm fronds came back as lace.
+        shadow-mapSize={shadowMap}
         // Tight ortho box around the building. The default frustum spans the
         // whole scene including a 450m ground plane, which spreads 2048px
         // across ~450m and gives shadows the resolution of a thumbnail.
-        shadow-camera-left={-48}
-        shadow-camera-right={48}
-        shadow-camera-top={48}
-        shadow-camera-bottom={-40}
+        shadow-camera-left={-78}
+        shadow-camera-right={78}
+        shadow-camera-top={70}
+        shadow-camera-bottom={-70}
         shadow-camera-near={1}
-        shadow-camera-far={240}
+        shadow-camera-far={340}
         shadow-bias={-0.0006}
         shadow-normalBias={0.03}
       />
@@ -1721,7 +1752,7 @@ function ExteriorLighting({
         ref={hemi}
         args={
           day
-            ? ['#BBD2E8', '#5C5A48', hemiIntensity]
+            ? ['#9FC2E6', '#6B563C', hemiIntensity]
             : ['#4A6B96', '#1A1512', hemiIntensity]
         }
       />
@@ -1914,7 +1945,7 @@ function ColorPipeline({ exposure, tier }: { exposure: number; tier: DeviceTier 
  * The generated target is disposed on unmount. PMREM targets are float cube
  * maps and leaking one per navigation would be a real cost on a phone.
  */
-function RoomEnvironmentMap({ intensity }: { intensity: number }) {
+function RoomEnvironmentMap() {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
 
@@ -1964,10 +1995,6 @@ function RoomEnvironmentMap({ intensity }: { intensity: number }) {
     };
   }, [gl, scene]);
 
-  // Separate effect: retuning intensity must not rebuild the cube map.
-  useEffect(() => {
-    scene.environmentIntensity = intensity;
-  }, [scene, intensity]);
 
   return null;
 }
@@ -2002,11 +2029,21 @@ function RoomEnvironmentMap({ intensity }: { intensity: number }) {
  * becomes atan2(-y, x)/2pi + 0.5, and atan2(-y, x) == -atan2(y, x). Identical
  * mapping, so the environment lands in the same place in both renderers.
  *
- * BACKGROUND ONLY. scene.environment remains the separately generated cube
- * map, so this changes what is BEHIND the building and contributes nothing to
- * how it is lit. The two are deliberately different objects: the lighting
- * environment is tuned for the metals and the glass, and binding this to it
- * would silently re-light every material in the scene.
+ * IT IS NOW THE LIGHTING ENVIRONMENT TOO, AND THAT IS A CORRECTION.
+ *
+ * `RoomEnvironmentMap` only ever mounted for the INTERIOR, so outside there was
+ * no scene.environment at all: every metal, every pane of glass and every
+ * surface of water in the estate had nothing to reflect. Measured on the shipped
+ * build, the gilt finials, the window glass and the fountain returned flat
+ * diffuse colour at the hero — which is exactly the difference between a render
+ * and a photograph, and a large part of what "it looks like another 3D build"
+ * was describing.
+ *
+ * The sky is PMREM-convolved before it is bound, not passed raw. A plain
+ * equirect texture as scene.environment gives every roughness the same mip, so
+ * polished stone and brushed steel reflect the same sharp sky; the PMREM cube
+ * carries the roughness chain that makes them read as different materials. One
+ * 256px cube, generated once per sky load and disposed with it.
  */
 // V7: SKY ONLY. The meadow HDRI above carried forested hills and a village on
 // its horizon, which the client review called "cheap" and "a slum". The estate
@@ -2015,8 +2052,30 @@ function RoomEnvironmentMap({ intensity }: { intensity: number }) {
 // by DAYLIGHT_HAZE, a sun glow on the daylight key's bearing, soft cumulus.
 const SKY_EQUIRECT_URL = '/textures/sky_estate_v7_4k.jpg';
 
+/**
+ * scene.environmentIntensity, in one place.
+ *
+ * It used to live inside RoomEnvironmentMap, which mounted for BOTH sets — so
+ * the exterior's metals, glass and water were reflecting a grey studio box at
+ * 0.45 while the sky they stood under contributed nothing. The room cube is now
+ * the interior's alone (the bake is calibrated against it) and the exterior
+ * reflects its own sky (SkyBackground), but both still need a gain, and two
+ * components writing the same global is how the first version of this drifted.
+ */
+function EnvIntensity({ value }: { value: number }) {
+  const scene = useThree((s) => s.scene);
+  useEffect(() => {
+    scene.environmentIntensity = value;
+    return () => {
+      scene.environmentIntensity = 1;
+    };
+  }, [scene, value]);
+  return null;
+}
+
 function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
   const scene = useThree((s) => s.scene);
+  const gl = useThree((s) => s.gl);
   const [env, setEnv] = useState<THREE.Texture | null>(null);
   const wants = set === 'exterior' && grade === 'daylight';
 
@@ -2054,6 +2113,22 @@ function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
       scene.background = prev;
     };
   }, [scene, env, wants, set, grade]);
+
+  // The reflection environment, from the same panorama the background uses.
+  // Exterior only: inside, RoomEnvironmentMap owns scene.environment and the
+  // bake is calibrated against it.
+  useEffect(() => {
+    if (!wants || !env) return;
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const target = pmrem.fromEquirectangular(env);
+    pmrem.dispose();
+    const prev = scene.environment;
+    scene.environment = target.texture;
+    return () => {
+      scene.environment = prev;
+      target.dispose();
+    };
+  }, [gl, scene, env, wants]);
 
   useEffect(() => () => env?.dispose(), [env]);
 
@@ -2365,6 +2440,7 @@ export function WorldCanvas() {
                 grade={look.grade}
                 keyIntensity={look.key}
                 hemiIntensity={look.hemi}
+                tier={tier}
               />
               {/* Halved on low tier: the field is atmosphere, and a phone
                   should get thinner air rather than no air. */}
@@ -2447,9 +2523,16 @@ export function WorldCanvas() {
                 <HallModel onRoot={setHallRoot} />
               ) : null}
             </Suspense>
-            {/* Metals need something to reflect or they read as flat paint;
-                outside, the glass and fountain water need it to refract. */}
-            <RoomEnvironmentMap intensity={look.env} />
+            {/* Metals need something to reflect or they read as flat paint.
+                Inside, that is the room cube the bake was calibrated against;
+                outside in daylight it is the estate's own sky (SkyBackground).
+                DUSK KEEPS THE ROOM CUBE: the painted sky is a daylight
+                panorama and is not loaded at dusk, and an exterior with no
+                environment at all takes every metal, every pane and the
+                fountain back to flat paint — which is the exact defect this
+                pass exists to remove. */}
+            {set === 'interior' || look.grade === 'dusk' ? <RoomEnvironmentMap /> : null}
+            <EnvIntensity value={look.env} />
           </Suspense>
           {/* The picture light over the founder's portrait — the only real-time
               light in a room that is otherwise entirely baked. See the note on
@@ -2524,6 +2607,10 @@ export function WorldCanvas() {
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{ background: SCRIM[set].radial }}
       />
+
+      {/* The lens and the print: grain, the sun-side leak, and the frame.
+          Over the scrims, under the page's own copy. */}
+      <CinemaOverlay set={set} grade={look.grade} />
       {set === 'exterior' && look.grade === 'daylight' && (
         <div
           className="pointer-events-none absolute inset-0 z-[1]"

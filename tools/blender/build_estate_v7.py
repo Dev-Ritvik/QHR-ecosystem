@@ -36,7 +36,7 @@ from mathutils import Matrix, Vector
 
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = ARGS[0] if ARGS else "C:/dev/Blender/mansion_estate_V7.blend"
-STAGES = set(ARGS[1:]) or {"arch", "land"}
+STAGES = set(ARGS[1:]) or {"arch", "land", "lux"}
 P3F = "C:/dev/Blender/mansion_exterior_P3F.blend"
 TEX = "C:/dev/estate/assets/materials/_v7"
 SLATE = "C:/dev/estate/assets/materials/roof_slate"
@@ -192,6 +192,29 @@ def build_materials():
         M["leaf_" + key] = principled(f"MAT_Leaves_{key.title()}", tex={"base": f"{TEX}/{stem}.png"}, rough=0.75,
                                       double=True, clip=True)
     M["bark"] = principled("MAT_Bark", base=(0.2, 0.15, 0.11), rough=0.9)
+    # ---- the luxury programme -------------------------------------------
+    # Polished stone reads as expense before any detail does: it is the one
+    # surface in the set that carries a reflection, and a reflection is what
+    # separates a render from a photograph.
+    M["terrace"] = principled("MAT_Stone_Terrace", tex=t("v7_terrace"), rough=0.18, spec=0.7, normal_strength=0.35)
+    M["pool"] = principled("MAT_Pool_Shell", base=(0.55, 0.8, 0.84), rough=0.3, spec=0.6)
+    M["poolwater"] = principled("MAT_Water_Pool", base=(0.05, 0.45, 0.52), rough=0.02, spec=1.0, alpha=0.45)
+    M["railglass"] = principled("MAT_Glass_Rail", base=(0.55, 0.62, 0.62), rough=0.02, spec=1.0, alpha=0.24, double=True)
+    M["steel"] = principled("MAT_Steel", base=(0.62, 0.63, 0.64), rough=0.22, metal=1.0)
+    M["teak"] = principled("MAT_Teak", base=(0.29, 0.17, 0.09), rough=0.45)
+    M["fabric"] = principled("MAT_Fabric", base=(0.86, 0.83, 0.76), rough=0.85, double=True)
+    M["carpaint"] = principled("MAT_Car_Paint", base=(0.016, 0.019, 0.026), rough=0.12, metal=0.75, spec=1.0)
+    M["carpaint2"] = principled("MAT_Car_Paint_Pale", base=(0.5, 0.48, 0.45), rough=0.14, metal=0.7, spec=1.0)
+    M["carglass"] = principled("MAT_Car_Glass", base=(0.03, 0.035, 0.04), rough=0.03, spec=1.0, alpha=0.62)
+    M["chrome"] = principled("MAT_Chrome", base=(0.78, 0.79, 0.8), rough=0.08, metal=1.0)
+    M["tarmac"] = principled("MAT_Helipad_Deck", base=(0.055, 0.057, 0.06), rough=0.75)
+    M["paint"] = principled("MAT_Paint_Line", base=(0.86, 0.86, 0.83), rough=0.6)
+    # Fixtures the evening channel lifts: WorldCanvas grades anything named
+    # MAT_Light_* upward at dusk, so these are lamps rather than white plastic.
+    M["lamp"] = principled("MAT_Light_Warm", base=(1.0, 0.78, 0.5), rough=0.3,
+                           emission=((1.0, 0.72, 0.42), 2.2))
+    M["poollamp"] = principled("MAT_Light_Pool", base=(0.6, 0.92, 1.0), rough=0.2,
+                               emission=((0.45, 0.85, 1.0), 2.6))
     return M
 
 
@@ -379,7 +402,8 @@ def finish(name, bm, mats, col, uv_tiles=None, smooth_angle=35.0):
 
 
 TILE = {"MAT_Stone_Wall": 3.0, "MAT_Stone_Trim": 2.0, "MAT_Stone_Rustic": 3.0, "MAT_Stone_Paving": 2.0,
-        "MAT_Stone_Steps": 2.0, "MAT_Roof_Slate": 3.0, "MAT_Roof": 2.0, "MAT_Lawn": 6.0}
+        "MAT_Stone_Steps": 2.0, "MAT_Roof_Slate": 3.0, "MAT_Roof": 2.0, "MAT_Lawn": 6.0,
+        "MAT_Stone_Terrace": 2.4, "MAT_Helipad_Deck": 4.0}
 
 
 def box_uv(ob, _unused):
@@ -1147,7 +1171,7 @@ def build_compound_wall(M, col):
     for s in (-1, 1):
         add_box(bm, s * 6.5 - 0.7, s * 6.5 + 0.7, WALL_FRONT - 0.7, WALL_FRONT + 0.7, 0.0, 3.6)
         add_box(bm, s * 6.5 - 0.82, s * 6.5 + 0.82, WALL_FRONT - 0.82, WALL_FRONT + 0.82, 3.6, 3.78)
-    finish("estate_wall", bm, [M["trim"]], col)
+    finish("estate_wall", bm, [M["wall"]], col)
 
 
 # ---- vegetation -------------------------------------------------------------
@@ -1356,6 +1380,15 @@ def build_vegetation(M, col):
         # where the approach and the doorway fly.
         if y > FOUNTAIN_Y - 3.0 or abs(x) < 9.0:
             continue
+        # AND clear of the hero's own sight line. The hero stands at
+        # (-32, -49.6) looking at the house, and a 16.5 m royal palm at
+        # (-17, -34.5) is 24 m from that lens and 20 degrees off its axis: it
+        # laid a frond straight across the facade and softened the one frame the
+        # whole page is judged on. Measured against estateBounds, this is the
+        # only planting inside the hero cone; the mirrored palm on the east side
+        # is 50 m away behind the building and stays.
+        if x < -6.0 and y > -48.0:
+            continue
         ring.append((x, y, rng.uniform(0, 6.28), rng.uniform(0.95, 1.05)))
     scatter(col, royal[1], "veg_palm_forecourt", ring)
     groves = []
@@ -1376,6 +1409,18 @@ def build_vegetation(M, col):
             for by in (-31.0, -21.0):
                 for j in range(3):
                     sh.append((bx + rng.uniform(-2.2, 2.2), by + rng.uniform(-2.5, 2.5), rng.uniform(0, 6.28), rng.uniform(0.8, 1.05)))
+    # And the new beds: colour against the stone at the foot of the house, and
+    # roses in the west parterre's quadrants.
+    for sx in (-1, 1):
+        for k in range(9):
+            sh.append((sx * (15.3 + rng.uniform(-1.2, 1.2)), -10.6 + 2.6 * k, rng.uniform(0, 6.28), rng.uniform(0.7, 0.95)))
+        for k in range(3):
+            sh.append((sx * (9.0 + 1.5 * k), -10.2 + rng.uniform(-0.8, 0.8), rng.uniform(0, 6.28), rng.uniform(0.7, 0.9)))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            for k in range(3):
+                sh.append((-26.5 + sx * rng.uniform(2.4, 6.2), -25.0 + sy * rng.uniform(2.4, 5.6),
+                           rng.uniform(0, 6.28), rng.uniform(0.6, 0.85)))
     scatter(col, bloom, "veg_bougainvillea", sh)
     # The belt: big canopies outside the compound wall and along its inside.
     belt = []
@@ -1445,6 +1490,313 @@ def build_gardens(M, col):
     finish("garden_hedges", hedge, [M["hedge"]], col)
     finish("garden_beds", soil, [M["soil"]], col)
     finish("garden_planters", planters, [M["trim"]], col)
+
+
+# ---------------------------------------------------------------------------
+# THE LUXURY PROGRAMME
+# ---------------------------------------------------------------------------
+# The client review, in one line: "this nowhere looks like a 50L build". What
+# was missing was not polygons on the house — it was everything a house like
+# this is BOUGHT with. So the west lawn becomes a pool terrace, the rear lawn
+# gets a helipad, the forecourt gets cars in it, the podium gets its balustrade,
+# and the whole estate gets fixtures that light at dusk.
+#
+# Everything here is placed against the film: the hero stands at Blender
+# (-32, -43, 25) looking at the house, which puts the WEST flank and the front
+# across the frame — so the pool terrace is west, where the hero and the quarter
+# beat both hold it, and the helipad is north-west, where the crane finds it.
+TERRACE = {"x0": -36.0, "x1": -17.0, "y0": -12.6, "y1": 12.6, "top": 0.5}
+POOL = {"x0": -32.8, "x1": -21.4, "y0": -6.6, "y1": 6.6,
+        "water": 0.455, "floor": -1.55, "catch": -34.3}
+HELIPAD = (-56.0, 34.0, 9.0)
+
+
+def pool_terrace(M, col):
+    """A terrace, an infinity pool, a glass rail, a cabana and the furniture that
+    says someone lives here."""
+    T, P = TERRACE, POOL
+    stone, coping, shell, water, glass, steel, teak, fabric, lamp = (new_bm() for _ in range(9))
+    top, wl = T["top"], P["water"]
+
+    # The slab, as a ring round the pool opening so no boolean is needed.
+    add_box(stone, T["x0"], P["catch"], T["y0"], T["y1"], 0.0, top)
+    add_box(stone, P["x1"], T["x1"], T["y0"], T["y1"], 0.0, top)
+    add_box(stone, P["catch"], P["x1"], T["y0"], P["y0"], 0.0, top)
+    add_box(stone, P["catch"], P["x1"], P["y1"], T["y1"], 0.0, top)
+    # Steps down to the lawn on the south edge, and a second flight west.
+    for k in range(3):
+        add_box(stone, -29.0, -23.0, T["y0"] - 0.42 * (k + 1), T["y0"] - 0.42 * k, 0.0, top - 0.167 * (k + 1))
+    # The pool box: walls from the coping down to the floor.
+    add_box(shell, P["x0"], P["x1"], P["y0"], P["y1"], P["floor"] - 0.12, P["floor"])
+    for x0, x1, y0, y1 in ((P["x0"] - 0.3, P["x0"], P["y0"], P["y1"]),
+                           (P["x1"], P["x1"] + 0.3, P["y0"], P["y1"]),
+                           (P["x0"] - 0.3, P["x1"] + 0.3, P["y0"] - 0.3, P["y0"]),
+                           (P["x0"] - 0.3, P["x1"] + 0.3, P["y1"], P["y1"] + 0.3)):
+        add_box(shell, x0, x1, y0, y1, P["floor"] - 0.12, wl - 0.02)
+    # THE INFINITY EDGE. The west lip stands exactly at water level and the
+    # water sheet runs over it into a catch basin a metre below — which is the
+    # one detail that makes a pool read as expensive rather than as a tank.
+    add_box(shell, P["catch"], P["x0"], P["y0"] - 0.3, P["y1"] + 0.3, -0.62, -0.5)
+    add_box(shell, P["catch"] - 0.25, P["catch"], P["y0"] - 0.3, P["y1"] + 0.3, -0.62, top)
+    # Coping on the three sides that are not the spill.
+    for x0, x1, y0, y1 in ((P["x1"], P["x1"] + 0.45, P["y0"] - 0.45, P["y1"] + 0.45),
+                           (P["x0"] - 0.1, P["x1"] + 0.45, P["y0"] - 0.45, P["y0"]),
+                           (P["x0"] - 0.1, P["x1"] + 0.45, P["y1"], P["y1"] + 0.45)):
+        add_box(coping, x0, x1, y0, y1, top - 0.06, top + 0.02)
+    # Water: the pool sheet, the spill face, and the catch basin below it.
+    add_box(water, P["x0"] - 0.02, P["x1"], P["y0"], P["y1"], wl - 0.02, wl)
+    add_box(water, P["x0"] - 0.06, P["x0"] - 0.02, P["y0"], P["y1"], -0.45, wl)
+    add_box(water, P["catch"] + 0.02, P["x0"], P["y0"] - 0.2, P["y1"] + 0.2, -0.5, -0.42)
+    # Underwater lights: two runs in the long walls.
+    for y in (-4.4, -1.5, 1.5, 4.4):
+        for x, d in ((P["x0"] + 0.02, -1), (P["x1"] - 0.02, 1)):
+            add_box(lamp, x - 0.02 - 0.06 * (d > 0), x + 0.02 + 0.06 * (d < 0), y - 0.34, y + 0.34, wl - 0.62, wl - 0.38)
+    # Glass balustrade along the west edge and returns along north and south.
+    rails = [((T["x0"] + 0.2, T["y0"] + 0.2), (T["x0"] + 0.2, T["y1"] - 0.2)),
+             ((T["x0"] + 0.2, T["y0"] + 0.2), (-24.0, T["y0"] + 0.2)),
+             ((T["x0"] + 0.2, T["y1"] - 0.2), (-19.0, T["y1"] - 0.2))]
+    for (ax, ay), (bx, by) in rails:
+        dx, dy = bx - ax, by - ay
+        L = math.hypot(dx, dy)
+        ux, uy = dx / L, dy / L
+        px, py = -uy, ux
+        n = max(2, int(round(L / 1.7)))
+        for k in range(n + 1):
+            cx, cy = ax + ux * L * k / n, ay + uy * L * k / n
+            add_box(steel, cx - 0.045, cx + 0.045, cy - 0.045, cy + 0.045, top, top + 1.06)
+        # the glass, inset between the posts, and a steel handrail over it
+        for k in range(n):
+            t0, t1 = L * k / n + 0.07, L * (k + 1) / n - 0.07
+            add_oriented_box(glass, Vector((ax, ay, 0)), Vector((ux, uy, 0)), Vector((px, py, 0)),
+                             t0, t1, top + 0.06, top + 0.98, -0.009, 0.009)
+        add_oriented_box(steel, Vector((ax, ay, 0)), Vector((ux, uy, 0)), Vector((px, py, 0)),
+                         -0.05, L + 0.05, top + 1.02, top + 1.08, -0.05, 0.05)
+    # Sun loungers and parasols on the east deck, facing the water.
+    for y in (-5.2, -2.6, 0.0, 2.6, 5.2):
+        x = -19.3
+        add_box(teak, x - 0.95, x + 0.95, y - 0.34, y + 0.34, top + 0.1, top + 0.16)
+        for sx in (x - 0.9, x + 0.9):
+            for sy in (y - 0.3, y + 0.3):
+                add_box(teak, sx - 0.04, sx + 0.04, sy - 0.04, sy + 0.04, top, top + 0.12)
+        add_box(fabric, x - 0.92, x + 0.5, y - 0.32, y + 0.32, top + 0.16, top + 0.24)
+        # the raised backrest
+        add_prism(fabric, [(0.5, top + 0.16), (0.92, top + 0.16), (0.92, top + 0.62), (0.62, top + 0.62)],
+                  Vector((x, y, 0)), Vector((1, 0, 0)), Vector((0, 1, 0)), -0.32, 0.32)
+    for y in (-3.9, 3.9):
+        x = -17.9
+        add_box(steel, x - 0.045, x + 0.045, y - 0.045, y + 0.045, top, top + 2.4)
+        add_lathe(fabric, [(0.0, 0.0), (1.55, -0.42), (1.62, -0.5)], 12, x, y, top + 2.36)
+    # The cabana at the north end: six posts, a flat roof, a fabric ceiling.
+    cx0, cx1, cy0, cy1, ch = -31.0, -22.6, 8.4, 12.1, 3.15
+    for x in (cx0 + 0.25, (cx0 + cx1) / 2, cx1 - 0.25):
+        for y in (cy0 + 0.25, cy1 - 0.25):
+            add_box(stone, x - 0.16, x + 0.16, y - 0.16, y + 0.16, top, top + ch)
+    add_box(stone, cx0, cx1, cy0, cy1, top + ch, top + ch + 0.26)
+    add_box(fabric, cx0 + 0.3, cx1 - 0.3, cy0 + 0.3, cy1 - 0.3, top + ch - 0.06, top + ch)
+    add_box(teak, cx0 + 1.2, cx1 - 1.2, cy1 - 1.9, cy1 - 0.7, top, top + 0.42)
+    add_box(fabric, cx0 + 1.2, cx1 - 1.2, cy1 - 1.9, cy1 - 0.7, top + 0.42, top + 0.58)
+    add_box(fabric, cx0 + 1.2, cx1 - 1.2, cy1 - 0.82, cy1 - 0.7, top + 0.58, top + 1.02)
+    # Deck bollards along the terrace walk.
+    for y in (-10.4, -7.4, 7.4, 10.4):
+        for x in (-34.4, -18.4):
+            add_box(steel, x - 0.07, x + 0.07, y - 0.07, y + 0.07, top, top + 0.62)
+            add_box(lamp, x - 0.09, x + 0.09, y - 0.09, y + 0.09, top + 0.62, top + 0.74)
+    finish("pool_terrace", stone, [M["terrace"]], col)
+    finish("pool_coping", coping, [M["trim"]], col)
+    finish("pool_shell", shell, [M["pool"]], col)
+    finish("pool_water", water, [M["poolwater"]], col, smooth_angle=60)
+    finish("pool_rail_glass", glass, [M["railglass"]], col)
+    finish("pool_rail_steel", steel, [M["steel"]], col, smooth_angle=50)
+    finish("pool_furniture_teak", teak, [M["teak"]], col)
+    finish("pool_furniture_fabric", fabric, [M["fabric"]], col, smooth_angle=50)
+    finish("pool_lights", lamp, [M["poollamp"]], col)
+
+
+def helipad(M, col):
+    """A pad on the north-west lawn, which the crane beat looks straight down
+    on. Painted ring, H, perimeter lights, windsock."""
+    cx, cy, r = HELIPAD
+    deck, paint, lamp, steel = new_bm(), new_bm(), new_bm(), new_bm()
+    add_lathe(deck, [(0.0, 0.0), (r, 0.0), (r, 0.16), (0.0, 0.16)], 64, cx, cy, 0.0)
+    # ring
+    segs = 64
+    for k in range(segs):
+        a0, a1 = 2 * math.pi * k / segs, 2 * math.pi * (k + 1) / segs
+        for r0, r1 in ((r - 1.5, r - 1.1),):
+            p = [(cx + r0 * math.cos(a0), cy + r0 * math.sin(a0)), (cx + r1 * math.cos(a0), cy + r1 * math.sin(a0)),
+                 (cx + r1 * math.cos(a1), cy + r1 * math.sin(a1)), (cx + r0 * math.cos(a1), cy + r0 * math.sin(a1))]
+            vs = [paint.verts.new((x, y, 0.17)) for x, y in p]
+            face(paint, vs, 0)
+    for x0, x1, y0, y1 in ((-2.1, -1.5, -2.6, 2.6), (1.5, 2.1, -2.6, 2.6), (-2.1, 2.1, -0.32, 0.32)):
+        add_box(paint, cx + x0, cx + x1, cy + y0, cy + y1, 0.16, 0.175)
+    for k in range(12):
+        a = 2 * math.pi * k / 12
+        x, y = cx + (r + 0.9) * math.cos(a), cy + (r + 0.9) * math.sin(a)
+        add_box(steel, x - 0.08, x + 0.08, y - 0.08, y + 0.08, 0.0, 0.3)
+        add_box(lamp, x - 0.1, x + 0.1, y - 0.1, y + 0.1, 0.3, 0.42)
+    # A windsock: the mast, and the sleeve streaming off its head, which is the
+    # one prop that says an aircraft is expected here rather than parked.
+    wx, wy = cx + r + 3.4, cy - r + 1.0
+    add_box(steel, wx - 0.07, wx + 0.07, wy - 0.07, wy + 0.07, 0.0, 4.6)
+    add_lathe_oriented(paint, [(0.44, 0.0), (0.44, 0.12), (0.24, 1.55), (0.24, 1.7)], 14,
+                       Vector((wx, wy, 4.42)), Vector((0.82, 0.52, -0.24)), Vector((0, 0, 1)))
+    finish("helipad_deck", deck, [M["tarmac"]], col)
+    finish("helipad_paint", paint, [M["paint"]], col)
+    finish("helipad_lights", lamp, [M["lamp"]], col)
+    finish("helipad_steel", steel, [M["steel"]], col, smooth_angle=50)
+
+
+def car(body, glassbm, chrome, cx, cy, rot, L=4.92, W=1.96):
+    """A car in silhouette, built the way a car is drawn: one SIDE PROFILE
+    extruded across the body, a narrower glasshouse on top of it, and four
+    wheels standing proud of both.
+
+    The first version stacked boxes and put the wheels inside the body, which at
+    forty metres is a black slab on a drive. Proportion is the whole job here —
+    nothing at this distance reads as a car except a bonnet line, a roof that
+    sits inboard, and wheels you can see under the sills."""
+    c, s_ = math.cos(rot), math.sin(rot)
+    O = Vector((cx, cy, 0.0))
+    U = Vector((c, s_, 0.0))          # along the car
+    Nv = Vector((-s_, c, 0.0))        # across it
+    h, w = L / 4.92, W / 1.96
+
+    # The side profile, nose to tail, in (x, z).
+    lower = [(-L / 2, 0.52 * h), (-L / 2 + 0.16, 0.36 * h), (-L / 2 + 0.62, 0.30 * h),
+             (L / 2 - 0.62, 0.30 * h), (L / 2 - 0.14, 0.38 * h), (L / 2, 0.62 * h),
+             (L / 2 - 0.1, 0.92 * h), (L / 2 - 1.42, 1.02 * h), (-L / 2 + 1.32, 1.02 * h),
+             (-L / 2 + 0.24, 0.88 * h)]
+    add_prism(body, lower, O, U, Nv, -W / 2, W / 2)
+    # The glasshouse: raked screens, inboard of the body by 90 mm a side.
+    house = [(-L / 2 + 1.36, 1.0 * h), (-L / 2 + 2.08, 1.46 * h), (L / 2 - 2.05, 1.46 * h),
+             (L / 2 - 1.38, 1.0 * h)]
+    add_prism(glassbm, house, O, U, Nv, -W / 2 + 0.09, W / 2 - 0.09)
+    roof = [(-L / 2 + 2.02, 1.44 * h), (-L / 2 + 2.12, 1.5 * h), (L / 2 - 2.09, 1.5 * h),
+            (L / 2 - 2.12, 1.44 * h)]
+    add_prism(body, roof, O, U, Nv, -W / 2 + 0.1, W / 2 - 0.1)
+    # A waist line and a sill strip, which is where a car catches the light.
+    for d in (-W / 2 - 0.012, W / 2 - 0.008):
+        add_oriented_box(chrome, O, U, Nv, -L / 2 + 0.5, L / 2 - 0.5, 0.94 * h, 1.0 * h, d, d + 0.02)
+        add_oriented_box(chrome, O, U, Nv, -L / 2 + 1.1, L / 2 - 1.1, 0.3 * h, 0.36 * h, d, d + 0.02)
+    # Lamps: a bar at each end, which at dusk is what the eye finds first.
+    add_oriented_box(chrome, O, U, Nv, L / 2 - 0.08, L / 2 + 0.02, 0.62 * h, 0.78 * h, -W / 2 + 0.22, W / 2 - 0.22)
+    add_oriented_box(chrome, O, U, Nv, -L / 2 - 0.02, -L / 2 + 0.08, 0.66 * h, 0.8 * h, -W / 2 + 0.26, W / 2 - 0.26)
+    # Four wheels, outboard of the sills so the car stands on them.
+    for ax in (L / 2 - 1.18, -L / 2 + 1.28):
+        for sy in (-1, 1):
+            hub = O + U * ax + Nv * (sy * (W / 2 - 0.06))
+            hub.z = 0.37 * h
+            prof = [(0.0, -0.115 * w), (0.2, -0.13 * w), (0.37 * h, -0.115 * w),
+                    (0.37 * h, 0.115 * w), (0.2, 0.13 * w), (0.0, 0.115 * w)]
+            add_lathe_oriented(chrome, prof, 18, hub, Nv * sy, Vector((0, 0, 1)))
+
+
+def motor_court(M, col):
+    body, bodyp, glassbm, chrome = new_bm(), new_bm(), new_bm(), new_bm()
+    # Two on the carriage ring either side of the axis, one at the steps.
+    car(body, glassbm, chrome, -10.6, FOUNTAIN_Y + 1.2, math.radians(8))
+    car(bodyp, glassbm, chrome, 10.6, FOUNTAIN_Y - 1.6, math.radians(186))
+    car(body, glassbm, chrome, 6.4, -14.6, math.radians(96), L=5.15, W=2.02)
+    finish("court_car_dark", body, [M["carpaint"]], col, smooth_angle=48)
+    finish("court_car_pale", bodyp, [M["carpaint2"]], col, smooth_angle=48)
+    finish("court_car_glass", glassbm, [M["carglass"]], col, smooth_angle=48)
+    finish("court_car_chrome", chrome, [M["chrome"]], col, smooth_angle=55)
+
+
+def podium_balustrade(M, col, gold_bm):
+    """The podium walk gets the same balustrade the roof has, which is what ties
+    the house to its terrace instead of letting it stand on a slab."""
+    bm = new_bm()
+    x, y, z = 17.4, 12.2, PODIUM_Z
+    runs = [((-x, -y), (-x, y)), ((x, -y), (x, y)), ((-x, y), (x, y)),
+            ((-x, -y), (-7.6, -y)), ((7.6, -y), (x, -y))]
+    for a, b in runs:
+        balustrade_run(bm, a, b, z, 1.02, die_w=0.62, spacing=0.34, segs=8)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            add_lathe(gold_bm, [(r * 0.85, zz * 0.85) for r, zz in URN], 20, sx * x, sy * y, z + 1.14)
+    finish("podium_balustrade", bm, [M["trim"]], col)
+
+
+def estate_lighting(M, col):
+    """Uplights on the facade and lanterns down the avenue: at dusk they are the
+    difference between a model and a place."""
+    steel, lamp = new_bm(), new_bm()
+    for sx in (-1, 1):
+        for x in (3.4, 7.0, 10.6):
+            add_box(lamp, sx * x - 0.16, sx * x + 0.16, -HD - 0.34, -HD - 0.06, 0.02, 0.1)
+        for y in (-6.0, 0.0, 6.0):
+            add_box(lamp, sx * (HW + 0.06), sx * (HW + 0.34), y - 0.16, y + 0.16, 0.02, 0.1)
+    for k in range(9):
+        y = -44.0 - k * 17.0
+        for sx in (-1, 1):
+            x = sx * (AVENUE_X + 2.6)
+            add_box(steel, x - 0.08, x + 0.08, y - 0.08, y + 0.08, 0.0, 1.05)
+            add_lathe(lamp, [(0.0, 0.0), (0.2, 0.06), (0.17, 0.34), (0.0, 0.4)], 8, x, y, 1.05)
+    finish("estate_light_posts", steel, [M["steel"]], col, smooth_angle=50)
+    finish("estate_lamps", lamp, [M["lamp"]], col, smooth_angle=50)
+
+
+def west_parterre(M, col):
+    """A formal garden between the pool terrace and the drive.
+
+    THE HERO'S FOREGROUND WAS EMPTY. From (-32, -49.6) the left third of frame
+    is lawn all the way from the pool terrace to the bottom of the picture, and
+    an unbroken field of grass is the cheapest surface in any architectural
+    photograph. A parterre is what actually goes there on an estate like this —
+    clipped box in a pattern, a gravel walk round it, standard roses on the
+    cross axes — and it reads at 40 m as detail rather than as decoration."""
+    hedge, gravel, kerb, stone = new_bm(), new_bm(), new_bm(), new_bm()
+    cx, cy = -26.5, -25.0
+    hw, hd = 9.0, 8.0
+    add_box(gravel, cx - hw, cx + hw, cy - hd, cy + hd, 0.0, 0.02)
+    # The kerb, and a hedge inside it.
+    for x0, x1, y0, y1 in ((cx - hw, cx + hw, cy - hd, cy - hd + 0.24),
+                           (cx - hw, cx + hw, cy + hd - 0.24, cy + hd),
+                           (cx - hw, cx - hw + 0.24, cy - hd, cy + hd),
+                           (cx + hw - 0.24, cx + hw, cy - hd, cy + hd)):
+        add_box(kerb, x0, x1, y0, y1, 0.0, 0.12)
+    # Four quadrants of clipped box, with a walk on both axes.
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            qx0, qx1 = sorted((cx + sx * 1.1, cx + sx * (hw - 1.1)))
+            qy0, qy1 = sorted((cy + sy * 1.1, cy + sy * (hd - 1.1)))
+            for a0, a1, b0, b1 in ((qx0, qx1, qy0, qy0 + 0.42), (qx0, qx1, qy1 - 0.42, qy1),
+                                   (qx0, qx0 + 0.42, qy0, qy1), (qx1 - 0.42, qx1, qy0, qy1)):
+                add_box(hedge, a0, a1, b0, b1, 0.0, 0.52)
+            # a cone in the middle of each quadrant
+            add_lathe(hedge, [(0.0, 0.0), (0.62, 0.0), (0.56, 0.4), (0.0, 2.3)], 14,
+                      (qx0 + qx1) / 2, (qy0 + qy1) / 2, 0.0)
+    # A stone urn on a plinth at the centre, on the cross of the walks.
+    add_box(stone, cx - 0.62, cx + 0.62, cy - 0.62, cy + 0.62, 0.0, 0.72)
+    add_lathe(stone, [(r * 1.5, zz * 1.5) for r, zz in URN], 24, cx, cy, 0.72)
+    finish("parterre_gravel", gravel, [M["paving"]], col)
+    finish("parterre_kerb", kerb, [M["trim"]], col)
+    finish("parterre_hedge", hedge, [M["hedge"]], col)
+    finish("parterre_urn", stone, [M["trim"]], col)
+
+
+def podium_beds(M, col):
+    """Flowering beds along the foot of the house, which is where a garden of
+    this kind puts its colour: against the stone, where it reads."""
+    soil = new_bm()
+    for sx in (-1, 1):
+        add_box(soil, sx * 13.4, sx * 17.2, -11.6, 11.6, 0.0, 0.1)
+    add_box(soil, -13.0, -8.2, -11.9, -8.6, 0.0, 0.1)
+    add_box(soil, 8.2, 13.0, -11.9, -8.6, 0.0, 0.1)
+    finish("podium_beds", soil, [M["soil"]], col)
+
+
+def build_luxury(M, col):
+    gold = new_bm()
+    pool_terrace(M, col)
+    west_parterre(M, col)
+    podium_beds(M, col)
+    helipad(M, col)
+    motor_court(M, col)
+    podium_balustrade(M, col, gold)
+    estate_lighting(M, col)
+    finish("podium_urns_gold", gold, [M["gold"]], col, smooth_angle=40)
 
 
 # ---------------------------------------------------------------------------
@@ -1526,6 +1878,8 @@ def main():
         build_compound_wall(M, col)
         build_gardens(M, col)
         build_vegetation(M, col)
+    if "lux" in STAGES:
+        build_luxury(M, col)
     bpy.ops.wm.save_as_mainfile(filepath=OUT)
     print("SAVED", OUT)
     if "preview" in STAGES:

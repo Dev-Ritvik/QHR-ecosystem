@@ -288,8 +288,19 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     // The elevation is untouched at 18.7 degrees, and the left edge lands
     // within two pixels of where it was, so the column of type keeps exactly
     // the gutter it was composed against.
-    position: grow([-20.0, 15.5, 27.0]),
-    target: grow([0.0, 4.1, 0.0]),
+    //
+    // LOWERED AND PULLED BACK for the "make it look expensive" pass, and it is a
+    // composition change rather than a taste one. At 15.5m over a 4.1m aim the
+    // camera looked DOWN onto the roof and the tree belt closed the top of
+    // frame: no sky at all, and the building's silhouette — parapet, cupola,
+    // spire, the three most expensive lines on it — read against foliage the
+    // same value as itself. 12.2m over a 5.0m aim at 31m out is 13 degrees
+    // rather than 18.7: the roofline now stands against the golden-hour sky,
+    // the fountain enters the bottom of frame as a foreground, and the pool
+    // terrace still holds the left third. The azimuth, the lens and the frame
+    // offset are untouched, so the type keeps its gutter.
+    position: grow([-20.0, 12.2, 31.0]),
+    target: grow([0.0, 5.0, 0.0]),
     // ATMOSPHERIC PERSPECTIVE, tightened from [40, 150].
     //
     // The key is a directional light, so it lights all 240m of lawn at the same
