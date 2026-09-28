@@ -14,38 +14,72 @@
 // hand from Blender. The numbers that matter are restated here so a future edit
 // can be checked without re-parsing the file:
 //
-// THE HALL WAS EXTENDED BY BAYS for the client review — "bigger, taller,
-// wider, and importantly longer" — by tools/blender/extend_hall_v7.py, so every
-// number
-// here changed with it. Re-measured from the re-exported GLB:
+// THE HALL WAS MADE IMPERIAL for the third review — "a double-curved imperial
+// staircase, triple the ceiling height, and a portrait at a central landing" —
+// by tools/blender/imperial_hall_v7.py, on the hall extended by bays
+// (extend_hall_v7.py). Re-measured from the re-exported GLB:
 //
-//   room shell        x -9.90..9.90   y 0..8.00      z -7.70..7.70
+//   room shell        x -9.90..9.90   y 0..13.00     z -7.70..7.70
+//   coffered ceiling  beams y 12.58..13.00, opening into a dome of radius 5.4
+//                     over the room's centre; oculus ring at y 18.31, sky 19.19
 //   entry doors       x -1.50..1.50   y 0..4.26      z  7.57..7.69
-//   staircase         x -3.25..3.25   z -1.86..-6.96, rising y 0 -> 3.30
-//   stair runner      x -2.38..2.38   (carpet inside the stone treads)
-//   landing           x -3.25..3.25   y 3.30..3.47   z -6.93..-8.55
-//   balustrade        x  2.94..3.19 (mirrored)  y 0.13..4.72  z -7.70..-1.64
-//   newel posts       x  2.94..3.18 (mirrored)  y 0..1.76     z -1.70..-1.46
-//   portrait          x -1.21..1.21  y 3.95..7.21   z -7.70..-7.57
-//   chandelier        x -1.01..1.01  y 5.85..7.85   z -0.14..1.88
-//   urns (above eye)  x  4.21..5.19 (mirrored)  y 0.68..1.87  z -2.05..-1.05
+//   the stair         a horseshoe (IMPERIAL_STAIR below): two curved flights,
+//                     r 2.6..4.6 about x 0, z -3.1, from the floor at the feet
+//                     (z -1.04..0.62) round to a landing 4.2 m up at the back
+//   landing           x -1.94..1.94   y 0..4.21      z -7.70..-5.39 (solid)
+//   balustrade        one run up the right flight, across the landing's front
+//                     and down the left; rail 1.22 m over the nosing line
+//   newel posts       feet x +/-1.6..2.8, z -1.04..0.58, y 0..1.76; heads on
+//                     the landing, y 4.20..5.96
+//   portrait          x -1.51..1.51  y 5.00..9.07   z -7.70..-7.46
+//   chandelier        x -1.46..1.46  y 9.80..12.70  z -1.46..1.46, on a chain
+//                     to the oculus
+//   urns (above eye)  x +/-2.8..3.8  y 0.68..1.87   z 5.9..6.9, flanking the
+//                     entry doors
 //   tables S1..S4     centres below; table top at y 0.80
 //
-// THE TWO OBSTACLES THAT SHAPE THIS PATH
+// THE OBSTACLE THAT SHAPES THIS PATH
 //
-// 1. The BALUSTRADE is solid from y 0.10 to y 2.79 either side of the stairs. A
-//    camera at eye height cannot cross the hall behind the newels — it would
-//    pass straight through it. So the left-to-right traverse happens in FRONT
-//    of the staircase, at z +0.30, where the only thing at that height is air.
-//    That is also the better shot: the stair sweeps across frame as the camera
-//    passes its foot.
-//
-// 2. The two dressing URNS moved out to the foot of the wider stair and grew a
-//    fifth with it: x +/-4.21..5.19, z -2.05..-1.05, tops at y 1.87 — now ABOVE
-//    the eye line rather than just under it. Every beat keeps clear of that z
-//    band on both sides rather than relying on a margin.
+// The STAIR. Its flights sweep out to x +/-4.6 and forward to z +0.62, with the
+// balustrade 1.2 m over the treads, so no camera crosses the back half of the
+// room at eye height. The left-to-right traverse happens in FRONT of the feet,
+// on the promenade at z +2.6, where the stair sweeps across frame as the camera
+// passes. The climb to the portrait happens in the air over the court between
+// the flights, never over a tread.
 
 import * as THREE from 'three';
+
+/**
+ * The imperial stair, as built by tools/blender/imperial_hall_v7.py, in three
+ * space: a horseshoe about `centre` (x, z). Each flight spans the radii
+ * rInner..rOuter and climbs from `thetaBottom` to `thetaTop`, measured in
+ * plan from the +x axis toward the back wall (-z) and mirrored for the left
+ * flight. The nosing line rises linearly with the angle from one riser at the
+ * foot to the landing at the head; the balustrade stands `rail` above it.
+ *
+ * Exported so the collision test models the flights from the numbers the
+ * Blender script used, not from a hand-drawn hull.
+ */
+export const IMPERIAL_STAIR = {
+  centre: [0, -3.1] as const,
+  rInner: 2.6,
+  rOuter: 4.6,
+  thetaBottom: (-54 * Math.PI) / 180,
+  thetaTop: (65 * Math.PI) / 180,
+  landing: 4.2,
+  risers: 26,
+  rail: 1.22,
+  /** The landing's plan: |x| <= halfWidth, from its curved front back to the wall. */
+  landingHalfWidth: 1.944,
+} as const;
+
+/** Height of the nosing line at plan angle theta on either flight. */
+export function stairNosingY(theta: number): number {
+  const s = IMPERIAL_STAIR;
+  const rise = s.landing / s.risers;
+  const step = (s.thetaTop - s.thetaBottom) / (s.risers - 1);
+  return rise * (1 + (theta - s.thetaBottom) / step);
+}
 
 /**
  * The four pedestals, read from the GLB.
@@ -70,6 +104,12 @@ export interface StationAnchor {
   /** Extra z offset on the camera only, to dodge geometry. */
   dz: number;
   /**
+   * This station's lens, when the room will not let the camera stand back to
+   * the common one (LENS.station). Wider only where a nearer camera must still
+   * hold the whole subject.
+   */
+  fov?: number;
+  /**
    * The x at which the camera leaves the promenade to turn in on this station.
    *
    * Explicit per station rather than derived, because what it has to miss
@@ -91,16 +131,42 @@ export interface StationAnchor {
   holoY: number;
 }
 
+/**
+ * THE STANDOFFS GREW 1.2 m IN THE OLD-MONEY PASS, WITH THE LENS NARROWED FROM 30
+ * TO 27 DEGREES. At 2.4 m a 30-degree frame is 1.3 m tall at the plan, and the
+ * plan, its new title and the table top below them need about 1.6 m: the
+ * station shot was cropping its own subject at the top. Standing further back
+ * on a longer lens is also exactly what the brief's "135mm" asks for — the room
+ * behind compresses and, with the hall's lens (LensFocus), falls out of focus
+ * while the table holds. The aim rose to 1.45 with it, to centre the taller
+ * subject.
+ */
 export const STATION_ANCHORS: readonly StationAnchor[] = [
   // LEFT FRONT. Clear floor: the nearest obstruction is urn_0 at z -1.05, more
   // than three metres behind the camera.
-  { id: 'S1', position: [-7.85, 0, 2.76], inward: [1, 0], standoff: 2.4, dz: 0.4, laneX: -4.6, holoY: 1.505 },
+  { id: 'S1', position: [-7.85, 0, 2.76], inward: [1, 0], standoff: 3.6, dz: 0.4, laneX: -4.6, holoY: 1.505 },
   // LEFT BACK. Approached axially down the left lane rather than from the
   // middle of the room: the balustrade begins at x -2.94 and this keeps the
   // whole move outside it. laneX matches the table's own x, so the descent is a
   // straight run at x -6.07 — outside urn_0 (which ends at x -5.19) for its
   // whole length.
-  { id: 'S2', position: [-6.07, 0, -5.52], inward: [0, 1], standoff: 2.3, dz: 0, laneX: -6.07, holoY: 1.401 },
+  // OLD-MONEY PASS: seen square-on from the room ([0, 1]) this table stands in
+  // front of the back-left corner, where both walls are lit ivory — a blank,
+  // blown field behind the plan, and a title with nothing to read against. From
+  // [0.8, 0.6] the left wall's walnut and pilasters sit behind the copy and the
+  // plan holds the right of frame. The camera comes down a lane at x -3.75,
+  // between urn_l (ends x -4.21) and the balustrade (starts x -3.19). At this
+  // angle the balustrade limits the standoff to 2.7 m — the dwell's pull-back
+  // at 3.2 m touched it (the collision test) — so this station alone takes a
+  // 32-degree lens to hold the same subject.
+  //
+  // IMPERIAL PASS: the left flight now sweeps out to x -4.6 in front of this
+  // table, and [0.8, 0.6] stood the camera on its treads. From [0.25, 0.97] the
+  // camera stands forward of the table, 5.3 m from the horseshoe's centre -
+  // 0.7 m outside the outer balustrade - and comes down a lane at x -5.3,
+  // between the flight and S1's table, which the urns no longer occupy. The
+  // clear run lets it stand back 3.4 m again, so the lens comes back to 30.
+  { id: 'S2', position: [-6.07, 0, -5.52], inward: [0.25, 0.97], standoff: 3.4, dz: 0, laneX: -5.3, holoY: 1.401, fov: 30 },
   // RIGHT BACK. The hard one.
   //
   // inward was [-1, -0.35], which stands the camera at z -1.74 and puts the
@@ -108,11 +174,14 @@ export const STATION_ANCHORS: readonly StationAnchor[] = [
   // it stands off the urn's corner instead, and the run down from laneX 6.90
   // clears the urn's x by 0.98m at the moment it crosses the urn's z band. Same
   // subject distance (2.55m), same framing, clearance instead of none.
-  { id: 'S3', position: [7.85, 0, -1.31], inward: [-0.8, -0.6], standoff: 2.55, dz: 0, laneX: 6.9, holoY: 1.441 },
+  // At the old-money pass's 3.75m standoff [-0.8, -0.6] put the approach 6cm
+  // inside urn_r again (the collision test caught it); [-0.62, -0.78] swings the
+  // viewpoint to x 5.53, outside the urn's x, and the run down clears it.
+  { id: 'S3', position: [7.85, 0, -1.31], inward: [-0.62, -0.78], standoff: 3.75, dz: 0, laneX: 6.9, holoY: 1.441 },
   // RIGHT FRONT. No project is published for this pedestal today, so it stays
   // dark furniture until one is. Described here so a fourth project lights it
   // up with no code change.
-  { id: 'S4', position: [7.85, 0, 4.94], inward: [-1, 0], standoff: 2.4, dz: -0.35, laneX: 5.6, holoY: 1.441 },
+  { id: 'S4', position: [7.85, 0, 4.94], inward: [-1, 0], standoff: 3.6, dz: -0.35, laneX: 5.6, holoY: 1.441 },
 ] as const;
 
 /**
@@ -146,7 +215,7 @@ export const HOLOGRAM_HEIGHT = 1.45;
  * unchanged, which is worth recording so the next person does not assume it
  * drifted.
  */
-export const STATION_AIM_HEIGHT = 1.34;
+export const STATION_AIM_HEIGHT = 1.45;
 
 /**
  * Eye height for every standing beat. A shade under a real 1.7m eye line
@@ -213,9 +282,10 @@ export interface InteriorBeat {
  *   establish  56  the room must read whole, including both side walls
  *   traverse   44  moving shots stay wider so architecture keeps its parallax
  *   station    30  compressed, subject isolated — the brief's telephoto
- *   portrait   32  wide enough to hold 3.26m of canvas from 8m back
+ *   portrait   40  4.6m of plate and frame at 70% of frame from 8m out, over
+ *                   the landing's rail (the portrait beat)
  */
-const LENS = { establish: 56, traverse: 44, station: 30, portrait: 32 } as const;
+const LENS = { establish: 56, traverse: 44, station: 27, portrait: 40 } as const;
 
 /**
  * How much of the interior leg each chapter gets.
@@ -295,7 +365,10 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
     id: 'threshold',
     at: 0,
     position: [0, 1.58, 6.7],
-    target: [0, 3.1, -5.0],
+    // Aimed up, over the landing to the attic windows: the room is 13 m to the
+    // cornice and 19 m to the oculus now, and the first thing the eye does on
+    // walking into a room like this is climb.
+    target: [0, 6.2, -5.0],
     fov: LENS.establish,
     roll: 0,
   });
@@ -330,8 +403,11 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
   beats.push({
     id: 'establish',
     at: CHAPTER_WEIGHTS.establish * 0.33,
-    position: [3.1, 3.1, 6.1],
-    target: [-1.1, 3.2, -6.7],
+    // IMPERIAL PASS: higher and aimed higher, so the wide shot holds both
+    // flights of the horseshoe, the portrait over the landing and the attic
+    // windows above the string course - the height is the point of the room.
+    position: [3.4, 2.6, 6.3],
+    target: [-0.8, 7.4, -6.0],
     fov: LENS.establish,
     roll: 0,
   });
@@ -403,7 +479,7 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
           prevVp.position[2] + (prev.inward[1] / plen) * 0.35,
         ],
         target: prevVp.target,
-        fov: LENS.station + 2,
+        fov: (prev.fov ?? LENS.station) + 2,
         roll: (i - 1) % 2 === 0 ? 0.012 : -0.012,
       });
 
@@ -418,7 +494,7 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
           id: `exit-${prev.id}`,
           at: W.establish + (i - 1) * W.station + W.station * 0.72,
           position: [prev.laneX, PROMENADE_Y, PROMENADE_Z],
-          target: [prev.position[0] * 0.3, 2.6, -4.6],
+          target: [prev.position[0] * 0.3, 3.4, -4.6],
           fov: LENS.traverse,
           roll: 0.008,
         });
@@ -426,7 +502,8 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
           id: 'cross-hall',
           at: W.establish + (i - 1) * W.station + W.station * 0.82,
           position: [((prev.position[0] + a.position[0]) / 2) * 0.35, PROMENADE_Y, PROMENADE_Z],
-          target: [1.2, 2.2, -3.8],
+          // up at the horseshoe as the camera passes its feet
+          target: [0.8, 4.2, -4.6],
           fov: LENS.traverse,
           roll: 0.022,
         });
@@ -447,7 +524,7 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
       at: W.establish + i * W.station,
       position: vp.position,
       target: vp.target,
-      fov: LENS.station,
+      fov: a.fov ?? LENS.station,
       // A hair of bank, opposite on each side of the room, so consecutive
       // stations do not read as the same shot twice.
       roll: i % 2 === 0 ? 0.012 : -0.012,
@@ -474,36 +551,53 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
       id: 'withdraw',
       at: W.establish + n * W.station - W.station * 0.18,
       position: [last.laneX - Math.sign(last.laneX) * 0.9, PROMENADE_Y, PROMENADE_Z],
-      target: [0, 3.2, -5.8],
+      target: [0, 4.6, -5.8],
       fov: LENS.traverse,
       roll: 0.014,
     });
   }
 
   // FOOT OF THE STAIRS. The brief's diagonal, resolved: onto the central axis
-  // looking up the flight. The runner leads the eye and the portrait is already
-  // at the top of frame.
+  // in front of the horseshoe, looking up through its mouth. Both flights curl
+  // away on either side, the runners lead the eye up them, and the portrait is
+  // already at the top of frame over the landing.
   beats.push({
     id: 'stair-foot',
     at: W.establish + n * W.station,
-    position: [1.2, 1.9, 3.9],
-    target: [0, 3.9, -6.1],
+    position: [0.9, 2.0, 4.4],
+    target: [0, 5.3, -6.5],
     fov: LENS.traverse,
     roll: 0.02,
   });
 
-  // PORTRAIT. On the axis, lifted, 7m out.
+  // THE RISE. The brief's arrows climb the stair to the portrait; in a
+  // horseshoe the stair is a pair of curves either side of an open court, so
+  // the camera climbs the court itself - the flights sweeping past on both
+  // sides, below the rails and never over a tread - and settles as the landing
+  // arrives at the foot of frame.
+  beats.push({
+    id: 'stair-rise',
+    at: W.establish + n * W.station + W.portrait * 0.55,
+    position: [0.45, 5.6, 2.3],
+    target: [0, 6.9, -7.0],
+    fov: 40,
+    roll: 0.01,
+  });
+
+  // PORTRAIT. On the axis, 8 m out and 9 m up.
   //
-  // The CHANDELIER now hangs x +/-1.01, y 5.85..7.85, z -0.14..1.88 — a metre
-  // above the raised camera rather than in front of it, so what decides this
-  // beat is the frame: at FOV 32 and 8.02m it is 4.69m tall against a 3.26m
-  // canvas, so the portrait holds 70% of frame with the landing and the newels
-  // beneath it, exactly the proportion it held in the smaller room.
+  // The height is set by the landing's balustrade: its rail stands at 5.42,
+  // 1.8 m in front of the canvas, and from lower down it crossed the engraved
+  // plate under the frame (portraitNameplate.test.ts holds the sight line).
+  // The CHANDELIER hangs at y 9.80..12.70 over x/z +/-1.46 — hung that high for
+  // this beat, which stands under it, 0.8 m below the lowest crystal, and it is
+  // behind and above the lens. At FOV 40 the frame is 5.9 m tall against 4.6 m
+  // of plate and frame: the portrait holds 70% of it, as it always has.
   beats.push({
     id: 'portrait',
     at: W.establish + n * W.station + W.portrait,
-    position: [0, 4.1, 0.45],
-    target: [0, 5.55, -7.6],
+    position: [0, 9.0, 0.4],
+    target: [0, 6.85, -7.6],
     fov: LENS.portrait,
     roll: 0,
   });
@@ -515,7 +609,9 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
   beats.push({
     id: 'turn-out',
     at: W.establish + n * W.station + W.portrait + W.city * 0.45,
-    position: [0, 2.9, -1.4],
+    // Down out of the air over the court to its mouth, between the flights'
+    // feet, facing the doors: the two flights frame the turn.
+    position: [0, 3.0, 0.4],
     target: [0, 2.8, 7.7],
     fov: LENS.traverse,
     roll: 0,
@@ -538,10 +634,17 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
   // Eye height 2.30, and the aim at 1.60, so the horizon sits a little above
   // centre: the sight line to the field's ground at y -2.4 first meets it about
   // 7.6m beyond the camera, which is why FIELD.near is 26 and not less.
+  //
+  // z 5.70 -> 6.20. At 5.70 the jambs sat exactly at the frame's edges, and
+  // any aim offset brought one of them in: the second client review's frame
+  // had the walnut panelling beside the door as a beige band down the left of
+  // the region. Half a metre further into the doorway the jambs subtend 90
+  // degrees, outside a frame of ~78, and the offset is faded out on the way
+  // here (CameraRig) — the visitor stands IN the door.
   beats.push({
     id: 'city',
     at: W.establish + n * W.station + W.portrait + W.city,
-    position: [0, 2.3, 5.7],
+    position: [0, 2.3, 6.2],
     target: [0, 1.6, 16.5],
     fov: LENS.establish,
     roll: 0,
@@ -659,7 +762,29 @@ export function stationEmphasis(
   s: number,
   id: string,
 ): number {
-  const i = beats.findIndex((b) => b.station === id);
+  return emphasisAt(beats, s, beats.findIndex((b) => b.station === id));
+}
+
+/**
+ * The same rise and fall for any beat, found by its id — the portrait.
+ *
+ * The portrait's emphasis used to be read off the LAST two beats of the leg,
+ * which was right while the portrait was the last beat. The district field
+ * added `turn-out` and `city` after it, and from then on the portrait's
+ * emphasis rose across the city chapter, with the camera facing the front
+ * doors: its hover glow lit behind the viewer's back, and at the portrait beat
+ * itself the click that opens About sat below its gate. Found by id, it peaks
+ * where the camera is actually looking at the painting.
+ */
+export function beatEmphasis(
+  beats: readonly InteriorBeat[],
+  s: number,
+  beatId: string,
+): number {
+  return emphasisAt(beats, s, beats.findIndex((b) => b.id === beatId));
+}
+
+function emphasisAt(beats: readonly InteriorBeat[], s: number, i: number): number {
   if (i < 0) return 0;
   const here = beats[i].at;
   const prev = i > 0 ? beats[i - 1].at : here - 0.1;

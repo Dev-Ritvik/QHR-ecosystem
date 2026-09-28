@@ -399,7 +399,8 @@ export interface DoorwayState {
   snap: boolean;
   /** performance.now() of the last cut, for the dip from black. */
   cutAt: number;
-  /** The hall model is parsed and in the scene. */
+  /** The hall model is parsed, in the scene, and its programs are compiled
+   *  (WorldCanvas, HallReadiness). */
   hallReady: boolean;
   /** Which model the scene is actually showing, as React last committed it. */
   sceneLeg: 'exterior' | 'interior';

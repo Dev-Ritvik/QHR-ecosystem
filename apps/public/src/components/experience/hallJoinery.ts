@@ -258,6 +258,55 @@ export function sconceGeometry(): THREE.BufferGeometry {
   return merge([back, arm, cross, ...knobs]);
 }
 
+/**
+ * THE FRIEZE HAS NEVER BEEN SEEN. Every anthemion on the hall's frieze (208
+ * nodes, one shared KIT_anth_M mesh) was modelled with its carving facing local
+ * -Z, and every node is placed so local -Z points INTO the wall. So from the
+ * room only their back faces were visible, and three culls back faces: the
+ * frieze rendered as bare plaster, and what read as ornament was the bake's
+ * dark star-shaped occlusion where each hidden plaque meets the wall. Under the
+ * old flat ambient those stars were a faint grey; with the bake left to light
+ * its own surfaces they went black. VERIFIED by painting the anthemions magenta:
+ * single-sided they did not appear at all; double-sided they sat exactly on the
+ * black stars.
+ *
+ * The fix is to the geometry, once: mirror the shared mesh through its own
+ * mid-plane (z -> -z, winding reversed, normals mirrored), so the carving faces
+ * the room from the same 2.3 cm slab and covers the occlusion it casts.
+ */
+export function faceTheFrieze(root: THREE.Object3D): number {
+  const done = new Set<THREE.BufferGeometry>();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !/^anth_/.test(mesh.name)) return;
+    const g = mesh.geometry as THREE.BufferGeometry & { userData: { facesRoom?: boolean } };
+    if (done.has(g) || g.userData.facesRoom) return;
+    done.add(g);
+    g.userData.facesRoom = true;
+    const pos = g.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i += 1) pos.setZ(i, -pos.getZ(i));
+    pos.needsUpdate = true;
+    const nrm = g.getAttribute('normal') as THREE.BufferAttribute | undefined;
+    if (nrm) {
+      for (let i = 0; i < nrm.count; i += 1) nrm.setZ(i, -nrm.getZ(i));
+      nrm.needsUpdate = true;
+    }
+    // A mirror turns every triangle inside out; reverse the winding.
+    const index = g.getIndex();
+    if (index) {
+      for (let i = 0; i < index.count; i += 3) {
+        const b = index.getX(i + 1);
+        index.setX(i + 1, index.getX(i + 2));
+        index.setX(i + 2, b);
+      }
+      index.needsUpdate = true;
+    }
+    g.computeBoundingBox();
+    g.computeBoundingSphere();
+  });
+  return done.size;
+}
+
 export interface Refurnished {
   counts: { newels: number; retired: number; balusters: number; urns: number; sconces: number };
   /** Remove what was added, release what was created, show the originals again. */

@@ -15,18 +15,81 @@
 // Both loaders are mandatory: KHR_texture_basisu and KHR_draco_mesh_compression
 // are in extensionsRequired, so the file will not parse without them.
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { guardAnisotropy } from './materialGuards';
 import { finishHall } from './hallFinish';
-import { refurnishHall } from './hallJoinery';
+import { faceTheFrieze, refurnishHall } from './hallJoinery';
+import { dressWalnut } from './hallWalnut';
+import { dressHallDetail } from './hallDetail';
+import { dressFloor } from './hallFloor';
+import { NO_DEPTH, markFocusDepth } from './LensFocus';
+import {
+  beginHallProbe,
+  installHallProbe,
+  type HallProbeCapture,
+  isShown,
+  prepareHallProbe,
+  roomCube,
+  warmHallPrograms,
+} from './hallProbe';
 
 export const HALL_MODEL_URL = '/models/interior_hall.glb';
+
+// Before any hall program compiles: the box-projected probe and the bake/probe
+// split are ShaderChunk edits (hallProbe.ts).
+installHallProbe();
+
+/**
+ * The hall's reflection probe, for anything in the room that is not part of the
+ * GLB — the nameplate, the stations' own pieces. Null until the first capture;
+ * `version` moves on every capture so a consumer can re-bind cheaply.
+ */
+export const hallEnv: {
+  texture: THREE.Texture | null;
+  version: number;
+  /** The 256-face stand-in bound before the capture, for pieces created
+   *  before the probe exists (they bind it so their programs never change). */
+  stand: THREE.Texture | null;
+} = {
+  texture: null,
+  version: 0,
+  stand: null,
+};
+
+/**
+ * Bind the hall's probe to every standard material under `group` — for pieces
+ * that live in the room but not in the GLB (the portrait's nameplate). Explicit,
+ * so each keeps its own gain; re-bound whenever the probe is re-captured. Give
+ * those materials PROBE_DEFINES when they are created, so the first binding
+ * costs no recompile.
+ */
+export function useProbeBinding(
+  group: React.RefObject<THREE.Object3D>,
+  gain: (m: THREE.MeshStandardMaterial) => number = () => 1,
+) {
+  const bound = useRef(-1);
+  useFrame(() => {
+    const g = group.current;
+    if (!g || !hallEnv.texture || bound.current === hallEnv.version) return;
+    bound.current = hallEnv.version;
+    g.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const mat = m as THREE.MeshStandardMaterial;
+        if (!mat?.isMeshStandardMaterial) continue;
+        mat.envMap = hallEnv.texture;
+        mat.envMapIntensity = gain(mat);
+      }
+    });
+  });
+}
 
 /** From interior_hall.manifest.json — the bake's normalisation divisor. Changing
  *  the bake means changing this, so it is named rather than inlined.
@@ -36,31 +99,45 @@ export const HALL_MODEL_URL = '/models/interior_hall.glb';
  *  belonged to the 15.0 x 10.6 x 6.4m room: the atlas is normalised by its own
  *  99.5th percentile, and a room whose surfaces stand further from the same
  *  lamps has a lower one. Using the old number would render the new bake 51%
- *  too bright. */
-const LIGHTMAP_INTENSITY = 3.0801;
-
-/** Environment response for the surfaces the bake never reached. Multiplies
- *  against scene.environmentIntensity (0.3 inside since the client-review
- *  finishes; it was 0.1 when this was counted), so 6.0 is an effective 1.8.
- *  See the note in dressInterior for what it is for and how it was counted. */
-const UNBAKED_ENV_INTENSITY = 6.0;
+ *  too bright.
+ *
+ *  3.8566 since the old-money pass: the same lamps RE-BAKED on the same layout
+ *  (tools/blender/rebake_hall_lightmap_v7.py, 1024 spp) and denoised
+ *  (tools/gltf/finish_hall_lightmap.py). The 99.5th percentile moved because the
+ *  tail moved — a noisy atlas and a clean one rank their brightest texels
+ *  differently — while the light did not: a flat wall bakes to 0.560 in the
+ *  shipped atlas and 0.558 in this one.
+ *
+ *  8.294 since the hall was made imperial (imperial_hall_v7.py): a new room,
+ *  so a new layout and a new bake (768 spp, OIDN-finished). The divisor more
+ *  than doubled because the atlas now holds light SOURCES' surroundings the
+ *  old room never had — the oculus pools light on the floor under the dome and
+ *  the clerestory windows wash the attic walls — and those set the 99.5th
+ *  percentile the atlas is normalised by. */
+const LIGHTMAP_INTENSITY = 8.294;
 
 let ktx2Singleton: KTX2Loader | null = null;
 let dracoSingleton: DRACOLoader | null = null;
 
-/** Loaders are shared across every mount. Creating a KTX2Loader per mount spawns
- *  a fresh worker pool each time, which on mid-tier phones is a stall the user
- *  can feel. */
-export function attachLoaders(loader: GLTFLoader, gl: THREE.WebGLRenderer) {
+/** The shared KTX2 transcoder: one worker pool for the GLB and for every loose
+ *  KTX2 texture the hall loads beside it (hallWalnut.ts). */
+export function hallKTX2(gl: THREE.WebGLRenderer): KTX2Loader {
   if (!ktx2Singleton) {
     ktx2Singleton = new KTX2Loader()
       .setTranscoderPath('/basis/')
       .detectSupport(gl);
   }
+  return ktx2Singleton;
+}
+
+/** Loaders are shared across every mount. Creating a KTX2Loader per mount spawns
+ *  a fresh worker pool each time, which on mid-tier phones is a stall the user
+ *  can feel. */
+export function attachLoaders(loader: GLTFLoader, gl: THREE.WebGLRenderer) {
   if (!dracoSingleton) {
     dracoSingleton = new DRACOLoader().setDecoderPath('/draco/');
   }
-  loader.setKTX2Loader(ktx2Singleton);
+  loader.setKTX2Loader(hallKTX2(gl));
   loader.setDRACOLoader(dracoSingleton);
 }
 
@@ -350,6 +427,17 @@ export function stripBakedLights(root: THREE.Object3D): number {
 const HOLO_TINT = new THREE.Color('#FFD9A8');
 
 /**
+ * Every hologram gain below, scaled for the hall's print. The gains were set
+ * against a hall that left the renderer as clamped scene-linear; the hall now
+ * prints through a filmic curve at exposure 2.3 (FilmGrade's HALL_GRADE), which
+ * took the plans to a blown cream sheet with the plots washed out. Swept live
+ * at the first station: 0.35 of the old gain at exposure 1.0 is where the plots,
+ * roads and planting all read in champagne — the plan as a gilded site model
+ * rather than a light box — and at exposure 2.3 that is 0.16.
+ */
+const HOLO_PRINT = 0.16;
+
+/**
  * Per-role treatment. The three materials that carry the plan are doing three
  * different jobs and were all being drawn the same way, which is most of why
  * the station read as one white sheet.
@@ -405,6 +493,29 @@ const HOLO_ROLE = {
  */
 const HOLO_SOLID = /^MAT_Holo3D_(Top|Side)/;
 
+/**
+ * THE SCAN. The second client review read the layout models as "raw,
+ * untextured CAD data dumps ... grey plastic". A still model in light is a
+ * still model; what makes a projection read as projected is that the light
+ * moves through it. Every few seconds a fine line of light crosses each model
+ * — plan, plot faces and edges alike, in world space so it runs across the
+ * whole station at once — and a faint line structure lies across the surfaces,
+ * the way a projector's raster does. Both are a few percent of the emission
+ * between sweeps; the sweep itself briefly doubles it along one line.
+ *
+ * One clock for every station, advanced by HallModel.
+ */
+export const holoClock = { value: 0 };
+const HOLO_SCAN = /* glsl */ `
+  {
+    // A thin band travelling along the station's diagonal, once every ~7 s.
+    float s = fract(dot(vHoloWorld.xz, vec2(0.21, 0.09)) - uHoloTime * 0.14);
+    float band = smoothstep(0.0, 0.012, s) * (1.0 - smoothstep(0.012, 0.05, s));
+    float raster = 0.94 + 0.06 * sin(dot(vHoloWorld, vec3(0.0, 90.0, 60.0)) + uHoloTime * 1.7);
+    totalEmissiveRadiance *= raster * (1.0 + 1.3 * band);
+  }
+`;
+
 function holographic(mat: THREE.MeshStandardMaterial & { __holo?: boolean }) {
   if (mat.__holo) return;
   mat.__holo = true;
@@ -425,7 +536,7 @@ function holographic(mat: THREE.MeshStandardMaterial & { __holo?: boolean }) {
     // ground and the plot faces close in value, the EDGES are what separate one
     // plot volume from the next, and a grazing-angle rim is the only thing in
     // this material doing that.
-    uGain: { value: isSide ? 0.6 : role.gain },
+    uGain: { value: (isSide ? 0.6 : role.gain) * HOLO_PRINT },
     uChroma: { value: role.chroma },
     uTint: { value: HOLO_TINT },
     // Square-on faces keep this much of their emission; grazing faces keep all.
@@ -433,12 +544,46 @@ function holographic(mat: THREE.MeshStandardMaterial & { __holo?: boolean }) {
     uEdgePow: { value: 1.5 },
   };
 
+  // Reachable for look-dev through the scene graph (?debug=1): the uniforms are
+  // shared by reference with the compiled program, so a write lands next frame.
+  mat.userData.holo = u;
+  // THE LAYERS OF LIGHT STAMP THEIR OWN DEPTH (LensFocus's hall lens). An
+  // additive layer used to ADD to the frame's alpha, which the lens reads as
+  // depth — so the plan inherited the depth of the wall behind it, plus one,
+  // and blurred with the wall. Their alpha now blends with MIN: where the plan
+  // glows it writes its own view depth, elsewhere NO_DEPTH, which changes
+  // nothing. The colour is still purely additive (One/One), exactly what
+  // SRC_ALPHA/ONE gave at the alpha of 1 these materials render at.
+  const additive = !HOLO_SOLID.test(mat.name);
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, u);
+    shader.uniforms.uHoloTime = holoClock;
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'varying vec3 vHoloWorld;\nvoid main() {')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+         vHoloWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+      );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <lights_fragment_begin>',
+      `${HOLO_SCAN}
+       #include <lights_fragment_begin>`,
+    );
+    if (additive) {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        `#include <dithering_fragment>
+         gl_FragColor.a = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) > 0.02
+           ? max( vViewPosition.z, 1.05 ) : ${NO_DEPTH.toExponential()};`,
+      );
+    }
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
-        `uniform float uInkLo;
+        `uniform float uHoloTime;
+         varying vec3 vHoloWorld;
+         uniform float uInkLo;
          uniform float uInkHi;
          uniform float uInkSoft;
          uniform float uInkFloor;
@@ -457,7 +602,9 @@ function holographic(mat: THREE.MeshStandardMaterial & { __holo?: boolean }) {
                // vViewPosition points FROM the fragment TO the camera in view
                // space and vNormal is the view-space normal, so their angle is
                // exactly the grazing term a volume needs to show a silhouette.
-               float f = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
+               // Clamped: a rounding error past 1.0 makes the base negative and
+               // pow() NaN (StationDressing, beamMaterial).
+               float f = clamp(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 0.0, 1.0);
                totalEmissiveRadiance *= uTint * uGain * mix(uEdgeFloor, 1.0, pow(f, uEdgePow));
              }`
           : `#ifdef USE_EMISSIVEMAP
@@ -526,50 +673,15 @@ function dressInterior(root: THREE.Object3D): string[] {
       const mat = m as THREE.MeshStandardMaterial & { __dressed?: boolean };
       if (!mat || mat.__dressed) continue;
 
-      // A THIRD OF THE ROOM CARRIES NO LIGHTMAP, AND WAS RENDERING AT AMBIENT.
-      //
-      // promoteLightmaps has already run, so `mat.lightMap` is the exact test
-      // for "this surface has baked GI". Counted from the GLB, the ones that do
-      // not are not a rounding error:
-      //
-      //     MAT_Trim_Cream      216 primitives, 0 with UV1   the anthemion
-      //                                                       frieze, capitals,
-      //                                                       every ornament
-      //     MAT_Gold             46, 0 with UV1   sconce arms, picture light
-      //     MAT_Wood_Dark        18, 0 with UV1   newels, wall panels
-      //     MAT_MarbleFloor       2, 0 with UV1   the urn plinths
-      //     rug field + border    2, 0 with UV1
-      //
-      // Their only illumination was ambientLight 0.12 plus the RoomEnvironment
-      // cube at scene.environmentIntensity 0.1. Diffuse dark wood under that
-      // renders black: RAYCAST through the establishing frame at x 120 and
-      // x 250 both returned `wallpanel_-1_12` / `wallpanel_-1_36`,
-      // MAT_Wood_Dark, lightMap false — the two unexplained black slabs on the
-      // left wall. The gold went the same way, which is why a room full of
-      // brass reads as a room full of nothing.
-      //
-      // envMapIntensity is PER MATERIAL, so raising it here reaches exactly the
-      // surfaces with no bake and cannot touch a single lightmapped one. That is
-      // also the physically honest place to put it: an object with no baked GI
-      // needs its indirect light from somewhere, and the environment cube — a
-      // box of emissive panels, which is what this room is — is the proxy the
-      // scene already carries. 6.0 against scene.environmentIntensity 0.1 is an
-      // effective 0.6, six tenths of what a fully lit surface would see.
-      // The holograms are excluded, and finding out why cost two rebuilds. They
-      // carry no lightmap either, so the first version of this lifted them with
-      // everything else — and they arrive from the GLB at metalness 1,
-      // roughness 1 with a black base colour, which is a mirror. Handing a
-      // mirror six times the room's environment turned the plan plates into
-      // sheets of reflected wall: station 2 rendered as a blank white rectangle
-      // that looked exactly like the additive-overdraw defect it had just
-      // stopped being. They are light sources, not surfaces; they are handled
-      // in their own block below, where their environment response is taken to
-      // zero outright.
-      if (!mat.lightMap && mat.isMeshStandardMaterial && !/^MAT_Holo/.test(mat.name)) {
-        mat.envMapIntensity = UNBAKED_ENV_INTENSITY;
-        mat.needsUpdate = true;
-        if (!touched.includes('unbaked-env')) touched.push('unbaked-env');
-      }
+      // A THIRD OF THE ROOM CARRIES NO LIGHTMAP — the anthemion frieze, the
+      // capitals and every ornament (MAT_Trim_Cream, 216 primitives with no
+      // UV1), the sconce arms and picture light (MAT_Gold), the newels and wall
+      // panels (MAT_Wood_Dark), the urn plinths and the rug. This block used to
+      // lift them with envMapIntensity 6 against the RoomEnvironment cube. On
+      // three r173 that never applied: a material with no envMap of its own has
+      // its envMapIntensity replaced by scene.environmentIntensity every frame.
+      // They are now lit by the hall's reflection probe (hallProbe.ts), which
+      // is bound explicitly and is the room's own light rather than a studio's.
 
       // THE BENCH. Material 'model' arrives metalness 0.8, roughness 0.5, base
       // 0.5 grey, with no maps — and the interior's environment intensity is
@@ -584,6 +696,26 @@ function dressInterior(root: THREE.Object3D): string[] {
         mat.needsUpdate = true;
         mat.__dressed = true;
         touched.push('bench');
+      }
+
+      // THE CHANDELIER'S CRYSTAL, WITHOUT TRANSMISSION. It was the only
+      // transmissive material in the hall, and three renders the whole opaque
+      // scene a second time into a transmission target whenever one is in
+      // view: MEASURED at the establishing shot, p90 frame time 66.7 ms with
+      // it and 16.7 ms without. Seven metres up, refraction through faceted
+      // drops is invisible; what reads is sparkle, which the hall's own probe
+      // gives them (PROBE_GAIN) as reflections of the lit room.
+      if (mat.name === 'Glass_Crystal_Kognaq_Simple.001') {
+        const phys = mat as THREE.MeshPhysicalMaterial;
+        if (phys.transmission > 0) {
+          phys.transmission = 0;
+          phys.transparent = true;
+          phys.opacity = 0.42;
+          phys.roughness = 0.03;
+          phys.metalness = 0;
+          phys.needsUpdate = true;
+          touched.push('crystal');
+        }
       }
 
       // THE URNS are no longer dressed here. material_0.001 was the decimated
@@ -616,7 +748,18 @@ function dressInterior(root: THREE.Object3D): string[] {
       if (/^MAT_Holo/.test(mat.name) && !/_S4$/.test(mat.name)) {
         const solid = HOLO_SOLID.test(mat.name);
         mat.transparent = !solid;
-        mat.blending = solid ? THREE.NormalBlending : THREE.AdditiveBlending;
+        if (solid) {
+          mat.blending = THREE.NormalBlending;
+        } else {
+          // Additive colour, MIN alpha: see holographic() for why.
+          mat.blending = THREE.CustomBlending;
+          mat.blendEquation = THREE.AddEquation;
+          mat.blendSrc = THREE.OneFactor;
+          mat.blendDst = THREE.OneFactor;
+          mat.blendEquationAlpha = THREE.MinEquation;
+          mat.blendSrcAlpha = THREE.OneFactor;
+          mat.blendDstAlpha = THREE.OneFactor;
+        }
         mat.depthWrite = solid;
         // A PROJECTION IS NOT A METAL. These arrive metalness 1 / roughness 1
         // with a black base, which in a room with an environment map is a rough
@@ -637,6 +780,116 @@ function dressInterior(root: THREE.Object3D): string[] {
 
   return touched;
 }
+
+/**
+ * The hall's reflection probe (hallProbe.ts).
+ *
+ * Bound to a stand-in at once, so every hall program compiles exactly once with
+ * the probe's defines and a probe-shaped environment; replaced by a photograph
+ * of the room taken over the first six frames the room is actually on screen,
+ * which on the journey are the frames the door passage swaps sets, under the
+ * veil. Swapping one 256-face PMREM for another changes no program parameter,
+ * so the capture costs a face of the hall a frame and no shader compiles.
+ */
+function useHallProbe(root: THREE.Object3D) {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  const probe = useRef<{
+    mats: THREE.MeshStandardMaterial[];
+    shot: THREE.WebGLRenderTarget | null;
+    /** A capture in progress, one face a frame (hallProbe.ts, beginHallProbe). */
+    capture: HallProbeCapture | null;
+    /** Main-thread time the capture has taken so far, for the log. */
+    ms: number;
+  } | null>(null);
+
+  useEffect(() => {
+    // The shared room cube (hallProbe.ts, roomCube): made under the preloader,
+    // so arming the hall mid-scroll renders nothing for the first time.
+    const stand = roomCube(gl);
+    const mats = prepareHallProbe(root, stand.texture);
+    // Every opaque surface writes its depth for the hall's lens (LensFocus),
+    // in the same define pass, so nothing compiles twice.
+    markFocusDepth(root);
+    probe.current = { mats, shot: null, capture: null, ms: 0 };
+    hallEnv.stand = stand.texture;
+
+    // Compile every hall program now, off the main thread, under the hall's
+    // own light state (hallProbe.ts, warmHallPrograms), instead of all at once
+    // on the frame the door passage swaps sets.
+    let alive = true;
+    const t0 = performance.now();
+    warmHallPrograms(gl, camera, root, stand.texture).then(() => {
+      if (!alive) return;
+      // eslint-disable-next-line no-console
+      console.info('[hall_warm] programs ready in %sms', (performance.now() - t0).toFixed(0));
+    });
+
+    // A lost context takes both render targets' contents with it, and neither
+    // can re-upload from the CPU (a PMREM target has no CPU copy). Take the
+    // rebuilt room cube and let the next frame photograph the room again.
+    const canvas = gl.domElement;
+    const onRestored = () => {
+      const p = probe.current;
+      if (!p) return;
+      const cube = roomCube(gl).texture;
+      hallEnv.stand = cube;
+      if (p.shot && hallEnv.texture === p.shot.texture) {
+        hallEnv.texture = null;
+        hallEnv.version += 1;
+      }
+      p.shot?.dispose();
+      p.shot = null;
+      p.capture?.cancel();
+      p.capture = null;
+      p.ms = 0;
+      for (const m of p.mats) m.envMap = cube;
+    };
+    canvas.addEventListener('webglcontextrestored', onRestored);
+
+    return () => {
+      alive = false;
+      canvas.removeEventListener('webglcontextrestored', onRestored);
+      const p = probe.current;
+      probe.current = null;
+      if (!p) return;
+      hallEnv.stand = null;
+      // drei shares these materials with the next mount, which binds its own.
+      for (const m of p.mats) m.envMap = null;
+      if (p.shot && hallEnv.texture === p.shot.texture) {
+        hallEnv.texture = null;
+        hallEnv.version += 1;
+      }
+      p.shot?.dispose();
+      p.capture?.cancel();
+    };
+  }, [gl, root, camera]);
+
+  // The holograms' scan (holoClock), one clock for every station.
+  useFrame((_, delta) => {
+    holoClock.value += delta;
+  });
+
+  // Default priority, so each face lands before the composer draws the frame.
+  useFrame(() => {
+    const p = probe.current;
+    if (!p || p.shot || !isShown(root)) return;
+    const t0 = performance.now();
+    p.capture ??= beginHallProbe(gl, scene, root);
+    const shot = p.capture.step();
+    p.ms += performance.now() - t0;
+    if (!shot) return;
+    p.capture = null;
+    p.shot = shot;
+    for (const m of p.mats) m.envMap = shot.texture;
+    hallEnv.texture = shot.texture;
+    hallEnv.version += 1;
+    // eslint-disable-next-line no-console
+    console.info('[hall_probe] captured in %sms over 6 frames, %d materials', p.ms.toFixed(1), p.mats.length);
+  });
+}
+
 export function HallModel({
   onReady,
   onRoot,
@@ -680,6 +933,8 @@ export function HallModel({
 
   useEffect(() => {
     const disarmed = guardAnisotropy(root);
+    // The frieze's anthemions, turned to face the room (hallJoinery.ts).
+    faceTheFrieze(root);
     const promoted = promoteLightmaps(root);
     const strippedLights = stripBakedLights(root);
     // AFTER the promotion, not before: dressInterior clones the runner's
@@ -691,6 +946,10 @@ export function HallModel({
     // stands, and before the texture merge, so the maps it clears are never
     // counted as shared.
     const finished = finishHall(root);
+    // The floor re-cut into slabs (hallFloor.ts), after its finish is set.
+    dressFloor(root);
+    // The runner's pile and the portrait behind glass (hallDetail.ts).
+    dressHallDetail(root);
     // LAST of the material passes, and it has to be. It compares textures by
     // their sampling state — anisotropy included — so it must run after
     // guardAnisotropy has settled that, after the promotion has moved the atlas
@@ -752,6 +1011,17 @@ export function HallModel({
     const joinery = refurnishHall(root);
     return () => joinery.dispose();
   }, [root]);
+
+  // The panelling's walnut veneer (hallWalnut.ts): its own material and UVs,
+  // created here so the probe below binds it with the rest of the room.
+  useEffect(() => {
+    const walnut = dressWalnut(root, hallKTX2(gl));
+    return () => walnut.dispose();
+  }, [root, gl]);
+
+  // AFTER the joinery and the panelling, so what they add is probed with
+  // everything else.
+  useHallProbe(root);
 
   // Separate from the counting pass, and deliberately so: the consumer
   // re-parents nodes inside `root`, and running that in the same effect as the

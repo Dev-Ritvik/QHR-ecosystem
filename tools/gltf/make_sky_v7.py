@@ -1,7 +1,7 @@
 """
 Paint the v7 sky: an equirectangular panorama with nothing in it but sky.
 
-    python make_sky_v7.py <out.jpg> [width]
+    python make_sky_v7.py <out.jpg> [width] [env_out.jpg]
 
 WHY. The background the site shipped was a photographic HDRI of a Central
 European meadow - forested hills, a farm track and a village on the horizon -
@@ -15,9 +15,9 @@ lands flat on every surface, it has no direction, and it gives a render nothing
 to model with. Every photograph of a house that sells for what this one is meant
 to sell for was taken in the last hour of light. So:
 
-  * the sun sits 13 degrees up rather than 32, on the front-left bearing the
-    daylight key now uses, which rakes the south and west elevations and throws
-    the palms' shadows the length of the lawn;
+  * the sun sits 14 degrees up rather than 32, on the front-right bearing the
+    daylight key now uses, which rakes the south front, leaves the west flank in
+    shade, and throws the palms' shadows the length of the lawn;
   * the horizon is WARM where the sun is and cool opposite it, which is what
     gives a panorama a direction even in the parts of frame the sun never
     reaches;
@@ -37,9 +37,12 @@ from PIL import Image
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "sky_estate_v7.jpg"
 W = int(sys.argv[2]) if len(sys.argv) > 2 else 4096
+ENV_OUT = sys.argv[3] if len(sys.argv) > 3 else None
 H = W // 2
-# The daylight key: [-96, 26, 62] in WorldCanvas, normalised.
-SUN_DIR = np.array([-96.0, 26.0, 62.0])
+# The daylight key: DAY_SUN in WorldCanvas, normalised. Front-right since the
+# critique pass (it was front-left, [-96, 26, 62], which lit both elevations
+# the hero sees and modelled neither).
+SUN_DIR = np.array([86.0, 25.0, 50.0])
 SUN_DIR = SUN_DIR / np.linalg.norm(SUN_DIR)
 rng = np.random.default_rng(3)
 
@@ -138,6 +141,29 @@ sky = np.where(below[..., None], gh, sky)
 
 img = (lin_to_srgb(sky) * 255 + 0.5).astype(np.uint8)
 Image.fromarray(img, "RGB").save(OUT, quality=88, optimize=True, progressive=True)
+
+# THE LIGHTING COPY. The panorama above is also what the scene is LIT by (PMREM,
+# WorldCanvas SkyBackground), and below its horizon it carries haze as bright as
+# the sky - fine as a backdrop nobody sees, wrong as light. Every surface that
+# faces down or out - a soffit, the underside of a cornice, the shadow side of
+# the house - was being lit from below by a luminous haze where a real building
+# is lit by its own lawn. This copy keeps the sky and replaces the lower
+# hemisphere with that lawn's bounce: a sunlit green-olive at about a third of
+# the sky's radiance (albedo ~0.2 under the sun plus sky), hazing back toward the
+# horizon colour over the last few degrees, as far ground does.
+if ENV_OUT:
+    EW, EH = 1024, 512
+    small = np.asarray(Image.fromarray(img, "RGB").resize((EW, EH), Image.LANCZOS), dtype=np.float64)
+    env = srgb_to_lin(small)
+    ev = (np.arange(EH) + 0.5) / EH
+    edy = np.sin((0.5 - ev) * np.pi)[:, None]
+    bounce = srgb_to_lin((74, 88, 44))
+    t = np.clip(-edy / 0.12, 0, 1) ** 0.8
+    horizon_row = env[EH // 2 - 1][None, :, :]
+    ground = horizon_row * (1 - t[..., None]) + bounce[None, None, :] * t[..., None]
+    env = np.where((edy < 0)[..., None], ground, env)
+    Image.fromarray((lin_to_srgb(env) * 255 + 0.5).astype(np.uint8), "RGB").save(ENV_OUT, quality=90, optimize=True)
+    print("ENV", ENV_OUT, (EH, EW))
 # The horizon colour on the sun's bearing is what DAYLIGHT_HAZE must match.
 warm_horizon = lin_to_srgb(horizon_cool * 0.25 + horizon_warm * 0.75) * 255
 print("SKY", OUT, img.shape, "haze sRGB", tuple(int(x) for x in (warm_horizon + 0.5)))

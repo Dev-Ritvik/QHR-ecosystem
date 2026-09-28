@@ -2,184 +2,168 @@
 
 // apps/public/src/components/experience/Constellation.tsx
 //
-// The glowing sphere: a spherical constellation of small luminous points, held
-// above the estate, that the orbit resolves onto.
+// The glowing ball above the house: "a glowing ball made up of multiple glowing
+// spheres ... and it will have the same hover effect" (the storyboard), after
+// the reference the client sent — Vertex3D's sphere of glowing beads that
+// streams away from the cursor like a disturbed fluid and settles back.
 //
-// WHAT IT MUST NOT BE. The brief lists the failure modes by name — gaming HUD,
-// cyberpunk, cheap neon, nightclub, particle demo — and they all share one
-// cause: additive points at full saturation with no falloff, so the thing reads
-// as light emitted by a screen rather than as objects in air. Everything below
-// is aimed at the opposite: warm champagne rather than cyan, brightness that
-// falls with depth so the far shell sits BEHIND the near one, and a size that
-// is in metres and therefore obeys perspective like a real object.
+// WHAT IT WAS, AND WHY IT WENT. Three shells of soft point sprites, champagne,
+// no glow: at dusk over the house the second client review read it as "a raw,
+// unstyled particle system from a default game engine ... [with no] light-spill
+// or aura". A sprite is a disc that always faces the lens; nothing about it is
+// an object.
 //
-// STRUCTURE, NOT SCATTER. Three concentric shells on a Fibonacci lattice, each
-// counter-rotating slowly against the next. A single shell of random points is
-// a fog; nested lattices turning at different rates give the parallax that makes
-// it read as a volume you could walk around, which is the whole reason it is
-// three-dimensional rather than an SVG.
+// WHAT IT IS.
 //
-// THE HOVER. Deliberately not `scale(1.1)`. The cursor is projected onto the
-// sphere and points near that projection are pushed OUTWARD along their own
-// radius and brightened, with the response falling off over about a fifth of
-// the sphere — so the surface swells toward the pointer and settles back, and
-// the constellation appears to notice the hand. Displacement plus local
-// luminance, which is what the brief asks for and what a scale cannot give.
+//   BEADS, NOT SPRITES. ~1,300 small glowing beads on a Fibonacci lattice, one
+//   instanced draw call. Each is drawn out along its own radius, so the ball
+//   has the reference's fine, spiked silhouette — a dandelion clock, not a
+//   golf ball — and each is a lit volume: hot where it faces the lens, amber at
+//   its rim, dimmer on the far side of the ball. Bright enough to cross the
+//   bloom threshold, so the ball spills light (PostFX, BLOOM).
 //
-// ONE DRAW CALL. All three shells are one BufferGeometry and one Points object.
-// A shell index rides in an attribute, so the shader can rotate them
-// independently without three draw calls and three uploads.
+//   AN AURA. A soft halo of warm light behind the ball, additive, so it glows
+//   into the evening sky around it the way a lamp does in air.
 //
-// GLSL NOTE: this compiles as GLSL ES 3.00 on WebGL2, where a long list of
-// words are reserved that GLSL ES 1.00 allowed. This project has already lost a
-// day to `flat` (a reserved interpolation qualifier) silently killing a vertex
-// shader, so shaders.test.ts scans these template literals for the whole list.
-// If a name here trips it, rename the variable — do not weaken the test.
+//   A BODY, SIMULATED (ballSim.ts). The client found the first version rigid
+//   and its hover cheap: beads displaced by a formula of the pointer, moving
+//   exactly as far as the formula said and stopping when the hand did. Now
+//   every bead has mass and is held by springs — to its place, and to its
+//   neighbours, so the beads hold together as a skin — the ball floats and
+//   squashes as a whole, and the hand is a force field moving through it. What
+//   the eye reads is inertia: motion that builds, carries on, overshoots a
+//   little and settles by itself. Each bead is drawn out along its own motion,
+//   and brightens while it moves.
+//
+// Gilt, not the reference's pink: the palette is the estate's.
+//
+// DEPTH-IN-ALPHA. The exterior lens and the contact occlusion read the view
+// depth from the frame's alpha (LensFocus.tsx). The beads write theirs; the
+// aura blends colour only and leaves the alpha alone.
+//
+// GLSL NOTE: GLSL ES 3.00 reserves words GLSL ES 1.00 allowed (shaders.test.ts
+// scans this file). Rename, do not weaken the test.
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { createBallSim, stepBall, type BallPointer } from './ballSim';
 
-/** Points per shell, innermost first. Falling counts keep the outer shell — the
- *  one that reads as the silhouette — dense, without paying for interior points
- *  that are mostly occluded by it. */
-const SHELLS = [
-  { radius: 0.52, count: 320 },
-  { radius: 0.78, count: 640 },
-  { radius: 1.0, count: 1180 },
-] as const;
+/** Beads on the ball, at full density. */
+const BEADS = 1300;
+/** A bead's width and length, in units of the ball's radius. */
+const BEAD_W = 0.013;
+const BEAD_L = 0.05;
 
-/**
- * Fibonacci lattice.
- *
- * Even coverage of a sphere without the polar bunching that naive
- * (random theta, random phi) produces — that clustering is exactly what makes a
- * generated point sphere look generated.
- */
-function fibonacciSphere(count: number, out: Float32Array, offset: number) {
+function fibonacciSphere(count: number): Float32Array {
+  const out = new Float32Array(count * 3);
   const golden = Math.PI * (3 - Math.sqrt(5));
   for (let i = 0; i < count; i += 1) {
     const y = 1 - (i / Math.max(1, count - 1)) * 2;
     const r = Math.sqrt(Math.max(0, 1 - y * y));
     const theta = golden * i;
-    out[(offset + i) * 3] = Math.cos(theta) * r;
-    out[(offset + i) * 3 + 1] = y;
-    out[(offset + i) * 3 + 2] = Math.sin(theta) * r;
+    out[i * 3] = Math.cos(theta) * r;
+    out[i * 3 + 1] = y;
+    out[i * 3 + 2] = Math.sin(theta) * r;
   }
+  return out;
 }
 
 const VERT = /* glsl */ `
-  uniform float uTime;
-  uniform float uSize;
-  uniform vec3  uCursor;      // world-space point the pointer projects to
-  uniform float uCursorGain;  // 0 when the pointer is away, 1 when engaged
-  uniform float uReveal;      // 0..1 chapter presence
+  uniform float uReveal;
+  uniform vec3  uDrift;     // the ball's own velocity: a bead riding the
+                            // whole ball's sway is not stirred by it
 
-  attribute float aShell;     // 0,1,2
-  attribute float aRadius;    // shell radius, object space
+  attribute vec3  aPos;      // the bead's simulated place, unit-sphere space
+  attribute vec3  aVel;      // and its velocity
   attribute float aSeed;
 
-  varying float vGlow;
+  varying vec3  vNormalV;
+  varying vec3  vViewPos;
   varying float vDepth;
-
-  // Rotate about Y. Each shell turns at its own rate and direction so the
-  // lattices slide across each other and the volume reads as deep.
-  vec3 spinY(vec3 p, float a) {
-    float s = sin(a), c = cos(a);
-    return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
-  }
+  varying float vStir;
 
   void main() {
-    // Alternating direction, slower on the outside: the outer shell is the
-    // silhouette and should feel almost still, while the core turns visibly.
-    float dir = mod(aShell, 2.0) < 0.5 ? 1.0 : -1.0;
-    float rate = 0.045 - aShell * 0.011;
-    vec3 dirVec = spinY(position, uTime * rate * dir);
-
-    // Breathing. A few millimetres, phase-offset per point, so the surface is
-    // never perfectly still without anything appearing to move.
-    float breathe = 1.0 + 0.014 * sin(uTime * 0.7 + aSeed * 6.2831);
-
-    vec3 local = dirVec * aRadius * breathe;
-
-    // HOVER RESPONSE. Distance from this point to the cursor's projection,
-    // measured on the object-space sphere. Points inside the influence radius
-    // are pushed out along their own normal and brightened.
-    float d = distance(normalize(local) * aRadius, uCursor);
-    // Inverted smoothstep, so proximity is 1 at the cursor and 0 at the edge
-    // of influence. 0.62 of a unit radius is roughly a fifth of the sphere.
-    float proximity = 1.0 - smoothstep(0.0, 0.62, d);
-    float pull = proximity * proximity * uCursorGain;
-
-    local += normalize(local) * pull * 0.19;
+    vec3 own = aVel - uDrift;
+    float speed = length(own);
+    // The bead's long axis: outward, bent into its own motion, and drawn out
+    // while it moves, so a disturbed patch of the ball reads as a current.
+    vec3 axis = normalize(normalize(aPos) + own * 0.22);
+    vec3 side = normalize(cross(axis, abs(axis.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+    vec3 fwd = cross(side, axis);
+    float grow = smoothstep(0.0, 1.0, uReveal);
+    float len = ${BEAD_L.toFixed(3)} * (0.75 + 0.5 * aSeed) * (1.0 + min(speed * 0.9, 1.6)) * grow;
+    float wid = ${BEAD_W.toFixed(3)} * (0.8 + 0.4 * aSeed) * grow;
+    vec3 local = aPos + side * position.x * wid + axis * position.y * len + fwd * position.z * wid;
+    vec3 nrm = normalize(side * normal.x * len + axis * normal.y * wid + fwd * normal.z * len);
 
     vec4 mv = modelViewMatrix * vec4(local, 1.0);
     gl_Position = projectionMatrix * mv;
-
-    // Size in METRES, attenuated by distance — so the constellation obeys
-    // perspective. A constant gl_PointSize is the single clearest tell of a
-    // particle demo: the far side of the sphere renders the same size as the
-    // near side and the volume collapses flat.
-    float dist = -mv.z;
-    gl_PointSize = uSize * (1.0 + pull * 1.35) * (300.0 / max(1.0, dist));
-
-    // Depth cue for the fragment stage: 0 at the back of the sphere, 1 at the
-    // front. This is what puts the far shell behind the near one without any
-    // depth testing between points.
-    vDepth = clamp(0.5 + local.z * 0.5, 0.0, 1.0);
-    vGlow = pull;
+    vViewPos = mv.xyz;
+    vNormalV = normalize(normalMatrix * nrm);
+    vec3 cView = (modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    vDepth = clamp(0.5 + (mv.z - cView.z) / (2.0 * length(modelMatrix[0].xyz)), 0.0, 1.0);
+    vStir = min(1.0, speed * 0.8);
   }
 `;
 
 const FRAG = /* glsl */ `
-  precision highp float;
-
-  uniform vec3  uCore;
-  uniform vec3  uWarm;
+  uniform vec3  uHot;
+  uniform vec3  uAmber;
   uniform float uReveal;
+  uniform float uPower;
 
-  varying float vGlow;
+  varying vec3  vNormalV;
+  varying vec3  vViewPos;
   varying float vDepth;
+  varying float vStir;
 
   void main() {
-    // Round, soft-edged point. gl_PointCoord is 0..1 across the sprite.
-    vec2 uv = gl_PointCoord - 0.5;
-    float r = length(uv) * 2.0;
-    if (r > 1.0) discard;
+    vec3 v = normalize(-vViewPos);
+    float facing = clamp(abs(dot(normalize(vNormalV), v)), 0.0, 1.0);
+    // White-hot where the bead faces the lens, amber at its rim.
+    vec3 col = mix(uAmber, uHot, pow(facing, 1.6));
+    // The far side of the ball glows through the near side, dimmer.
+    float depth = 0.28 + 0.72 * vDepth;
+    float power = uPower * depth * (1.0 + vStir * 0.9) * uReveal;
+    // Depth in metres into the alpha, for the lens and the occlusion
+    // (LensFocus.installFocusDepth; never 1.0, which means "far").
+    gl_FragColor = vec4(col * power, max(-vViewPos.z, 1.05));
+  }
+`;
 
-    // Two-part falloff: a tight core and a wide halo. One smoothstep gives a
-    // fuzzy dot; this gives something with a filament in the middle, which is
-    // what reads as a light rather than as a blurred circle.
-    float core = 1.0 - smoothstep(0.0, 0.34, r);
-    float halo = (1.0 - smoothstep(0.0, 1.0, r)) * 0.42;
+const AURA_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    // A billboard: the quad's corners laid out in view space around the centre.
+    vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    float s = length(modelMatrix[0].xyz);
+    mv.xy += position.xy * s;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
 
-    // Warm champagne at the core, cooling very slightly at the rim. Restrained
-    // on purpose: saturated hues here are what make this kind of object read as
-    // a screensaver.
-    vec3 tint = mix(uWarm, uCore, core);
-    tint = mix(tint, uCore, vGlow * 0.7);
-
-    // Depth: the back of the sphere is dimmer and cooler. 0.34 floor so the far
-    // side is present rather than absent — a hollow front-facing shell reads as
-    // a dome, not a ball.
-    float depth = 0.34 + 0.66 * vDepth;
-
-    float a = (core + halo) * depth * uReveal * (0.55 + 0.9 * vGlow);
-    gl_FragColor = vec4(tint * (0.85 + vGlow * 1.4), a);
+const AURA_FRAG = /* glsl */ `
+  uniform vec3  uAmber;
+  uniform float uReveal;
+  varying vec2 vUv;
+  void main() {
+    float r = length(vUv - 0.5) * 2.0;
+    float halo = exp(-r * r * 3.2) * 0.55 + exp(-r * 7.0) * 0.35;
+    gl_FragColor = vec4(uAmber * halo * 0.32 * uReveal, 0.0);
   }
 `;
 
 export function Constellation({
-  /** World position of the sphere's centre. */
+  /** World position of the ball's centre. */
   position,
-  /** World radius. The shells are authored in unit space and scaled by this. */
+  /** World radius. */
   radius = 5.2,
-  /** 0..1 — how present this chapter is. Fades the whole object rather than
-   *  unmounting it, so the geometry is uploaded once and the arrival is a
-   *  dissolve rather than a pop. */
+  /** 0..1 — how present this chapter is. The beads grow in and the glow comes
+   *  up with it, so the arrival is a bloom rather than a pop. */
   reveal,
-  /** Halved on low tier: this is atmosphere with a hover response, and a phone
-   *  should get a thinner constellation rather than none. */
+  /** Thinner on the low tier. */
   density = 1,
 }: {
   position: [number, number, number];
@@ -189,54 +173,52 @@ export function Constellation({
 }) {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
-  const points = useRef<THREE.Points>(null);
+  const group = useRef<THREE.Group>(null);
+  const beads = useRef<THREE.InstancedMesh>(null);
+
+  const count = Math.max(200, Math.round(BEADS * density));
 
   const geometry = useMemo(() => {
-    const counts = SHELLS.map((s) => Math.max(24, Math.round(s.count * density)));
-    const total = counts.reduce((a, b) => a + b, 0);
-
-    const pos = new Float32Array(total * 3);
-    const shell = new Float32Array(total);
-    const rad = new Float32Array(total);
-    const seed = new Float32Array(total);
-
-    let o = 0;
-    for (let s = 0; s < SHELLS.length; s += 1) {
-      fibonacciSphere(counts[s], pos, o);
-      for (let i = 0; i < counts[s]; i += 1) {
-        shell[o + i] = s;
-        // A little jitter on the radius so the shells are not three perfect
-        // soap bubbles. Deterministic per index — no Math.random, so the same
-        // constellation is built on the server-less client every time and a
-        // reload does not reshuffle it.
-        const j = Math.sin((o + i) * 12.9898) * 43758.5453;
-        seed[o + i] = j - Math.floor(j);
-        rad[o + i] = SHELLS[s].radius * (0.97 + seed[o + i] * 0.06);
-      }
-      o += counts[s];
+    // A low sphere: at a bead's size on screen, 80 triangles are a sphere.
+    const g = new THREE.IcosahedronGeometry(1, 1);
+    const dirs = fibonacciSphere(count);
+    const seed = new Float32Array(count);
+    for (let i = 0; i < count; i += 1) {
+      const j = Math.sin(i * 12.9898) * 43758.5453;
+      seed[i] = j - Math.floor(j);
+      // A little jitter off the lattice, so the ball is not a perfect grid.
+      const k = Math.sin(i * 78.233) * 43758.5453;
+      const jit = (k - Math.floor(k) - 0.5) * 0.018;
+      dirs[i * 3] += jit;
+      dirs[i * 3 + 2] -= jit;
+      const n = Math.hypot(dirs[i * 3], dirs[i * 3 + 1], dirs[i * 3 + 2]);
+      dirs[i * 3] /= n;
+      dirs[i * 3 + 1] /= n;
+      dirs[i * 3 + 2] /= n;
     }
-
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('aShell', new THREE.BufferAttribute(shell, 1));
-    g.setAttribute('aRadius', new THREE.BufferAttribute(rad, 1));
-    g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
-    // The lattice is a unit sphere and the shader only ever pushes points
-    // outward by 0.19, so the bounds are known and never need recomputing from
-    // a moving vertex buffer.
-    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1.3);
+    const sim = createBallSim(dirs);
+    // The simulation's own arrays ARE the attributes: no copy per frame.
+    const aPos = new THREE.InstancedBufferAttribute(sim.pos, 3);
+    const aVel = new THREE.InstancedBufferAttribute(sim.vel, 3);
+    aPos.setUsage(THREE.DynamicDrawUsage);
+    aVel.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('aPos', aPos);
+    g.setAttribute('aVel', aVel);
+    g.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seed, 1));
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2.0);
+    g.userData.sim = sim;
     return g;
-  }, [density]);
+  }, [count]);
 
   const uniforms = useMemo(
     () => ({
-      uTime: { value: 0 },
-      uSize: { value: 0.0 },
-      uCursor: { value: new THREE.Vector3(0, 0, 0) },
-      uCursorGain: { value: 0 },
       uReveal: { value: 0 },
-      uCore: { value: new THREE.Color('#FFE9C8') },
-      uWarm: { value: new THREE.Color('#C98F4E') },
+      uDrift: { value: new THREE.Vector3() },
+      uHot: { value: new THREE.Color('#FFDDA6') },
+      uAmber: { value: new THREE.Color('#C87A30') },
+      // Over the bloom threshold (PostFX BLOOM, 0.82 scene-linear) at the
+      // front of the ball, so it spills light; under it at the back.
+      uPower: { value: 1.35 },
     }),
     [],
   );
@@ -247,48 +229,60 @@ export function Constellation({
         uniforms,
         vertexShader: VERT,
         fragmentShader: FRAG,
-        transparent: true,
-        // Additive, but the alpha above is already depth- and reveal-weighted,
-        // so the sum stays inside the headroom ACES has left. Straight additive
-        // at full alpha is what turns this kind of object into a white ball.
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
+        depthWrite: true,
         depthTest: true,
       }),
     [uniforms],
   );
 
+  const aura = useMemo(() => {
+    const m = new THREE.ShaderMaterial({
+      uniforms: { uAmber: uniforms.uAmber, uReveal: uniforms.uReveal },
+      vertexShader: AURA_VERT,
+      fragmentShader: AURA_FRAG,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      // Additive in colour, and the alpha — the scene's depth — left alone.
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneFactor,
+      blendEquationAlpha: THREE.AddEquation,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
+    });
+    return m;
+  }, [uniforms]);
+  const auraGeometry = useMemo(() => new THREE.PlaneGeometry(2, 2), []);
+
   useEffect(
     () => () => {
       geometry.dispose();
       material.dispose();
+      aura.dispose();
+      auraGeometry.dispose();
     },
-    [geometry, material],
+    [geometry, material, aura, auraGeometry],
   );
 
-  // ── Pointer projection ───────────────────────────────────────────────────
+  // ── The pointer on the ball ──────────────────────────────────────────────
   //
-  // The cursor is not a 3D object, so "the point of the sphere nearest the
-  // pointer" is found by intersecting the pointer ray with the sphere. When the
-  // ray misses — which is most of the time, since the sphere occupies a corner
-  // of the frame — the nearest point ON the ray to the centre is used instead
-  // and the gain falls off with how badly it missed. That keeps the response
-  // continuous: the surface starts reacting as the pointer approaches rather
-  // than snapping on at the silhouette edge.
+  // The pointer ray is intersected with the ball; where it misses, the point
+  // of the ray nearest the centre stands in and the response tapers with the
+  // miss, so the surface starts to stir as the hand approaches rather than
+  // switching on at the silhouette.
   const ndc = useRef(new THREE.Vector2(0, 0));
-  const active = useRef(false);
+  const engaged = useRef(false);
   useEffect(() => {
     const el = gl.domElement;
     const onMove = (e: PointerEvent) => {
       const r = el.getBoundingClientRect();
-      ndc.current.set(
-        ((e.clientX - r.left) / r.width) * 2 - 1,
-        -(((e.clientY - r.top) / r.height) * 2 - 1),
-      );
-      active.current = true;
+      ndc.current.set(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1));
+      engaged.current = true;
     };
     const onLeave = () => {
-      active.current = false;
+      engaged.current = false;
     };
     if (window.matchMedia('(pointer: fine)').matches) {
       window.addEventListener('pointermove', onMove, { passive: true });
@@ -303,66 +297,80 @@ export function Constellation({
   const ray = useRef(new THREE.Raycaster());
   const centre = useRef(new THREE.Vector3());
   const nearest = useRef(new THREE.Vector3());
-  const local = useRef(new THREE.Vector3());
+  const onBall = useRef(new THREE.Vector3(0, 0, 1));
+  const last = useRef(new THREE.Vector3(0, 0, 1));
+  const handVel = useRef(new THREE.Vector3());
+  const inverse = useRef(new THREE.Quaternion());
+  const toCam = useRef(new THREE.Vector3());
+  const moved = useRef(new THREE.Vector3());
+  const pointer = useRef<BallPointer>({ gain: 0, at: [0, 0, 1], vel: [0, 0, 0] });
+  const wasOn = useRef(false);
 
   useFrame((_, delta) => {
-    const obj = points.current;
-    if (!obj) return;
+    const g = group.current;
+    if (!g) return;
+    const dt = Math.min(0.05, Math.max(1e-4, delta));
+    uniforms.uReveal.value += (reveal.current - uniforms.uReveal.value) * Math.min(1, dt * 3.5);
 
-    const r = reveal.current;
-    uniforms.uReveal.value += (r - uniforms.uReveal.value) * Math.min(1, delta * 3.5);
-    uniforms.uTime.value += delta;
-
-    // Below the visibility floor there is nothing to compute — skip the
-    // raycast entirely rather than projecting a pointer onto an invisible
-    // object for the 60% of the page this chapter is not on screen.
-    obj.visible = uniforms.uReveal.value > 0.004;
-    if (!obj.visible) {
-      uniforms.uCursorGain.value = 0;
+    g.visible = uniforms.uReveal.value > 0.004;
+    if (!g.visible) {
+      pointer.current.gain = 0;
+      wasOn.current = false;
       return;
     }
-
-    // Point size in metres of world, converted to the pixels the shader wants.
-    // Scaled by the object's own scale so a change of radius does not silently
-    // change the grain of the constellation.
-    uniforms.uSize.value = 0.9 * (radius / 6.2);
+    // The ball turns, slowly, as a whole.
+    g.rotation.y += dt * 0.045;
 
     let gain = 0;
-    if (active.current) {
+    if (engaged.current) {
       ray.current.setFromCamera(ndc.current, camera);
-      obj.getWorldPosition(centre.current);
-      // Closest approach of the pointer ray to the sphere centre.
+      g.getWorldPosition(centre.current);
       ray.current.ray.closestPointToPoint(centre.current, nearest.current);
       const miss = nearest.current.distanceTo(centre.current);
-      // Full response inside the sphere, tapering to nothing at 1.8 radii — so
-      // the constellation reacts as the pointer nears it, not only once it is
-      // over it.
-      gain = 1 - THREE.MathUtils.smoothstep(miss, radius * 0.55, radius * 1.8);
-
-      // Project the closest point back onto the unit sphere in the object's own
-      // space, which is where the vertex shader compares it.
-      local.current.copy(nearest.current).sub(centre.current).divideScalar(radius);
-      const len = local.current.length();
-      if (len > 1e-4) local.current.multiplyScalar(Math.min(1, 1 / len));
-      uniforms.uCursor.value.copy(local.current);
+      gain = 1 - THREE.MathUtils.smoothstep(miss, radius * 0.7, radius * 1.8);
+      // Onto the ball, in its own (turning) frame, on the camera's side.
+      onBall.current.copy(nearest.current).sub(centre.current).divideScalar(radius);
+      toCam.current.copy(camera.position).sub(centre.current).normalize();
+      const flat = onBall.current.length();
+      onBall.current.addScaledVector(toCam.current, Math.sqrt(Math.max(0, 1 - Math.min(1, flat * flat))));
+      if (onBall.current.lengthSq() > 1e-8) onBall.current.normalize();
+      g.getWorldQuaternion(inverse.current).invert();
+      onBall.current.applyQuaternion(inverse.current);
     }
-    uniforms.uCursorGain.value +=
-      (gain - uniforms.uCursorGain.value) * Math.min(1, delta * 7);
+    // The hand's velocity across the ball, smoothed; zero on the first frame
+    // of an approach so arriving is not read as a flick.
+    const m = moved.current.copy(onBall.current).sub(last.current).divideScalar(dt);
+    last.current.copy(onBall.current);
+    if (!wasOn.current || gain < 0.01) m.set(0, 0, 0);
+    wasOn.current = gain >= 0.01;
+    if (m.length() > 4) m.setLength(4);
+    handVel.current.lerp(m, Math.min(1, dt * 9));
+    const pt = pointer.current;
+    pt.gain += (gain - pt.gain) * Math.min(1, dt * 5);
+    pt.at[0] = onBall.current.x;
+    pt.at[1] = onBall.current.y;
+    pt.at[2] = onBall.current.z;
+    pt.vel[0] = handVel.current.x;
+    pt.vel[1] = handVel.current.y;
+    pt.vel[2] = handVel.current.z;
+
+    const sim = geometry.userData.sim;
+    stepBall(sim, dt, pt);
+    uniforms.uDrift.value.set(sim.centre[3], sim.centre[4], sim.centre[5]);
+    (geometry.getAttribute('aPos') as THREE.BufferAttribute).needsUpdate = true;
+    (geometry.getAttribute('aVel') as THREE.BufferAttribute).needsUpdate = true;
   });
 
   return (
-    <points
-      ref={points}
-      // Named so the capture probe can find it, hide it and photograph the same
-      // held frame twice. An additive object over a bright sky can be at full
-      // reveal and still put almost nothing on screen; a differenced pair is the
-      // only way to tell that apart from "still fading in".
-      name="CONSTELLATION"
-      position={position}
-      scale={radius}
-      geometry={geometry}
-      material={material}
-      frustumCulled={false}
-    />
+    // Named so the capture probe can find it, hide it and photograph the same
+    // held frame twice.
+    <group ref={group} name="CONSTELLATION" position={position} scale={radius}>
+      <instancedMesh
+        ref={beads}
+        args={[geometry, material, count]}
+        frustumCulled={false}
+      />
+      <mesh geometry={auraGeometry} material={aura} scale={2.1} frustumCulled={false} renderOrder={2} />
+    </group>
   );
 }

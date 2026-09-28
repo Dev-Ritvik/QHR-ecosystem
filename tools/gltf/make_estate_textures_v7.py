@@ -162,9 +162,14 @@ tmid = periodic_noise(N, 1.4, 8, 80)
 tlf = periodic_noise(N, 2.2, 1, 6)
 # Warmer and a shade lighter as well: grass under a low sun is olive-gold, and
 # the cool 92,124,62 was reading as a snooker table under the graded key.
-colour_map((104, 132, 64), 0.1 * stripe + 0.07 * tmid + 0.09 * turf + 0.075 * tlf, "v7_lawn_basecolor.png")
-report["lawn_tilt95"] = normal_map(1.2 * turf + 0.5 * stripe, 0.35, "v7_lawn_normal.png")
-grey_map(0.9 + 0.05 * turf - 0.03 * stripe, "v7_lawn_roughness.png")
+# NO STRIPES IN THE TEXTURE any more. Baked into a 6 m tile, the bands could
+# not know how far away they were: at the film's distances they aliased into a
+# checkerboard of 12-18 m squares across the whole lawn, the plainest "game"
+# tell in the hero. The mowing bands are drawn at runtime (ExteriorModel,
+# the lawn shader), in world space, fading with distance; this map is turf.
+colour_map((104, 132, 64), 0.07 * tmid + 0.09 * turf + 0.075 * tlf, "v7_lawn_basecolor.png")
+report["lawn_tilt95"] = normal_map(1.2 * turf, 0.35, "v7_lawn_normal.png")
+grey_map(0.9 + 0.05 * turf, "v7_lawn_roughness.png")
 
 # --- PALM FROND. A dense pinnate leaf on a transparent ground, rachis along u.
 # Real pinnae are narrow, but at every distance this film sees a palm from they

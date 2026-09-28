@@ -20,9 +20,11 @@ describe('the finishes', () => {
   });
 
   it('keeps the walnut a wood and not a black slab', () => {
+    // The floor is the veneer sheet's own mean (hallWalnut.ts WALNUT_MEAN,
+    // linear luminance 0.0697): real walnut is that dark, and black is 0.
     for (const name of ['MAT_Wood_Dark', 'MAT_Wood_Dark_LM']) {
       const l = luminance(HALL_FINISHES[name].color as string);
-      expect(l).toBeGreaterThan(0.07);
+      expect(l).toBeGreaterThan(0.06);
       expect(l).toBeLessThan(0.25);
     }
   });

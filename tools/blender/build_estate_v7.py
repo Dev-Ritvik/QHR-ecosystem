@@ -186,12 +186,30 @@ def build_materials():
     M["soil"] = principled("MAT_Soil", base=(0.16, 0.1, 0.065), rough=0.95)
     M["trunk"] = principled("MAT_Palm_Trunk", base=(0.34, 0.31, 0.27), rough=0.85)
     M["shaft"] = principled("MAT_Palm_Crownshaft", base=(0.19, 0.27, 0.12), rough=0.6)
-    M["frond"] = principled("MAT_Palm_Frond", tex={"base": f"{TEX}/v7_palm_frond.png"}, rough=0.7, double=True, clip=True)
+    # Foliage cards rendered from modelled leaf clusters (render_foliage_v7.py):
+    # albedo with the occlusion between leaves, and the cluster's normals.
+    M["frond"] = principled("MAT_Palm_Frond", tex={"base": f"{TEX}/v7_palm_frond.png", "normal": f"{TEX}/v7_palm_frond_normal.png"},
+                            rough=0.7, double=True, clip=True, normal_strength=0.8)
     for key, stem in (("rain", "v7_canopy_rain"), ("mango", "v7_canopy_mango"), ("bougainvillea", "v7_bougainvillea"),
                       ("frangipani", "v7_frangipani")):
-        M["leaf_" + key] = principled(f"MAT_Leaves_{key.title()}", tex={"base": f"{TEX}/{stem}.png"}, rough=0.75,
-                                      double=True, clip=True)
+        M["leaf_" + key] = principled(f"MAT_Leaves_{key.title()}", tex={"base": f"{TEX}/{stem}.png", "normal": f"{TEX}/{stem}_normal.png"},
+                                      rough=0.75, double=True, clip=True, normal_strength=0.8)
     M["bark"] = principled("MAT_Bark", base=(0.2, 0.15, 0.11), rough=0.9)
+    # The shade trees made from Poly Haven's scans (ph_trees_v7.py): the leaf
+    # card cut from each scan's own crown, and the scan's bark.
+    for key in PH_TREES:
+        stem = f"{TEX}/v7_ph_{key}"
+        if not os.path.exists(f"{stem}.png"):
+            continue
+        # The procedural card material of the same name steps aside, or
+        # Blender would name this one "MAT_Leaves_Rain.001".
+        old = bpy.data.materials.get(f"MAT_Leaves_{key.title()}")
+        if old is not None:
+            old.name = f"MAT_Leaves_{key.title()}_Procedural"
+        M["leaf_" + key] = principled(f"MAT_Leaves_{key.title()}", tex={"base": f"{stem}.png", "normal": f"{stem}_normal.png"},
+                                      rough=0.75, double=True, clip=True, normal_strength=0.8)
+        M["bark_" + key] = principled(f"MAT_Bark_{key.title()}", tex={"base": f"{stem}_bark.jpg", "normal": f"{stem}_bark_normal.jpg",
+                                                                       "rough": f"{stem}_bark_rough.png"}, rough=0.9, normal_strength=1.0)
     # ---- the luxury programme -------------------------------------------
     # Polished stone reads as expense before any detail does: it is the one
     # surface in the set that carries a reflection, and a reflection is what
@@ -848,6 +866,20 @@ def build_portico(M, col, gold_bm):
     add_box(bm, -FX - 0.05, FX + 0.05, -FD + 0.1, PORTICO_FRONT, 4.4, 5.22)
     path = [(-FX - 0.05, PORTICO_FRONT), (FX + 0.05, PORTICO_FRONT), (FX + 0.05, -FD + 0.3), (-FX - 0.05, -FD + 0.3)]
     add_sweep(bm, path, [(0.0, 4.72), (0.03, 4.72), (0.03, 4.74), (0.0, 4.76)])
+    # THE ARCHITRAVE IN TWO FASCIAE, AND A DENTIL COURSE (the third review:
+    # "columns of that diameter exist to bear massive weight; here they ...
+    # [hold] up a paper-thin roof"). The entablature is 1.2 m over 4.4 m of
+    # column, which is classical; what it lacked was the modelling that makes a
+    # beam read as a beam. The architrave steps out twice as it rises, and a
+    # row of dentils under the cornice throws a line of shadow blocks: the
+    # same depth, read as stone laid in courses rather than a painted band.
+    add_sweep(bm, path, [(0.0, 4.4), (0.025, 4.4), (0.025, 4.55), (0.0, 4.55)])
+    add_sweep(bm, path, [(0.0, 4.55), (0.05, 4.55), (0.05, 4.7), (0.0, 4.7)])
+    for k in range(int((2 * FX + 0.1) / 0.24)):
+        x = -FX - 0.05 + 0.12 + 0.24 * k
+        if x > FX - 0.07:
+            break
+        add_box(bm, x - 0.07, x + 0.07, PORTICO_FRONT - 0.1, PORTICO_FRONT + 0.001, 5.1, 5.22)
     add_sweep(bm, path, [(0.0, 5.22), (0.1, 5.22), (0.16, 5.28), (0.5, 5.3), (0.5, 5.47), (0.55, 5.51), (0.55, 5.55),
                          (0.45, 5.6), (-0.3, 5.6)])
     # Plain frieze panels either side of the lions, each with a gilt rosette.
@@ -1070,13 +1102,47 @@ AVENUE_X = 7.6
 WALL_X, WALL_FRONT, WALL_BACK = 72.0, -214.0, 84.0
 
 
+def _smooth(t):
+    t = max(0.0, min(1.0, t))
+    return t * t * (3 - 2 * t)
+
+
+def park_swell(x, y):
+    """A few gentle swells in the park (the second client review: "a massive,
+    completely flat green plane ... without any topographical dips"). Sums of
+    long, incommensurate waves — 20 to 50 m across, a metre at most — so the
+    ground rolls without ever repeating or reading as a pattern."""
+    return (0.5 * math.sin(x / 23.0 + 0.7) * math.cos(y / 31.0 - 0.4)
+            + 0.32 * math.sin((x + y) / 47.0 + 1.3)
+            + 0.22 * math.cos((x - 2.0 * y) / 19.0 + 2.1))
+
+
+def park_mask(x, y):
+    """1 in the open park, 0 on anything formal or built. Level where it must
+    be: the house, its gardens, the forecourt, the pool terrace and the canal
+    (|x| < 40, -60 < y < 70), the avenue's corridor to the gate, and a margin
+    inside the compound wall so the wall stands on level ground."""
+    dx = max(0.0, abs(x) - 40.0)
+    dy = max(0.0, -60.0 - y, y - 70.0)
+    formal = math.hypot(dx, dy)
+    if y < -60.0:
+        formal = min(formal, max(0.0, abs(x) - 14.0))
+    to_wall = min(WALL_X - abs(x), y - WALL_FRONT, WALL_BACK - y)
+    if to_wall <= 0:
+        return 0.0
+    # And level under the helipad (a deck is laid flat), with room round it.
+    pad = math.hypot(x - HELIPAD[0], y - HELIPAD[1]) - HELIPAD[2]
+    return _smooth(formal / 18.0) * _smooth((to_wall - 4.0) / 14.0) * _smooth((pad - 3.0) / 12.0)
+
+
 def ground_height(x, y):
-    """Flat inside the compound; a planted berm rises outside it so the horizon
-    is trees, not a terrain edge."""
+    """Level in the formal core, gently rolling in the park, and a planted berm
+    rising outside the compound so the horizon is trees, not a terrain edge."""
     ox = max(0.0, abs(x) - (WALL_X + 6))
     oy = max(0.0, (y - WALL_BACK - 6), (WALL_FRONT - 6) - y)
     o = math.hypot(ox, oy)
-    return 2.6 * (1 - math.exp(-(o / 22.0) ** 2))
+    berm = 2.6 * (1 - math.exp(-(o / 22.0) ** 2))
+    return berm + 0.9 * park_swell(x, y) * park_mask(x, y)
 
 
 def build_ground(M, col):
@@ -1090,9 +1156,19 @@ def build_ground(M, col):
             y = -S - 60 + 2 * S * j / N
             row.append(bm.verts.new((x, y, ground_height(x, y) - 0.02)))
         verts.append(row)
+    # THE POOL IS CUT INTO THE LAWN, NOT LAID ON IT. The grid used to run
+    # straight under the pool terrace, so the lawn sat 20 mm below the pool's
+    # water line and 1.5 m above its floor: through water at 45% alpha the pool
+    # showed grass, and the tiled shell was never seen at all. Cells lying wholly
+    # inside the terrace footprint are left out; the slab covers every one of
+    # them except the pool opening, which is exactly the hole that was missing.
+    T = TERRACE
     for j in range(N):
         for i in range(N):
-            face(bm, [verts[j][i], verts[j][i + 1], verts[j + 1][i + 1], verts[j + 1][i]], 0)
+            quad = [verts[j][i], verts[j][i + 1], verts[j + 1][i + 1], verts[j + 1][i]]
+            if all(T["x0"] <= v.co.x <= T["x1"] and T["y0"] <= v.co.y <= T["y1"] for v in quad):
+                continue
+            face(bm, quad, 0)
     finish("ground_plane", bm, [M["lawn"]], col, smooth_angle=60)
 
 
@@ -1115,6 +1191,28 @@ def build_hardscape(M, col):
     add_box(pav, -4.4, 4.4, FOUNTAIN_Y - r1 + 0.8, WALL_FRONT, 0.0, 0.013)
     add_box(pav, -17.4, 17.4, -12.2, 12.2, 0.0, 0.011)
     add_box(pav, -3.8, 3.8, 11.4, 17.6, 0.0, 0.013)
+    # KERBS WHERE THE PAVING MEETS THE LAWN. Only the carriage ring had them;
+    # the straight walks met the grass along a razor line with nothing between
+    # (the review: "razor-sharp, unnatural edges that lack physical curbs").
+    # A dressed stone kerb, 16 cm wide and 10 cm proud, on every lawn-facing
+    # edge, stopping where one walk runs into another or into the ring's kerb.
+    def kerb_run(x0, x1, y0, y1):
+        add_box(kerb, x0, x1, y0, y1, 0.0, 0.1)
+    ring_at = lambda x: math.sqrt(max(0.0, r1 * r1 - x * x))  # noqa: E731
+    for s in (-1, 1):
+        # the avenue, from the ring's outer kerb to the gate
+        kerb_run(s * 4.4 - 0.08, s * 4.4 + 0.08, WALL_FRONT, FOUNTAIN_Y - ring_at(4.4))
+        # the apron, from the ring's outer kerb to the podium walk
+        kerb_run(s * 7.0 - 0.08, s * 7.0 + 0.08, FOUNTAIN_Y + ring_at(7.0), -12.2)
+        # the rear walk, from the podium walk to the canal
+        kerb_run(s * 3.8 - 0.08, s * 3.8 + 0.08, 12.2, 17.6)
+    # the podium walk: its east side, and its front and back either side of the
+    # apron and the rear walk. The west side is the pool terrace's.
+    kerb_run(17.32, 17.48, -12.2, 12.2)
+    kerb_run(TERRACE["x1"], -7.0, -12.28, -12.12)
+    kerb_run(7.0, 17.48, -12.28, -12.12)
+    kerb_run(TERRACE["x1"], -3.8, 12.12, 12.28)
+    kerb_run(3.8, 17.48, 12.12, 12.28)
     finish("drive_forecourt", pav, [M["paving"]], col)
     finish("hardscape_kerbs", kerb, [M["trim"]], col)
 
@@ -1266,54 +1364,114 @@ def make_palm(M, name, height, lean, seed):
     return me
 
 
-def card_tree_mesh(M, name, leaf_key, height, canopy_r, canopy_h, cards, seed, trunk_r=0.28, branches=4):
-    """A tree the way real-time foliage is built: a bark trunk and a few limbs,
-    and a canopy of alpha-cut leaf-cluster cards scattered through an
-    ellipsoid. Each card's normals point away from the canopy centre, so the
-    crown shades as one soft volume instead of a hundred flat planes."""
+def card_tree_mesh(M, name, leaf_key, height, canopy_r, canopy_h, cards, seed, trunk_r=0.28, branches=4,
+                   lobes=7, card_m=1.5):
+    """A tree the way real-time foliage is built, and built to read as a tree
+    rather than a lollipop.
+
+    THE OLD CROWN was ~75 cards of 2-3 m scattered through one ellipsoid: a
+    smooth blob with a leaf pattern stamped on it, which is most of what made
+    the estate "look like a PS2 game". This one is grown:
+
+      * LIMBS to LOBES. The crown is 5-9 lobes at the ends of limbs from the
+        trunk top, biased to the upper and outer crown, with sky between them.
+      * SMALL CARDS, MANY. `cards` cards of ~`card_m` metres - the size the
+        foliage atlases were rendered at (render_foliage_v7.py), so the leaves
+        read at their real size - laid on each lobe's outer shell, facing out.
+      * NORMALS for soft volume: each card's normal blends its lobe's outward
+        direction with the crown's, so lobes shade as lobes inside one crown.
+      * OCCLUSION baked into a colour attribute: darker deep in a lobe, darker
+        low in the crown, darker at the crown's core. Exported as COLOR_0 and
+        multiplied into the leaf colour at runtime.
+    """
     rng = random.Random(seed)
     bm = new_bm()
+    occ_layer = bm.loops.layers.color.new("Col")
     trunk_top = height - canopy_h * 0.75
     add_lathe(bm, [(0.0, 0.0), (trunk_r * 1.35, 0.0), (trunk_r, 0.6), (trunk_r * 0.72, trunk_top), (0.0, trunk_top + 0.2)], 8, 0, 0, 0.0, 0)
     C = Vector((0.0, 0.0, height - canopy_h * 0.5))
-    for b in range(branches):
-        a = 2 * math.pi * b / branches + rng.uniform(-0.4, 0.4)
-        tip = C + Vector((math.cos(a) * canopy_r * 0.55, math.sin(a) * canopy_r * 0.55, rng.uniform(-0.2, 0.3) * canopy_h))
-        base = Vector((0, 0, trunk_top - 0.3))
-        axis = tip - base
-        L = axis.length
-        add_lathe_oriented(bm, [(0.0, 0.0), (trunk_r * 0.5, 0.0), (trunk_r * 0.22, L), (0.0, L)], 6, base, axis, (0, 0, 1) if abs(axis.z) < 0.9 * L else (1, 0, 0), 0)
-    card_normals = []
-    uv_pairs = []
-    for i in range(cards):
-        while True:
-            d = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
-            if 0.05 < d.length <= 1.0:
-                break
-        d.normalize()
-        shell = 0.45 + 0.55 * rng.random() ** 0.5
-        P = C + Vector((d.x * canopy_r * shell, d.y * canopy_r * shell, d.z * canopy_h * 0.5 * shell))
-        size = rng.uniform(0.75, 1.1) * max(1.0, canopy_r * 0.42)
-        n = (d + Vector((rng.uniform(-0.6, 0.6), rng.uniform(-0.6, 0.6), rng.uniform(-0.3, 0.6)))).normalized()
-        t1 = n.cross(Vector((0, 0, 1)))
-        if t1.length < 1e-3:
-            t1 = Vector((1, 0, 0))
-        t1.normalize()
-        t2 = n.cross(t1).normalized()
-        rot = rng.uniform(0, 2 * math.pi)
-        a1 = t1 * math.cos(rot) + t2 * math.sin(rot)
-        a2 = n.cross(a1).normalized()
-        corners = [P - a1 * size - a2 * size, P + a1 * size - a2 * size, P + a1 * size + a2 * size, P - a1 * size + a2 * size]
-        vs = [bm.verts.new(c) for c in corners]
-        f = face(bm, vs, 1)
-        if f is None:
+    rx, rz = canopy_r, canopy_h * 0.5
+
+    # Lobe centres on the upper/outer crown, spread by rejection so they do not
+    # merge into one mass again.
+    L = []
+    tries = 0
+    while len(L) < lobes and tries < 400:
+        tries += 1
+        az = rng.uniform(0, 2 * math.pi)
+        el = rng.uniform(-0.25, 1.0)
+        ring = math.sqrt(max(0.0, 1 - el * el))
+        d = Vector((math.cos(az) * ring, math.sin(az) * ring, el))
+        c = C + Vector((d.x * rx * 0.62, d.y * rx * 0.62, d.z * rz * 0.62))
+        r = rng.uniform(0.3, 0.46) * (rx + rz)
+        if any((c - q).length < 0.55 * (r + qr) for q, qr in L):
             continue
-        for c in corners:
-            card_normals.append(((c - C) * 0.8 / max(0.001, (c - C).length) + n * 0.2).normalized())
-        uv_pairs.append(f)
+        L.append((c, r))
+    if not L:
+        L = [(C, 0.5 * (rx + rz))]
+    # A central lobe fills the crown's core so it never shows sky straight through.
+    L.append((C + Vector((0, 0, rz * 0.1)), 0.42 * (rx + rz)))
+
+    base = Vector((0, 0, trunk_top - 0.3))
+    for c, r in L[:-1]:
+        axis = c - base
+        Ln = axis.length * 0.85
+        add_lathe_oriented(bm, [(0.0, 0.0), (trunk_r * 0.55, 0.0), (trunk_r * 0.2, Ln), (0.0, Ln)], 6, base,
+                           axis, (0, 0, 1) if abs(axis.z) < 0.9 * axis.length else (1, 0, 0), 0)
+
+    card_normals = []
+    total_area = sum(r * r for _, r in L)
+    for c, r in L:
+        n_here = max(6, int(round(cards * (r * r) / total_area)))
+        for i in range(n_here):
+            while True:
+                d = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
+                if 0.05 < d.length <= 1.0:
+                    break
+            d.normalize()
+            out = (c - C)
+            if out.length > 1e-3 and d.dot(out.normalized()) < -0.35 and rng.random() < 0.7:
+                d = -d
+            depth = rng.random() ** 1.6
+            P = c + d * r * (1.0 - 0.45 * depth)
+            size = card_m * rng.uniform(0.75, 1.15) * 0.5
+            crown_out = (P - C)
+            crown_out = crown_out.normalized() if crown_out.length > 1e-3 else Vector((0, 0, 1))
+            n = (d * 0.55 + crown_out * 0.45 + Vector((rng.uniform(-0.35, 0.35), rng.uniform(-0.35, 0.35), rng.uniform(-0.2, 0.4)))).normalized()
+            t1 = n.cross(Vector((0, 0, 1)))
+            if t1.length < 1e-3:
+                t1 = Vector((1, 0, 0))
+            t1.normalize()
+            t2 = n.cross(t1).normalized()
+            rot = rng.uniform(0, 2 * math.pi)
+            a1 = t1 * math.cos(rot) + t2 * math.sin(rot)
+            a2 = n.cross(a1).normalized()
+            corners = [P - a1 * size - a2 * size, P + a1 * size - a2 * size, P + a1 * size + a2 * size, P - a1 * size + a2 * size]
+            vs = [bm.verts.new(q) for q in corners]
+            f = face(bm, vs, 1)
+            if f is None:
+                continue
+            core = (P - C)
+            core_n = math.sqrt((core.x / rx) ** 2 + (core.y / rx) ** 2 + (core.z / rz) ** 2)
+            height_t = max(0.0, min(1.0, (P.z - (C.z - rz)) / (2 * rz)))
+            occ = (1.0 - 0.45 * depth) * (0.62 + 0.38 * height_t) * (0.72 + 0.28 * min(1.0, core_n))
+            occ = max(0.28, min(1.0, occ))
+            for q in corners:
+                card_normals.append(((q - c).normalized() * 0.5 + n * 0.5).normalized())
+            for loop in f.loops:
+                loop[occ_layer] = (occ, occ, occ, 1.0)
+    # bark: nearly fully lit (the colour attribute multiplies the bark too)
+    for f in bm.faces:
+        if f.material_index == 0:
+            for loop in f.loops:
+                loop[occ_layer] = (0.85, 0.85, 0.85, 1.0)
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
+    try:
+        me.color_attributes.active_color = me.color_attributes["Col"]
+    except Exception:
+        pass
     uvl = me.uv_layers.new(name="UVMap")
     loop_normals = []
     ci = 0
@@ -1323,7 +1481,6 @@ def card_tree_mesh(M, name, leaf_key, height, canopy_r, canopy_h, cards, seed, t
         if p.material_index == 1:
             for k, li in enumerate(p.loop_indices):
                 uvl.data[li].uv = quad_uv[k % 4]
-    # custom normals: bark keeps its own, cards take the canopy's
     for p in me.polygons:
         for li in p.loop_indices:
             if p.material_index == 1:
@@ -1353,23 +1510,65 @@ def scatter(col, me, name, points):
     return parent
 
 
+PH_TREES = ("rain", "mango", "neem")
+PH_LIB = "C:/dev/Blender/_polyhaven/ph_trees_web.blend"
+
+
+def ph_tree(M, key):
+    """A shade tree made from a Poly Haven scan (tools/blender/ph_trees_v7.py),
+    or None when the library or its textures are not there — the procedural
+    card_tree_mesh stands in, so the build never depends on a download."""
+    name = f"ph_tree_{key}"
+    if "bark_" + key not in M or not os.path.exists(PH_LIB):
+        return None
+    if name not in bpy.data.meshes:
+        with bpy.data.libraries.load(PH_LIB, link=False) as (src, dst):
+            if name not in src.meshes:
+                return None
+            dst.meshes = [name]
+    me = bpy.data.meshes[name]
+    me.materials[0] = M["bark_" + key]
+    me.materials[1] = M["leaf_" + key]
+    return me
+
+
 def build_vegetation(M, col):
     rng = random.Random(11)
-    royal = [make_palm(M, f"palm_royal_{k}", h, 0.0, 30 + k) for k, h in enumerate((13.0, 14.5))]
+    # FOUR royal palms, not two, at different heights and with the slight lean
+    # a real palm grows with (the review: "perfectly spaced, rigid arrays ...
+    # copy-paste cloning"). The avenue stays an allee; its trees stop being
+    # one tree.
+    royal = [make_palm(M, f"palm_royal_{k}", h, lean, 30 + k)
+             for k, (h, lean) in enumerate(((13.0, 0.25), (14.5, -0.3), (12.2, 0.45), (15.4, -0.18)))]
     coco = [make_palm(M, f"palm_coconut_{k}", h, lean, 50 + k) for k, (h, lean) in enumerate(((9.5, 1.4), (11.0, -1.1)))]
-    rain = card_tree_mesh(M, "tree_rain", "rain", 12.0, 7.5, 5.0, 84, 70, trunk_r=0.45, branches=5)
-    mango = card_tree_mesh(M, "tree_mango", "mango", 10.5, 5.0, 6.5, 70, 71, trunk_r=0.36)
-    neem = card_tree_mesh(M, "tree_neem", "rain", 13.5, 5.5, 7.0, 76, 72, trunk_r=0.34)
-    frangi = card_tree_mesh(M, "tree_frangipani", "frangipani", 4.8, 2.7, 2.4, 30, 90, trunk_r=0.16, branches=4)
-    bloom = card_tree_mesh(M, "shrub_bougainvillea", "bougainvillea", 1.7, 1.3, 1.3, 14, 95, trunk_r=0.05, branches=0)
+    # Cards per crown and card size are set so a card's leaves read at their
+    # rendered size (a ~1.1 m cluster) and the crown is covered with sky
+    # between its lobes. The shade trees are the belt: ~180 of them, most far.
+    # The shade trees: from the scans where they have been made (the review:
+    # "repetitive, cloned 3D assets ... flat, 2D cutouts"), from the recipe
+    # otherwise.
+    rain = ph_tree(M, "rain") or card_tree_mesh(M, "tree_rain", "rain", 12.0, 7.5, 5.0, 300, 70, trunk_r=0.45, lobes=8, card_m=1.9)
+    mango = ph_tree(M, "mango") or card_tree_mesh(M, "tree_mango", "mango", 10.5, 5.0, 6.5, 300, 71, trunk_r=0.36, lobes=7, card_m=1.6)
+    neem = ph_tree(M, "neem") or card_tree_mesh(M, "tree_neem", "rain", 13.5, 5.5, 7.0, 280, 72, trunk_r=0.34, lobes=7, card_m=1.7)
+    frangi = card_tree_mesh(M, "tree_frangipani", "frangipani", 4.8, 2.7, 2.4, 90, 90, trunk_r=0.16, lobes=5, card_m=1.1)
+    bloom = card_tree_mesh(M, "shrub_bougainvillea", "bougainvillea", 1.7, 1.3, 1.3, 40, 95, trunk_r=0.05, lobes=3, card_m=0.75)
 
     avenue = []
     for k in range(18):
-        y = FOUNTAIN_Y - 17.0 - 9.5 * k
         for sx in (-1, 1):
-            avenue.append((sx * AVENUE_X, y, rng.uniform(0, 6.28), rng.uniform(0.92, 1.08)))
-    scatter(col, royal[0], "veg_palm_avenue", avenue[0::2])
-    scatter(col, royal[1], "veg_palm_avenue_b", avenue[1::2])
+            # A hand's width off the line and up to 0.7 m along it: planted by
+            # people with a line and a tape, not placed by a script.
+            y = FOUNTAIN_Y - 17.0 - 9.5 * k + rng.uniform(-0.7, 0.7)
+            x = sx * AVENUE_X + rng.uniform(-0.3, 0.3)
+            avenue.append((x, y, rng.uniform(0, 6.28), rng.uniform(0.88, 1.1)))
+    # Each palm a variant chosen at random rather than alternating, so no
+    # rhythm of two repeats down the avenue.
+    buckets = [[] for _ in royal]
+    for a in avenue:
+        buckets[rng.randrange(len(royal))].append(a)
+    for k, b in enumerate(buckets):
+        if b:
+            scatter(col, royal[k], "veg_palm_avenue" + ("" if k == 0 else f"_{'bcd'[k - 1]}"), b)
     # The forecourt ring is planted only on its far half and flanks, so no palm
     # stands between the camera and the front of the house.
     ring = []
@@ -1572,16 +1771,29 @@ def pool_terrace(M, col):
         add_oriented_box(steel, Vector((ax, ay, 0)), Vector((ux, uy, 0)), Vector((px, py, 0)),
                          -0.05, L + 0.05, top + 1.02, top + 1.08, -0.05, 0.05)
     # Sun loungers and parasols on the east deck, facing the water.
-    for y in (-5.2, -2.6, 0.0, 2.6, 5.2):
-        x = -19.3
-        add_box(teak, x - 0.95, x + 0.95, y - 0.34, y + 0.34, top + 0.1, top + 0.16)
-        for sx in (x - 0.9, x + 0.9):
-            for sy in (y - 0.3, y + 0.3):
-                add_box(teak, sx - 0.04, sx + 0.04, sy - 0.04, sy + 0.04, top, top + 0.12)
-        add_box(fabric, x - 0.92, x + 0.5, y - 0.32, y + 0.32, top + 0.16, top + 0.24)
-        # the raised backrest
-        add_prism(fabric, [(0.5, top + 0.16), (0.92, top + 0.16), (0.92, top + 0.62), (0.62, top + 0.62)],
-                  Vector((x, y, 0)), Vector((1, 0, 0)), Vector((0, 1, 0)), -0.32, 0.32)
+    #
+    # AS PEOPLE LEAVE THEM, not as a catalogue sets them. The review: "cloned
+    # in a mathematically perfect straight line, which breaks organic realism".
+    # Five loungers in two pairs and a single, each pair turned a few degrees
+    # toward the other, set a hand's width off the line, and the backrests at
+    # different rakes — one laid flat by someone who was lying in the sun.
+    lrng = random.Random(41)
+    loungers = ((-5.35, -4.0, 0.62), (-2.75, 3.5, 0.5), (0.35, 0.0, 0.62), (2.65, -3.0, 0.3), (5.3, 5.0, 0.62))
+    for y0, yaw_deg, back in loungers:
+        x = -19.3 + lrng.uniform(-0.14, 0.14)
+        y = y0 + lrng.uniform(-0.12, 0.12)
+        yaw = math.radians(yaw_deg + lrng.uniform(-1.5, 1.5))
+        U = Vector((math.cos(yaw), math.sin(yaw), 0.0))
+        V = Vector((-math.sin(yaw), math.cos(yaw), 0.0))
+        O = Vector((x, y, 0.0))
+        add_oriented_box(teak, O, U, V, -0.95, 0.95, top + 0.1, top + 0.16, -0.34, 0.34)
+        for su in (-0.9, 0.9):
+            for sv in (-0.3, 0.3):
+                add_oriented_box(teak, O + U * su + V * sv, U, V, -0.04, 0.04, top, top + 0.12, -0.04, 0.04)
+        add_oriented_box(fabric, O, U, V, -0.92, 0.5, top + 0.16, top + 0.24, -0.32, 0.32)
+        # the backrest, at this lounger's rake
+        add_prism(fabric, [(0.5, top + 0.16), (0.92, top + 0.16), (0.92, top + back), (0.5 + 0.12 * (back - 0.16) / 0.46, top + back)],
+                  O, U, V, -0.32, 0.32)
     for y in (-3.9, 3.9):
         x = -17.9
         add_box(steel, x - 0.045, x + 0.045, y - 0.045, y + 0.045, top, top + 2.4)

@@ -56,19 +56,17 @@ export function ResumeResidence({ className = '' }: { className?: string }) {
     <Link
       href={residenceHref(chapter)}
       className={
-        'tap-target whitespace-nowrap text-[13px] tracking-[0.04em] text-[#E8B98A]/75 ' +
+        'tap-target whitespace-nowrap text-[11px] text-[#E8B98A]/75 ' +
         'transition-colors hover:text-[#E8B98A] ' +
         className
       }
     >
-      {/* The same bracketed micro-navigation the primary nav uses, so this
-          reads as part of the bar rather than as a badge stuck onto it. The
-          brackets and the arrow are aria-hidden: they are typography, and a
-          screen reader should hear the sentence, not the furniture. */}
-      <span aria-hidden className="mr-[0.35em] opacity-45">[</span>
-      <span aria-hidden className="mr-[0.4em]">&larr;</span>
-      <span className="uppercase tracking-[0.14em]">The residence</span>
-      <span aria-hidden className="ml-[0.35em] opacity-45">]</span>
+      {/* Set like the primary nav — small, tracked, no brackets — so it reads
+          as part of the bar rather than as a badge stuck onto it. The arrow is
+          aria-hidden: a screen reader should hear the sentence, not the
+          furniture. */}
+      <span aria-hidden className="mr-[0.5em]">&larr;</span>
+      <span className="uppercase tracking-[0.22em]">The residence</span>
       <span className="sr-only"> — resume at {chapterLabel(chapter)}</span>
     </Link>
   );

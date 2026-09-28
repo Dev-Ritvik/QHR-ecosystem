@@ -10,11 +10,13 @@
 // place is named for. Two pieces, both built here rather than in the hall GLB so
 // the wording can change without a re-export and a re-bake:
 //
-//   the mount   a walnut panel with a gilt fillet, set on the wall behind the
-//               frame, so the portrait hangs on a place of honour instead of on
-//               plaster like the mouldings either side of it
+//   the mount   a walnut panel behind the frame, so the portrait hangs on a
+//               place of honour instead of on plaster. Since the imperial hall
+//               it is architecture, not an add-on: the arched walnut panel and
+//               its architrave are in the GLB (imperial_hall_v7.py), so it is
+//               lit by the bake like the rest of the wall
 //   the plate   polished brass, engraved, beneath the frame and above the
-//               landing, where the camera's climb up the stair arrives
+//               landing, where the camera's climb up the court arrives
 //
 // THE NAME IS NOT INVENTED. The site publishes the founder's title ("Managing
 // Director", on /about) and the company; it does not publish the name. The plate
@@ -22,8 +24,23 @@
 // 2026-09-18, and the fallback is kept: set FOUNDER.name to null and the plate
 // goes back to title and company rather than to a guess.
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { useProbeBinding } from './HallModel';
+import { PROBE_DEFINES } from './hallProbe';
+
+/**
+ * Reflection gains against the hall's own probe (hallProbe.ts). The 6 / 9 / 7
+ * these materials carried were never applied — three r173 swaps a material's
+ * own envMapIntensity for scene.environmentIntensity when it has no envMap of
+ * its own — and against a probe of the room itself, 1 is the honest value.
+ */
+const NAMEPLATE_GAIN: Record<string, number> = { plate: 1.1 };
+
+/** The probe's defines, and the depth write the hall's lens reads: without it
+ *  the lens took the nameplate for background and softened it under a sharp
+ *  portrait. */
+const NAMEPLATE_DEFINES = { ...PROBE_DEFINES, ESTATE_FOCUS: '' };
 
 export const FOUNDER = {
   /** The founder's name as it should be engraved, or null until supplied.
@@ -34,15 +51,16 @@ export const FOUNDER = {
 };
 
 /**
- * Where the pieces sit, from the extended hall (extend_hall_v7.py): the frame
- * spans x -1.21..1.21, y 3.95..7.21, its back on the wall face at z -7.70; the
- * landing is at y 3.45 and the cornice begins at 7.45.
+ * Where the plate sits, from the imperial hall (imperial_hall_v7.py): the frame
+ * spans x -1.51..1.51, y 5.00..9.07, its back on the wall face at z -7.70, on a
+ * walnut panel whose face stands 3 cm proud of it; the landing is at y 4.20.
+ * The plate hangs between the two, a quarter larger with the portrait.
  */
 export const NAMEPLATE = {
   wallZ: -7.7,
-  frameBottom: 3.95,
-  mount: { width: 3.4, bottom: 3.47, top: 7.38, depth: 0.03 },
-  plate: { width: 1.56, height: 0.34, depth: 0.018, gap: 0.08 },
+  panelDepth: 0.03,
+  frameBottom: 5.0,
+  plate: { width: 1.95, height: 0.42, depth: 0.018, gap: 0.09 },
 } as const;
 
 function serifFamily(): string {
@@ -107,7 +125,7 @@ function drawPlate(canvas: HTMLCanvasElement) {
 }
 
 export function PortraitNameplate() {
-  const { mount, plate, wallZ, frameBottom } = NAMEPLATE;
+  const { plate, wallZ, panelDepth, frameBottom } = NAMEPLATE;
 
   const plateTexture = useMemo(() => {
     if (typeof document === 'undefined') return null;
@@ -138,38 +156,24 @@ export function PortraitNameplate() {
 
   useEffect(() => () => plateTexture?.dispose(), [plateTexture]);
 
-  const mountH = mount.top - mount.bottom;
+  const group = useRef<THREE.Group>(null);
+  useProbeBinding(group, (m) => NAMEPLATE_GAIN[m.name] ?? 1);
+
   const plateY = frameBottom - plate.gap - plate.height / 2;
-  const mountZ = wallZ + mount.depth / 2 + 0.002;
-  const plateZ = wallZ + mount.depth + plate.depth / 2 + 0.004;
+  const plateZ = wallZ + panelDepth + plate.depth / 2 + 0.004;
 
   return (
-    <group name="portrait_nameplate">
-      <mesh position={[0, mount.bottom + mountH / 2, mountZ]} name="portrait_mount">
-        <boxGeometry args={[mount.width, mountH, mount.depth]} />
-        <meshStandardMaterial color="#4a2d1a" roughness={0.3} metalness={0} envMapIntensity={6} />
-      </mesh>
-      {/* the gilt fillet round the mount */}
-      {[
-        [0, mount.top - 0.03, mount.width, 0.035],
-        [0, mount.bottom + 0.03, mount.width, 0.035],
-        [-mount.width / 2 + 0.03, mount.bottom + mountH / 2, 0.035, mountH],
-        [mount.width / 2 - 0.03, mount.bottom + mountH / 2, 0.035, mountH],
-      ].map(([x, y, w, h], i) => (
-        <mesh key={i} position={[x, y, mountZ + mount.depth / 2 + 0.006]}>
-          <boxGeometry args={[w, h, 0.012]} />
-          <meshStandardMaterial color="#e2bd72" roughness={0.35} metalness={0.7} envMapIntensity={9} />
-        </mesh>
-      ))}
+    <group name="portrait_nameplate" ref={group}>
       {plateTexture ? (
         <mesh position={[0, plateY, plateZ]} name="portrait_plate">
           <boxGeometry args={[plate.width, plate.height, plate.depth]} />
           <meshStandardMaterial
+            name="plate"
             map={plateTexture}
             color="#ffffff"
             roughness={0.32}
             metalness={0.55}
-            envMapIntensity={7}
+            defines={NAMEPLATE_DEFINES}
           />
         </mesh>
       ) : null}

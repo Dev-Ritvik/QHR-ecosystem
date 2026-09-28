@@ -44,6 +44,9 @@ bpy.ops.export_scene.gltf(
     export_image_format="AUTO",
     export_texcoords=True,
     export_normals=True,
+    # The trees' baked crown occlusion (build_estate_v7.card_tree_mesh) rides
+    # as COLOR_0; nothing else in the estate carries a colour attribute.
+    export_vertex_color="ACTIVE",
     export_materials="EXPORT",
     export_cameras=False,
     export_lights=False,

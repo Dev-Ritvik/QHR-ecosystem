@@ -6,38 +6,43 @@
 // in the asset pipeline can notice when it drifts away from the frame it hangs
 // under.
 //
-// The hall's own numbers below are measured from the extended interior
-// (tools/blender/extend_hall_v7.py; the same figures head interiorPath.ts), so
+// The hall's own numbers below are measured from the imperial interior
+// (tools/blender/imperial_hall_v7.py; the same figures head interiorPath.ts), so
 // if the portrait is ever moved again, this fails on the same edit that moves
 // it rather than in a screenshot three chapters later.
 
 import { describe, expect, it } from 'vitest';
 import { FOUNDER, NAMEPLATE } from './PortraitNameplate';
+import { buildInteriorBeats, IMPERIAL_STAIR } from './interiorPath';
 
 /** Measured from the shipped hall, three-space metres. */
 const HALL = {
   wallFaceZ: -7.7,
   wallOuterZ: -8.0,
-  frame: { halfWidth: 1.207, bottom: 3.95, top: 7.205, faceZ: -7.574 },
-  landingTop: 3.471,
-  corniceBottom: 7.45,
-  /** The back wall's panel mouldings, which the mount must not run into. */
-  mouldingInnerX: 3.4,
+  frame: { halfWidth: 1.509, bottom: 5.0, top: 9.069, faceZ: -7.542 },
+  /** The arched walnut panel the portrait hangs on, and its face. */
+  panel: { halfWidth: 1.85, faceZ: -7.67 },
+  landingTop: IMPERIAL_STAIR.landing,
+  /** The landing balustrade's line across the court, on the axis. */
+  railZ: -(3.1 + IMPERIAL_STAIR.rInner + 0.14),
+  railTop: IMPERIAL_STAIR.landing + IMPERIAL_STAIR.rail,
 };
 
 describe('the portrait nameplate', () => {
-  const { mount, plate, wallZ, frameBottom } = NAMEPLATE;
+  const { plate, wallZ, panelDepth, frameBottom } = NAMEPLATE;
   const plateTop = frameBottom - plate.gap;
   const plateBottom = plateTop - plate.height;
+  const plateZ = wallZ + panelDepth + plate.depth;
 
-  it('hangs on the wall the portrait hangs on', () => {
+  it('hangs on the panel the portrait hangs on', () => {
     expect(wallZ).toBe(HALL.wallFaceZ);
     expect(frameBottom).toBe(HALL.frame.bottom);
-    // In front of the plaster, behind the frame's own face.
-    expect(mount.depth).toBeGreaterThan(0);
-    expect(wallZ + mount.depth + plate.depth).toBeLessThan(HALL.frame.faceZ);
+    // On the walnut panel's face, and behind the frame's own face.
+    expect(wallZ + panelDepth).toBeCloseTo(HALL.panel.faceZ, 3);
+    expect(plateZ).toBeLessThan(HALL.frame.faceZ);
     // And inside the wall's thickness, so nothing pokes out of the building.
     expect(wallZ).toBeGreaterThan(HALL.wallOuterZ);
+    expect(plate.width / 2).toBeLessThan(HALL.panel.halfWidth);
   });
 
   it('reads between the frame and the landing, not behind either', () => {
@@ -45,19 +50,15 @@ describe('the portrait nameplate', () => {
     expect(plateBottom).toBeGreaterThan(HALL.landingTop);
   });
 
-  it('gives the frame a mount that is wider and taller than it, and clear of the room', () => {
-    expect(mount.width / 2).toBeGreaterThan(HALL.frame.halfWidth);
-    expect(mount.width / 2).toBeLessThan(HALL.mouldingInnerX);
-    expect(mount.top).toBeGreaterThan(HALL.frame.top);
-    expect(mount.top).toBeLessThan(HALL.corniceBottom);
-    // It stands ON the landing rather than floating over it or sinking in.
-    expect(Math.abs(mount.bottom - HALL.landingTop)).toBeLessThan(0.05);
-  });
-
-  it('holds the whole plate', () => {
-    expect(plate.width).toBeLessThan(mount.width);
-    expect(plateBottom).toBeGreaterThan(mount.bottom);
-    expect(plateTop).toBeLessThan(mount.top);
+  it('is seen whole over the landing rail from the portrait beat', () => {
+    // The landing's balustrade stands 2 m in front of the plate. From the
+    // portrait beat the sight line to the plate's lowest edge must pass over
+    // the rail, or the rail crosses the engraving.
+    const beat = buildInteriorBeats(3).find((b) => b.id === 'portrait')!;
+    const [, cy, cz] = beat.position;
+    const t = (HALL.railZ - cz) / (plateZ - cz);
+    const yAtRail = cy + (plateBottom - cy) * t;
+    expect(yAtRail).toBeGreaterThan(HALL.railTop + 0.05);
   });
 
   it('engraves only what the site actually publishes', () => {

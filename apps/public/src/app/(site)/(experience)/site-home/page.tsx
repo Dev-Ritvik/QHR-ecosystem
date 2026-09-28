@@ -39,6 +39,9 @@ import { chapters, TRACK_VH, type Chapter } from '@/components/experience/journe
 import { ChapterUrl } from '@/components/experience/ChapterUrl';
 import { ChapterFade } from '@/components/experience/ChapterFade';
 import { EnterLink } from '@/components/experience/EnterLink';
+import { Arrow } from '@/components/site/Arrow';
+import { WordReveal } from '@/components/experience/WordReveal';
+import { AmbientSound } from '@/components/experience/AmbientSound';
 
 // ISR: Background revalidation every hour, unless manually cleared by the webhook (T37)
 export const revalidate = 3600;
@@ -141,6 +144,26 @@ export const metadata: Metadata = {
 // utility class. The film is the one page that needs the world reachable
 // through it, so it says so louder.
 const TRACK_TRANSPARENT = 'pointer-events-none';
+
+/**
+ * The hall's copy sits over a lit ivory room since the old-money pass, so it
+ * carries a soft, wide shadow — a haze of the walnut's own brown, not a hard
+ * drop — that keeps ivory type legible where it crosses plaster.
+ */
+const HALL_COPY = '[text-shadow:0_1px_28px_rgba(16,11,8,0.55),0_0_2px_rgba(16,11,8,0.35)]';
+
+/** 1 -> I, 4 -> IV: station numbers, as a collection numbers its pieces. */
+function roman(n: number): string {
+  const table: [number, string][] = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+  let out = '';
+  for (const [v, r] of table) {
+    while (n >= v) {
+      out += r;
+      n -= v;
+    }
+  }
+  return out;
+}
 const TRACK_ROOT_TRANSPARENT = '!pointer-events-none';
 const PANE_CONTENT_INTERACTIVE = 'pointer-events-none [&>*]:pointer-events-auto';
 
@@ -238,6 +261,10 @@ export default async function SiteHomePage() {
       {/* Dissolves a chapter as it leaves the frame. Renders nothing;
           reads the panes tagged data-chapter-fade below. */}
       <ChapterFade />
+      {/* Headlines rise in a word at a time as their chapter arrives. */}
+      <WordReveal />
+      {/* A sound layer, muted until asked for. */}
+      <AmbientSound />
 
       {/* Hands the published projects to the WebGL tree, which binds them to
           the hologram tables in the hall. Renders nothing itself — the canvas
@@ -299,73 +326,75 @@ export default async function SiteHomePage() {
               pane's `[&>*]` rule would hand pointer events straight back to a
               full-width, full-height wrapper. The transparency is carried down
               to the copy column, which is the only thing here worth clicking. */}
-          <div className="pointer-events-none mx-auto flex h-full max-w-6xl flex-col px-6 pt-[6vh]">
-            <div className="pointer-events-auto w-full md:max-w-[min(31vw,452px)]">
+          {/* THE SCRIM. The copy sits over sky, canopy and a lit lawn — the
+              busiest texture in the frame — and the review measured it
+              bleeding into the picture. A soft fall of shade anchored behind
+              the copy column, dense where the type is and gone before the
+              house, so the render keeps its light and the type gets a ground.
+              `!pointer-events-none`: the pane hands pointer events back to
+              every direct child, and this one must never take a click. */}
+          <div aria-hidden className="hero-scrim !pointer-events-none absolute inset-0" />
+
+          {/* THE GRID. The same twelve columns and gutter as the header
+              (SiteHeader), so the copy's left edge, the logo and the nav all
+              stand on column lines: the copy spans columns 1-5, the nav starts
+              on column 7. */}
+          <div className="site-grid pointer-events-none relative h-full grid-rows-[1fr_auto] pt-[6vh]">
+            <div className="hero-copy pointer-events-auto col-span-12 w-full max-w-[452px] lg:col-span-5">
               {/* Small uppercase metadata. The two districts, because they are
                   the specific factual claim the whole page rests on and they
                   no longer need to be carried by the body copy. */}
-              <p className="t-eyebrow text-[#F2EDE4]/55">
+              <p className="t-eyebrow text-[#F2EDE4]/75">
                 Vizianagaram &middot; Srikakulam
               </p>
 
-              {/* t-display, not an ad-hoc text-4xl/5xl/6xl ladder. The scale is
-                  fluid via clamp(), so it never jumps at a breakpoint.
-
-                  The break before the italic is a real gap, not a line break:
-                  two lines set tight, then air, then the turn of phrase. The
-                  italic falls on "we come from" because that is the claim the
-                  page rests on — a developer selling in the districts it is
-                  actually from. */}
-              <h1 className="t-display mt-8 text-[#F2EDE4]">
+              {/* ONE SENTENCE, ONE SIZE, ONE LEADING. The italic used to
+                  arrive after an extra 0.3em gap beneath two lines set at 0.94
+                  (tight enough that "Land, in the" touched "districts"): the
+                  review read the jump as a second headline bolted on. Now all
+                  three lines share the display size and an even 1.04 leading;
+                  the turn of phrase is carried by the italic and the bronze
+                  alone, as a type setter would set an emphasis — inside the
+                  sentence, not below it. */}
+              <h1 className="t-display mt-7 text-[#F2EDE4]">
                 Land, in the
                 <br />
-                districts
-                <em className="mt-[0.30em] block italic text-[#E8B98A]">
-                  we come from
-                </em>
+                districts <em className="t-display-em">we&nbsp;come&nbsp;from</em>
               </h1>
 
-              {/* Two short lines. This was a six-line paragraph that restated
-                  the districts, the developer, the plans, the sizes and where
-                  the rate comes from — all of which the page says again, at
-                  length, in chapters the visitor has not reached yet. A cover
-                  states; it does not brief. */}
-              <p className="t-body mt-10 max-w-[38ch] text-[#F2EDE4]/70">
-                Approved layouts, sold direct by the developer.
-                <br className="hidden md:block" /> Every sanctioned plan
-                published in full.
+              {/* A hairline between the statement and the gloss — the same
+                  gilt rule the chapters use — so the eye steps down a register
+                  instead of falling off the headline into small type. */}
+              <span aria-hidden className="mt-9 block h-px w-12 bg-[#E8B98A]/60" />
+
+              {/* Editorial, not default: the lede size with its own leading and
+                  a touch of tracking, set to a short measure and balanced. */}
+              <p className="t-hero-lede mt-7 max-w-[34ch] text-[#F2EDE4]/88">
+                Approved layouts, sold direct by the developer. Every sanctioned
+                plan published in full.
               </p>
 
-              {/* Secondary by construction: eyebrow scale, stacked rather than
-                  ranged across the frame, no button shape. gap-y-4 keeps the
-                  two 44px hit areas from overlapping. */}
-              <p className="mt-11 flex flex-col items-start gap-y-4">
-                <Link
-                  href="/start-here"
-                  className="tap-target t-eyebrow group inline-flex items-center gap-2 text-[#E8B98A] transition-colors hover:text-[#F2EDE4]"
-                >
-                  In a hurry? Start here
-                  <span aria-hidden className="transition-transform group-hover:translate-x-1">
-                    &rarr;
-                  </span>
+              {/* One structured action and one quiet one. The primary is a
+                  solid gilt plate, legible over any part of the render; the
+                  secondary is a text link with a drawn arrow and a hairline
+                  that draws under it on hover. */}
+              <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-5">
+                <Link href="/start-here" className="cta-primary group">
+                  Start here
+                  <Arrow />
                 </Link>
-                <Link
-                  href="/hall"
-                  className="tap-target t-eyebrow group inline-flex items-center gap-2 text-[#F2EDE4]/55 transition-colors hover:text-[#F2EDE4]"
-                >
-                  See the layouts raised
-                  <span aria-hidden className="transition-transform group-hover:translate-x-1">
-                    &rarr;
-                  </span>
+                <Link href="/hall" className="cta-quiet group">
+                  <span className="cta-quiet-label">See the layouts raised</span>
+                  <Arrow />
                 </Link>
-              </p>
+              </div>
             </div>
 
             {/* Scroll indicator, pushed to the foot of the pane. It belongs to
                 the frame rather than to the copy, and the bottom third of the
                 frame is the one part of the composition with nothing in it. */}
-            <div className="mt-auto flex items-center gap-4 pb-[9vh]">
-              <span className="t-eyebrow text-[#F2EDE4]/45">Scroll</span>
+            <div className="col-span-12 flex items-center gap-4 self-end pb-[9vh]">
+              <span className="t-eyebrow text-[#F2EDE4]/70">Scroll</span>
               <span aria-hidden className="relative h-10 w-px overflow-hidden bg-[#F2EDE4]/15">
                 <span className="absolute inset-x-0 top-0 h-4 animate-[scrollcue_2.2s_ease-in-out_infinite] bg-[#E8B98A]" />
               </span>
@@ -387,15 +416,18 @@ export default async function SiteHomePage() {
       >
         <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
           <div
-            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            className={`pane-scrim sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
             data-chapter-fade
           >
-            <p className="t-eyebrow text-[#F2EDE4]/45">Twenty years, one district</p>
+            <p className="t-eyebrow text-[#F2EDE4]/72">Twenty years, one district</p>
             <p className="t-h3 mt-6 text-[#F2EDE4]/85">
               We do not broker land.
               <br />
-              We develop it, and we are still here
-              <br className="hidden sm:block" /> when the last plot sells.
+              {/* Balanced, not broken by hand: a forced break after "still
+                  here" left "here" alone on a line at 1440. */}
+              <span className="block [text-wrap:balance]">
+                We develop it, and we are still here when the last plot sells.
+              </span>
             </p>
           </div>
         </div>
@@ -418,10 +450,10 @@ export default async function SiteHomePage() {
       >
         <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
           <div
-            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            className={`pane-scrim sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
             data-chapter-fade
           >
-            <p className="t-eyebrow text-[#F2EDE4]/45">Every plot, plotted</p>
+            <p className="t-eyebrow text-[#F2EDE4]/72">Every plot, plotted</p>
             <h2 className="t-h2 mt-6 text-[#F2EDE4]">
               One point for
               <br />
@@ -430,13 +462,13 @@ export default async function SiteHomePage() {
             <hr className="rule-hair mt-10" />
             <dl className="mt-8 grid grid-cols-3 gap-x-6">
               <div>
-                <dt className="t-eyebrow text-[#F2EDE4]/45">Layouts</dt>
+                <dt className="t-eyebrow text-[#F2EDE4]/72">Layouts</dt>
                 <dd className="mt-3 text-[28px] leading-none text-[#F2EDE4] [font-variant-numeric:tabular-nums]">
                   {list.length}
                 </dd>
               </div>
               <div>
-                <dt className="t-eyebrow text-[#F2EDE4]/45">Plots</dt>
+                <dt className="t-eyebrow text-[#F2EDE4]/72">Plots</dt>
                 <dd className="mt-3 text-[28px] leading-none text-[#F2EDE4] [font-variant-numeric:tabular-nums]">
                   {list.reduce(
                     (n: number, p: any) =>
@@ -446,7 +478,7 @@ export default async function SiteHomePage() {
                 </dd>
               </div>
               <div>
-                <dt className="t-eyebrow text-[#F2EDE4]/45">Open</dt>
+                <dt className="t-eyebrow text-[#F2EDE4]/72">Open</dt>
                 <dd className="mt-3 text-[28px] leading-none text-[#E8B98A] [font-variant-numeric:tabular-nums]">
                   {list.reduce(
                     (n: number, p: any) =>
@@ -456,7 +488,7 @@ export default async function SiteHomePage() {
                 </dd>
               </div>
             </dl>
-            <p className="t-body mt-8 max-w-md text-[#F2EDE4]/55">
+            <p className="t-body mt-8 max-w-md text-[#F2EDE4]/82">
               Counted from the sanctioned layout plans, not from a brochure. The
               hall below holds one table for each.
             </p>
@@ -493,16 +525,14 @@ export default async function SiteHomePage() {
           style={{ top: held(approach.from, approach.to, -1) }}
         />
         <div
-          className={`sticky top-0 flex h-screen flex-col items-center justify-end px-6 pb-[9vh] text-center ${PANE_CONTENT_INTERACTIVE}`}
+          className={`pane-scrim-low sticky top-0 flex h-screen flex-col items-center justify-end px-6 pb-[9vh] text-center ${PANE_CONTENT_INTERACTIVE}`}
           data-chapter-fade
         >
-          <p className="t-eyebrow text-[#F2EDE4]/55">The residence</p>
+          <p className="t-eyebrow text-[#F2EDE4]/82">The residence</p>
           <p className="t-h3 mt-5 text-[#F2EDE4]/90">The door is open.</p>
-          <EnterLink className="tap-target t-eyebrow group mt-8 inline-flex items-center gap-2 text-[#E8B98A] transition-colors hover:text-[#F2EDE4]">
+          <EnterLink className="cta-primary group mt-8">
             Step inside
-            <span aria-hidden className="transition-transform group-hover:translate-x-1">
-              &rarr;
-            </span>
+            <Arrow />
           </EnterLink>
         </div>
       </section>
@@ -510,7 +540,7 @@ export default async function SiteHomePage() {
       {list.length === 0 ? (
         <div className="pointer-events-auto mx-auto max-w-6xl px-6 pt-[20vh]">
           <p className="t-h3 text-[#F2EDE4]/70">No layouts are open right now.</p>
-          <p className="t-body mt-3 text-[#F2EDE4]/60">
+          <p className="t-body mt-3 text-[#F2EDE4]/80">
             Ask the head office what is coming — new layouts are released before
             they reach this page.
           </p>
@@ -530,10 +560,10 @@ export default async function SiteHomePage() {
           >
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
               <div
-            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            className={`pane-scrim pane-scrim-hall sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE} ${HALL_COPY}`}
             data-chapter-fade
           >
-                <p className="t-eyebrow text-[#F2EDE4]/45">Inside</p>
+                <p className="t-eyebrow text-[#F2EDE4]/72">Inside</p>
                 <p className="t-h3 mt-6 text-[#F2EDE4]/85">
                   Each layout stands on its own table.
                   <br className="hidden sm:block" /> Turn one to read it from
@@ -568,13 +598,15 @@ export default async function SiteHomePage() {
               >
                 <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
                   <div
-            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            className={`pane-scrim pane-scrim-hall sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE} ${HALL_COPY}`}
             data-chapter-fade
           >
-                    <p className="t-eyebrow mb-6 text-[#F2EDE4]/40 [font-variant-numeric:tabular-nums]">
-                      {String(i + 1).padStart(2, '0')} &nbsp;/&nbsp;{' '}
-                      {String(stationProjects.length).padStart(2, '0')}
+                    {/* Numbered like a collection, not a slideshow: Roman
+                        numerals over a hairline of gilt. */}
+                    <p className="t-eyebrow text-[#E8B98A]/70">
+                      {roman(i + 1)} &nbsp;&middot;&nbsp; {roman(stationProjects.length)}
                     </p>
+                    <span aria-hidden className="mb-7 mt-4 block h-px w-12 bg-[#C9A46A]/60" />
                     <StationText project={project} />
                   </div>
                 </div>
@@ -594,10 +626,10 @@ export default async function SiteHomePage() {
           >
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
               <div
-            className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+            className={`pane-scrim pane-scrim-hall sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE} ${HALL_COPY}`}
             data-chapter-fade
           >
-                <p className="t-eyebrow text-[#F2EDE4]/45">At the top of the stairs</p>
+                <p className="t-eyebrow text-[#F2EDE4]/72">At the top of the stairs</p>
                 <p className="t-h3 mt-6 text-[#F2EDE4]/85">
                   The name on the sanction letters
                   <br className="hidden sm:block" /> has been the same for twenty
@@ -606,12 +638,10 @@ export default async function SiteHomePage() {
                 <p className="mt-10">
                   <Link
                     href="/about"
-                    className="tap-target t-eyebrow group inline-flex items-center gap-2 text-[#E8B98A] transition-colors hover:text-[#F2EDE4]"
+                    className="cta-quiet group"
                   >
-                    Who we are
-                    <span aria-hidden className="transition-transform group-hover:translate-x-1">
-                      &rarr;
-                    </span>
+                    <span className="cta-quiet-label">Who we are</span>
+                    <Arrow />
                   </Link>
                 </p>
               </div>
@@ -654,10 +684,10 @@ export default async function SiteHomePage() {
                 on it landed on the copy rather than on the scene. */}
             <div className="col-span-12 md:col-span-5 md:max-w-[36vw]">
               <div
-                className={`sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
+                className={`pane-scrim sticky top-0 flex h-screen flex-col justify-center ${PANE_CONTENT_INTERACTIVE}`}
                 data-chapter-fade
               >
-                <p className="t-eyebrow text-[#F2EDE4]/45">Out the front door</p>
+                <p className="t-eyebrow text-[#F2EDE4]/72">Out the front door</p>
                 {/* The measure is stepped down on small screens because this
                     chapter carries more than any other — a heading, every
                     published project, and the note about what the positions
@@ -688,7 +718,7 @@ export default async function SiteHomePage() {
                   ))}
                 </ul>
 
-                <p className="t-body mt-6 max-w-[34ch] !text-[0.8rem] text-[#F2EDE4]/50 md:mt-10 md:!text-[0.95rem]">
+                <p className="t-body mt-6 max-w-[34ch] !text-[0.8rem] text-[#F2EDE4]/76 md:mt-10 md:!text-[0.95rem]">
                   Positions in the scene are a diagram of the network, not a
                   map: the district is real, the plot counts are real, and the
                   place on the ground is not published.

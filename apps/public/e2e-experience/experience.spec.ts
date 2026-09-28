@@ -747,6 +747,7 @@ test.describe('the front door', () => {
           cam: p ? (p.camera.position.toArray() as number[]) : null,
           state: el.dataset.doorway ?? null,
           coverage: Number(el.dataset.doorwayCoverage ?? 0),
+          held: el.dataset.doorwayHeld === '1',
           y: window.scrollY,
         };
       });
@@ -776,7 +777,9 @@ test.describe('the front door', () => {
     for (let i = 0; i < 80; i += 1) {
       const s = await pose();
       if (s.state !== 'enter') break;
-      scrollYs.add(s.y);
+      // Only while HELD: the passage releases the page at ENTER.release, before
+      // it finishes, and a wheel after that is meant to scroll.
+      if (s.held) scrollYs.add(s.y);
       if (s.y === heldY && s.cam) nearestTheDoor = Math.min(nearestTheDoor, s.cam[2]);
       peak = Math.max(peak, s.coverage);
       // Try to scroll the page out from under the passage; it must not move.
@@ -784,6 +787,11 @@ test.describe('the front door', () => {
       await page.waitForTimeout(60);
     }
 
+    // The page records the fullest white it painted (data-doorway-peak). The
+    // samples above only see the frames they land between: on a loaded machine
+    // one slow frame at the peak hid a white that was on screen, and the test
+    // failed on its own polling rate.
+    peak = Math.max(peak, Number((await page.locator('html').getAttribute('data-doorway-peak')) ?? 0));
     expect(peak, 'the light fills the frame').toBeGreaterThan(0.99);
     // THE CAMERA HAS TO FLY IN, AND THIS IS WHAT PROVES IT DID.
     //
@@ -804,7 +812,7 @@ test.describe('the front door', () => {
     expect(nearestTheDoor, 'the camera flew over the fountain to the door').toBeLessThan(14);
     expect(
       scrollYs.size,
-      'the page is held at the door, then landed once — the wheel does not move it',
+      `the page is held at the door, then landed once — the wheel does not move it (saw ${[...scrollYs].join(', ')}, held at ${heldY})`,
     ).toBeLessThanOrEqual(2);
 
     await page.waitForFunction(
@@ -920,6 +928,12 @@ test.describe('degraded paths', () => {
       ),
       'no horizontal overflow',
     ).toBe(true);
+    // AND the layout is the device's width. A mobile browser WIDENS the layout
+    // viewport to fit content that overflows it (a chapter scrim reaching 30vw
+    // past its column made it 484px on this 390px phone, and zoomed the page
+    // out to fit), after which scrollWidth equals innerWidth and the check
+    // above passes on a broken page.
+    expect(await page.evaluate(() => window.innerWidth), 'the layout is the device width').toBe(390);
 
     expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
     await ctx.close();

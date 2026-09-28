@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Build, export and ship the v7 estate, end to end.
 #
-#   bash tools/gltf/ship_estate_v7.sh            # full: textures, build, export, ship, bounds
-#   SKIP_BUILD=1 bash tools/gltf/ship_estate_v7.sh   # re-export and ship an existing .blend
+#   bash tools/gltf/ship_estate_v7.sh            # full: textures, build, AO bake, export, ship, bounds
+#   SKIP_BUILD=1 bash tools/gltf/ship_estate_v7.sh   # re-bake, re-export and ship an existing .blend
+#   SKIP_BUILD=1 SKIP_AO=1 bash tools/gltf/ship_estate_v7.sh   # re-export only (the bake is in the .blend)
 #
 # Outputs:
 #   C:/dev/Blender/mansion_estate_V7.blend            the source scene
@@ -16,7 +17,22 @@ WORK="${WORK:-C:/dev/Blender/_v7out}"
 
 if [ -z "${SKIP_BUILD:-}" ]; then
   python "$ROOT/tools/gltf/make_estate_textures_v7.py" "$ROOT/assets/materials/_v7"
-  "$BLENDER" --background --python "$ROOT/tools/blender/build_estate_v7.py" -- "$BLEND" arch land
+  # AFTER the procedural textures, whose flat leaf clusters it replaces: the
+  # foliage cards rendered from modelled leaves (albedo + normal per species).
+  "$BLENDER" --background --python "$ROOT/tools/blender/render_foliage_v7.py" -- "$ROOT/assets/materials/_v7" "" 1024 96
+  # The shade trees from Poly Haven's CC0 scans (downloaded to C:/dev/Blender/
+  # _polyhaven; ~360 MB, not in the repo). Without them the build falls back to
+  # the procedural trees.
+  if [ -d "${PH_DIR:-C:/dev/Blender/_polyhaven}/jacaranda_tree" ]; then
+    "$BLENDER" --background --python "$ROOT/tools/blender/ph_trees_v7.py" -- "${PH_DIR:-C:/dev/Blender/_polyhaven}" "$ROOT/assets/materials/_v7" "${PH_DIR:-C:/dev/Blender/_polyhaven}/ph_trees_web.blend" 96
+  fi
+  "$BLENDER" --background --python "$ROOT/tools/blender/build_estate_v7.py" -- "$BLEND" arch land lux
+fi
+# Ambient occlusion: the architecture atlas and the top-down ground map, baked
+# into the .blend (images packed, UV2 and the _AO/_AOG materials wired) so the
+# export below carries them. ~15 minutes on a laptop GPU at full size.
+if [ -z "${SKIP_AO:-}" ]; then
+  "$BLENDER" --background "$BLEND" --python "$ROOT/tools/blender/bake_estate_ao_v7.py" -- "${AO_WORK:-C:/dev/Blender/_v7ao}"
 fi
 
 rm -rf "$WORK" && mkdir -p "$WORK/ex"

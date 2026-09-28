@@ -1,6 +1,6 @@
 {
   "model": "interior_hall.glb",
-  "size_mb": 16.39,
+  "size_mb": 24.44,
   "loaders_required": {
     "KTX2Loader": "all 37 textures are KTX2/Basis (KHR_texture_basisu is in extensionsRequired). setTranscoderPath('/basis/') and detectSupport(renderer) before loading; the transcoder is served from apps/public/public/basis/.",
     "DRACOLoader": "geometry is Draco compressed. setDecoderPath('/draco/'); the decoder is served from apps/public/public/draco/."
@@ -9,16 +9,18 @@
     "slot": "occlusionTexture",
     "uv": "TEXCOORD_1",
     "atlas_px": 4096,
-    "codec": "ETC1S (basis-lz, qlevel 255)",
-    "intensity": 3.0801,
+    "codec": "UASTC (RDO lambda 2.0, zstd 20)",
+    "intensity": 8.294,
     "encoding": "sRGB",
     "note": "glTF has no lightmap slot, so baked GI rides in occlusion. On load promote aoMap -> lightMap and set colorSpace = SRGBColorSpace: the atlas is normalised then sRGB-encoded for precision, because linear 8-bit puts the room near value 13 and bands.",
-    "intensity_note": "RE-DERIVED for the extended hall: the bake normalises the atlas by its own 99.5th percentile and this is that divisor, straight from lightmap_manifest.json. HallModel.tsx carries it as LIGHTMAP_INTENSITY."
+    "intensity_note": "RE-DERIVED for the extended hall: the bake normalises the atlas by its own 99.5th percentile and this is that divisor, straight from lightmap_manifest.json. HallModel.tsx carries it as LIGHTMAP_INTENSITY.",
+    "note_rebake": "2026-09-22 old-money pass: re-baked on the existing UVLightmap layout at 1024 spp (tools/blender/rebake_hall_lightmap_v7.py), denoised with OIDN (normal + coverage guides), dilated in a 32 px band and normalised by its own p99.5 (tools/gltf/finish_hall_lightmap.py), then swapped into image 3 with tools/gltf/glb_replace_image.py. UASTC because ETC1S turned the lamplit walls into pink/green 4x4 blocks (chroma error p99 0.46 vs 0.17).",
+    "note_imperial": "2026-09-24 the imperial hall (tools/blender/imperial_hall_v7.py): new geometry, so bake_lightmap.py re-packed the UVLightmap layout (277 shell objects, 62,691 tris), then re-baked on it at 768 spp (rebake_hall_lightmap_v7.py), finished with finish_hall_lightmap.py (OIDN, 32 px dilation, p99.5 = 8.294), UASTC RDO 2.0 zstd 20, and swapped into image 3 with glb_replace_image.py."
   },
   "textures": {
     "count": 37,
     "normal_maps": "UASTC - ETC1S quantises a direction field hard enough to facet across large flat walls",
-    "everything_else": "ETC1S - on the 4K atlas it is 1.1MB against 7.1MB for UASTC, on smooth low-frequency light",
+    "everything_else": "ETC1S - on the 4K atlas it is 1.1MB against 7.1MB for UASTC, on smooth low-frequency light The lightmap is the exception: UASTC since 2026-09-22.",
     "pbr_max_px": 1024,
     "ktx2": 37,
     "multiple_of_four": "Enforced in the pipeline by tools/gltf/round4_textures.py after the resize pass: ETC1S/UASTC upload fails in the browser on any other size, which is how four plates shipped blank in August."

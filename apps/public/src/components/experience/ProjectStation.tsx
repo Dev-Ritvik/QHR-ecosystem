@@ -54,6 +54,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { StationAnchor } from './interiorPath';
+import { StationDressing, type StationDetails } from './StationDressing';
 import {
   clicksSuppressed,
   lockCanvasScroll,
@@ -324,6 +325,16 @@ export function ProjectStation({
 
   return (
     <group position={[cx, 0, cz]}>
+      {/* The projector, its beam and the hologram's words (StationDressing).
+          Sceneless: it dresses nodes inside the hall, so its position here
+          is irrelevant. The store's cards carry the plot counts beside the
+          fields StationProject names. */}
+      <StationDressing
+        root={root}
+        anchor={anchor}
+        project={project as StationDetails | null}
+        emphasis={emphasis}
+      />
       {/* TABLE PROXY — the drag surface.
           A proxy rather than the table meshes themselves: raycasting 3,688
           triangles on every pointer move to decide whether a drag started is

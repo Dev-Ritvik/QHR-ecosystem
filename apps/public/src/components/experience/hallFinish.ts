@@ -34,12 +34,19 @@ import * as THREE from 'three';
 
 export type TextureSlot = 'map' | 'normalMap' | 'roughnessMap' | 'metalnessMap';
 
+/**
+ * A surface's paint and response. Reflection strength is deliberately NOT here:
+ * it belongs to the hall's reflection probe (hallProbe.ts, PROBE_GAIN), which
+ * binds the environment explicitly. The envMapIntensity values this table used
+ * to carry (walnut 9, gilt 9, marble 2.6) never reached the screen — three r173
+ * replaces a material's own gain with scene.environmentIntensity whenever the
+ * material has no envMap of its own.
+ */
 export interface Finish {
   /** sRGB hex for a cleared surface, or linear RGB multiplying a kept map. */
   color?: string | readonly [number, number, number];
   roughness?: number;
   metalness?: number;
-  envMapIntensity?: number;
   clear?: readonly TextureSlot[];
 }
 
@@ -58,21 +65,24 @@ export const HALL_FINISHES: Readonly<Record<string, Finish>> = {
   MAT_Ceiling_Plaster_LM: { color: '#f6f1e8' },
   MAT_Trim_Cream_LM: { clear: ALL, color: '#e6ddcc', roughness: 0.5 },
   MAT_Trim_Cream: { clear: ALL, color: '#f3ecdf', roughness: 0.45 },
-  // Panelling and newels. No bake reaches them, so their light is the
-  // environment; 9 against the hall's environmentIntensity is what lets a
-  // polished walnut read as wood rather than as a hole in the wall.
-  MAT_Wood_Dark: { clear: ALL, color: '#7b4d2b', roughness: 0.28, metalness: 0, envMapIntensity: 9 },
-  // Handrails and the inner doors, which the bake does reach.
-  MAT_Wood_Dark_LM: { clear: ALL, color: '#80552f', roughness: 0.3, metalness: 0, envMapIntensity: 3 },
+  // The turned newels (the panels themselves get their own veneered material,
+  // hallWalnut.ts). No bake reaches them, so their light is the hall's
+  // reflection probe. Painted the veneer's own mean colour (#5e4632, measured
+  // from the generated sheet) so solid and veneered walnut read as one timber;
+  // the old #7b4d2b read as orange under the print.
+  MAT_Wood_Dark: { clear: ALL, color: '#5e4632', roughness: 0.26, metalness: 0 },
+  // Handrails and the inner doors, which the bake does reach — a shade lighter,
+  // as a rail polished by hands is.
+  MAT_Wood_Dark_LM: { clear: ALL, color: '#6b4f38', roughness: 0.28, metalness: 0 },
   // Polished marble. The veining map stays; its roughness map goes, because a
   // hall floor is honed flat and the map was scattering every reflection.
-  MAT_MarbleFloor_LM: { clear: ['roughnessMap'], color: [1.4, 1.36, 1.3], roughness: 0.12, envMapIntensity: 2.6 },
+  MAT_MarbleFloor_LM: { clear: ['roughnessMap'], color: [1.4, 1.36, 1.3], roughness: 0.12 },
   MAT_MarbleFloor: { clear: ['roughnessMap'], color: [1.9, 1.85, 1.78], roughness: 0.16 },
   // Gilt. Metalness 0.6, not 1: a pure metal is only ever as bright as what it
   // reflects, and the small side-facing pieces (sconce plates, picture-light
   // arms) reflect the darker half of the room and went black. A little diffuse
   // keeps them gold from every side.
-  MAT_Gold: { clear: ALL, color: '#e2bd72', roughness: 0.4, metalness: 0.6, envMapIntensity: 9 },
+  MAT_Gold: { clear: ALL, color: '#e2bd72', roughness: 0.4, metalness: 0.6 },
   MAT_Table_Brass: { color: '#e9c77e', roughness: 0.3, metalness: 0.9 },
 };
 
@@ -84,7 +94,6 @@ export function applyFinish(mat: Finishable, finish: Finish): void {
   else if (finish.color) mat.color.setRGB(finish.color[0], finish.color[1], finish.color[2], THREE.LinearSRGBColorSpace);
   if (finish.roughness !== undefined) mat.roughness = finish.roughness;
   if (finish.metalness !== undefined) mat.metalness = finish.metalness;
-  if (finish.envMapIntensity !== undefined) mat.envMapIntensity = finish.envMapIntensity;
   mat.needsUpdate = true;
 }
 

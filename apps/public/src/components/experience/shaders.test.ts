@@ -25,7 +25,19 @@ import { join } from 'node:path';
  * name like `sample`, `filter` or `buffer` inside a shader.
  */
 
-const SHADER_FILES = ['Terrain.tsx', 'Motes.tsx', 'Constellation.tsx', 'CityField.tsx'];
+const SHADER_FILES = [
+  'Terrain.tsx',
+  'Motes.tsx',
+  'Constellation.tsx',
+  'CityField.tsx',
+  'exteriorFoliage.ts',
+  'exteriorLawn.ts',
+  'exteriorSurfaces.ts',
+  'exteriorWindows.ts',
+  'hallDetail.ts',
+  'PortraitBeam.tsx',
+  'StationDressing.tsx',
+];
 
 /**
  * Reserved in GLSL ES 3.00 and therefore unusable as identifiers, but legal in

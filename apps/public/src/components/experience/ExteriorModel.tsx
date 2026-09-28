@@ -33,6 +33,12 @@ import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { attachLoaders } from './HallModel';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { guardAnisotropy } from './materialGuards';
+import { markFocusDepth } from './LensFocus';
+import { dressLawn, sharpenTextures } from './exteriorLawn';
+import { dressFoliage, followSun } from './exteriorFoliage';
+import { dressWindows } from './exteriorWindows';
+import { dressSurfaces } from './exteriorSurfaces';
+import { keepDepthAlpha } from './LensFocus';
 
 /**
  * The shipped exterior.
@@ -1127,14 +1133,31 @@ const EMISSIVE: Record<Grade, EmissiveSpec> = {
  * Applied to the CLONED graph on load, like every other pass here, and keyed by
  * material name so a re-export that renames a material fails loudly (the count
  * in the ready log drops) rather than quietly rendering the old look.
+ *
+ * `env` IS A GAIN ON THE SKY, and until the AO pass it did nothing at all.
+ * three r173 (WebGLRenderer.setProgram) overwrites envMapIntensity with
+ * scene.environmentIntensity for every standard material that takes its
+ * environment from the scene — so the pool, the glass, the gilt and the chrome
+ * all reflected the sky at the global 0.25, exactly like the lawn. The override
+ * only applies when material.envMap is null, so the polished materials are now
+ * given the environment explicitly (useSkyReflections below) and their
+ * intensity is set to env x the global: a gain relative to everything else,
+ * which is what these numbers were always meant to be.
  */
-const POLISH: Record<string, { colour?: number; rough?: number; env?: number; metal?: number }> = {
+const POLISH: Record<string, { colour?: number; rough?: number; env?: number; metal?: number; opacity?: number }> = {
   MAT_Roof_Slate: { colour: 1.85, rough: 0.82, env: 1.35 },
   MAT_Roof: { colour: 1.7, rough: 0.85, env: 1.3 },
   MAT_Lawn: { colour: 1.28, rough: 0.72, env: 1.0 },
   MAT_Water: { env: 2.0 },
-  MAT_Water_Pool: { env: 3.0 },
-  MAT_Glass_Window: { env: 2.2 },
+  // A REFLECTING POOL, not a resort one (essence.md: old money is quiet). The
+  // cyan sheet over a pale shell was the loudest colour in every frame it was
+  // in, and the most "game" surface in the hero. Dark water mirrors the sky and
+  // the house, and at evening its lights (MAT_Light_Pool) glow against it.
+  MAT_Water_Pool: { colour: 0.32, env: 4.2 },
+  // Clear glass, not smoked: at 0.55 over a dark tint the panes were the
+  // review's "flat black voids". Thin, so the rooms behind show
+  // (exteriorWindows.ts) and the sky rides on it by Fresnel.
+  MAT_Glass_Window: { env: 2.8, opacity: 0.26 },
   MAT_Glass_Rail: { env: 2.4 },
   MAT_Car_Glass: { env: 2.4 },
   MAT_Car_Paint: { env: 2.2 },
@@ -1144,7 +1167,9 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   MAT_Gold: { env: 1.9 },
   MAT_Stone_Terrace: { env: 1.5 },
   MAT_Stone_Paving: { env: 0.9 },
-  MAT_Pool_Shell: { env: 1.2 },
+  // Dark slate under dark water: the reflecting pool above. At 0.45 the shell
+  // still read cyan through the sheet.
+  MAT_Pool_Shell: { colour: 0.16, env: 1.2 },
 };
 
 /**
@@ -1170,10 +1195,41 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
  * traversal.
  */
 const WATER_RE = /^MAT_Water/;
+const POOL_RE = /^MAT_Water_Pool/;
 
+/**
+ * THE WATER, SECOND PASS — the art-direction review still read the pool as
+ * "a solid, static blue plane ... painted plastic".
+ *
+ * Two sines of 0.02 were below what a 2880px frame can show. Now:
+ *
+ *   FOUR WAVE TRAINS, 2.3 m down to 0.27 m, each summed into the slope of the
+ *   surface in WORLD space (the sheet is level) and turned into the view-space
+ *   normal. Every train fades out as it shrinks toward a pixel (fwidth), so
+ *   the far canal keeps its long swell and the pool at the lens gets its
+ *   ripples, and nothing aliases into a shimmer. The sun's highlight breaks on
+ *   them into glints; the sky and the house break in the reflection.
+ *
+ *   DEPTH, IN THE POOL. Water over a pale shell is light where it is shallow
+ *   and deep where it is not. The pool is a single sheet, so the depth is
+ *   read from the distance to its own edge (its world box, measured once):
+ *   lighter over the first metre of the rim, the dark reflecting body beyond.
+ *
+ *   CAUSTICS where it is shallow: the network of light a rippled surface
+ *   focuses onto the floor under it, drifting with the waves.
+ */
 function animateWater(root: THREE.Object3D, clock: { value: number }): number {
   const done = new Set<THREE.Material>();
   let count = 0;
+  root.updateMatrixWorld(true);
+  const poolBox = new THREE.Box3();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (mats.some((m) => m && POOL_RE.test(m.name))) poolBox.expandByObject(mesh);
+  });
+  const box = new THREE.Vector4(poolBox.min.x, poolBox.min.z, poolBox.max.x, poolBox.max.z);
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -1182,8 +1238,13 @@ function animateWater(root: THREE.Object3D, clock: { value: number }): number {
       const mat = m as THREE.MeshStandardMaterial & { __ripple?: boolean };
       if (!mat || mat.__ripple || !WATER_RE.test(mat.name)) continue;
       mat.__ripple = true;
-      mat.onBeforeCompile = (shader) => {
+      const pool = POOL_RE.test(mat.name) && !poolBox.isEmpty();
+      if (pool) mat.defines = { ...(mat.defines ?? {}), WATER_POOL: '' };
+      const prev = mat.onBeforeCompile;
+      mat.onBeforeCompile = (shader, renderer) => {
+        prev.call(mat, shader, renderer);
         shader.uniforms.uTime = clock;
+        shader.uniforms.uPoolBox = { value: box };
         shader.vertexShader = shader.vertexShader
           .replace('void main() {', `varying vec3 vRipplePos;
              void main() {`)
@@ -1193,21 +1254,14 @@ function animateWater(root: THREE.Object3D, clock: { value: number }): number {
              vRipplePos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
           );
         shader.fragmentShader = shader.fragmentShader
-          .replace('void main() {', `uniform float uTime;
-             varying vec3 vRipplePos;
+          .replace('void main() {', `${WATER_FUNCTIONS}
              void main() {`)
-          .replace(
-            '#include <normal_fragment_maps>',
-            `#include <normal_fragment_maps>
-             {
-               vec2 p = vRipplePos.xz;
-               float a = sin(p.x * 0.9 + p.y * 0.35 + uTime * 0.85);
-               float b = sin(p.x * -0.42 + p.y * 1.15 + uTime * 0.62);
-               normal = normalize(normal + vec3(a * 0.02, 0.0, b * 0.02));
-             }`,
-          );
+          .replace('#include <color_fragment>', `#include <color_fragment>
+${WATER_COLOUR}`)
+          .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+${WATER_NORMAL}`);
       };
-      mat.customProgramCacheKey = () => `water-ripple-${mat.name}`;
+      mat.customProgramCacheKey = () => `water-ripple-v2${pool ? '-pool' : ''}`;
       mat.needsUpdate = true;
       count += 1;
     }
@@ -1215,9 +1269,142 @@ function animateWater(root: THREE.Object3D, clock: { value: number }): number {
   return count;
 }
 
-function polishSurfaces(root: THREE.Object3D): number {
+const WATER_FUNCTIONS = /* glsl */ `
+uniform float uTime;
+uniform vec4 uPoolBox;
+varying vec3 vRipplePos;
+// One train's slope: amplitude x wavenumber x cos, along its direction, faded
+// out before its wavelength shrinks to a couple of pixels.
+vec2 waterTrain(vec2 p, float lambda, float angle, float slope, float speed, float fw) {
+  float k = 6.2831853 / lambda;
+  vec2 d = vec2(cos(angle), sin(angle));
+  float keep = 1.0 - smoothstep(lambda * 0.18, lambda * 0.5, fw);
+  return d * slope * keep * cos(dot(d, p) * k - uTime * speed);
+}
+float waterCaustic(vec2 p, float t) {
+  float r1 = abs(sin(p.x * 3.1 + sin(p.y * 2.3 + t * 0.8) * 1.2 + t * 0.6));
+  float r2 = abs(sin(p.y * 2.7 + sin(p.x * 1.9 - t * 0.7) * 1.3 - t * 0.5));
+  return pow(1.0 - min(r1, r2), 6.0);
+}
+`;
+
+const WATER_NORMAL = /* glsl */ `
+{
+  vec2 p = vRipplePos.xz;
+  float fw = length(fwidth(p));
+  vec2 g = waterTrain(p, 2.3, 0.3, 0.035, 1.3, fw)
+         + waterTrain(p, 1.1, 2.1, 0.03, 1.9, fw)
+         + waterTrain(p, 0.55, 4.0, 0.026, 2.6, fw)
+         + waterTrain(p, 0.27, 5.3, 0.02, 3.7, fw);
+  vec3 nW = normalize(vec3(-g.x, 1.0, -g.y));
+  normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
+}
+`;
+
+const WATER_COLOUR = /* glsl */ `
+#ifdef WATER_POOL
+{
+  vec2 size = max(uPoolBox.zw - uPoolBox.xy, vec2(0.01));
+  vec2 q = clamp(vRipplePos.xz - uPoolBox.xy, vec2(0.0), size);
+  float edge = min(min(q.x, size.x - q.x), min(q.y, size.y - q.y));
+  float deep = smoothstep(0.25, 2.2, edge);
+  // Toward green-black, not resort cyan: a still pool over dark stone.
+  vec3 body = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.55);
+  vec3 shallow = body * vec3(1.7, 1.65, 1.5);
+  diffuseColor.rgb = mix(shallow, body * 0.5, deep);
+  float fw = length(fwidth(vRipplePos.xz));
+  float c = waterCaustic(vRipplePos.xz, uTime) * (1.0 - smoothstep(0.08, 0.25, fw));
+  diffuseColor.rgb += c * (1.0 - 0.75 * deep) * vec3(0.05, 0.075, 0.07);
+}
+#endif
+`;
+
+/**
+ * The name a material was authored under. The AO bake duplicates every material
+ * it puts a map on (<name>_AO on the architecture atlas, <name>_AOG on the
+ * ground map — tools/blender/bake_estate_ao_v7.py), and anything that looks a
+ * material up by name means the authored one.
+ */
+export function authoredName(name: string): string {
+  return name.replace(/_AOG?$/, '');
+}
+
+/**
+ * THE BAKED OCCLUSION, and how hard it is allowed to bite.
+ *
+ * aoMap darkens indirect light only — the hemisphere and the sky's irradiance
+ * and reflections — and never the sun, which has its shadow map. So 1.0 is not
+ * "black crevices"; it is "the sky does not reach in there", which is true. The
+ * architecture takes it at full strength. The ground map is eased a little,
+ * because the lawn is the largest surface in every frame and the bake's
+ * open-lawn normalisation (99th percentile) already reads the compound's tree
+ * belt as a slight loss of sky everywhere.
+ */
+const AO_STRENGTH = { architecture: 1.0, ground: 0.85 } as const;
+
+function strengthenOcclusion(root: THREE.Object3D): { architecture: number; ground: number } {
+  const seen = new Set<THREE.Material>();
+  const count = { architecture: 0, ground: 0 };
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) {
+      const mat = m as THREE.MeshStandardMaterial;
+      if (!mat || seen.has(mat) || !mat.aoMap) continue;
+      seen.add(mat);
+      const kind = mat.name.endsWith('_AOG') ? 'ground' : 'architecture';
+      mat.aoMapIntensity = AO_STRENGTH[kind];
+      count[kind] += 1;
+    }
+  });
+  return count;
+}
+
+type SkyReflector = { mat: THREE.MeshStandardMaterial; gain: number };
+
+/**
+ * CAR PAINT IS TWO SURFACES. The review: the car "without realistic paint
+ * shaders". A standard material is one layer, so the car's dark paint was a
+ * matte-ish plastic with a sheen. Real paint is a metallic base coat under a
+ * clear lacquer: the base gives the colour its depth, the lacquer a second,
+ * mirror-sharp reflection of the sky and the house riding on top of it. Swapped
+ * for a MeshPhysicalMaterial with a clearcoat, on the car only (a physical
+ * program is the heaviest three has; a car is a few hundred triangles).
+ */
+const CAR_PAINT_RE = /^MAT_Car_Paint/;
+
+function lacquerCars(root: THREE.Object3D): THREE.MeshPhysicalMaterial[] {
+  const swapped = new Map<THREE.Material, THREE.MeshPhysicalMaterial>();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+    const src = mesh.material as THREE.MeshStandardMaterial;
+    if (!src || !CAR_PAINT_RE.test(src.name)) return;
+    let paint = swapped.get(src);
+    if (!paint) {
+      paint = new THREE.MeshPhysicalMaterial({
+        name: src.name,
+        color: src.color.clone(),
+        metalness: 0.55,
+        roughness: 0.32,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.035,
+        envMap: src.envMap,
+        envMapIntensity: src.envMapIntensity,
+      });
+      paint.defines = { ...(src.defines ?? {}) };
+      swapped.set(src, paint);
+    }
+    mesh.material = paint;
+  });
+  return [...swapped.values()];
+}
+
+
+function polishSurfaces(root: THREE.Object3D): SkyReflector[] {
   const done = new Set<THREE.Material>();
-  let touched = 0;
+  const reflectors: SkyReflector[] = [];
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -1225,18 +1412,42 @@ function polishSurfaces(root: THREE.Object3D): number {
     for (const m of mats) {
       const mat = m as THREE.MeshStandardMaterial;
       if (!mat || done.has(mat)) continue;
-      const rule = POLISH[mat.name];
+      const rule = POLISH[authoredName(mat.name)];
       if (!rule) continue;
       done.add(mat);
       if (rule.colour !== undefined) mat.color.multiplyScalar(rule.colour);
       if (rule.rough !== undefined) mat.roughness *= rule.rough;
       if (rule.metal !== undefined) mat.metalness = rule.metal;
-      if (rule.env !== undefined) mat.envMapIntensity = rule.env;
+      if (rule.opacity !== undefined) mat.opacity = rule.opacity;
+      if (mat.transparent) keepDepthAlpha(mat);
+      if (rule.env !== undefined) reflectors.push({ mat, gain: rule.env });
       mat.needsUpdate = true;
-      touched += 1;
     }
   });
-  return touched;
+  return reflectors;
+}
+
+/**
+ * Keep the polished materials on the scene's sky with their own gain. Run per
+ * frame because both halves can change under it: SkyBackground swaps
+ * scene.environment when the sky loads (and clears it at the threshold), and
+ * EnvIntensity rewrites the global. A handful of materials and two compares
+ * each — nothing, next to the frame.
+ */
+function useSkyReflections(reflectors: { current: SkyReflector[] }) {
+  const scene = useThree((s) => s.scene);
+  useFrame(() => {
+    const env = scene.environment;
+    const base = scene.environmentIntensity;
+    for (const r of reflectors.current) {
+      if (r.mat.envMap !== env) {
+        r.mat.envMap = env;
+        r.mat.needsUpdate = true;
+      }
+      const want = r.gain * base;
+      if (r.mat.envMapIntensity !== want) r.mat.envMapIntensity = want;
+    }
+  });
 }
 
 function applyGrade(root: THREE.Object3D, grade: Grade): string[] {
@@ -1520,9 +1731,27 @@ export function ExteriorModel({
   // assignment. A ref rather than state: it is written sixty times a second and
   // must never re-render anything.
   const waterClock = useRef({ value: 0 });
+  // The key light, found once: the foliage follows its direction and colour
+  // (exteriorFoliage.ts) as the film's evening turns it.
+  const world = useThree((s) => s.scene);
+  const sun = useRef<THREE.DirectionalLight | null>(null);
+  const sunSearch = useRef(0);
   useFrame((_, delta) => {
     waterClock.current.value += delta;
+    // Looked for at most twice a second: a scene with no shadow-casting sun
+    // (the dusk rollback) must not be traversed every frame.
+    if ((!sun.current || !sun.current.parent) && (sunSearch.current -= delta) <= 0) {
+      sunSearch.current = 0.5;
+      sun.current = null;
+      world.traverse((o) => {
+        const l = o as THREE.DirectionalLight;
+        if (!sun.current && l.isDirectionalLight && l.castShadow) sun.current = l;
+      });
+    }
+    followSun(sun.current, delta);
   });
+  const reflectors = useRef<SkyReflector[]>([]);
+  useSkyReflections(reflectors);
 
   useEffect(() => {
     // BEFORE the grade, and before anything reads the frame: an anisotropic
@@ -1530,11 +1759,25 @@ export function ExteriorModel({
     // whole bloom chain — and therefore the whole screen — to black.
     const disarmed = guardAnisotropy(root);
     const graded = applyGrade(root, grade);
+    // Before the polish, so the lacquer is the material the polish reaches.
+    const lacquered = lacquerCars(root);
     // AFTER the grade (which clones the paving materials) and BEFORE the merge
     // (which is by material identity): a pass that changed a material after the
     // merge keyed on it would be graded into one batch and not the other.
-    const polished = polishSurfaces(root);
+    reflectors.current = polishSurfaces(root);
+    const polished = reflectors.current.length;
+    const occluded = strengthenOcclusion(root);
+    // Every estate material writes its depth for the exterior lens.
+    markFocusDepth(root);
     const rippled = animateWater(root, waterClock.current);
+    // The lawn's bands and macro field, and anisotropic filtering on every
+    // estate texture (exteriorLawn.ts): the ground seen at a grazing angle is
+    // most of every exterior frame.
+    const lawns = dressLawn(root);
+    const foliage = dressFoliage(root);
+    const rooms = dressWindows(root);
+    const aged = dressSurfaces(root);
+    const sharpened = sharpenTextures(root, Math.min(8, gl.capabilities.getMaxAnisotropy()));
 
     // AFTER the grade, and that ordering is load-bearing: applyGrade swaps the
     // paving materials per grade and looks its targets up BY NAME, so merging
@@ -1597,8 +1840,9 @@ export function ExteriorModel({
 
     // eslint-disable-next-line no-console
     console.info(
-      '[exterior_ready] url=%s meshes=%d tris=%d graded=[%s] polished=%d water=%d anisotropyDisarmed=[%s] | size %sx%sx%s | y %s..%s',
-      url, meshes, Math.round(tris), graded.join(','), polished, rippled, disarmed.join(','),
+      '[exterior_ready] url=%s meshes=%d tris=%d graded=[%s] polished=%d water=%d ao=%d/%d anisotropyDisarmed=[%s] | size %sx%sx%s | y %s..%s',
+      url, meshes, Math.round(tris), graded.join(','), polished, rippled,
+      occluded.architecture, occluded.ground, disarmed.join(','),
       size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2),
       box.min.y.toFixed(2), box.max.y.toFixed(2),
     );
@@ -1618,8 +1862,8 @@ export function ExteriorModel({
 
     // eslint-disable-next-line no-console
     console.info(
-      '[exterior_batched] merged=%d meshesRemoved=%d',
-      batched.merged, batched.removed,
+      '[exterior_batched] merged=%d meshesRemoved=%d lawn=%d foliage=%d sharpened=%d rooms=%d aged=%s lacquered=%d',
+      batched.merged, batched.removed, lawns, foliage, sharpened, rooms, JSON.stringify(aged), lacquered.length,
     );
 
     // The merged geometries are the only ones this component OWNS — every other
@@ -1628,8 +1872,12 @@ export function ExteriorModel({
     // graph and never disposed.
     return () => {
       for (const g of batched.owned) g.dispose();
+      // The lacquer is made here, per mount; the scan's own paint stays with
+      // drei's cached parse.
+      for (const m of lacquered) m.dispose();
+      reflectors.current = [];
     };
-  }, [root, onReady, grade]);
+  }, [root, onReady, grade, gl]);
 
   // Its own effect, declared after the grade and the merge so a consumer never
   // receives a graph those passes have not finished with. The doors are not in

@@ -33,7 +33,32 @@ export default defineConfig({
     baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3001',
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // ON THE DISCRETE GPU BY DEFAULT. Headless Chromium otherwise renders WebGL
+  // with SwiftShader, on the CPU and without parallel shader compiles, and on a
+  // dual-GPU laptop plain --use-angle=d3d11 lands on the integrated chip; every
+  // timing the suite waits on was then a software renderer's or an iGPU's, far
+  // from a visitor's hardware. --force_high_performance_gpu picks the discrete
+  // one (verified: ANGLE reports the RTX 4070). CI keeps SwiftShader, having no
+  // GPU; E2E_SOFTWARE=1 asks for it locally.
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions:
+          process.env.CI || process.env.E2E_SOFTWARE
+            ? {}
+            : {
+                args: [
+                  '--use-angle=d3d11',
+                  '--enable-gpu',
+                  '--ignore-gpu-blocklist',
+                  '--force_high_performance_gpu',
+                ],
+              },
+      },
+    },
+  ],
   webServer: {
     command: 'pnpm start',
     url: 'http://localhost:3001',

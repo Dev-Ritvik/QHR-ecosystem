@@ -41,24 +41,30 @@ import {
 import {
   STATION_ANCHORS,
   buildInteriorBeats,
+  beatEmphasis,
   stationEmphasis,
   type InteriorBeat,
 } from './interiorPath';
 import { PortraitNameplate } from './PortraitNameplate';
+import { PortraitBeam } from './PortraitBeam';
+import { hallEnv } from './HallModel';
+import { isShown, warmHallPrograms } from './hallProbe';
+import { lensSubject } from './LensFocus';
 
 /**
  * The portrait, measured from the GLB.
  *
- * Since the hall was extended by bays, portrait_canvas spans x -1.05..1.05,
- * y 4.10..7.04, with portrait_frame_outer at x -1.21..1.21, y 3.95..7.21 and its
- * back on the wall face at z -7.70 — a 2.1 x 2.94m canvas hung higher over a
- * landing that is now 3.47m up, with portrait_rebate and portrait_glass around
- * it, the nameplate below it (PortraitNameplate.tsx) and a dedicated spot
- * (LGT_portrait) that the bake already contains.
+ * Since the hall was made imperial (imperial_hall_v7.py), portrait_canvas spans
+ * x -1.31..1.31, y 5.20..8.87, with portrait_frame_outer at x -1.51..1.51,
+ * y 5.00..9.07 and its back on the wall face at z -7.70 — a quarter larger than
+ * before, hung on an arched walnut panel over the central landing (4.2 m up),
+ * with portrait_rebate and portrait_glass around it, the nameplate below it
+ * (PortraitNameplate.tsx) and a dedicated spot (LGT_portrait) that the bake
+ * already contains.
  */
 const PORTRAIT = {
-  centre: [0, 5.58, -7.58] as [number, number, number],
-  size: [2.42, 3.26, 0.24] as [number, number, number],
+  centre: [0, 7.035, -7.58] as [number, number, number],
+  size: [3.02, 4.07, 0.3] as [number, number, number],
 };
 
 /** Materials whose emissive strength is driven by station emphasis. The
@@ -70,10 +76,11 @@ const HOLO_MATERIALS = /^MAT_Holo/;
 /**
  * Emphasis every station holds on a page with no scroll choreography (/hall).
  * Chosen so a hologram's emissive lands exactly where the GLB shipped it
- * (0.42 + 0.78 x 0.74 = 1.0), which is how /hall looked before the interaction
+ * (0.6 + 0.6 x 0.667 = 1.0), which is how /hall looked before the interaction
  * layer was mounted there, and clears the ACTIVE gate so its hologram answers.
+ * (It was 0.74 against the pre-old-money idle of 0.42 + 0.78e.)
  */
-const STILL_EMPHASIS = 0.74;
+const STILL_EMPHASIS = 0.667;
 
 /**
  * DRAG ANYWHERE IN THE ROOM TO TURN A TABLE.
@@ -253,6 +260,22 @@ export function InteriorStage({
 
   useDragAnywhere(mode);
 
+  // THE STAGE IS SHOWN WHEN THE HALL IS. On the journey it mounts as the hall
+  // arms, on the lawn, and its own pieces — the hit boxes, the portrait's light,
+  // the nameplate — are not under the hall's hidden group: they drew outside
+  // for the whole approach, and their first draw compiled the nameplate's
+  // programs under the exterior's lights. MEASURED 1.4 s of getProgramInfoLog
+  // in that frame, mid-scroll, for programs recompiled again at the door.
+  // Instead they compile here as the hall arrives, under the hall's own light
+  // state and off the main thread (hallProbe.ts, warmHallPrograms).
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  const stage = useRef<THREE.Group>(null);
+  useEffect(() => {
+    if (!root || !stage.current) return;
+    void warmHallPrograms(gl, camera, stage.current, hallEnv.stand);
+  }, [root, gl, camera]);
+
   const portraitEmphasis = useRef(0);
   const portraitHover = useRef(0);
   const portraitFrame = useRef<THREE.Mesh | null>(null);
@@ -384,24 +407,54 @@ export function InteriorStage({
     };
   }, [root, projects.length, mode]);
 
+  // The lens must not keep a subject this stage no longer draws.
+  useEffect(
+    () => () => {
+      lensSubject.weight = 0;
+    },
+    [],
+  );
+
   // ── THE ONE LOOP ─────────────────────────────────────────────────────────
   useFrame((_, delta) => {
     const s = legProgress.current;
+    if (stage.current) stage.current.visible = isShown(root);
 
     for (const a of STATION_ANCHORS) {
       emphasis.current[a.id].current =
         mode === 'still' ? STILL_EMPHASIS : stationEmphasis(beats, s, a.id);
     }
 
-    // The portrait is the last beat, so its emphasis is simply how far into the
-    // final leg the viewer is.
-    const portraitBeat = beats[beats.length - 1];
-    const prev = beats[beats.length - 2];
-    const from = prev ? prev.at : 0.85;
-    portraitEmphasis.current =
-      mode === 'still'
-        ? 0
-        : Math.min(1, Math.max(0, (s - from) / Math.max(1e-3, portraitBeat.at - from)));
+    // The portrait's own beat, found by id: it is no longer the last beat of
+    // the leg (see beatEmphasis).
+    portraitEmphasis.current = mode === 'still' ? 0 : beatEmphasis(beats, s, 'portrait');
+
+    // THE LENS SUBJECT (LensFocus): the station the camera is most on, or the
+    // portrait once the climb begins. Squared, so the long lens only closes
+    // down as the camera settles on a subject and the traverses stay sharp.
+    // /hall has no choreography to take a subject from, so it stays sharp.
+    if (mode === 'still') {
+      lensSubject.weight = 0;
+    } else {
+      let best = 0;
+      let subject: (typeof STATION_ANCHORS)[number] | null = null;
+      for (const a of STATION_ANCHORS) {
+        const e = emphasis.current[a.id].current;
+        if (e > best) {
+          best = e;
+          subject = a;
+        }
+      }
+      if (portraitEmphasis.current > best) {
+        lensSubject.point.set(...PORTRAIT.centre);
+        lensSubject.weight = portraitEmphasis.current ** 2;
+      } else if (subject) {
+        lensSubject.point.set(subject.position[0], subject.holoY, subject.position[2]);
+        lensSubject.weight = best ** 2;
+      } else {
+        lensSubject.weight = 0;
+      }
+    }
 
     // Hologram output. A station's plan sits at a low idle and lifts to the
     // strength the GLB shipped as the camera arrives, so the room has one
@@ -426,7 +479,12 @@ export function InteriorStage({
       // now goes slightly ABOVE the strength the GLB shipped so the active
       // station is unambiguously the brightest thing in frame. Still under the
       // bloom threshold: this is a projection, not a lamp.
-      h.mat.emissiveIntensity = h.base * (0.42 + 0.78 * e);
+      // OLD-MONEY PASS: 0.42 -> 0.6 at idle. The plan now prints as a gilded
+      // site model rather than a glow, and its solid blocks have a black base:
+      // at 0.42 an unvisited station, seen across the room from the
+      // establishing shot, read as a dark lump over its table. At 0.6 it is a
+      // quiet gilt maquette, still clearly below the station being looked at.
+      h.mat.emissiveIntensity = h.base * (0.6 + 0.6 * e);
     }
 
     // Portrait: a light response rather than a scale. The frame's emissive lifts
@@ -482,7 +540,7 @@ export function InteriorStage({
           .map((p, i) => ({ anchor: STATION_ANCHORS[i], project: p as StationProject | null }));
 
   return (
-    <>
+    <group ref={stage} visible={false}>
       {stations.map(({ anchor, project }) => (
         <ProjectStation
           key={anchor.id}
@@ -512,14 +570,16 @@ export function InteriorStage({
           the name and title. Built here rather than in the GLB so the wording
           can change without a re-export and a re-bake. */}
       <PortraitNameplate />
+      {/* The picture light's beam, made visible (PortraitBeam.tsx). */}
+      <PortraitBeam />
 
       {/* The response itself: a soft warm plane just in front of the canvas,
           additively blended. Not a scale, not an outline — the brief is
           explicit that hover should read as light and focus rather than as a
           CSS transform, and additive light over a painting is what a gallery
           does. depthWrite off so it never occludes the frame it sits on. */}
-      <mesh ref={portraitFrame} position={[0, 5.58, -7.55]} renderOrder={2}>
-        <planeGeometry args={[2.63, 3.52]} />
+      <mesh ref={portraitFrame} position={[0, 7.035, -7.5]} renderOrder={2}>
+        <planeGeometry args={[3.29, 4.4]} />
         <meshBasicMaterial
           color="#F2D9A8"
           transparent
@@ -529,6 +589,6 @@ export function InteriorStage({
           toneMapped={false}
         />
       </mesh>
-    </>
+    </group>
   );
 }

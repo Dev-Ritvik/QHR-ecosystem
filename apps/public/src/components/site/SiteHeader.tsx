@@ -60,6 +60,8 @@ const ALL = [
 
 export function SiteHeader() {
   const pathname = usePathname() || '/';
+  // The home page is the film (the middleware rewrites "/" to /site-home).
+  const overFilm = pathname === '/' || pathname === '/site-home';
   const [open, setOpen] = useState(false);
 
   // Close on navigation. The panel is not unmounted by the route change —
@@ -123,18 +125,43 @@ export function SiteHeader() {
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/[0.07] bg-[#0A1120]/72 backdrop-blur-md">
-        <div className="mx-auto flex h-[62px] max-w-6xl items-center gap-6 px-5">
-          <Logo size={30} />
+      {/* OVER THE FILM THE HEADER IS AIR, NOT A BAR. Everywhere else it keeps
+          its frosted navy band; on the home page it sits over a lit ivory hall
+          and a sunlit estate, where a cold, blurred strip across the top of
+          every frame read as an app's toolbar laid over a photograph. There it
+          is a soft fall of shade, just enough to hold the navigation. */}
+      <header
+        className={
+          'fixed inset-x-0 top-0 z-40 transition-colors duration-500 ' +
+          (overFilm
+            ? // No border at all: a background gradient is sized to the padding
+              // box and REPEATS into the border box, so even a transparent 1px
+              // border repainted the gradient's darkest row as a hairline.
+              'bg-gradient-to-b from-[#120d09]/55 via-[#120d09]/22 to-transparent bg-no-repeat'
+            : 'border-b border-white/[0.07] bg-[#0A1120]/72 backdrop-blur-md')
+        }
+      >
+        {/* ON THE SITE GRID (globals.css): the same twelve columns as the
+            hero, so the logo stands on the copy's left edge, the nav is set
+            justified across columns 7-10 (first link on column 7's line, last
+            ending on column 10's), and Enquire ends on the right edge of the
+            frame. On a phone it is a plain row, logo left and Enquire right:
+            twelve columns and eleven gutters do not fit 390px round a badge and
+            a button, and the grid's minimum width widened the whole page to
+            484px (measured). */}
+        <div className="site-grid h-[62px] items-center max-md:!flex max-md:justify-between">
+          <div className="col-span-6 flex items-center gap-6 md:col-span-5 lg:col-span-6">
+            <Logo size={30} />
 
-          {/* The way back into the film. Renders nothing on the film itself,
-              and nothing until this session has reached a chapter — see
-              ResumeResidence. Sits beside the logo rather than in the nav
-              because it is not a destination, it is a resume. */}
-          <ResumeResidence className="hidden md:inline-block" />
+            {/* The way back into the film. Renders nothing on the film itself,
+                and nothing until this session has reached a chapter — see
+                ResumeResidence. Sits beside the logo rather than in the nav
+                because it is not a destination, it is a resume. */}
+            <ResumeResidence className="hidden md:inline-block" />
+          </div>
 
-          <nav aria-label="Primary" className="ml-auto hidden md:block">
-            <ul className="flex items-center gap-5">
+          <nav aria-label="Primary" className="hidden md:col-span-5 md:block lg:col-span-4">
+            <ul className="flex items-center justify-between">
               {PRIMARY.map((l) => {
                 const active = pathname === l.href;
                 return (
@@ -146,22 +173,27 @@ export function SiteHeader() {
                         // tap-target: these render 18px tall, which is fine for
                         // a mouse and not for the tablets that also get this
                         // bar. The hit area grows; the type does not.
-                        'tap-target text-[13px] tracking-[0.04em] transition-colors ' +
+                        'tap-target group relative text-[11px] font-normal uppercase tracking-[0.22em] transition-colors duration-300 ' +
                         (active
                           ? 'text-[#F2EDE4]'
-                          : 'text-[#F2EDE4]/55 hover:text-[#F2EDE4]')
+                          : 'text-[#F2EDE4]/80 hover:text-[#F2EDE4]')
                       }
                     >
-                      {/* Bracketed micro-navigation. The brackets are
-                          aria-hidden so a screen reader hears "Plots", not
-                          "left bracket Plots right bracket" — they are a
-                          typographic device, not part of the link's name. They
-                          brighten on hover with the label, so the whole token
-                          reads as one target rather than a word inside
-                          furniture. */}
-                      <span aria-hidden className="mr-[0.35em] opacity-45">[</span>
-                      <span className="uppercase tracking-[0.14em]">{l.label}</span>
-                      <span aria-hidden className="ml-[0.35em] opacity-45">]</span>
+                      {/* NO BRACKETS. The client's art-direction review named
+                          them outright: "[ PLOTS ]" reads as code, a
+                          wireframe, a terminal — "aggressively anti-luxury".
+                          What is left is the word, set small, tracked wide and
+                          quiet, with a hairline that draws in under it on hover
+                          and stays under the page you are on. That is the whole
+                          vocabulary an editorial masthead uses. */}
+                      {l.label}
+                      <span
+                        aria-hidden
+                        className={
+                          'pointer-events-none absolute -bottom-[5px] left-0 h-px w-full origin-left bg-[#E8B98A]/70 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ' +
+                          (active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100')
+                        }
+                      />
                     </Link>
                   </li>
                 );
@@ -169,30 +201,29 @@ export function SiteHeader() {
             </ul>
           </nav>
 
-          <Link
-            href="/contact"
-            className="tap-target ml-auto rounded-[3px] border border-[#C08A5D]/45 px-4 py-2 text-[11px] uppercase tracking-[0.16em] text-[#E8B98A] transition-colors hover:border-[#C08A5D] hover:text-[#F2EDE4] md:ml-0"
-          >
-            Enquire
-          </Link>
+          <div className="col-span-6 flex items-center justify-end gap-3 md:col-span-2">
+            <Link href="/contact" className="cta-enquire tap-target">
+              Enquire
+            </Link>
 
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            aria-controls="site-menu"
-            className="tap-target -mr-2 flex h-10 w-10 items-center justify-center text-[#F2EDE4]/70 hover:text-[#F2EDE4] md:hidden"
-          >
-            <span className="sr-only">{open ? 'Close menu' : 'Open menu'}</span>
-            <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true">
-              <path
-                d={open ? 'M1 1 L17 11 M17 1 L1 11' : 'M0 1 H18 M0 6 H18 M0 11 H18'}
-                stroke="currentColor"
-                strokeWidth="1.4"
-                fill="none"
-              />
-            </svg>
-          </button>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              aria-controls="site-menu"
+              className="tap-target -mr-2 flex h-10 w-10 items-center justify-center text-[#F2EDE4]/70 hover:text-[#F2EDE4] md:hidden"
+            >
+              <span className="sr-only">{open ? 'Close menu' : 'Open menu'}</span>
+              <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true">
+                <path
+                  d={open ? 'M1 1 L17 11 M17 1 L1 11' : 'M0 1 H18 M0 6 H18 M0 11 H18'}
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  fill="none"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 

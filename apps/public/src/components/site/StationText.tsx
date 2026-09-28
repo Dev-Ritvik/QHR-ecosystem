@@ -14,6 +14,7 @@
 // removing the link would remove the product.
 
 import Link from 'next/link';
+import { Arrow } from './Arrow';
 import { InferSelectModel } from 'drizzle-orm';
 import { projectsPub } from '@estate/db/src/schema/projection';
 
@@ -35,9 +36,7 @@ export function StationText({ project }: { project: Project }) {
         {project.isSoldOut
           ? 'Fully sold'
           : `${project.availableUnits} of ${project.totalUnits} plots open`}
-        <span aria-hidden className="ml-3 inline-block transition-transform group-hover:translate-x-1">
-          &rarr;
-        </span>
+        <Arrow className="ml-3 inline-block align-middle" />
       </p>
     </Link>
   );

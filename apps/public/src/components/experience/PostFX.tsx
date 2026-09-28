@@ -4,19 +4,25 @@
 //
 // The cinematic lens: bloom and vignette.
 //
-// ONE CRITICAL DECISION, STATED UP FRONT: there is NO ToneMapping effect in
-// this chain, and that is deliberate.
+// TONE MAPPING, CORRECTED (the AO / art-direction pass). This header used to
+// say the scene arrives here already tone-mapped because three applies ACES in
+// each material's fragment shader. On three r173 that is not what happens:
+// WebGLRenderer.setProgram only compiles tone mapping into a material when it
+// renders to the SCREEN (`_currentRenderTarget === null`), the composer renders
+// the scene into its own buffer, and postprocessing's EffectMaterial is
+// `toneMapped: false`. So with this composer mounted there was no curve at all:
+// the frame went out as clamped scene-linear, and ColorPipeline's exposure was
+// inert. Two consequences, both deliberate now rather than accidental:
 //
-// three applies tone mapping inside the material's fragment shader
-// (tonemapping_fragment), not as a final blit — so the scene arriving in the
-// composer's buffer has ALREADY been through ACESFilmic at the exposure
-// ColorPipeline set. Adding postprocessing's ToneMapping effect on top would map
-// an already-mapped image a second time. That is precisely the arithmetic that
-// produced the "radioactive yellow glare" rejection earlier in this build, and
-// it is not worth repeating for a line of code that looks correct in a tutorial.
+//   * OUTSIDE, in daylight, FilmGrade supplies the curve (ACES, own exposure)
+//     after bloom — so bloom still sees scene-linear, as it always did.
+//   * INSIDE, since the old-money pass, the hall gets the same curve with its
+//     own grade (HALL_GRADE): without one, its shadows had no toe and its ivory
+//     no shoulder, and the room read as a milky, low-contrast print.
+//   * At dusk the chain is left as it was measured and approved.
 //
-// Consequence: bloom operates on tone-mapped values, so its luminanceThreshold
-// is in display space, not scene-linear. 0.85 is chosen against that.
+// Bloom's luminanceThreshold has therefore always been in scene-linear terms,
+// and it is set per set (BLOOM / HALL_BLOOM).
 //
 // Gated by device tier. Low tier keeps vignette only, which costs almost
 // nothing and still frames the composition.
@@ -75,9 +81,20 @@ import {
   Noise,
   Vignette,
 } from '@react-three/postprocessing';
-import { BlendFunction } from 'postprocessing';
+import { useCallback, useEffect, useRef } from 'react';
+import {
+  BlendFunction,
+  type BloomEffect,
+  type BrightnessContrastEffect,
+  type HueSaturationEffect,
+  type VignetteEffect,
+} from 'postprocessing';
 import { Vector2 } from 'three';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
+import { FILM_GRADE, FilmGrade, HALL_GRADE, type FilmGradeEffect } from './FilmGrade';
+import { LensFocus } from './LensFocus';
+import type { SceneSet } from './poses';
+import type { Grade } from './WorldCanvas';
 
 /**
  * THE GRADE, AND WHY A RENDER NEEDS ONE.
@@ -107,6 +124,26 @@ const GRADE = { contrast: 0.055, saturation: 0.09, grain: 0.028 } as const;
 const ABERRATION = new Vector2(0.00042, 0.00042);
 
 /**
+ * Bloom, per set. The threshold is in SCENE-LINEAR light, because bloom runs
+ * before the print.
+ *
+ * Outside: only the gold finials, the lit window reveals, the constellation and
+ * the active hologram cross 0.82; a lower threshold catches the cream stone and
+ * turns the whole facade into a lamp.
+ *
+ * Inside the same 0.82 caught the room. The hall is IVORY: its lit walls, its
+ * ceiling and its stair stringer all sit near that level, so every bright
+ * surface put a haze over its neighbours — a glow with no source, which is the
+ * milky veil the hall had. Inside, only the light sources bloom: the
+ * chandelier's crystal, the sconce flames, the holograms.
+ */
+const BLOOM = { intensity: 0.74, threshold: 0.82, smoothing: 0.3 } as const;
+const HALL_BLOOM = { intensity: 0.55, threshold: 1.25, smoothing: 0.35 } as const;
+/** A touch heavier than outside since the second client review: the room
+ *  is lamp-lit, and its edges fall away toward the corners (FilmGrade HALL_GRADE). */
+const HALL_VIGNETTE = { offset: 0.3, darkness: 0.62 } as const;
+
+/**
  * MULTISAMPLING OFF.
  *
  * Kept from the investigation above. It did not fix the depth blit on its own,
@@ -120,38 +157,130 @@ const ABERRATION = new Vector2(0.00042, 0.00042);
  */
 const MULTISAMPLING = 0;
 
-export function PostFX({ tier }: { tier: DeviceTier }) {
+/**
+ * A callback ref for an effect instance. @react-three/postprocessing types an
+ * effect component's ref as the effect CLASS rather than the instance, so an
+ * object ref will not type-check; a callback that takes what it is given does.
+ */
+function useEffectRef<T>() {
+  const ref = useRef<T | null>(null);
+  const bind = useCallback((instance: unknown) => {
+    ref.current = (instance as T | null) ?? null;
+  }, []);
+  return [ref, bind] as const;
+}
+
+/** Look-dev: with ?debug=1 the composer joins window.__estate (WorldCanvas),
+ *  and the two prints are published so a capture can move them live. */
+function exposeComposer(composer: unknown) {
+  if (typeof window === 'undefined' || !composer) return;
+  if (new URLSearchParams(window.location.search).get('debug') !== '1') return;
+  const w = window as unknown as { __estateComposer?: unknown; __estateGrades?: unknown };
+  w.__estateComposer = composer;
+  w.__estateGrades = { film: FILM_GRADE, hall: HALL_GRADE };
+}
+
+export function PostFX({
+  tier,
+  set = 'exterior',
+  grade = 'daylight',
+}: {
+  tier: DeviceTier;
+  set?: SceneSet;
+  grade?: Grade;
+}) {
   // Grain and aberration are the two passes that buy the least per millisecond,
   // so they are the two a mid-tier device does without: it keeps the bloom, the
   // grade and the vignette, which carry the look.
   const lens = tier === 'high';
+  // THE EXTERIOR PRINT (FilmGrade.tsx): a filmic curve and the green, split
+  // and contrast grade, in place of the contrast/saturation pair. Outside in
+  // daylight; the dusk rollback keeps the chain it was measured against.
+  const film = set === 'exterior' && grade === 'daylight';
+  // THE HALL'S PRINT (FilmGrade's HALL_GRADE): the same curve, graded for a
+  // lamplit ivory room. The hall had no curve at all before this.
+  const hall = set === 'interior';
+  const printed = film || hall;
+  const printSettings = hall ? HALL_GRADE : FILM_GRADE;
+
+  // THE THRESHOLD IS A UNIFORM WRITE, NOT A NEW CHAIN. The set flips from
+  // exterior to interior in the middle of the door passage, under the veil.
+  // If that flip changed which effects are mounted, the composer would rebuild
+  // and recompile its passes right there — measured, a stall long enough that
+  // the passage's white peak was never drawn (E2E: "the light fills the frame"
+  // read 0). So every effect either chain needs stays mounted for the life of
+  // a tier, and the flip only moves values the effects already own: the print
+  // to 1 or 0 (0 is an exact passthrough), the contrast/saturation pair to its
+  // graded values or to identity, the vignette to its two settings. The r3f
+  // wrappers put their props into constructor args, so these are driven
+  // through refs rather than props — a changed prop would re-instantiate the
+  // effect and rebuild the chain all the same.
+  const [contrast, bindContrast] = useEffectRef<BrightnessContrastEffect>();
+  const [saturation, bindSaturation] = useEffectRef<HueSaturationEffect>();
+  const [print, bindPrint] = useEffectRef<FilmGradeEffect>();
+  const [vignette, bindVignette] = useEffectRef<VignetteEffect>();
+  const [bloom, bindBloom] = useEffectRef<BloomEffect>();
+  useEffect(() => {
+    if (contrast.current) contrast.current.contrast = printed ? 0 : GRADE.contrast;
+    if (saturation.current) saturation.current.saturation = printed ? 0 : GRADE.saturation;
+    if (print.current) print.current.amount = printed ? 1 : 0;
+    const b = bloom.current;
+    if (b) {
+      const look = hall ? HALL_BLOOM : BLOOM;
+      b.intensity = look.intensity;
+      b.luminanceMaterial.threshold = look.threshold;
+      b.luminanceMaterial.smoothing = look.smoothing;
+    }
+    const v = vignette.current;
+    if (v) {
+      // Lighter under the print, whose toe already darkens the corners the
+      // vignette used to be responsible for. Low tier keeps its own pair.
+      v.offset = tier === 'low' ? 0.32 : hall ? HALL_VIGNETTE.offset : film ? 0.3 : 0.28;
+      v.darkness = tier === 'low' ? 0.62 : hall ? HALL_VIGNETTE.darkness : film ? 0.55 : 0.7;
+    }
+  }, [film, hall, printed, tier, contrast, saturation, print, vignette, bloom]);
+
   if (tier === 'low') {
     // A phone gets the grade but not the passes that cost a full-screen blur:
-    // contrast, saturation and the vignette are one shader between them.
+    // the grade and the vignette are one shader between them.
     return (
       <EffectComposer multisampling={MULTISAMPLING}>
-        <BrightnessContrast brightness={0} contrast={GRADE.contrast} />
-        <HueSaturation hue={0} saturation={GRADE.saturation} />
-        <Vignette offset={0.32} darkness={0.62} eskil={false} />
+        <BrightnessContrast ref={bindContrast} brightness={0} contrast={GRADE.contrast} />
+        <HueSaturation ref={bindSaturation} hue={0} saturation={GRADE.saturation} />
+        <FilmGrade ref={bindPrint} settings={printSettings} />
+        <Vignette ref={bindVignette} offset={0.32} darkness={0.62} eskil={false} />
       </EffectComposer>
     );
   }
 
+  // KEYED ON THE TIER, so a tier change rebuilds the chain in the order it is
+  // written. r3f appends an effect that mounts later — the tier is promoted
+  // from 'mid' to 'high' after the first frames are measured — to the END of
+  // the composer's children, so the high-tier chain was running Render ->
+  // [Bloom, grade, Vignette] -> Aberration -> Grain: grain and aberration after
+  // the vignette, and with the lens, the lens after the pass that clamps the
+  // scene's alpha, where the depth it reads had already been flattened to 1.0
+  // and it blurred the whole frame as if it were sky. The promotion happens
+  // once, at load; nothing else changes the effect set (see above).
   return (
-    <EffectComposer multisampling={MULTISAMPLING}>
-      {/* Selective: only the gold finials, the lit window reveals, the
-          constellation and the active hologram cross 0.85 after tone mapping. A
-          lower threshold catches the cream stone and turns the whole facade into
-          a lamp — which is the failure mode this build has already shipped
-          once. */}
+    <EffectComposer key={tier} multisampling={MULTISAMPLING} ref={exposeComposer}>
+      {/* FIRST, and on its own pass: the lens reads the scene's depth from
+          the alpha channel, which the next pass clamps away (LensFocus.tsx).
+          It rests at zero strength anywhere but the exterior leg. */}
+      {lens ? <LensFocus active={film || hall} /> : <></>}
+      {/* Selective, per set (BLOOM / HALL_BLOOM): only light sources cross
+          the threshold. Driven through the ref, like the grade below, so the
+          threshold at the door is a uniform write. */}
       <Bloom
-        intensity={0.74}
-        luminanceThreshold={0.82}
-        luminanceSmoothing={0.3}
+        ref={bindBloom}
+        intensity={BLOOM.intensity}
+        luminanceThreshold={BLOOM.threshold}
+        luminanceSmoothing={BLOOM.smoothing}
         mipmapBlur
       />
-      <BrightnessContrast brightness={0} contrast={GRADE.contrast} />
-      <HueSaturation hue={0} saturation={GRADE.saturation} />
+      <BrightnessContrast ref={bindContrast} brightness={0} contrast={GRADE.contrast} />
+      <HueSaturation ref={bindSaturation} hue={0} saturation={GRADE.saturation} />
+      <FilmGrade ref={bindPrint} settings={printSettings} />
       {lens ? (
         <ChromaticAberration offset={ABERRATION} radialModulation modulationOffset={0.35} />
       ) : (
@@ -165,7 +294,7 @@ export function PostFX({ tier }: { tier: DeviceTier }) {
       ) : (
         <></>
       )}
-      <Vignette offset={0.28} darkness={0.7} eskil={false} />
+      <Vignette ref={bindVignette} offset={0.28} darkness={0.7} eskil={false} />
     </EffectComposer>
   );
 }

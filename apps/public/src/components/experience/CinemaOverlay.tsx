@@ -19,9 +19,12 @@
 //           daylight key is), at 7%. A real lens flares toward its light source
 //           and the absence of any such spill is part of what makes a clean
 //           render read as synthetic.
-//   frame   a hairline inset in the site's gold, with corner ticks. The oldest
-//           trick in exhibition print: a picture inside a border reads as a
-//           picture rather than as a window.
+//
+// THERE IS NO FRAME. There was, for one release: a hairline inset in the
+// site's gold with corner ticks. The client's art-direction review asked for it
+// to go — "it boxes in the 3D experience and reduces the feeling of vastness" —
+// and the review is right about what an inset border does to a view that is
+// meant to open out to a horizon.
 //
 // COSTS NOTHING TO ANIMATE. Three fixed-position composited layers, no paint on
 // scroll, `pointer-events-none` throughout so nothing here can take a click
@@ -41,14 +44,14 @@ export function CinemaOverlay({ set, grade }: { set: SceneSet; grade: Grade }) {
   return (
     <>
       {/* THE LIGHT LEAK. Only in daylight outside, and only on the sun's side:
-          the key stands at [-96, 26, 62], which from every beat in the film is
-          the upper left of frame. */}
+          the key stands at DAY_SUN (front-right), which from the hero is the
+          right of frame — away from the copy column, which it used to wash. */}
       {day && (
         <div
           className="pointer-events-none absolute inset-0 z-[1]"
           style={{
             background:
-              'radial-gradient(58% 48% at 16% 14%, rgba(255,203,138,0.14) 0%, rgba(255,186,110,0.06) 38%, rgba(255,186,110,0) 72%)',
+              'radial-gradient(58% 48% at 88% 16%, rgba(255,203,138,0.14) 0%, rgba(255,186,110,0.06) 38%, rgba(255,186,110,0) 72%)',
             mixBlendMode: 'screen',
           }}
         />
@@ -61,38 +64,6 @@ export function CinemaOverlay({ set, grade }: { set: SceneSet; grade: Grade }) {
         style={{ backgroundImage: GRAIN_TILE }}
       />
 
-      {/* THE FRAME: a hairline and four corner ticks, in the site's gold. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-[3] hidden md:block"
-        style={{ padding: '18px' }}
-      >
-        <div className="relative h-full w-full border border-[rgba(214,178,116,0.16)]">
-          {(
-            [
-              ['-1px', '-1px', 'borderTop', 'borderLeft'],
-              ['-1px', 'auto', 'borderTop', 'borderRight'],
-              ['auto', '-1px', 'borderBottom', 'borderLeft'],
-              ['auto', 'auto', 'borderBottom', 'borderRight'],
-            ] as const
-          ).map(([top, left, a, b], i) => (
-            <span
-              key={i}
-              style={{
-                position: 'absolute',
-                top: top === 'auto' ? 'auto' : top,
-                bottom: top === 'auto' ? '-1px' : 'auto',
-                left: left === 'auto' ? 'auto' : left,
-                right: left === 'auto' ? '-1px' : 'auto',
-                width: '16px',
-                height: '16px',
-                [a]: '1px solid rgba(214,178,116,0.5)',
-                [b]: '1px solid rgba(214,178,116,0.5)',
-              }}
-            />
-          ))}
-        </div>
-      </div>
     </>
   );
 }

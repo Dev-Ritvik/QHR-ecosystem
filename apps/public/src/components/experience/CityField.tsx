@@ -43,6 +43,8 @@ import { HANDOFF_MS, cancelDive, startDive } from './dive';
 import { useBeaconFocus } from '@/components/site/CityLink';
 import { clicksSuppressed } from './stationControls';
 import { doorwayState } from './doorway';
+import { hallEnv } from './HallModel';
+import { warmHallPrograms } from './hallProbe';
 
 /** The film's night. Same value the veil, the preloader and the exterior's
  *  evening fog all settle on, so the field belongs to the same picture. */
@@ -467,15 +469,29 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
   // in the cornice and fade half the room's joinery.
   const doorState = useRef<{ mesh: THREE.Mesh; material: THREE.Material } | null>(null);
   const openUniform = useRef({ value: 0 });
+  // The clones, which the hall's probe does not know about: they follow its
+  // capture from the frame loop below.
+  const thresholdMats = useRef<THREE.MeshStandardMaterial[]>([]);
 
   useEffect(() => {
     if (!root) return;
     const cleanups: (() => void)[] = [];
+    // clone() is copy(), and MeshStandardMaterial.copy() resets `defines` to
+    // STANDARD alone: each clone would lose the hall's probe and lens defines
+    // (hallProbe.ts, LensFocus.tsx), and with the probe's the bake/probe split,
+    // lighting the front wall's bake a second time with the ambient and the IBL
+    // beside a room that does not.
+    const held = thresholdMats.current;
+    const keepHallDefines = (clone: THREE.MeshStandardMaterial, original: THREE.MeshStandardMaterial) => {
+      clone.defines = { ...original.defines };
+      held.push(clone);
+    };
 
     const doors = root.getObjectByName('int_doors') as THREE.Mesh | null;
     if (doors && !Array.isArray(doors.material)) {
       const original = doors.material as THREE.MeshStandardMaterial;
       const clone = original.clone();
+      keepHallDefines(clone, original);
       clone.name = `${original.name}__threshold`;
       clone.transparent = true;
       clone.depthWrite = false;
@@ -492,6 +508,7 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
     if (wall && !Array.isArray(wall.material)) {
       const original = wall.material as THREE.MeshStandardMaterial;
       const clone = original.clone();
+      keepHallDefines(clone, original);
       clone.name = `${original.name}__threshold`;
       const uOpen = openUniform.current;
       clone.onBeforeCompile = (shader) => {
@@ -536,10 +553,18 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
       });
     }
 
+    // Compiled with the hall, off the main thread, rather than on the frame the
+    // door passage first draws them (hallProbe.ts, warmHallPrograms) — and the
+    // field's own shaders with them, rather than at the reveal.
+    for (const o of [doors, wall, groupRef.current]) {
+      if (o) void warmHallPrograms(gl, camera, o, hallEnv.stand);
+    }
+
     return () => {
       for (const fn of cleanups) fn();
+      held.length = 0;
     };
-  }, [root]);
+  }, [root, gl, camera]);
 
   // ── Interaction ───────────────────────────────────────────────────────────
   const setHover = useCallback((index: number, on: boolean) => {
@@ -615,6 +640,9 @@ export function CityField({ projects, reveal, root, onOpen, tier }: CityFieldPro
     // are out of the way — whichever of the two asks for more. The camera faces
     // into the room the whole time, so the opening closing again behind it is
     // never on screen.
+    const env = hallEnv.texture;
+    if (env) for (const m of thresholdMats.current) if (m.envMap !== env) m.envMap = env;
+
     const passage = doorwayState.channels.hallOpen;
     const door = doorState.current;
     if (door) {

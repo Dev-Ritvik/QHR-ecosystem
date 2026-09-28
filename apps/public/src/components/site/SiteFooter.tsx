@@ -1,3 +1,5 @@
+'use client';
+
 // apps/public/src/components/site/SiteFooter.tsx
 //
 // Replaces the placeholder strip that held nothing but the privacy control.
@@ -9,8 +11,21 @@
 //
 // PrivacyControl keeps its place here. Withdrawing consent has to be as easy as
 // granting it, and a footer on every page is the only element that qualifies.
+//
+// ON THE FILM IT IS THE LAST FRAME, NOT A PAGE UNDER IT. The second client
+// review: "the transition from the interactive 3D WebGL environment to the
+// standard, dark-blue text footer is jarring ... a completely separate, basic
+// HTML webpage appended to the bottom of a 3D application." It was: a solid
+// navy slab with a rule across the top, arriving under the district field. On
+// the home page the footer is now transparent at its head and deepens into
+// the page colour, so the field's glowing markers stay in frame behind a
+// closing line set in the film's own type; the rules are gilt hairlines, as
+// the film's are. Every other page keeps the plain footer it had.
+
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Arrow } from './Arrow';
 import { PrivacyControl } from '@/components/consent/ConsentPanel';
 import { Logo } from './Logo';
 import { BRANCHES } from '@estate/domain/leads/branches';
@@ -45,10 +60,44 @@ const LEGAL = [
 
 export function SiteFooter() {
   const year = new Date().getFullYear();
+  const pathname = usePathname() || '/';
+  const overFilm = pathname === '/' || pathname === '/site-home';
+  const rule = overFilm ? 'border-[#E8B98A]/[0.16]' : 'border-white/[0.08]';
 
   return (
-    <footer className="relative z-10 border-t border-white/[0.08] bg-[#060A14]">
-      <div className="mx-auto max-w-6xl px-6 py-16">
+    <footer
+      className={
+        'relative z-10 ' +
+        (overFilm
+          ? 'bg-gradient-to-b from-transparent via-[#060A14]/82 via-40% to-[#060A14]'
+          : 'border-t border-white/[0.08] bg-[#060A14]')
+      }
+    >
+      {overFilm ? (
+        // THE SIGN-OFF. The film's last word, over its last frame: one line
+        // in the display serif, one sentence, one action.
+        <div className="mx-auto max-w-6xl px-6 pb-20 pt-[18vh]">
+          <p className="t-eyebrow text-[#E8B98A]/85">Visit</p>
+          <p data-reveal className="t-h1 mt-6 max-w-[16ch] text-[#F2EDE4] [text-shadow:0_1px_28px_rgba(6,10,20,0.6)]">
+            The land is best seen <em className="t-display-em">from the land.</em>
+          </p>
+          <p className="t-hero-lede mt-7 max-w-[40ch] text-[#F2EDE4]/80">
+            Every open layout can be walked. The branch that holds it will take
+            you there.
+          </p>
+          <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-5">
+            <Link href="/contact" className="cta-primary group">
+              Arrange a site visit
+              <Arrow />
+            </Link>
+            <a href="tel:+919553513366" className="cta-quiet group">
+              <span className="cta-quiet-label">+91 95535 13366</span>
+              <Arrow />
+            </a>
+          </div>
+        </div>
+      ) : null}
+      <div className={'mx-auto max-w-6xl px-6 py-16 ' + (overFilm ? `border-t ${rule}` : '')}>
         <div className="grid gap-12 md:grid-cols-[1.1fr_2fr]">
           <div>
             <Logo size={34} href={null} />
@@ -73,7 +122,7 @@ export function SiteFooter() {
           <div className="grid gap-10 sm:grid-cols-3">
             {COLUMNS.map((c) => (
               <div key={c.title}>
-                <h2 className="text-[10px] uppercase tracking-[0.2em] text-[#F2EDE4]/50">
+                <h2 className="t-eyebrow text-[#F2EDE4]/60">
                   {c.title}
                 </h2>
                 {/* Real 44px rows rather than an invisible expander: these are
@@ -98,7 +147,7 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="mt-14 grid gap-8 border-t border-white/[0.08] pt-10 sm:grid-cols-3">
+        <div className={`mt-14 grid gap-8 border-t ${rule} pt-10 sm:grid-cols-3`}>
           {(['visakhapatnam', 'vizianagaram', 'srikakulam'] as const).map((id) => {
             const b = BRANCHES[id];
             return (
@@ -115,7 +164,7 @@ export function SiteFooter() {
           })}
         </div>
 
-        <div className="mt-12 flex flex-wrap items-center gap-x-6 gap-y-4 border-t border-white/[0.08] pt-8">
+        <div className={`mt-12 flex flex-wrap items-center gap-x-6 gap-y-4 border-t ${rule} pt-8`}>
           <p className="text-[12px] text-[#F2EDE4]/60">
             &copy; {year} Quality Homes Reality
           </p>

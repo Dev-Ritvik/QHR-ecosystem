@@ -49,8 +49,10 @@ import {
 } from './estateBounds';
 import {
   buildInteriorBeats,
+  IMPERIAL_STAIR,
   interiorCurves,
   interiorCurveT,
+  stairNosingY,
   stationViewpoint,
   STATION_ANCHORS,
 } from './interiorPath';
@@ -69,41 +71,76 @@ type Box = { name: string; min: [number, number, number]; max: [number, number, 
 const EXTERIOR_SOLIDS: Box[] = [...ESTATE_ARCHITECTURE, ...ESTATE_PLANTING];
 
 /**
+ * The imperial stair's flights as solids: each flight cut into narrow wedges
+ * of plan angle, each wedge boxed from the floor to the top of its balustrade
+ * rail at the wedge's upper end. The boxes of a curved wedge overlap the air
+ * round it a little, which makes this conservative - a pass here is stronger
+ * than the stone requires. Built from IMPERIAL_STAIR, the numbers the Blender
+ * script used, so the model cannot drift from the stair it describes.
+ */
+function imperialFlights(): Box[] {
+  const s = IMPERIAL_STAIR;
+  const [cx, cz] = s.centre;
+  const out: Box[] = [];
+  const WEDGES = 30;
+  for (const side of [1, -1]) {
+    for (let k = 0; k < WEDGES; k += 1) {
+      const a0 = s.thetaBottom + ((s.thetaTop - s.thetaBottom) * k) / WEDGES;
+      const a1 = s.thetaBottom + ((s.thetaTop - s.thetaBottom) * (k + 1)) / WEDGES;
+      const xs: number[] = [];
+      const zs: number[] = [];
+      for (const a of [a0, (a0 + a1) / 2, a1]) {
+        for (const r of [s.rInner, s.rOuter]) {
+          xs.push(cx + side * r * Math.cos(a));
+          // plan angle runs toward the back wall, which is -z in three space
+          zs.push(cz - r * Math.sin(a));
+        }
+      }
+      out.push({
+        name: `flight_${side > 0 ? 'r' : 'l'}${k}`,
+        min: [Math.min(...xs), 0, Math.min(...zs)],
+        max: [Math.max(...xs), stairNosingY(a1) + s.rail, Math.max(...zs)],
+      });
+    }
+  }
+  return out;
+}
+
+/**
  * Solid volumes in interior_hall.glb.
  *
- * The balustrade and the urns are the two that actually bite: the balustrade is
- * a wall from y 0.10 to 2.79 either side of the stairs, and the urns reach
- * y 1.56, which is 8cm under the camera's eye line.
+ * The stair is the one that bites: two flights sweeping out to x +/-4.6 with a
+ * rail 1.22 m over their treads, and a landing 4.2 m up across the back.
  */
 const INTERIOR_SOLIDS: Box[] = [
-  // V7: the hall extended by bays (tools/blender/extend_hall_v7.py) — the room
-  // is 19.8 x 15.4 x 8.0m, and every solid in it moved with the walls.
-  { name: 'wall_left', min: [-10.2, 0, -8.0], max: [-9.9, 8.0, 8.0] },
-  { name: 'wall_right', min: [9.9, 0, -8.0], max: [10.2, 8.0, 8.0] },
-  { name: 'wall_back', min: [-10.2, 0, -8.0], max: [10.2, 8.0, -7.7] },
-  { name: 'wall_front', min: [-10.2, 0, 7.7], max: [10.2, 8.0, 8.0] },
-  { name: 'ceiling', min: [-9.9, 8.0, -7.7], max: [9.9, 8.1, 7.7] },
-  // stair_step_0..11 plus the landing, as one wedge-free hull. Conservative:
-  // the real stair is a ramp, so this box also covers the air above the lower
-  // treads, and a camera is allowed there. Handled by the ramp test below.
-  { name: 'stair_solid', min: [-3.25, 0, -8.55], max: [3.25, 3.47, -1.86] },
-  { name: 'balustrade_r', min: [2.94, 0.13, -7.7], max: [3.19, 4.72, -1.64] },
-  { name: 'balustrade_l', min: [-3.19, 0.13, -7.7], max: [-2.94, 4.72, -1.64] },
-  { name: 'urn_l', min: [-5.19, 0, -2.05], max: [-4.21, 1.87, -1.05] },
-  { name: 'urn_r', min: [4.21, 0, -2.05], max: [5.19, 1.87, -1.05] },
-  { name: 'chandelier', min: [-1.01, 5.85, -0.14], max: [1.01, 7.85, 1.88] },
-  { name: 'column_l', min: [-10.1, 0, -7.55], max: [-9.2, 7.46, 7.55] },
-  { name: 'column_r', min: [9.2, 0, -7.55], max: [10.1, 7.46, 7.55] },
-  { name: 'portrait', min: [-1.21, 3.95, -7.7], max: [1.21, 7.21, -7.5] },
+  // THE IMPERIAL HALL (tools/blender/imperial_hall_v7.py): 19.8 x 15.4 m on
+  // plan, walls to 13 m, coffered ceiling beams from 12.58, and a dome over the
+  // centre to 19.2. The ceiling box stands for the beams; the dome is above it.
+  { name: 'wall_left', min: [-10.2, 0, -8.0], max: [-9.9, 13.0, 8.0] },
+  { name: 'wall_right', min: [9.9, 0, -8.0], max: [10.2, 13.0, 8.0] },
+  { name: 'wall_back', min: [-10.2, 0, -8.0], max: [10.2, 13.0, -7.7] },
+  { name: 'wall_front', min: [-10.2, 0, 7.7], max: [10.2, 13.0, 8.0] },
+  { name: 'ceiling', min: [-9.9, 12.58, -7.7], max: [9.9, 13.1, 7.7] },
+  ...imperialFlights(),
+  // The landing, solid to the floor, with its balustrade along the curved front.
+  {
+    name: 'landing',
+    min: [-IMPERIAL_STAIR.landingHalfWidth, 0, -7.7],
+    max: [IMPERIAL_STAIR.landingHalfWidth, IMPERIAL_STAIR.landing + IMPERIAL_STAIR.rail, -5.39],
+  },
+  { name: 'newels_foot', min: [-2.81, 0, -1.04], max: [2.81, 1.76, 0.59] },
+  { name: 'urn_l', min: [-3.8, 0, 5.9], max: [-2.8, 1.87, 6.9] },
+  { name: 'urn_r', min: [2.8, 0, 5.9], max: [3.8, 1.87, 6.9] },
+  { name: 'chandelier', min: [-1.46, 9.8, -1.46], max: [1.46, 12.7, 1.46] },
+  { name: 'column_l', min: [-10.1, 0, -7.55], max: [-9.2, 12.45, 7.55] },
+  { name: 'column_r', min: [9.2, 0, -7.55], max: [10.1, 12.45, 7.55] },
+  { name: 'portrait', min: [-1.51, 5.0, -7.7], max: [1.51, 9.07, -7.46] },
   // TABLES, re-measured against the final delivery. The Ø0.58m pedestals
   // (half-extent 0.29, top 0.96) were replaced by Ø1.15m turned tables:
   // table_top_S1 spans x -6.52..-5.37 about a centre of -5.95, so a half-extent
   // of 0.575 with the top surface at 0.80. Boxed at 0.62 x 0.85 — conservative,
   // because each table carries an inward yaw and a square-footed veneer whose
   // axis-aligned hull is wider than the disc.
-  //
-  // This is the one obstacle in the room that changed. Every other bound below
-  // was re-parsed from the new GLB and is identical.
   { name: 'table_S1', min: [-8.47, 0, 2.14], max: [-7.23, 0.85, 3.38] },
   { name: 'table_S2', min: [-6.69, 0, -6.14], max: [-5.45, 0.85, -4.9] },
   { name: 'table_S3', min: [7.23, 0, -1.93], max: [8.47, 0.85, -0.69] },
@@ -125,16 +162,6 @@ function distanceToBox(p: THREE.Vector3, b: Box): number {
     p.y - b.min[1], b.max[1] - p.y,
     p.z - b.min[2], b.max[2] - p.z,
   );
-}
-
-/** The stair is a ramp, not the box the hull above describes. A camera over the
- *  lower treads is fine; a camera inside the masonry is not. Tread surface
- *  height at a given z, from stair_step_0 (z -0.63, y 0.22) to stair_step_11
- *  (z -4.37, y 2.64), then the landing at 2.76. */
-function stairSurfaceY(z: number): number {
-  if (z > -1.86) return 0;
-  if (z < -6.96) return 3.47;
-  return 0.275 + ((-1.86 - z) / (6.96 - 1.86)) * (3.3 - 0.275);
 }
 
 function sampleCurve(curve: THREE.CatmullRomCurve3, n: number): THREE.Vector3[] {
@@ -475,7 +502,6 @@ describe('interior camera path', () => {
         for (let i = 0; i < samples.length; i += 1) {
           const p = samples[i];
           for (const solid of INTERIOR_SOLIDS) {
-            if (solid.name === 'stair_solid') continue; // handled by the ramp test
             const d = distanceToBox(p, solid);
             if (d < NEAR_INTERIOR) {
               hits.push(
@@ -487,18 +513,12 @@ describe('interior camera path', () => {
         expect(hits).toEqual([]);
       });
 
-      it('stays above the stair surface and below the ceiling', () => {
+      it('stays above the floor and below the coffered ceiling', () => {
         const bad: string[] = [];
         for (let i = 0; i < samples.length; i += 1) {
           const p = samples[i];
-          if (Math.abs(p.x) <= 3.25 && p.z <= -1.86) {
-            const floor = stairSurfaceY(p.z);
-            if (p.y < floor + 0.6) {
-              bad.push(`t=${(i / (samples.length - 1)).toFixed(3)} y=${p.y.toFixed(2)} tread=${floor.toFixed(2)}`);
-            }
-          }
           if (p.y < 0.5) bad.push(`below floor at ${p.y.toFixed(2)}`);
-          if (p.y > 7.8) bad.push(`through ceiling at ${p.y.toFixed(2)}`);
+          if (p.y > 12.3) bad.push(`through ceiling at ${p.y.toFixed(2)}`);
         }
         expect(bad).toEqual([]);
       });
@@ -522,16 +542,19 @@ describe('interior camera path', () => {
       const vp = stationViewpoint(a);
       const eye = new THREE.Vector3(...vp.position);
       const aim = new THREE.Vector3(...vp.target);
-      // Far enough back that a 30-degree lens frames the table and the plan
-      // above it, close enough that the plan is legible.
+      // Far enough back, FOR ITS LENS, that the frame holds the table top, the
+      // plan and its title (about 1.45 m at the subject); close enough that the
+      // plan reads. The title carries the name now, so the plan no longer has
+      // to fill the frame to be legible. Judged as frame height rather than
+      // distance, because one station (S2) stands nearer on a wider lens.
       const d = eye.distanceTo(aim);
-      expect(d).toBeGreaterThan(1.8);
-      expect(d).toBeLessThan(3.2);
-      // And inside the room.
-      expect(Math.abs(eye.x)).toBeLessThan(7.4);
-      expect(Math.abs(eye.z)).toBeLessThan(5.2);
+      const fov = ((a.fov ?? 27) * Math.PI) / 180;
+      expect(2 * d * Math.tan(fov / 2)).toBeGreaterThan(1.45);
+      expect(d).toBeLessThan(4.4);
+      // And inside the extended room, clear of its walls.
+      expect(Math.abs(eye.x)).toBeLessThan(9.4);
+      expect(Math.abs(eye.z)).toBeLessThan(7.2);
       for (const solid of INTERIOR_SOLIDS) {
-        if (solid.name === 'stair_solid') continue;
         expect(distanceToBox(eye, solid)).toBeGreaterThan(NEAR_INTERIOR);
       }
     }
