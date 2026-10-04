@@ -15,7 +15,7 @@
 // Both loaders are mandatory: KHR_texture_basisu and KHR_draco_mesh_compression
 // are in extensionsRequired, so the file will not parse without them.
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -26,8 +26,10 @@ import { guardAnisotropy } from './materialGuards';
 import { finishHall } from './hallFinish';
 import { faceTheFrieze, refurnishHall } from './hallJoinery';
 import { dressWalnut } from './hallWalnut';
+import { applyHallLevel, hallLight, trackHallMaterial, untrackHallMaterials } from './hallLight';
 import { dressHallDetail } from './hallDetail';
 import { dressFloor } from './hallFloor';
+import { hallPortal } from './doorPortal';
 import { NO_DEPTH, markFocusDepth } from './LensFocus';
 import {
   beginHallProbe,
@@ -113,8 +115,19 @@ export function useProbeBinding(
  *  than doubled because the atlas now holds light SOURCES' surroundings the
  *  old room never had — the oculus pools light on the floor under the dome and
  *  the clerestory windows wash the attic walls — and those set the 99.5th
- *  percentile the atlas is normalised by. */
-const LIGHTMAP_INTENSITY = 8.294;
+ *  percentile the atlas is normalised by.
+ *
+ *  5.2441 since the refinement brief (2026-10-03): the REFINED hall (Attic
+ *  bases, the stair's apron frames, column shafts unrolled to one lightmap
+ *  island each: tools/blender/refine_hall_v7.py, bake_lightmap.py), baked as
+ *  two families of light - the lamps, and the windows with the oculus - and
+ *  mixed at 1.6 : 0.55 (tools/gltf/mix_hall_passes.py). The lamps lead a
+ *  little and the windows' wash is halved, for a room whose panes are now the
+ *  sky after sunset (DUSK_GLASS). A fully lamp-led mix (4.5 : 0.1) was tried
+ *  and measured: the wall behind the tables' copy came out 2.7 to 3.7 times
+ *  brighter and the second table's plan washed out, so the room keeps the
+ *  distribution its levels and filters were tuned on. */
+const LIGHTMAP_INTENSITY = 5.2441;
 
 let ktx2Singleton: KTX2Loader | null = null;
 let dracoSingleton: DRACOLoader | null = null;
@@ -139,6 +152,102 @@ export function attachLoaders(loader: GLTFLoader, gl: THREE.WebGLRenderer) {
   }
   loader.setKTX2Loader(hallKTX2(gl));
   loader.setDRACOLoader(dracoSingleton);
+}
+
+/** A table's material without its bake, one per baked material, kept across
+ *  remounts the way the promotion guard keeps the originals. */
+const liveMaterials = new WeakMap<THREE.Material, THREE.Material>();
+/** Table geometries already cleared of their floor-level underside. */
+const clearedFeet = new WeakSet<THREE.BufferGeometry>();
+
+/**
+ * THE TABLES ARE LIT LIVE, NOT BAKED.
+ *
+ * The client: "the bases of these stations must be fixed". What was wrong was
+ * the light, not the turning. The four tables share ONE mesh per part
+ * (table_base, table_top, table_inlay), and the bake lightmapped them anyway:
+ * four tables baked into the same texels, so every table wore the light of
+ * whichever was baked last — in the imperial hall, a pedestal gone nearly
+ * black under its own top and a foot whose upper slope glared like a pale
+ * paper disc. And a table TURNS (the station's drag), which no bake can
+ * follow: the light would have turned with it.
+ *
+ * So every mesh under a TURNTABLE_* node gets its material without the
+ * lightmap, which hands its diffuse to the hall's probe (hallProbe.ts) like
+ * the rest of the unbaked joinery; its grounding is drawn by StationDressing.
+ * Names are kept, so the finishes and probe gains still find them.
+ *
+ * AND THE BASE IS INSIDE OUT. Measured on the source mesh: the pedestal's side
+ * walls face inward (normal . radial = -1.00), its sloping tops face down, and
+ * its underside faces up. Single-sided, the camera looked through the near
+ * wall at the inside of the far one — the "black lump" — and through the foot
+ * at that underside lying on the floor — the flat pale disc. The live
+ * materials are therefore double-sided: three flips a back face's normal
+ * toward the viewer (faceDirection), so an inside-out wall shades as the outer
+ * surface it should have been, and a correctly built part is unaffected (its
+ * back faces are behind its front ones). The underside disc is removed, since
+ * double-sided it would fight the marble it lies on.
+ */
+export function liveTurntables(root: THREE.Object3D): { meshes: number; feet: number } {
+  let meshes = 0;
+  let feet = 0;
+  root.updateMatrixWorld(true);
+  const toRoot = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const underTurntable = (o: THREE.Object3D) => {
+    for (let p: THREE.Object3D | null = o; p && p !== root; p = p.parent) {
+      if (p.name.startsWith('TURNTABLE_')) return true;
+    }
+    return false;
+  };
+  const v = new THREE.Vector3();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !underTurntable(mesh)) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    let changed = false;
+    const live = mats.map((m) => {
+      const mat = m as THREE.MeshStandardMaterial;
+      if (!mat?.lightMap) return m;
+      let l = liveMaterials.get(mat);
+      if (!l) {
+        const c = mat.clone();
+        c.lightMap = null;
+        c.side = THREE.DoubleSide;
+        c.needsUpdate = true;
+        liveMaterials.set(mat, c);
+        l = c;
+      }
+      changed = true;
+      return l;
+    });
+    if (changed) {
+      mesh.material = Array.isArray(mesh.material) ? live : live[0];
+      meshes += 1;
+    }
+
+    // The underside: triangles whose three corners all lie on the floor.
+    const g = mesh.geometry as THREE.BufferGeometry;
+    if (!/^table_base/.test(mesh.name) || clearedFeet.has(g) || !g.index) return;
+    clearedFeet.add(g);
+    const pos = g.getAttribute('position') as THREE.BufferAttribute;
+    const toRootMesh = new THREE.Matrix4().multiplyMatrices(toRoot, mesh.matrixWorld);
+    const onFloor = new Uint8Array(pos.count);
+    for (let i = 0; i < pos.count; i += 1) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(toRootMesh);
+      onFloor[i] = v.y < 0.004 ? 1 : 0;
+    }
+    const src = g.index.array;
+    const kept: number[] = [];
+    for (let t = 0; t < src.length; t += 3) {
+      if (onFloor[src[t]] && onFloor[src[t + 1]] && onFloor[src[t + 2]]) continue;
+      kept.push(src[t], src[t + 1], src[t + 2]);
+    }
+    if (kept.length < src.length) {
+      g.setIndex(kept);
+      feet += 1;
+    }
+  });
+  return { meshes, feet };
 }
 
 /**
@@ -464,13 +573,21 @@ const HOLO_ROLE = {
   // gain 0.42 -> 0.26. With the paper gone, the plate is the SITE GROUND —
   // the land the plots stand on — and it was rendering brighter than the
   // plots themselves, which puts the product behind its own backdrop.
-  plate: { lo: 0.004, hi: 0.13, floor: 0.0, gain: 0.26, chroma: 0.9, soft: 0 },
+  //
+  // chroma 0.9 -> 0.18 (the art-direction audit: the map should read as "a
+  // glowing, frosted-glass hologram", not as a video game). The sheet's print
+  // colours made a board game of it — and its north-point stamp, printed in
+  // yellow, a gold coin floating beside the plan. In one champagne light the
+  // stamp is a drawn compass again; a trace of hue still tells water and
+  // planting from plots.
+  plate: { lo: 0.004, hi: 0.13, floor: 0.0, gain: 0.26, chroma: 0.18, soft: 0 },
   // chroma 1.1 -> 0.55. At full chroma the plot fills keep the sheet's own
   // print colours — scarlet, bottle green, cobalt — and a hundred saturated
   // blocks read as a board game rather than as a projection. Half-strength
   // keeps which-land-is-which legible while the whole model stays in the
   // projection's colour.
-  top: { lo: 0.01, hi: 0.4, floor: 0.2, gain: 0.5, chroma: 0.55, soft: 0 },
+  // And 0.55 -> 0.25 with the audit, for the same reason.
+  top: { lo: 0.01, hi: 0.4, floor: 0.2, gain: 0.5, chroma: 0.25, soft: 0 },
 } as const;
 
 /**
@@ -655,6 +772,31 @@ function holographic(mat: THREE.MeshStandardMaterial & { __holo?: boolean }) {
   mat.customProgramCacheKey = () => `holo-${mat.name}`;
 }
 
+/** The picture lamp's tube, as a share of the emissive strength it shipped at
+ *  (see dressInterior). */
+export const PICTURE_LAMP = 0.3;
+
+/**
+ * THE GLASS AT THE EXTERIOR'S HOUR.
+ *
+ * The film comes to the door after sundown: the estate's lamps are lit and its
+ * sky is going to ink. Inside, the clerestory and the oculus were still noon —
+ * panes of warm white at three and six times the wall's light, each a shaft of
+ * sun across the room. The refinement brief (2026-10-03): "reduce beam/glowing
+ * windows"; and since the entry became one move through the open door, the two
+ * hours are a single frame apart.
+ *
+ * So the panes are the sky a quarter of an hour after sunset: a deep blue, well
+ * under the room's lamplit ivory and far under the bloom's threshold, which is
+ * what a window is in a lit room at that hour — the darkest pale thing in it.
+ * The room's light is mixed to match (LIGHTMAP_INTENSITY has the account: the
+ * windows' wash on the walls is halved, the lamps raised).
+ */
+export const DUSK_GLASS: Readonly<Record<string, { colour: string; strength: number }>> = {
+  MAT_Clerestory: { colour: '#1E3A5F', strength: 0.75 },
+  MAT_OculusSky: { colour: '#1A3152', strength: 0.7 },
+};
+
 function dressInterior(root: THREE.Object3D): string[] {
   const touched: string[] = [];
 
@@ -696,6 +838,27 @@ function dressInterior(root: THREE.Object3D): string[] {
         mat.needsUpdate = true;
         mat.__dressed = true;
         touched.push('bench');
+      }
+
+      // THE WINDOWS, AT DUSK (DUSK_GLASS).
+      const dusk = DUSK_GLASS[mat.name];
+      if (dusk) {
+        mat.emissive.set(dusk.colour);
+        mat.emissiveIntensity = dusk.strength;
+        mat.__dressed = true;
+        touched.push('dusk glass');
+      }
+
+      // THE PICTURE LAMP, TURNED DOWN. Its tube shipped at an emissive strength
+      // several times the hall's bloom threshold, and the halo it threw stood
+      // over the top of the print: from the door the founder's hair was under
+      // it (the client, 2026-10-01: "the founder's hair is covered with the
+      // lighting"; "reduce the intensity of the light"). Scaled to a lit tube
+      // with a breath of glow, so the print's top edge is clear.
+      if (mat.name === 'MAT_PicLight') {
+        mat.emissiveIntensity *= PICTURE_LAMP;
+        mat.__dressed = true;
+        touched.push('picture lamp');
       }
 
       // THE CHANDELIER'S CRYSTAL, WITHOUT TRANSMISSION. It was the only
@@ -809,6 +972,9 @@ function useHallProbe(root: THREE.Object3D) {
     // so arming the hall mid-scroll renders nothing for the first time.
     const stand = roomCube(gl);
     const mats = prepareHallProbe(root, stand.texture);
+    // Every probed hall material goes on the house-light dimmer (hallLight.ts),
+    // at the strengths it has just been given as full.
+    for (const m of mats) trackHallMaterial(m);
     // Every opaque surface writes its depth for the hall's lens (LensFocus),
     // in the same define pass, so nothing compiles twice.
     markFocusDepth(root);
@@ -856,6 +1022,7 @@ function useHallProbe(root: THREE.Object3D) {
       if (!p) return;
       hallEnv.stand = null;
       // drei shares these materials with the next mount, which binds its own.
+      untrackHallMaterials(p.mats);
       for (const m of p.mats) m.envMap = null;
       if (p.shot && hallEnv.texture === p.shot.texture) {
         hallEnv.texture = null;
@@ -871,8 +1038,16 @@ function useHallProbe(root: THREE.Object3D) {
     holoClock.value += delta;
   });
 
-  // Default priority, so each face lands before the composer draws the frame.
+  // The house lights (hallLight.ts): the level InteriorStage wrote this frame.
   useFrame(() => {
+    applyHallLevel(hallLight.level);
+  });
+
+  // Default priority, so each face lands before the composer draws the frame.
+  // With the door open on the hall the portal's pass takes the faces instead,
+  // under the room's own light state (HallPortal, pumpProbe): here the scene
+  // still wears the exterior's fog and sky.
+  const step = useCallback(() => {
     const p = probe.current;
     if (!p || p.shot || !isShown(root)) return;
     const t0 = performance.now();
@@ -887,6 +1062,15 @@ function useHallProbe(root: THREE.Object3D) {
     hallEnv.version += 1;
     // eslint-disable-next-line no-console
     console.info('[hall_probe] captured in %sms over 6 frames, %d materials', p.ms.toFixed(1), p.mats.length);
+  }, [gl, scene, root]);
+  useEffect(() => {
+    hallPortal.pumpProbe = step;
+    return () => {
+      if (hallPortal.pumpProbe === step) hallPortal.pumpProbe = null;
+    };
+  }, [step]);
+  useFrame(() => {
+    if (!hallPortal.open) step();
   });
 }
 
@@ -936,6 +1120,9 @@ export function HallModel({
     // The frieze's anthemions, turned to face the room (hallJoinery.ts).
     faceTheFrieze(root);
     const promoted = promoteLightmaps(root);
+    // Straight after the promotion, before any pass clones or finishes the
+    // tables' materials: they are lit live (see liveTurntables).
+    const tables = liveTurntables(root);
     const strippedLights = stripBakedLights(root);
     // AFTER the promotion, not before: dressInterior clones the runner's
     // material, and cloning it while its lightmap was still sitting in the
@@ -985,10 +1172,12 @@ export function HallModel({
     const centre = box.getCenter(new THREE.Vector3());
     // eslint-disable-next-line no-console
     console.info(
-      '[hall_ready] meshes=%d tris=%d lightmaps=%d bakedLightsRemoved=%d texturesMerged=%d freedMB=%s dressed=[%s] finished=%d anisotropyDisarmed=[%s] | size %sx%sx%s | centre %s,%s,%s | y %s..%s',
+      '[hall_ready] meshes=%d tris=%d lightmaps=%d liveTables=%d/%d bakedLightsRemoved=%d texturesMerged=%d freedMB=%s dressed=[%s] finished=%d anisotropyDisarmed=[%s] | size %sx%sx%s | centre %s,%s,%s | y %s..%s',
       meshes,
       Math.round(tris),
       promoted,
+      tables.meshes,
+      tables.feet,
       strippedLights,
       shared.merged,
       shared.freedMB.toFixed(2),

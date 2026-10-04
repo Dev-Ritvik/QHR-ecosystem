@@ -33,7 +33,7 @@ export default function TermsPage() {
       >
         <PendingNotice what="This is a structural draft. The operative clauses are commercial decisions rather than technical ones, so they are left for Quality Homes Reality and its legal advisers rather than assumed." />
 
-        <h2 className="font-serif text-xl text-[#F2EDE4]">Who these terms are with</h2>
+        <h2 className="font-serif text-step-1 text-[#F2EDE4]">Who these terms are with</h2>
         <p>
           This website is operated by Quality Homes Reality, head office at
           D.No. 50-92-36, 2nd Floor, Opp. Canara Bank, Shantipuram, Shankara
@@ -41,7 +41,7 @@ export default function TermsPage() {
           and identifiers: <Pending>REGISTERED NAME, CIN / GST</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           What the information here is, and is not
         </h2>
         <p>
@@ -58,7 +58,7 @@ export default function TermsPage() {
           full: <Pending>RERA REGISTRATION NUMBERS PER PROJECT</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           Enquiries and bookings
         </h2>
         <p>
@@ -68,7 +68,7 @@ export default function TermsPage() {
           schedule: <Pending>PAYMENT TERMS</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Images and plans</h2>
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">Images and plans</h2>
         <p>
           Renders, elevations and the three-dimensional hall are illustrative.
           They show layout and arrangement, not a guarantee of finish,
@@ -77,7 +77,7 @@ export default function TermsPage() {
           <Pending>AMENITY DELIVERY AND STATUS COMMITMENTS</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Using this site</h2>
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">Using this site</h2>
         <p>
           You may browse, and share links to, any page here. You may not copy the
           layout drawings, renders or written content for commercial use without
@@ -85,7 +85,7 @@ export default function TermsPage() {
           of other visitors.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           Liability and governing law
         </h2>
         <p>
@@ -95,7 +95,7 @@ export default function TermsPage() {
           mechanism: <Pending>ARBITRATION OR COURTS</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Your data</h2>
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">Your data</h2>
         <p>
           How your information is handled is set out in the{' '}
           <Link className="underline underline-offset-4" href="/privacy">
@@ -108,7 +108,7 @@ export default function TermsPage() {
           , which form part of these terms.
         </p>
 
-        <p className="mt-12 text-sm text-[#F2EDE4]/50">
+        <p className="mt-12 text-step--1 text-[#F2EDE4]/[0.62]">
           Last updated: <Pending>DATE ON PUBLICATION</Pending>.
         </p>
       </Surface>

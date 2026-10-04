@@ -54,6 +54,7 @@ import {
   DOOR_OUT,
   JOURNEY_END,
 } from '../src/components/experience/journey';
+import { CODA_FADE } from '../src/components/experience/lensFilter';
 
 const VIEWPORT = { width: 1440, height: 900 };
 
@@ -248,7 +249,7 @@ test.describe('the film', () => {
       [...document.querySelectorAll('main > section[id], main > header[id]')].map((s) => s.id),
     );
     expect(ids).toContain('hero');
-    expect(ids).toContain('constellation');
+    expect(ids).toContain('holdings');
     expect(ids).toContain('portrait');
     expect(ids.filter((i) => i.startsWith('station-')).length).toBeGreaterThan(0);
   });
@@ -425,7 +426,7 @@ test.describe('navigation', () => {
 
     await page.evaluate(() => {
       const a = document.createElement('a');
-      a.href = '#constellation';
+      a.href = '#holdings';
       a.id = 'e2e-anchor';
       a.textContent = 'probe';
       // The scroll track is deliberately pointer-transparent so the canvas
@@ -680,16 +681,29 @@ test.describe('the interior', () => {
 
 test.describe('the front door', () => {
   // BY CLIENT REVIEW: the passage into the hall "must open from the actual
-  // door", accelerate, go white, and decelerate inside. None of that is a DOM
+  // door", accelerate, and decelerate inside; since the fourth art-direction
+  // critique it goes through the door's DARK, not a white flash, and the room
+  // comes up as the exposure opens (doorway.ts). None of that is a DOM
   // fact, so — like the turntable case — the camera is read through three's own
-  // devtools event, and the passage reports its state and its white coverage on
+  // devtools event, and the passage reports its state and its dark coverage on
   // <html data-doorway data-doorway-coverage>, written by the same frame that
   // paints the light.
-  test('wheeling through the door plays the passage and lands inside', async ({ page }) => {
+  // TWO WAYS IN (the refinement brief, 2026-10-03: "the current black-void
+  // transition should be replaced with a continuous physical/cinematic entry
+  // through the architecture"). Where the device can draw it, the leaves open
+  // on the lit hall and the camera goes THROUGH, with no dark frame at all;
+  // a low-tier device, a hall still loading and ?door=threshold keep the dark
+  // threshold. Which one ran is on <html data-doorway-style>; the first case
+  // takes whichever the machine is offered, the second asks for the fallback.
+  for (const [title, url, forced] of [
+    ['wheeling through the door plays the passage and lands inside', '/', null],
+    ['and by the dark threshold, where the continuous entry is not offered', '/?door=threshold', 'threshold'],
+  ] as const) {
+  test(title, async ({ page }) => {
     const errors = watchErrors(page);
     await page.addInitScript(DEVTOOLS_HOOK);
     await page.setViewportSize(VIEWPORT);
-    await page.goto('/');
+    await page.goto(url);
     await consent(page);
     await ready(page);
 
@@ -787,12 +801,21 @@ test.describe('the front door', () => {
       await page.waitForTimeout(60);
     }
 
-    // The page records the fullest white it painted (data-doorway-peak). The
+    // The page records the fullest cover it painted (data-doorway-peak). The
     // samples above only see the frames they land between: on a loaded machine
-    // one slow frame at the peak hid a white that was on screen, and the test
+    // one slow frame at the peak hid a cover that was on screen, and the test
     // failed on its own polling rate.
     peak = Math.max(peak, Number((await page.locator('html').getAttribute('data-doorway-peak')) ?? 0));
-    expect(peak, 'the light fills the frame').toBeGreaterThan(0.99);
+    const style = await page.locator('html').getAttribute('data-doorway-style');
+    expect(['through', 'threshold'], 'the passage says how it was made').toContain(style);
+    if (forced) expect(style, 'the fallback was asked for').toBe(forced);
+    if (style === 'through') {
+      // The sets change behind the doorway, with the room already filling the
+      // frame: nothing is ever painted over the picture.
+      expect(peak, 'the continuous entry never darkens the frame').toBeLessThan(0.01);
+    } else {
+      expect(peak, "the threshold's dark covers the swap").toBeGreaterThan(0.99);
+    }
     // THE CAMERA HAS TO FLY IN, AND THIS IS WHAT PROVES IT DID.
     //
     // The samples are taken while the page is HELD, and the last one lands just
@@ -823,7 +846,7 @@ test.describe('the front door', () => {
     await page.waitForTimeout(900);
 
     const inside = await pose();
-    expect(inside.coverage, 'and the light has gone').toBe(0);
+    expect(inside.coverage, 'and the dark has lifted').toBe(0);
     // In the hall: interior_hall.glb's walls stand at x +/-9.9 and z +/-7.7
     // since it was extended by bays for the client review.
     expect(Math.abs(inside.cam![0])).toBeLessThan(9.9);
@@ -832,6 +855,140 @@ test.describe('the front door', () => {
     expect(new URL(page.url()).hash, 'the page landed on the first chapter inside').toBe(
       '#establish',
     );
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+  }
+
+  // AND OUT AGAIN, BY THE SAME DOOR (the same brief: "transitions should feel
+  // continuous. Avoid anything that makes the user think a new 3D scene is
+  // loading"). Where the way in went through the open door, the way out is that
+  // move backwards — the camera draws back through the leaves and nothing is
+  // painted over the picture; where it went by the dark threshold, so does the
+  // way out. Either way the page is held for the move and lands at the door.
+  test('wheeling back out leaves by the same door, and lands on the forecourt', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.addInitScript(DEVTOOLS_HOOK);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+
+    await page.evaluate(() => {
+      const w = window as unknown as Record<string, any>;
+      const gl = w.__PROBE__?.renderers?.[w.__PROBE__.renderers.length - 1];
+      if (!gl || gl.__e2eDoorPatched) return;
+      const orig = gl.render.bind(gl);
+      gl.render = function (scene: any, camera: any) {
+        // (Through the open door the hall is drawn from an eye of its own,
+        // nested in the frame's render: the same place, half a metre lower.)
+        if (w.__DOOR__?.scene === scene) {
+          w.__DOOR__.camera = camera;
+        } else if (scene?.isScene) {
+          let isWorld = false;
+          scene.traverse((o: any) => {
+            if (!isWorld && /^(mansion_|ashlar_|door_leaf_)/.test(o.name || '')) isWorld = true;
+          });
+          if (isWorld) w.__DOOR__ = { scene, camera };
+        }
+        return orig(scene, camera);
+      };
+      gl.__e2eDoorPatched = true;
+    });
+
+    await scrollToFraction(page, DOOR_OUT - 0.003);
+    await page
+      .waitForFunction(
+        () => {
+          const p = (window as unknown as Record<string, any>).__DOOR__;
+          return !!p?.scene.getObjectByName('int_wall_front');
+        },
+        undefined,
+        { timeout: 45_000, polling: 250 },
+      )
+      .catch(() => undefined);
+    await page.waitForTimeout(800);
+
+    const pose = () =>
+      page.evaluate(() => {
+        const p = (window as unknown as Record<string, any>).__DOOR__;
+        const el = document.documentElement;
+        return {
+          cam: p ? (p.camera.position.toArray() as number[]) : null,
+          state: el.dataset.doorway ?? null,
+          coverage: Number(el.dataset.doorwayCoverage ?? 0),
+          held: el.dataset.doorwayHeld === '1',
+          y: window.scrollY,
+        };
+      });
+    const idle = () =>
+      page.waitForFunction(
+        () => document.documentElement.getAttribute('data-doorway') === 'idle',
+        undefined,
+        { timeout: 20_000 },
+      );
+
+    // In, by hand.
+    await page.mouse.move(720, 450);
+    let entered = false;
+    for (let i = 0; i < 12 && !entered; i += 1) {
+      await page.mouse.wheel(0, 120);
+      await page.waitForTimeout(90);
+      entered = (await pose()).state === 'enter';
+    }
+    expect(entered, 'the way in started').toBe(true);
+    await idle();
+    await page.waitForTimeout(1200);
+    const html = page.locator('html');
+    const wayIn = await html.getAttribute('data-doorway-style');
+    const inside = await pose();
+    expect(inside.cam![2], 'the camera is in the hall').toBeLessThan(7.7);
+
+    // Out, by hand.
+    let left = false;
+    for (let i = 0; i < 25 && !left; i += 1) {
+      await page.mouse.wheel(0, -120);
+      await page.waitForTimeout(90);
+      left = (await pose()).state === 'exit';
+    }
+    expect(left, 'a crossing made by hand from inside the hall starts the way out').toBe(true);
+
+    let peak = 0;
+    const heldYs = new Set<number>();
+    for (let i = 0; i < 140; i += 1) {
+      const s = await pose();
+      if (s.state !== 'exit') break;
+      if (s.held) {
+        heldYs.add(s.y);
+        // Try to scroll the page out from under the passage; it must not move.
+        if (i % 5 === 0) await page.mouse.wheel(0, -400);
+      }
+      peak = Math.max(peak, s.coverage);
+      await page.waitForTimeout(60);
+    }
+    peak = Math.max(peak, Number((await html.getAttribute('data-doorway-peak')) ?? 0));
+    const wayOut = await html.getAttribute('data-doorway-style');
+    expect(wayOut, 'the way out is made the way the way in was').toBe(wayIn);
+    if (wayOut === 'through') {
+      expect(peak, 'the continuous way out never darkens the frame').toBeLessThan(0.01);
+    } else {
+      expect(peak, "the threshold's dark covers the swap").toBeGreaterThan(0.99);
+    }
+    expect(
+      heldYs.size,
+      `the page is held for the move, then landed once (saw ${[...heldYs].join(', ')})`,
+    ).toBeLessThanOrEqual(2);
+
+    await idle();
+    await page.waitForTimeout(900);
+    const outside = await pose();
+    expect(outside.coverage, 'nothing is left over the picture').toBe(0);
+    // Out beyond the portico (the door's leaves stand at z 8.2), in front of
+    // the house: the door's own frame is square on the axis at z 33.6, and a
+    // wheel that lands after the page is let go may carry it a little up the
+    // approach, which swings off the axis.
+    expect(outside.cam![2], 'the camera is out on the forecourt').toBeGreaterThan(18);
+    expect(Math.abs(outside.cam![0])).toBeLessThan(8);
+    expect(new URL(page.url()).hash, 'the page landed on the chapter at the door').toBe('#approach');
     expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
   });
 });
@@ -940,17 +1097,18 @@ test.describe('degraded paths', () => {
   });
 });
 
-test.describe('the district field', () => {
-  // The last chapter, and the one Phase 6 recorded as missing entirely. Its
-  // contract is not "a city appears" — it is that what appears is DERIVED from
-  // published data, reachable without a pointer, and routes to pages that exist.
+test.describe('the map table', () => {
+  // The last chapter: the two districts carved into a table in the court of the
+  // stair (MapTable.tsx), with a pin for every published layout. Its contract is
+  // that what stands on it is DERIVED from published data, reachable without a
+  // pointer, and routes to pages that exist.
   //
-  // 0.90 is the city beat: journey.ts puts JOURNEY_END there, and
+  // 0.90 is the map beat: journey.ts puts JOURNEY_END there, and
   // buildInteriorBeats(3) renormalises the interior leg by
-  // 0.26 + 3*0.19 + 0.18 + 0.20 = 1.21, which lands `city` at legProgress 1.0.
+  // 0.26 + 3*0.19 + 0.18 + 0.20 = 1.21, which lands `map` at legProgress 1.0.
   const CITY = 0.9;
 
-  test('opens with one marker per published project, and no others', async ({ page }) => {
+  test('stands one pin per published project, and no others', async ({ page }) => {
     await page.addInitScript(DEVTOOLS_HOOK);
     await page.setViewportSize(VIEWPORT);
     await page.goto('/');
@@ -959,9 +1117,9 @@ test.describe('the district field', () => {
     await scrollToFraction(page, CITY);
     await page.waitForTimeout(1600);
 
-    // The DOM list is the authority, so it decides how many markers there
-    // should be. Reading the count from the page rather than hardcoding three
-    // keeps this true the day a fourth project publishes.
+    // The DOM list is the authority, so it decides how many pins there should
+    // be. Reading the count from the page rather than hardcoding three keeps
+    // this true the day a fourth project publishes.
     const links = await page.locator('#city a[href^="/projects/"]').all();
     expect(links.length, 'the chapter lists every published project').toBeGreaterThan(0);
 
@@ -969,27 +1127,36 @@ test.describe('the district field', () => {
       (h ?? '').replace('/projects/', ''),
     );
 
-    const beacons = await page.evaluate(() => {
-      const w = window as unknown as Record<string, any>;
-      if (!w.__PROBE__) return null;
-      const found: string[] = [];
-      let ground = false;
-      for (const scene of w.__PROBE__.scenes as any[]) {
-        scene.traverse((o: any) => {
-          if (o.name === 'city_ground') ground = true;
-          const m = /^beacon_(.+)$/.exec(o.name || '');
-          if (m && !found.includes(m[1])) found.push(m[1]);
-        });
-      }
-      return { ground, found };
-    });
+    const pins = await page
+      .waitForFunction(
+        () => {
+          const w = window as unknown as Record<string, any>;
+          if (!w.__PROBE__) return null;
+          const found: string[] = [];
+          let table = false;
+          let desert = false;
+          for (const scene of w.__PROBE__.scenes as any[]) {
+            scene.traverse((o: any) => {
+              if (o.name === 'map_relief') table = true;
+              if (/^(city_|beacon_)/.test(o.name || '')) desert = true;
+              const m = /^map_pin_(?!stems$|heads$)(.+)$/.exec(o.name || '');
+              if (m && !found.includes(m[1])) found.push(m[1]);
+            });
+          }
+          return table ? { table, desert, found } : null;
+        },
+        undefined,
+        { timeout: 30_000, polling: 500 },
+      )
+      .then((h) => h.jsonValue() as Promise<{ table: boolean; desert: boolean; found: string[] } | null>)
+      .catch(() => null);
 
-    expect(beacons, 'the scene was observed').not.toBeNull();
-    expect(beacons!.ground, 'the district ground is in the scene').toBe(true);
-    expect(
-      beacons!.found.slice().sort(),
-      'one marker per published project, and no invented ones',
-    ).toEqual(slugs.slice().sort());
+    expect(pins, 'the table was observed').not.toBeNull();
+    expect(pins!.table, 'the relief is in the scene').toBe(true);
+    expect(pins!.desert, 'and the old field out of doors is not').toBe(false);
+    expect(pins!.found.slice().sort(), 'one pin per published project, and no invented ones').toEqual(
+      slugs.slice().sort(),
+    );
   });
 
   test('every listed project is a real page, not a 404', async ({ page }) => {
@@ -1013,19 +1180,20 @@ test.describe('the district field', () => {
     }
   });
 
-  test('the field states that it is a diagram and not a map', async ({ page }) => {
+  test('the table says it is a model, not a survey', async ({ page }) => {
     // The one claim this chapter must never make. No published project has a
-    // centroid, so a visitor must not be able to read these positions as
-    // geography — and the page has to say so in words, not only in a comment.
+    // centroid, so a visitor must not be able to read a pin as a site — and the
+    // page has to say so in words, not only in a comment.
     await page.setViewportSize(VIEWPORT);
     await page.goto('/');
     await consent(page);
     await ready(page);
-    await expect(page.locator('#city')).toContainText(/diagram of the network, not a map/i);
+    await expect(page.locator('#city')).toContainText(/a model of the two districts, not a survey/i);
+    await expect(page.locator('#city')).toContainText(/marks|district, as long|place on the ground/i);
   });
 
   test('a keyboard can reach a project without touching the scene', async ({ page }) => {
-    // The canvas is aria-hidden, so the beacons are deliberately NOT focusable.
+    // The canvas is aria-hidden, so the pins are deliberately NOT focusable.
     // The contract is that the list beside them is, and that it goes to the
     // same place.
     await page.setViewportSize(VIEWPORT);
@@ -1043,7 +1211,7 @@ test.describe('the district field', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 
-  test('selecting a marker dives, veils, and lands on that project', async ({ page }) => {
+  test('selecting a pin leans in, veils, and lands on that project', async ({ page }) => {
     const errors = watchErrors(page);
     const documents: string[] = [];
     page.on('request', (r) => {
@@ -1067,7 +1235,7 @@ test.describe('the district field', () => {
         if (scene?.isScene) {
           let isWorld = false;
           scene.traverse((o: any) => {
-            if (!isWorld && /^(beacon_|city_ground)/.test(o.name || '')) isWorld = true;
+            if (!isWorld && /^(map_pin_|map_relief)/.test(o.name || '')) isWorld = true;
           });
           if (isWorld) w.__CITY__ = { scene, camera };
         }
@@ -1079,7 +1247,7 @@ test.describe('the district field', () => {
 
     // SETTLE FIRST. The rig damps toward the scroll pose with a 3.1s time
     // constant, so for seconds after a jump the camera is still travelling —
-    // and a marker projected through a moving camera has moved by more than its
+    // and a pin projected through a moving camera has moved by more than its
     // own width by the time a click round-trips. Measured: this test passed
     // alone and failed inside the suite, on nothing but that.
     await page
@@ -1101,9 +1269,9 @@ test.describe('the district field', () => {
       )
       .catch(() => undefined);
 
-    // Where a marker actually is on screen, projected through the camera the
-    // app is drawing with — the same technique the turntable test uses, and for
-    // the same reason: none of this is visible from the DOM.
+    // Where a pin actually is on screen, projected through the camera the app
+    // is drawing with — the same technique the turntable test uses, and for the
+    // same reason: none of this is visible from the DOM.
     const marker = await page.evaluate(() => {
       const w = window as unknown as Record<string, any>;
       const pair = w.__CITY__;
@@ -1112,7 +1280,7 @@ test.describe('the district field', () => {
       let best: { slug: string; x: number; y: number } | null = null;
       pair.scene.traverse((o: any) => {
         if (best) return;
-        const m = /^beacon_(.+)$/.exec(o.name || '');
+        const m = /^map_pin_(?!stems$|heads$)(.+)$/.exec(o.name || '');
         if (!m) return;
         const c = o.getWorldPosition(new V());
         const p = c.clone().project(pair.camera);
@@ -1126,7 +1294,7 @@ test.describe('the district field', () => {
           y < window.innerHeight - 40
         ) {
           // AND REACHABLE. The chapter's copy column is a real, interactive
-          // block of the page sitting over the left of the canvas, so a marker
+          // block of the page sitting over the left of the canvas, so a pin
           // projected behind it is on screen and not clickable — a click there
           // lands on the list, not the scene. Asking the document what is
           // actually under the point is the only way to know, and it is also
@@ -1138,7 +1306,7 @@ test.describe('the district field', () => {
       return best as { slug: string; x: number; y: number } | null;
     });
 
-    expect(marker, 'at least one marker is on screen at the city beat').not.toBeNull();
+    expect(marker, 'at least one pin is on screen at the map beat').not.toBeNull();
 
     const before = documents.length;
     const camBefore = await page.evaluate(() => {
@@ -1174,8 +1342,9 @@ test.describe('the district field', () => {
     // the navigation first means the error names which.
     await expect(page).toHaveURL(new RegExp(`/projects/${marker!.slug}$`), { timeout: 12_000 });
 
-    // Pointer parallax alone is worth at most ~0.42 m; a dive is metres.
-    expect(moved, 'the camera travels toward the marker before the veil closes').toBeGreaterThan(
+    // Pointer parallax alone is worth at most ~0.42 m; leaning in to a pin is
+    // metres.
+    expect(moved, 'the camera leans in toward the pin before the veil closes').toBeGreaterThan(
       1.2,
     );
 
@@ -1201,12 +1370,10 @@ test.describe('the district field', () => {
     // The list is the path that must keep working when the scene does not
     // animate — same destination, same client-side push, no dissolve.
     //
-    // NOT the marker: this case was titled "from a marker" and never touched
-    // one. The marker path under reduced motion — startDive() returning false
-    // and select() routing at once — is measured in PHASE6_REPORT.md §6B.34.3
-    // (0.237 m of camera displacement against 25.386 m with motion allowed)
-    // and is deliberately still not asserted here, because projecting and
-    // clicking a beacon needs the settle machinery the dive case carries.
+    // NOT the pin: the pin path under reduced motion — startDive() returning
+    // false and select() routing at once — is deliberately not asserted here,
+    // because projecting and clicking a pin needs the settle machinery the
+    // dive case carries.
     const first = page.locator('#city a[href^="/projects/"]').first();
     const href = await first.getAttribute('href');
     const documents: string[] = [];
@@ -1275,5 +1442,358 @@ test.describe('the rest of the site', () => {
     await ready(page);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+});
+
+test.describe('a frame that is not wide', () => {
+  // The page lays the film's copy out one of two ways and the lens filters for
+  // one of two, and both ask the same question (copyZone.filmIsWide, Tailwind's
+  // `wide:`): a landscape frame from 768px up, or anything else. They used to
+  // ask different ones, and an upright tablet got a landscape frame's copy
+  // under a phone's filters.
+
+  test("on a phone a table's copy stands above its plan, in place, and cannot be clicked unseen", async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    const page = await ctx.newPage();
+    const errors = watchErrors(page);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+
+    /** Scroll so the first table's section top is `dvh` viewports above the frame's. */
+    const at = async (dvh: number) => {
+      await page.evaluate((d) => {
+        const sec = document.getElementById('station-1');
+        if (!sec) throw new Error('no station-1');
+        const y = sec.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo(0, Math.round(y + d * window.innerHeight));
+      }, dvh);
+      await page.waitForTimeout(1600);
+    };
+    const read = () =>
+      page.evaluate(() => {
+        const pane = document.querySelector('#station-1 [data-chapter-fade]') as HTMLElement;
+        const link = pane.querySelector('a[href^="/projects/"]') as HTMLElement;
+        const r = link.getBoundingClientRect();
+        return {
+          opacity: +getComputedStyle(pane).opacity,
+          faded: pane.hasAttribute('data-faded'),
+          pointer: getComputedStyle(link).pointerEvents,
+          top: r.top,
+          bottom: r.bottom / window.innerHeight,
+        };
+      });
+
+    // Riding in from below it is at nothing, and takes no pointer: a tap on the
+    // picture must not land on a name nobody can see.
+    await at(-0.5);
+    let s = await read();
+    expect(s.opacity, 'unseen on the way in').toBeLessThan(0.02);
+    expect(s.faded).toBe(true);
+    expect(s.pointer).toBe('none');
+
+    // Held: developed in place, under the header and above the plan, whose
+    // pane begins at 29% of the frame's height.
+    await at(0.2);
+    s = await read();
+    expect(s.opacity, 'whole once the camera is on the table').toBe(1);
+    expect(s.faded).toBe(false);
+    expect(s.pointer).toBe('auto');
+    expect(s.top, 'clear of the header').toBeGreaterThanOrEqual(76);
+    expect(s.bottom, 'above the plan').toBeLessThan(0.27);
+
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+    await ctx.close();
+  });
+
+  test('an upright tablet is laid out as a phone is, and a wide frame is not', async ({ browser }) => {
+    const top = async (viewport: { width: number; height: number }) => {
+      const ctx = await browser.newContext({ viewport });
+      const page = await ctx.newPage();
+      await page.goto('/');
+      await consent(page);
+      await ready(page);
+      const y = await page.evaluate(() => {
+        const h = document.querySelector('#hero h1');
+        if (!h) throw new Error('no hero headline');
+        return h.getBoundingClientRect().top / window.innerHeight;
+      });
+      await ctx.close();
+      return y;
+    };
+    // Across the top of the frame, over the sky — not at the foot of a column
+    // the frame does not have.
+    expect(await top({ width: 820, height: 1180 }), 'an upright tablet').toBeLessThan(0.3);
+    expect(await top({ width: 390, height: 844 }), 'a phone').toBeLessThan(0.3);
+    expect(await top(VIEWPORT), 'a wide frame').toBeGreaterThan(0.45);
+  });
+});
+
+test.describe("the film's stage", () => {
+  // On a wide frame the film's copy, its grid and its header are set in the
+  // frame's own unit — a pixel of the 1440x900 design, a nine-hundredth of the
+  // frame's height (globals.css, THE FILM'S STAGE) — because the picture they
+  // were composed against scales with the frame's height and rems do not. On
+  // a laptop's real 1536x730 the cover used to begin at 40% of the frame's
+  // height, on the horizon's haze, and its grid stood further out than the
+  // house it was set against.
+
+  const cover = async (
+    browser: import('@playwright/test').Browser,
+    viewport: { width: number; height: number },
+    phone = false,
+  ) => {
+    const ctx = await browser.newContext(phone ? { viewport, hasTouch: true, isMobile: true } : { viewport });
+    const page = await ctx.newPage();
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    const r = await page.evaluate(() => {
+      const hero = document.getElementById('hero');
+      const h1 = hero?.querySelector('h1');
+      const lede = hero?.querySelector('p.t-hero-lede');
+      const cta = hero?.querySelector('a.cta-primary');
+      const mark = document.querySelector('header img');
+      if (!hero || !h1 || !lede || !cta || !mark) throw new Error('the cover is missing a part');
+      const b = h1.getBoundingClientRect();
+      const text = document.createRange();
+      text.selectNodeContents(h1);
+      return {
+        left: b.left,
+        size: parseFloat(getComputedStyle(h1).fontSize),
+        lines: Math.round(b.height / parseFloat(getComputedStyle(h1).lineHeight)),
+        textRight: text.getBoundingClientRect().right,
+        // The block's first drawn line is its headline: the chapter's label is
+        // read, not drawn (the refinement brief, 2026-10-03).
+        top: b.top / window.innerHeight,
+        bottom: cta.getBoundingClientRect().bottom / window.innerHeight,
+        mark: mark.getBoundingClientRect().left,
+        lede: lede.getBoundingClientRect().height,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+    await ctx.close();
+    return r;
+  };
+
+  test('stands the cover over the same part of the picture, the same size against it, on every wide frame', async ({
+    browser,
+  }) => {
+    // The design, a laptop's real frame, a 1080p screen, a tablet on its side.
+    for (const v of [VIEWPORT, { width: 1536, height: 730 }, { width: 1920, height: 1080 }, { width: 1024, height: 768 }]) {
+      const u = Math.min(v.height / 900, v.width / 1200);
+      const c = await cover(browser, v);
+      const name = `${v.width}x${v.height}`;
+      // 552 design pixels left of the frame's middle, with the mark above it on the same line
+      expect((v.width / 2 - c.left) / u, `${name}: the copy's left edge`).toBeCloseTo(552, 0);
+      expect(Math.abs(c.mark - c.left), `${name}: the mark on the copy's edge`).toBeLessThan(1);
+      // the headline at the design's size in the frame's unit, on its two lines
+      expect(c.size / u, `${name}: the headline's size`).toBeCloseTo(48.83, 0);
+      expect(c.lines, `${name}: the headline's lines`).toBe(2);
+      // on the land: its headline where it was drawn (54.6% of the way down, the
+      // place it had under its label), and its foot inside the frame
+      expect(c.top, `${name}: the block's top`).toBeCloseTo(0.5455, 2);
+      expect(c.bottom, `${name}: the block's foot`).toBeGreaterThan(0.85);
+      expect(c.bottom, `${name}: the block's foot`).toBeLessThan(0.91);
+      expect(c.overflow, `${name}: no sideways scroll`).toBeLessThanOrEqual(0);
+    }
+  });
+
+  test('lays a phone on its side out beside the picture, its headline short of the middle and its gloss off the frame', async ({
+    browser,
+  }) => {
+    for (const v of [{ width: 844, height: 390 }, { width: 667, height: 375 }]) {
+      const c = await cover(browser, v, true);
+      const name = `${v.width}x${v.height}`;
+      expect(c.top, `${name}: half-way down a column, not across the top`).toBeGreaterThan(0.53);
+      expect(c.top, `${name}: half-way down a column, not across the top`).toBeLessThan(0.57);
+      expect(c.bottom, `${name}: inside the frame`).toBeLessThan(0.92);
+      expect(c.lines, `${name}: two lines`).toBe(2);
+      expect(c.size, `${name}: a headline that can be read`).toBeGreaterThanOrEqual(20);
+      expect(c.textRight, `${name}: ending short of the house`).toBeLessThan(v.width / 2);
+      // still in the page for a screen reader, but not on the picture
+      expect(c.lede, `${name}: the gloss off the frame`).toBeLessThanOrEqual(2);
+      expect(c.overflow, `${name}: no sideways scroll`).toBeLessThanOrEqual(0);
+    }
+  });
+});
+
+test.describe("the film's last frame", () => {
+  // The film ends on the lit map table and the page scrolls on into the
+  // colophon, which is set on the picture with no ground of its own. The
+  // coda's last frame is composed for it (codaFrame.ts): the table beside the
+  // sign-off on a wide frame and above it on a phone; and where a colophon
+  // taller than the frame still rides up through the table, the lens closes
+  // down (lensFilter.codaFilter). Before this, at the page's end, a row of
+  // links crossed the lit relief on every size of screen.
+  //
+  // These read the lens, the table's place on the screen and the colophon's
+  // lines from the look-dev handle (?debug=1, WorldCanvas's DebugHandle): the
+  // lens is a uniform in a post pass, which no scene traversal reaches.
+
+  type Box = { l: number; t: number; r: number; b: number };
+  interface Last {
+    coda: number;
+    all: number;
+    table: Box | null;
+    lines: Box[];
+  }
+
+  const open = async (
+    browser: import('@playwright/test').Browser,
+    viewport: { width: number; height: number },
+    phone = false,
+  ) => {
+    const ctx = await browser.newContext(phone ? { viewport, hasTouch: true, isMobile: true } : { viewport });
+    const page = await ctx.newPage();
+    await page.goto('/?debug=1');
+    await consent(page);
+    await ready(page);
+    // Into the hall first, so the end of the page is reached from inside it.
+    await scrollToFraction(page, 0.7);
+    await page.waitForTimeout(1500);
+    return { ctx, page };
+  };
+
+  /** Scroll to `back` frames before the page's end and read the frame once
+   *  the camera and the lens have come to rest. */
+  const frameAt = async (page: Page, back: number): Promise<Last> => {
+    await page.evaluate((b) => {
+      window.scrollTo(0, document.documentElement.scrollHeight - window.innerHeight - Math.round(b * window.innerHeight));
+    }, back);
+    const read = () =>
+      page.evaluate(() => {
+        const e = (window as unknown as Record<string, any>).__estate;
+        if (!e) return null;
+        const t = e.map.screen;
+        return {
+          coda: e.journey.coda as number,
+          all: e.lens.all as number,
+          table: t ? { l: t.l, t: t.t, r: t.r, b: t.b } : null,
+          lines: (e.copy.lines as Box[]).map((b) => ({ l: b.l, t: b.t, r: b.r, b: b.b })),
+        };
+      });
+    let prev: Last | null = null;
+    let still = 0;
+    for (let i = 0; i < 60 && still < 4; i += 1) {
+      await page.waitForTimeout(400);
+      const now = (await read()) as Last | null;
+      const same =
+        !!now &&
+        !!prev &&
+        Math.abs(now.all - prev.all) < 0.01 &&
+        (now.table === null) === (prev.table === null) &&
+        (!now.table || !prev.table || Math.abs(now.table.t - prev.table.t) + Math.abs(now.table.l - prev.table.l) < 0.002);
+      still = same ? still + 1 : 0;
+      prev = now;
+    }
+    if (!prev) throw new Error('the look-dev handle is missing');
+    return prev;
+  };
+
+  const over = (a: Box, b: Box) => a.r > b.l && a.l < b.r && a.b > b.t && a.t < b.b;
+
+  test('on a desk and a laptop the land stays lit: the table beside the sign-off, every row under it', async ({
+    browser,
+  }) => {
+    // Three loads of the film, each scrolled to its end and left to settle.
+    test.setTimeout(240_000);
+    for (const v of [VIEWPORT, { width: 1536, height: 730 }, { width: 1920, height: 1080 }]) {
+      const name = `${v.width}x${v.height}`;
+      const { ctx, page } = await open(browser, v);
+      const end = await frameAt(page, 0);
+      expect(end.coda, `${name}: the coda has run`).toBe(1);
+      expect(end.table, `${name}: the table is in the frame`).not.toBeNull();
+      const table = end.table!;
+      expect(end.lines.length, `${name}: the colophon is up`).toBeGreaterThan(12);
+      // right of the middle, in the upper half, whole within the frame
+      expect(table.l, `${name}: the table's left edge`).toBeGreaterThan(0.5);
+      expect(table.r, `${name}: its right`).toBeLessThan(0.95);
+      expect(table.b, `${name}: its foot`).toBeLessThan(0.53);
+      // no line of the colophon on it, and none near enough to ask for the lens
+      for (const b of end.lines) expect(over(b, table), `${name}: a line at ${b.l.toFixed(2)},${b.t.toFixed(2)}`).toBe(false);
+      expect(end.all, `${name}: the lens is open`).toBeLessThan(0.05);
+      await ctx.close();
+    }
+  });
+
+  test('on a tablet held upright the table stands beside the sign-off, and the land stays lit', async ({ browser }) => {
+    // Laid out as a phone is, but with room beside the sign-off: the phone's
+    // frame closed the lens over the page's last sixteenth of a viewport.
+    for (const v of [{ width: 820, height: 1180 }, { width: 768, height: 1024 }]) {
+      const name = `${v.width}x${v.height}`;
+      const { ctx, page } = await open(browser, v, true);
+      const end = await frameAt(page, 0);
+      expect(end.coda, `${name}: the coda has run`).toBe(1);
+      expect(end.table, `${name}: the table is in the frame`).not.toBeNull();
+      const table = end.table!;
+      expect(end.lines.length, `${name}: the colophon is up`).toBeGreaterThan(12);
+      expect(table.l, `${name}: the table's left edge`).toBeGreaterThan(0.55);
+      expect(table.r, `${name}: its right`).toBeLessThan(1);
+      expect(table.t, `${name}: under the header`).toBeGreaterThan(0.2);
+      expect(table.b, `${name}: its foot`).toBeLessThan(0.42);
+      for (const b of end.lines) expect(over(b, table), `${name}: a line at ${b.l.toFixed(2)},${b.t.toFixed(2)}`).toBe(false);
+      expect(end.all, `${name}: the lens is open`).toBeLessThan(0.05);
+      await ctx.close();
+    }
+  });
+
+  test('on a phone the sign-off stands under the lit table, and the lens closes as its lines reach it', async ({
+    browser,
+  }) => {
+    const { ctx, page } = await open(browser, { width: 390, height: 844 }, true);
+
+    // Seven-eighths of a frame before the end: the camera at rest, the table
+    // in the upper part of the frame, the sign-off whole beneath it.
+    const poster = await frameAt(page, 0.87);
+    expect(poster.coda, 'the coda has run').toBe(1);
+    expect(poster.table, 'the table is in the frame').not.toBeNull();
+    const table = poster.table!;
+    expect(table.t, "under the header's band").toBeGreaterThan(0.18);
+    expect(table.b, 'over the middle').toBeLessThan(0.47);
+    expect(table.r - table.l, 'at the width of the screen').toBeGreaterThan(0.6);
+    expect(poster.lines.length, 'the sign-off is up').toBeGreaterThanOrEqual(4);
+    for (const b of poster.lines) expect(b.t, 'every line under the table').toBeGreaterThan(table.b);
+    expect(poster.all, 'the lens is open').toBeLessThan(0.05);
+
+    // The page's end: the colophon over the whole frame, the lens closed.
+    const end = await frameAt(page, 0);
+    expect(end.table, 'the table is still in the frame').not.toBeNull();
+    expect(end.lines.some((b) => over(b, end.table!)), 'lines stand on the table').toBe(true);
+    expect(end.all, 'the lens is closed').toBeGreaterThan(CODA_FADE.stops * 0.97);
+    await ctx.close();
+  });
+
+  test('no line of the colophon ever stands on the lit table, at any size or scroll', async ({ browser }) => {
+    // Five loads of the film, five settled frames of each.
+    test.setTimeout(420_000);
+    const sizes: { v: { width: number; height: number }; phone?: boolean }[] = [
+      { v: { width: 1280, height: 593 } },
+      { v: { width: 1024, height: 768 } },
+      { v: { width: 844, height: 390 }, phone: true },
+      { v: { width: 360, height: 640 }, phone: true },
+      { v: { width: 820, height: 1180 }, phone: true },
+    ];
+    for (const { v, phone } of sizes) {
+      const name = `${v.width}x${v.height}`;
+      const { ctx, page } = await open(browser, v, phone);
+      for (const back of [1.2, 0.8, 0.5, 0.25, 0]) {
+        const f = await frameAt(page, back);
+        if (!f.table) continue;
+        const on = f.lines.filter((b) => over(b, f.table!));
+        if (on.length > 0) {
+          expect(f.all, `${name}, ${back} before the end: ${on.length} lines on the table`).toBeGreaterThan(
+            CODA_FADE.stops * 0.97,
+          );
+        }
+      }
+      await ctx.close();
+    }
   });
 });

@@ -45,6 +45,7 @@
 // pattern as softSunShadows.ts: nothing outside the hall compiles differently.
 
 import * as THREE from 'three';
+import { withFullHall } from './hallLight';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 /**
@@ -71,7 +72,7 @@ export const HALL_PROBE_AT = [0, 1.7, 1.6] as const;
 const PROBE_PX = 256;
 
 /** The layer the capture renders. Hall geometry and every light are enabled on
- *  it; the stage's hit proxies, the motes and the district field are not. */
+ *  it; the stage's hit proxies and the motes are not. */
 export const HALL_LAYER = 7;
 
 /**
@@ -97,11 +98,13 @@ export const PROBE_GAIN: Readonly<Record<string, number>> = {
   // The chandelier's drops: no transmission (HallModel.dressInterior), so their
   // sparkle is all reflection — a little more of the room than a flat surface.
   'Glass_Crystal_Kognaq_Simple.001': 1.6,
-  // The portrait's glass carries the room (hallDetail.ts): above a wall's
-  // gain, at glass roughness, so the chandelier and the picture light ride on
-  // it. The painting under it takes a little, for its varnish.
-  MAT_PortraitGlass: 2.4,
-  MAT_Portrait: 0.45,
+  // The portrait's glass carried the room at 2.4, at glass roughness, so the
+  // chandelier and the picture light rode on it — and so did the windows,
+  // across the sitter's face. The client had the reflection taken off
+  // (2026-10-01; hallDetail.ts): museum glass, a breath of sheen and no
+  // picture. The painting under it takes a little, for its varnish.
+  MAT_PortraitGlass: 0.25,
+  MAT_Portrait: 0.3,
 };
 
 const EMISSIVE_ONLY = /^MAT_Holo|^MAT_Hologram$/;
@@ -309,6 +312,13 @@ function roomHeld(gl: THREE.WebGLRenderer) {
   return next;
 }
 
+/** The renderer's shared PMREM generator (see roomHeld): its programs are
+ *  compiled and introduced under the preloader, so a later filter — the pool's
+ *  probe (poolProbe.ts) — costs its draws and nothing more. */
+export function sharedPmrem(gl: THREE.WebGLRenderer): THREE.PMREMGenerator {
+  return roomHeld(gl).pmrem;
+}
+
 export function roomCube(gl: THREE.WebGLRenderer): THREE.WebGLRenderTarget {
   return roomHeld(gl).target;
 }
@@ -374,7 +384,23 @@ export function warmHallPrograms(
   stage.add(new THREE.AmbientLight());
   const spot = new THREE.SpotLight();
   stage.add(spot, spot.target);
+  return warmProgramsUnder(gl, camera, object, stage);
+}
 
+/**
+ * The same queue, for anything first drawn in the middle of a move: its
+ * programs built and introduced ahead of the frame that needs them, under the
+ * light state of `stage` — which for a thing of the estate's own pass is the
+ * scene itself (the doorway's two panels, DoorwayRig: each compiled on the
+ * frame the door began to open, MEASURED, a held frame at the start of the one
+ * move that must not have one).
+ */
+export function warmProgramsUnder(
+  gl: THREE.WebGLRenderer,
+  camera: THREE.Camera,
+  object: THREE.Object3D,
+  stage: THREE.Scene,
+): Promise<void> {
   const byKey = new Map<string, WarmItem>();
   object.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -434,9 +460,18 @@ export function hallWarmIdle(): boolean {
 /** What besides the material decides a program: instancing, skinning, morphs,
  *  shadows received, and which vertex attributes the geometry carries. */
 function warmKind(o: THREE.Mesh): string {
-  const m = o as THREE.Mesh & { isInstancedMesh?: boolean; isSkinnedMesh?: boolean; isBatchedMesh?: boolean };
+  const m = o as THREE.Mesh & {
+    isInstancedMesh?: boolean;
+    isSkinnedMesh?: boolean;
+    isBatchedMesh?: boolean;
+    instanceColor?: unknown;
+  };
   const attrs = o.geometry ? Object.keys(o.geometry.attributes).sort().join(',') : '';
-  return `${m.isInstancedMesh ? 'i' : ''}${m.isSkinnedMesh ? 's' : ''}${m.isBatchedMesh ? 'b' : ''}${o.morphTargetInfluences ? 'm' : ''}${o.receiveShadow ? 'r' : ''}:${attrs}`;
+  // An instanced mesh that colours its instances is a program of its own: the
+  // map table's pin heads and stems wear one material, and warmed as one kind
+  // the heads' compiled on the first frame the door stood open (MEASURED).
+  const instanced = m.isInstancedMesh ? (m.instanceColor ? 'ic' : 'i') : '';
+  return `${instanced}${m.isSkinnedMesh ? 's' : ''}${m.isBatchedMesh ? 'b' : ''}${o.morphTargetInfluences ? 'm' : ''}${o.receiveShadow ? 'r' : ''}:${attrs}`;
 }
 
 /**
@@ -606,8 +641,11 @@ export function beginHallProbe(
   return {
     step() {
       const lit: THREE.Object3D[] = [];
+      // (Not the exterior's lights: with the door open on the hall
+      // (HallPortal) they are in the scene too, and they are no part of the
+      // room. Whoever mounts them marks them `outside`.)
       scene.traverse((o) => {
-        if ((o as THREE.Light).isLight && !o.layers.isEnabled(HALL_LAYER)) {
+        if ((o as THREE.Light).isLight && !o.layers.isEnabled(HALL_LAYER) && !o.userData.outside) {
           o.layers.enable(HALL_LAYER);
           lit.push(o);
         }
@@ -619,7 +657,8 @@ export function beginHallProbe(
       const prevMip = gl.getActiveMipmapLevel();
       try {
         gl.setRenderTarget(cube, face);
-        gl.render(scene, faces[face]);
+        // At full house light: the dimmer scales what the probe reflects too.
+        withFullHall(() => gl.render(scene, faces[face]));
       } finally {
         gl.setRenderTarget(prev, prevFace, prevMip);
         scene.background = background;

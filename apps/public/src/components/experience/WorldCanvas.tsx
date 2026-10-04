@@ -30,7 +30,6 @@ import { usePathname } from 'next/navigation';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { springTo } from './cameraSpring';
-import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { placeForRoute, type PlaceId } from '@estate/domain/experience/places';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
@@ -43,8 +42,6 @@ import {
   exteriorPoseAt,
   atmosphereAt,
   lensAt,
-  CONSTELLATION,
-  CONSTELLATION_RADIUS,
   FILM_SHARE,
 } from './cameraPath';
 import {
@@ -56,9 +53,18 @@ import {
 } from './useScrollProgress';
 import { SceneFallback } from './SceneFallback';
 import { PostFX } from './PostFX';
-import { installSoftSunShadows, SUN_SHADOW_CAMERA } from './softSunShadows';
+import {
+  DAY_SUN,
+  installCloudShadows,
+  installSoftSunShadows,
+  SUN_SHADOW_CADENCE,
+  SUN_SHADOW_CAMERA,
+  sunShadowDue,
+  type SunShadowState,
+} from './softSunShadows';
 import { installFocusDepth } from './LensFocus';
 import { filmState } from './FilmGrade';
+import { hallLight, hallReadingLevel } from './hallLight';
 import { CinemaOverlay } from './CinemaOverlay';
 import { Motes } from './Motes';
 import { useSceneCards } from './useSceneCards';
@@ -68,25 +74,45 @@ import {
   interiorCurves,
   interiorCurveT,
   interiorLensAt,
-  CHAPTER_WEIGHTS,
 } from './interiorPath';
-import { CROSSOVER, journeyState, readJourney } from './journey';
+import { CROSSOVER, JOURNEY_END, journeyState, readJourney } from './journey';
 import { cancelDive, diveProgress, diveState, prefersReducedMotion } from './dive';
 import {
   CUT_MS,
   DOORWAY,
+  HALL_IN_EXTERIOR,
+  THROUGH,
   cancelDoorway,
   doorwayState,
   noteDoorwayInput,
   setDoorwayHost,
   stepDoorway,
-  whiteGradient,
+  THRESHOLD_DARK,
 } from './doorway';
+import { hallPortal } from './doorPortal';
+import { HallPortal, type PortalLight } from './HallPortal';
+import { passageLight } from './passageLight';
+import { applyPoolGain, poolLight } from './nightPools';
+import { PorticoLantern } from './PorticoLantern';
+import {
+  HEADER_BAND,
+  approachFilter,
+  headerBandApproach,
+  headerBandOutside,
+  headerBandReach,
+  holdingsFilter,
+  lensFilter,
+  phoneSkyFilter,
+} from './lensFilter';
+import { PHONE_FRAMING, applyShift, phoneFrameAt, phoneFrameInCoda, phoneWeight, widenFov } from './phoneFraming';
+import { HALL_AIM_OFFSET, codaEase, codaPose, codaProgress } from './codaFrame';
+import { mapStage } from './mapTablePlan';
+import { copyPresence, copyZone, filmIsWide } from './copyZone';
+import { READING_STOPS, READING_TIME, isFilmRoute, readingLight } from './readingLight';
 import { ExteriorDoorway } from './DoorwayRig';
 import { lenisInstance } from './SmoothScroll';
-import { Constellation } from './Constellation';
 import { InteriorStage } from './InteriorStage';
-import { CityField } from './CityField';
+import { MapTable } from './MapTable';
 import { veiledPush } from '@/components/site/RouteVeil';
 
 /**
@@ -126,24 +152,17 @@ const HANDHELD = 0.045;
  */
 const FRAME_OFFSET = 7.4;
 
-// RectAreaLight renders black without this — it needs its BRDF lookup textures
-// initialised before any such light is constructed. Module scope so it runs
-// exactly once regardless of how many lights mount.
-RectAreaLightUniformsLib.init();
-
 // THE SWING EASE now lives in cameraPath.ts (SWING, exteriorSwing), with its
 // history, beside the beats it paces — the approach chapter gave the exterior
 // leg two curves, and the ease has to know where one hands over to the other.
-
-/** Extra intensity on the entry bay's area light with the front doors fully
- *  open and lit — the spill from the doorway onto the portico and the steps. */
-const PORTICO_GLOW = 7;
 
 const UP = new THREE.Vector3(0, 1, 0);
 
 /** One scratch vector for the dive's endpoint. Module-level because the frame
  *  loop must not allocate. */
 const TMP = new THREE.Vector3();
+/** The hall's place in the exterior's coordinates (doorway.ts). */
+const HALL_OFFSET = new THREE.Vector3(...HALL_IN_EXTERIOR);
 
 const STATION_RE = /^holo3d_(S[123])_/;
 
@@ -215,6 +234,9 @@ interface DebugPose {
 
 function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: number }) {
   const { camera, gl } = useThree();
+  // The canvas's own proportions, for the phone's lens. Not the camera's
+  // aspect: a view offset writes that (applyShift).
+  const size = useThree((s) => s.size);
   const debugPose = useMemo(
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1',
     [],
@@ -228,6 +250,10 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
     const beats = buildInteriorBeats(stationCount);
     return { beats, ...interiorCurves(beats) };
   }, [stationCount]);
+  // Look-dev: the phone's framing table, live (phoneFraming.ts).
+  useEffect(() => {
+    if (debugPose) (window as unknown as { __estatePhone?: unknown }).__estatePhone = PHONE_FRAMING;
+  }, [debugPose]);
   const target = useRef(new THREE.Vector3());
   const desired = useRef(new THREE.Vector3());
   const look = useRef(new THREE.Vector3());
@@ -377,31 +403,37 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
         // Inside, the copy column is over a wall rather than over sky, and the
         // subject is a table 2.4m away rather than a building 28m away. A 7.4m
         // aim offset at that distance would point the camera at the skirting
-        // beside the station. Small, and faded out from the turn out to the
-        // threshold: at the doorway the view is squared onto the opening, and an
-        // offset there brought a jamb into frame.
-        const turnOut = interior.beats.find((b) => b.id === 'turn-out')?.at ?? 1;
-        offset = 0.55 * (1 - Math.min(1, Math.max(0, (s - turnOut) / Math.max(1e-3, 1 - turnOut))));
+        // beside the station. Small, and held to the end: the map table's frame
+        // keeps the left of the picture for the list of layouts, as every
+        // other chapter keeps it for its copy.
+        offset = HALL_AIM_OFFSET;
 
         // THE CODA. Past the end of the film the page scrolls on into the
-        // footer, and the camera used to hold the threshold while a page slid
-        // up over it (the third review: "a harsh, unstyled jump ... program the
-        // 3D camera to tilt up into the dark night sky ... and use that
+        // footer (the third review: "a harsh, unstyled jump ... use that
         // rendered darkness as the organic background for your final footer
-        // text"). Over the viewport after the film ends, the camera lifts its
-        // eyes off the district field into the dark above it, so the footer's
-        // sign-off arrives over sky the scene is rendering.
-        const past = (window.scrollY - scrollExtent()) / Math.max(1, window.innerHeight * 1.1);
-        const coda = Math.min(1, Math.max(0, past));
+        // text"). It used to step out of the front door and look up at a sky
+        // over the district field. Since the fourth art-direction critique the
+        // film ends inside, on the map table, and the coda is the room's own:
+        // the house lights go down round the table (InteriorStage reads
+        // journeyState.coda), the camera rises off it and eases back — turning
+        // as it goes, so that the table ends where the colophon is not
+        // (codaFrame.ts has the frame it is composed for) — and the footer's
+        // sign-off arrives on the court's darkened stone beside the lit land:
+        // the last light in the house.
+        const coda = journeyState.coda;
         if (coda > 0) {
-          const e = coda * coda * (3 - 2 * coda);
-          look.current.y += 16 * e;
-          desired.current.y += 1.2 * e;
-          offset *= 1 - e;
+          offset = codaPose(
+            codaEase(coda),
+            phoneWeight(size.width / Math.max(1, size.height)),
+            desired.current,
+            look.current,
+          );
         }
       } else {
         const s = journeyState.legProgress;
-        exteriorPoseAt(s, desired.current, look.current);
+        // (An upright screen keeps the aim it had before the roof was made
+        // flat: cameraPath, FILM_TARGET_CURVE_UPRIGHT.)
+        exteriorPoseAt(s, desired.current, look.current, phoneWeight(size.width / Math.max(1, size.height)));
         offset = lensAt(s).frameOffset;
       }
     } else {
@@ -464,7 +496,66 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
         door.captured = true;
       }
       const entering = door.dir === 'enter';
-      if (c.side === 'near') {
+      if (door.style === 'through') {
+        // ONE MOVE, THROUGH THE OPEN DOOR (doorway.ts, THROUGH). Outside it is
+        // the same line the threshold's rush took — from where the camera
+        // stood to the point just inside the door — and inside it runs on from
+        // that same point, in the hall's coordinates, to the pose the scroll
+        // gives. The two models share an axis and stand 55 cm apart in height
+        // (HALL_IN_EXTERIOR): for as long as the scene still shows the
+        // exterior, the camera stays in the exterior's space and the hall is
+        // drawn through the doorway from the same eye (HallPortal).
+        const sill = THROUGH.sillFov;
+        if (!entering) {
+          // THE WAY OUT: the same line, backwards. Near side, the hall: from
+          // where the camera stood back to the point inside the door, in the
+          // hall's coordinates. Far side, the estate: from that point out to
+          // the pose the scroll gives. For as long as the scene still shows
+          // the hall after the page has landed outside, the camera stays in
+          // the hall's space.
+          if (c.side === 'near') {
+            desired.current.set(...door.fromPos).lerp(TMP.set(...DOORWAY.exteriorPass).sub(HALL_OFFSET), c.leave);
+            look.current.set(...door.fromLook).lerp(TMP.set(...DOORWAY.exteriorGaze).sub(HALL_OFFSET), c.aim);
+            doorFov = door.fromFov + (sill - door.fromFov) * c.warp;
+            rollScale = 1 - c.aim;
+          } else {
+            TMP.copy(desired.current);
+            desired.current.set(...DOORWAY.exteriorPass).lerp(TMP, c.arrive);
+            TMP.copy(look.current);
+            look.current.set(...DOORWAY.exteriorGaze).lerp(TMP, c.settle);
+            const live = lens ? lens.fov : cam.fov;
+            doorFov = live + (sill - live) * c.warp;
+            rollScale = c.settle;
+            if (door.sceneLeg === 'interior') {
+              desired.current.sub(HALL_OFFSET);
+              look.current.sub(HALL_OFFSET);
+            }
+          }
+        } else if (c.side === 'near') {
+          desired.current.set(...door.fromPos).lerp(TMP.set(...DOORWAY.exteriorPass), c.leave);
+          look.current.set(...door.fromLook).lerp(TMP.set(...DOORWAY.exteriorGaze), c.aim);
+          doorFov = door.fromFov + (sill - door.fromFov) * c.warp;
+          rollScale = 1 - c.aim;
+        } else {
+          TMP.copy(desired.current);
+          desired.current
+            .set(...DOORWAY.exteriorPass)
+            .sub(HALL_OFFSET)
+            .lerp(TMP, c.arrive);
+          TMP.copy(look.current);
+          look.current
+            .set(...DOORWAY.exteriorGaze)
+            .sub(HALL_OFFSET)
+            .lerp(TMP, c.settle);
+          const live = lens ? lens.fov : cam.fov;
+          doorFov = live + (sill - live) * c.warp;
+          rollScale = c.settle;
+          if (door.sceneLeg === 'exterior') {
+            desired.current.add(HALL_OFFSET);
+            look.current.add(HALL_OFFSET);
+          }
+        }
+      } else if (c.side === 'near') {
         const pass = entering ? DOORWAY.exteriorPass : DOORWAY.hallPass;
         const gaze = entering ? DOORWAY.exteriorGaze : DOORWAY.hallGaze;
         desired.current.set(...door.fromPos).lerp(TMP.set(...pass), c.leave);
@@ -568,6 +659,30 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
     }
     camera.lookAt(target.current);
 
+    // THE PHONE'S LENS (phoneFraming.ts): in the hall, on a portrait screen, the
+    // beats open a little and shift their front so the copy has the room's
+    // dark to stand on and a table's model stands whole in the frame. Never
+    // during a passage (its lens is the door's), never outside.
+    let rise = 0;
+    let shift = 0;
+    let widen = 1;
+    const aspect = size.width / Math.max(1, size.height);
+    if (lens && p.path && journeyState.leg === 'interior' && doorFov === null) {
+      const k = phoneWeight(aspect);
+      if (k > 0) {
+        // (and through the coda it goes on to the phone's last frame)
+        const pf = phoneFrameInCoda(
+          phoneFrameAt(interior.beats, journeyState.legProgress, size.width),
+          codaEase(journeyState.coda),
+          size.width,
+        );
+        widen = 1 + (pf.widen - 1) * k;
+        rise = pf.rise * k;
+        shift = pf.shift * k;
+      }
+    }
+    applyShift(cam, aspect, rise, shift);
+
     if (lens) {
       // FOV WARP. 50 at the top, 68 through the dive, 44 crossing the fountain.
       // Widening on the fast leg stretches the near geometry and exaggerates
@@ -576,7 +691,7 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
       // changed — updateProjectionMatrix rebuilds the matrix and dirties every
       // frustum test downstream, so calling it unconditionally every frame is
       // real cost for nothing.
-      const fov = doorFov ?? lens.fov;
+      const fov = doorFov ?? widenFov(lens.fov, widen);
       if (Math.abs(cam.fov - fov) > 0.01) {
         cam.fov = fov;
         cam.updateProjectionMatrix();
@@ -739,23 +854,14 @@ function JourneyDriver({
   active,
   onLeg,
   onArmed,
-  reveal,
   interiorLeg,
-  cityReveal,
-  cityFrom,
   veil,
 }: {
   active: boolean;
   onLeg: (leg: 'exterior' | 'interior') => void;
   onArmed: () => void;
-  /** Constellation presence, 0..1. */
-  reveal: React.MutableRefObject<number>;
   /** Interior leg progress, 0..1, for the stage. */
   interiorLeg: React.MutableRefObject<number>;
-  /** District field presence, 0..1. */
-  cityReveal: React.MutableRefObject<number>;
-  /** Leg progress at which the city chapter opens. */
-  cityFrom: number;
   /** The blackout element. Written directly rather than through state. */
   veil: React.RefObject<HTMLDivElement>;
 }) {
@@ -800,11 +906,10 @@ function JourneyDriver({
     journeyState.legProgress = 0;
     journeyState.veil = 0;
     journeyState.armed = false;
-    reveal.current = 0;
+    journeyState.coda = 0;
     interiorLeg.current = 0;
-    cityReveal.current = 0;
     if (veil.current) veil.current.style.opacity = '0';
-  }, [active, reveal, interiorLeg, cityReveal, veil]);
+  }, [active, interiorLeg, veil]);
 
   useFrame(() => {
     if (!active) return;
@@ -826,60 +931,25 @@ function JourneyDriver({
       onLeg(journeyState.leg);
     }
 
-    // THE CONSTELLATION'S CHAPTER. Dark through the hero and the revolution,
-    // igniting as the crane rises onto it, extinguished by the veil. The
-    // thresholds are the ones journey.chapters() gives the DOM, so the copy
-    // beside the sphere arrives with the sphere rather than near it.
-    //
-    // 0.60/0.32 -> 0.58/0.20, AND THAT IS A DEFECT FIX, NOT A TASTE CHANGE.
-    //
-    // The old ramp reached full strength at legProgress 0.92. The veil starts
-    // closing at document scroll 0.424, which is legProgress 0.922. So the
-    // constellation was at full strength for 0.002 of the leg — measured on the
-    // shipped build, reveal read 0.215 at the chapter's own opening, 0.726 at
-    // its MIDPOINT, and 0.977 four fifths of the way through. The object the
-    // chapter is named after was never once seen at strength in a held frame.
-    //
-    // 0.58..0.78 lights it during the crane and holds it lit for the whole of
-    // the frame the visitor actually stops on.
-    //
-    // Those numbers are on the FILM's clock, which is now the first FILM_SHARE
-    // of the leg (cameraPath.ts). The approach then carries the sphere down the
-    // flank with it — it crowns the house the camera is circling — and lets it
-    // go as the camera turns onto the axis, where it would only be a glow above
-    // the top of frame. No veil term: the sphere is out long before the door.
+    // THE SPHERE IS GONE. The second art-direction audit (2026-09-30) read the
+    // constellation over the spire as "the single most out-of-place element in
+    // the entire experience ... visual tropes from The Matrix", and asked for
+    // it to be removed outright. The chapter keeps its beat and its copy; the
+    // spire against the evening sky is what the camera holds now.
     const s = journeyState.legProgress;
-    if (journeyState.leg === 'exterior') {
-      const film = Math.min(1, s / FILM_SHARE);
-      const approach = Math.max(0, (s - FILM_SHARE) / (1 - FILM_SHARE));
-      reveal.current = smooth01((film - 0.58) / 0.2) * (1 - smooth01((approach - 0.55) / 0.3));
-    } else {
-      reveal.current = 0;
-    }
-
     interiorLeg.current = journeyState.leg === 'interior' ? s : 0;
 
-    // THE DISTRICT FIELD'S CHAPTER, on the same construction as the
-    // constellation's and with the same lesson applied: it reaches full
-    // strength BEFORE the beat it belongs to, not at the end of the leg. The
-    // city beat lands at legProgress 1.0, which is document scroll 0.90 —
-    // JOURNEY_END, where the footer is already arriving — so a ramp that
-    // finished there would finish behind the credits, exactly as the
-    // constellation's did behind the veil.
-    //
-    // cityFrom is derived from the chapter weights rather than written out, so
-    // publishing a fourth project moves the field with the film instead of
-    // leaving it lit a chapter early.
-    // 0.62 of the chapter, not all of it. The city BEAT lands at legProgress
-    // 1.0 — document scroll 0.90, JOURNEY_END — so a ramp that finished with
-    // the chapter would reach full strength on the last frame of the film with
-    // the footer already arriving over it. Lit by 62% of the way in, the field
-    // is at strength while the camera is still settling onto the threshold,
-    // which is also the better order: the land opens, then the camera arrives.
-    cityReveal.current =
-      journeyState.leg === 'interior'
-        ? smooth01((s - cityFrom) / Math.max(1e-3, (1 - cityFrom) * 0.62))
-        : 0;
+    // THE CODA: how far past the film's end the page has scrolled (codaFrame's
+    // CODA_SCROLL: begun a third of a viewport late so the list of layouts has
+    // left before the lights go). Past the FILM's end, which is JOURNEY_END of the
+    // measured span — not past the span itself: scrollExtent() is what
+    // progress 1.0 would be, a point below the bottom of the page, so measured
+    // from there the coda never began.
+    {
+      const past =
+        (window.scrollY - scrollExtent() * JOURNEY_END) / Math.max(1, window.innerHeight * 1.1);
+      journeyState.coda = journeyState.leg === 'interior' ? codaProgress(past) : 0;
+    }
 
     // THE VEIL, written straight to the DOM.
     //
@@ -923,16 +993,24 @@ function smooth01(x: number): number {
 }
 
 /**
- * The page-side surfaces the doorway draws on: the white layer, the canvas
- * frame it blurs, and the renderer whose exposure it lifts. Registered by the
- * components that own them; painted by the journey driver every frame.
+ * The page-side surface the doorway draws on, and the print it asks to open.
+ * Painted by the journey driver every frame.
  *
  * Module-level like the rest of the journey's per-frame state, and for the same
  * reason — written at frame rate, so it must never pass through React.
  *
- * THE WHITE LAYER EXISTS ONLY WHILE A PASSAGE RUNS, and that is a defect fix.
- * It was a permanent portal at the end of <body>, and MEASURED in the keyboard
- * E2E case, its mere presence broke the skip link: after the consent dialog
+ * THE DARK LAYER covers the model swap, and only the frames on which the
+ * render is already dark: the camera is inside the vestibule when it closes
+ * and the room is still five stops under when it lifts (doorway.ts). It is a
+ * guarantee, not an effect — if the hall's first draw stalls, the stalled frame
+ * is dark, not the forecourt's last frame half-swapped. The exposure it opens
+ * afterwards is the print's own (passageLight, FilmGrade), which is what makes
+ * the room come up as an eye adjusts — the windows and the lamps first, the
+ * walls last — rather than fade in as a whole.
+ *
+ * THE LAYER EXISTS ONLY WHILE A PASSAGE RUNS, and that is a defect fix. It was
+ * a permanent portal at the end of <body>, and MEASURED in the keyboard E2E
+ * case, its mere presence broke the skip link: after the consent dialog
  * unmounts, Chrome resumes sequential focus from where the dialog was, and with
  * a node after that point Tab searched forward, found nothing focusable, and
  * left the document — the first Tab on the page focused nothing. Removing the
@@ -941,20 +1019,12 @@ function smooth01(x: number): number {
  * the state the tests read lives on <html data-doorway>, which is always there.
  */
 const doorwaySurfaces = {
-  white: null as HTMLDivElement | null,
-  frame: null as HTMLDivElement | null,
-  gl: null as THREE.WebGLRenderer | null,
-  /** The exposure ColorPipeline set, which the passage multiplies. */
-  exposure: 1,
-  /** CSS blur costs a full-screen filter pass; phones do without it. */
-  blur: true,
+  layer: null as HTMLDivElement | null,
   // Last written values, so an idle frame writes nothing to the DOM.
-  paintedBackground: '',
-  paintedFilter: '',
+  paintedOpacity: '',
   paintedState: '',
-  /** The fullest white painted since the passage began (data-doorway-peak). */
+  /** The fullest cover painted since the passage began (data-doorway-peak). */
   peak: 0,
-  exposureDirty: false,
 };
 
 function paintDoorway() {
@@ -964,35 +1034,39 @@ function paintDoorway() {
   const running = st.mode === 'running';
 
   const state = running ? st.dir : 'idle';
-  const background = running && c.white > 0.0005 ? whiteGradient(c.whiteShape, c.white) : 'none';
+  const opacity = running && c.dark > 0.0005 ? c.dark.toFixed(3) : '0';
 
-  if (running && !s.white) {
+  if (running && !s.layer) {
     // z-index 75: over the header (40), the skip link (50) and the preloader
     // (60), under the route veil (80), which must always be able to close over
-    // anything. Over the header and the copy on purpose — a passage into light
-    // with a navigation bar printed across it is a web page, not a doorway.
-    // Pointer events on: nothing may be clicked through the light, and the page
+    // anything. Over the header and the copy on purpose — for the frames it is
+    // shut, the visitor is standing in a dark doorway, and a navigation bar
+    // printed across the dark is a web page, not a doorway.
+    // Pointer events on: nothing may be clicked through it, and the page
     // underneath is held still for the whole passage.
     const el = document.createElement('div');
     el.setAttribute('aria-hidden', 'true');
     el.style.cssText =
       'position:fixed;inset:0;z-index:75;pointer-events:auto;touch-action:none;' +
-      'background:none;opacity:0;transition:none';
+      `background:${THRESHOLD_DARK};opacity:0;transition:none`;
     document.body.appendChild(el);
-    s.white = el;
-    s.paintedBackground = '';
+    s.layer = el;
+    s.paintedOpacity = '';
   }
-  if (s.white) {
+  if (s.layer) {
     if (!running) {
-      s.white.remove();
-      s.white = null;
-      s.paintedBackground = '';
-    } else if (background !== s.paintedBackground) {
-      s.white.style.background = background;
-      s.white.style.opacity = background === 'none' ? '0' : '1';
-      s.paintedBackground = background;
+      s.layer.remove();
+      s.layer = null;
+      s.paintedOpacity = '';
+    } else if (opacity !== s.paintedOpacity) {
+      s.layer.style.opacity = opacity;
+      s.paintedOpacity = opacity;
     }
   }
+
+  // The print's exposure: the iris. And, through the open door, its grade.
+  passageLight.exposure = running ? c.exposure : 1;
+  passageLight.grade = running ? c.grade : 0;
 
   const root = document.documentElement;
   if (state !== s.paintedState) {
@@ -1003,46 +1077,22 @@ function paintDoorway() {
     root.dataset.doorway = state;
     s.paintedState = state;
   }
-  const coverage = running ? c.white.toFixed(3) : '0';
+  const coverage = running ? c.dark.toFixed(3) : '0';
   if (root.dataset.doorwayCoverage !== coverage) root.dataset.doorwayCoverage = coverage;
+  // How the passage is being made ('through' the open door, or by the dark
+  // 'threshold'), kept after it ends: what a test of it has to hold it to.
+  if (running && root.dataset.doorwayStyle !== st.style) root.dataset.doorwayStyle = st.style;
   // Whether the page is held. The passage lets the page go at ENTER.release,
   // before it reports itself finished, so a visitor can scroll on while the
-  // white clears; "held" and "running" are different questions.
+  // room comes up; "held" and "running" are different questions.
   const held = running && !st.released ? '1' : '0';
   if (root.dataset.doorwayHeld !== held) root.dataset.doorwayHeld = held;
-  // The fullest white this passage actually painted, kept after it ends. A
+  // The fullest cover this passage actually painted, kept after it ends. A
   // reader polling the coverage from outside the page sees only the frames it
   // happens to land between, and one slow frame at the peak hides the peak.
-  if (running && c.white > s.peak) {
-    s.peak = c.white;
+  if (running && c.dark > s.peak) {
+    s.peak = c.dark;
     root.dataset.doorwayPeak = s.peak.toFixed(3);
-  }
-
-  if (s.frame) {
-    const px = running && s.blur ? c.blur * DOORWAY.blurPx : 0;
-    const filter = px > 0.05 ? `blur(${px.toFixed(2)}px)` : '';
-    if (filter !== s.paintedFilter) {
-      s.frame.style.filter = filter;
-      // A CSS blur averages the edge pixels with transparency beyond the
-      // element, so on its own it rings the frame with the page's navy — seen
-      // in a captured frame as a dark vignette the passage never asked for.
-      // Scaling the layer by a little more than the blur radius puts that soft
-      // edge off screen.
-      s.frame.style.transform = filter
-        ? `scale(${(1 + (4 * px) / Math.max(1, window.innerHeight)).toFixed(4)})`
-        : '';
-      s.paintedFilter = filter;
-    }
-  }
-
-  if (s.gl) {
-    if (running) {
-      s.gl.toneMappingExposure = s.exposure * c.exposure;
-      s.exposureDirty = true;
-    } else if (s.exposureDirty) {
-      s.gl.toneMappingExposure = s.exposure;
-      s.exposureDirty = false;
-    }
   }
 }
 
@@ -1181,104 +1231,19 @@ const CLIP: Record<SceneSet, { near: number; far: number }> = {
   exterior: { near: 0.5, far: 400 },
 };
 
-/**
- * Legibility scrim, per set — and much lighter outside than it used to be.
- *
- * The review was right that a heavy DOM gradient is a band-aid, and the fix it
- * asked for is the one applied here: the contrast is now made in WebGL. These
- * exterior stops were tuned against the DUSK grade, which renders on a #0A1120
- * sky with fog from 34m matched to that same colour — the top of the frame is
- * genuinely dark there because it is sky, not an overlay. So the exterior's
- * top stop drops from 0.80 to 0.28 and the radial pass is nearly gone.
- *
- * Daylight is now the default and does NOT have that dark sky, so this pass
- * alone is not enough for it. It is topped up by DAYLIGHT_COLUMN_SCRIM below,
- * which is scoped to the left column so the building is never dimmed. These
- * stops are deliberately left as they are: they still serve the dusk rollback,
- * and widening them would darken a frame that the daylight grade exists to
- * open up.
- *
- * It is not deleted, and claiming otherwise would be dishonest. The bottom
- * eighth still darkens, because the lawn in the near field is a mid-value
- * surface and the footer sits directly on it; no amount of scene lighting fixes
- * white text on a lit lawn without also ruining the lawn. That residue is the
- * honest minimum, not a substitute for grading the scene.
- *
- * The interior used to keep the heavier pass; since the finishes changed it
- * keeps a warm, local one — see the interior entry.
- *
- * Deliberately NOT frosted panels behind each block. Glassmorphism reads as
- * 2021 SaaS and fights the material language of the rest of this build: it
- * announces the UI instead of letting the scene hold it. Cinema has put titles
- * over image for a century with a graded scrim.
+/*
+ * THERE IS NO SCRIM. There were three: a per-set linear and radial darkening
+ * over the whole canvas, and a daylight column shade behind the hero copy — on
+ * top of the page's own per-chapter shades (globals.css). The second
+ * art-direction audit (2026-09-30) named them the first of its five quality
+ * killers: "massive, heavy black gradients ... the ultimate developer crutch.
+ * It signals that the 3D composition and lighting were not designed to
+ * accommodate the typography." So the contrast is made where it belongs, in
+ * the picture: the copy sits in the house's shade, in the evening land, in the
+ * dim of a gallery hall and the night over the land (see the per-chapter
+ * notes in cameraPath.ts, interiorPath.ts and FilmGrade.tsx). The measurement
+ * history of the scrims is in git, before that date.
  */
-const SCRIM: Record<SceneSet, { linear: string; radial: string }> = {
-  exterior: {
-    // Top stop 0.18 -> 0.10 with the filmic print: the curve already rolls the
-    // sky off, and the header carries its own backdrop, so the extra dark only
-    // turned the sky above the house grey.
-    linear:
-      'linear-gradient(to bottom, rgba(6,10,20,0.10) 0%, rgba(6,10,20,0) 20%, rgba(6,10,20,0) 70%, rgba(6,10,20,0.5) 100%)',
-    radial:
-      'radial-gradient(130% 88% at 50% 42%, rgba(6,10,20,0) 0%, rgba(6,10,20,0) 66%, rgba(6,10,20,0.16) 100%)',
-  },
-  // Warm, and a fraction of what it was. The navy 0.80/0.88 bands were tuned for
-  // the dark hall; over the ivory room they read as grime at the top and bottom
-  // of every frame. The copy now gets a soft warm pool under the left column,
-  // where it sits, instead of a whole-frame darkening.
-  interior: {
-    // OLD-MONEY PASS: the hall now prints bright (lit walls at luma ~190), and
-    // ivory copy over ivory plaster read at the portrait beat as nearly
-    // nothing. The pool behind the copy column is deeper and wider; the top
-    // band, which only has the navigation to hold, is lighter than it was.
-    linear:
-      'linear-gradient(to bottom, rgba(16,11,8,0.3) 0%, rgba(16,11,8,0) 12%, rgba(16,11,8,0) 70%, rgba(16,11,8,0.38) 100%)',
-    radial:
-      'radial-gradient(72% 78% at 14% 55%, rgba(16,11,8,0.62) 0%, rgba(16,11,8,0.38) 42%, rgba(16,11,8,0) 100%)',
-  },
-};
-
-/**
- * The extra pass the DAYLIGHT grade needs, and only that grade.
- *
- * Daylight lights the band the hero copy sits in, so the vertical SCRIM above
- * — authored against a navy dusk sky — stops being enough on its own. This
- * buys the contrast back.
- *
- * It is paid on the LEFT COLUMN rather than the whole frame, because the copy
- * occupies x 160..606 of 1440 and the mansion sits from roughly x 700 — a
- * full-width band would buy contrast by dimming the very building the grade
- * exists to reveal. Fading out by 52% keeps the architecture untouched.
- *
- * MEASURED, production build, 1440x900 hero, against a BACKDROP PLATE: the
- * same frame re-rendered with the glyphs set transparent, so the background is
- * read rather than estimated from between the letterforms. Ratios are computed
- * on the alpha-composited text colour. "typical" is the median backdrop under
- * the run of copy, "worst" its 95th percentile.
- *
- *                        DUSK typ/worst    DAYLIGHT typ/worst   AA needs
- *   H1 (66px)             12.87 / 7.26       7.53 / 5.62          3.0
- *   body copy (16.8px)     4.29 / 3.89       4.69 / 3.86          4.5
- *   gold link (13.4px)     5.33 / 4.21       5.35 / 4.81          4.5
- *   secondary link         3.55 / 3.23       3.72 / 3.37          4.5
- *   eyebrow                5.49 / 5.47       3.69 / 2.93          4.5
- *
- * Read that honestly, because an earlier revision of this comment did not:
- * DUSK IS NOT CLEAN EITHER. Body copy at 4.29 and the secondary link at 3.55
- * already miss AA on the shipping grade; that is a pre-existing defect of the
- * 0.55/0.70 alpha type over a lit lawn, not something daylight introduced.
- *
- * With this scrim, daylight is BETTER than dusk on body copy, gold and the
- * secondary link, and materially worse on exactly one element: the eyebrow,
- * 5.49 -> 3.69, which sits high in the frame where the column scrim has
- * already faded and the dusk sky used to be near-black.
- *
- * So the grade fork does not turn an accessible page into an inaccessible one.
- * Both grades owe the same fix — the alpha-dimmed small type needs opacity,
- * not more scrim — and that is a typography change outside this pass.
- */
-const DAYLIGHT_COLUMN_SCRIM =
-  'linear-gradient(to right, rgba(6,10,20,0.38) 0%, rgba(6,10,20,0.34) 30%, rgba(6,10,20,0) 52%, rgba(6,10,20,0) 100%)';
 
 /**
  * EXTERIOR GRADE — daylight (ships) or dusk (?grade=dusk).
@@ -1459,10 +1424,31 @@ function useLook(set: SceneSet) {
 // 150 m; the estate is 1.6x larger, its horizon is a planted belt 80-180 m out,
 // and at the old pair that belt arrived as a milky wall across the top of the
 // hero.
-const DAY_FOG: readonly [number, number] = [86, 440];
-const EVENING_FOG_FAR = 300;
+// [86, 440] -> [80, 270], evening 300 -> 210: the Vertex3D review (2026-09-30)
+// — "you cannot see where the 3D geometry ends and the skybox begins ... fog is
+// the glue that binds a 3D scene together". The tree belt 80-180 m out now
+// sits well into the warm haze and the land's far edge dissolves into the
+// sky's horizon; the house, whose far corner is under 80 m from every beat
+// but the crane, stays clear of it.
+const DAY_FOG: readonly [number, number] = [80, 270];
+const EVENING_FOG_FAR = 210;
 /** Emissive strength of the curtained windows at full evening (see ExteriorLighting). */
 const WINDOW_EVENING_GLOW = 0.7;
+/**
+ * NIGHT FALLS OVER THE APPROACH. The evening above keeps the sun on the house
+ * (the magic-hour shot the holdings chapter holds); then, as the camera comes
+ * down the flank and onto the axis, the sun goes: the key loses NIGHT_KEY_LOSS
+ * of itself, the house's lamps come up — the frontispiece's arched windows, the
+ * entry bay, the flank — and the curtained rooms glow brighter. The second
+ * art-direction audit (2026-09-30) removed the shade behind "The door is open";
+ * this is what gives that line its ground: the forecourt the copy stands on is
+ * in the dark, and the house it is inviting the visitor into is lit from
+ * within. Leg progress, on the approach's own share (cameraPath.ts).
+ */
+const NIGHT_FROM = FILM_SHARE + (1 - FILM_SHARE) * 0.35;
+const NIGHT_TO = FILM_SHARE + (1 - FILM_SHARE) * 0.9;
+const NIGHT_KEY_LOSS = 0.82;
+const WINDOW_NIGHT_GLOW = 0.6;
 /** Aerial-perspective colour, sampled from the approved render's own horizon band. */
 // V7: the painted sky's horizon haze, so the tree belt fades into the sky it
 // stands against rather than into the olive of the old meadow hills.
@@ -1483,8 +1469,11 @@ const DAYLIGHT_HAZE = '#ECCEAC';
  *
  * The painted sky draws its sun glow on this vector
  * (tools/gltf/make_sky_v7.py SUN_DIR); move one and the other must move.
+ *
+ * DEFINED IN softSunShadows.ts, since the cloud shadows in the sun's shadow
+ * patch there are placed along it.
  */
-export const DAY_SUN: readonly [number, number, number] = [86, 25, 50];
+export { DAY_SUN };
 const HAZE_DAY = new THREE.Color(DAYLIGHT_HAZE);
 /**
  * The film's navy, LIFTED — and lifted by measurement rather than by eye.
@@ -1498,8 +1487,53 @@ const HAZE_DAY = new THREE.Color(DAYLIGHT_HAZE);
  * #131E33 is the same hue at roughly 3x the linear value, which lands the
  * hazed distance around [22,27,34] — darker than the sky above it, lighter
  * than nothing, and continuous with both.
+ *
+ * AND NOT NAVY (the client, 2026-10-01, of the holdings frame: "the blue
+ * shadows of this look cheap replace it with something which looks good").
+ * That navy was written for a dusk whose sky was a navy clear colour. The sky
+ * is a photographed sunset now — amber at the horizon under slate cloud — and
+ * since the print opens up through the evening (FilmGrade, EVENING_LIFT) the
+ * haze came out a saturated ink blue: a band of it across the far land and a
+ * cast of it in every distant shadow, the one hue in the frame the sky does
+ * not hold. Air takes the colour of the light coming through it. The haze is
+ * now the dusk's own: the smoke-mauve of the sunset's lower sky (measured on
+ * the frame at leg 0.6: away from the sun the sky's foot prints (57, 46, 37)),
+ * dark enough that the far tree line stays a silhouette under the amber and
+ * near enough to the sky's own value that the land's distance and the sky's
+ * foot are one air. Near-neutral here: the print warms it.
  */
-const HAZE_NIGHT = new THREE.Color('#131E33');
+const HAZE_NIGHT = new THREE.Color('#37302E');
+/**
+ * THE SKY'S FILL, AT DUSK. By day the hemisphere is a blue sky over a warm
+ * ground; as the evening fell it kept that blue and lost four-fifths of its
+ * strength, so everything the low sun did not reach — the forecourt's palms,
+ * the car, the fountain, the whole shaded side of the garden — went to a blue
+ * black against sunlit ground ("this looks darker make it less dark", the
+ * client, of the forecourt). A sunset sky is not blue and it is not dark: it
+ * is a wide warm source, and as the sun weakens it is most of the light there
+ * is. So the fill RISES with the evening, to EVENING_FILL of its daylight
+ * strength, and turns to the dusk's own colour: the shade is deep and warm
+ * rather than black and blue, and the sun's side still stands well over it.
+ * (Tried first at 0.52 of daylight: the forecourt frame's shaded flank still
+ * printed at a luma of 48, against 64 by day.)
+ */
+const FILL_DAY = new THREE.Color('#9FC2E6');
+const FILL_EVENING = new THREE.Color('#CDB7A6');
+/**
+ * And once the SUN HAS GONE the sky is not the sunset's colour any more. The
+ * refinement brief (2026-10-03): "the warm cinematic mood remains, but the
+ * color grade is not doing all the luxury work". Under FILL_EVENING to the end,
+ * the house at the door was one orange: cream stone under an amber sky is
+ * amber, the lit rooms and the lantern were the same amber, and nothing in the
+ * frame was warm BECAUSE it was lit. After sundown the dome is a soft, nearly
+ * neutral grey (still on the warm side: the client's note, no blue), so the
+ * stone goes back to its own cream and the lamps are the warm things in the
+ * picture. Taken across the same night that takes the key.
+ */
+const FILL_NIGHT = new THREE.Color('#C9C3BE');
+const EVENING_FILL = 1.3;
+/** How much of the fill the night takes, across the approach. */
+const NIGHT_FILL_LOSS = 0.3;
 // Warmer than it was (#FFF0DB): the key is a 14-degree sun, and the raking
 // front it now lights should read as the hour, against the cool sky fill on
 // the west flank. Warm against cool is what makes the two faces two faces.
@@ -1508,16 +1542,28 @@ const KEY_EVENING = new THREE.Color('#FFC489');
 
 function ExteriorLighting({
   driveByScroll,
+  holdTime,
+  film,
   grade,
   keyIntensity,
   hemiIntensity,
   tier,
+  estate,
 }: {
   driveByScroll: boolean;
+  /** The film itself: the header stands on the picture, and the lens carries
+   *  its top band (lensFilter.ts, HEADER_BAND). */
+  film: boolean;
+  /** The film's time of day held at this point of the exterior leg, whatever
+   *  the camera is doing: a reading page on the film's path (readingLight.ts). */
+  holdTime?: number;
   grade: Grade;
   keyIntensity: number;
   hemiIntensity: number;
   tier: DeviceTier;
+  /** The estate's root, once it has loaded: everything in it casts into the
+   *  sun's shadow map (see the cadence below). */
+  estate: THREE.Object3D | null;
 }) {
   const day = grade === 'daylight';
   /** The shadow map, by tier. A phone pays for the same frustum at a quarter of
@@ -1528,7 +1574,6 @@ function ExteriorLighting({
   const scene = useThree((s) => s.scene);
   const key = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
-  const entry = useRef<THREE.RectAreaLight>(null);
   // The curtained windows, found once the estate has loaded (see the evening
   // glow below). Re-scanned on a slow cadence until they exist.
   const windowGlow = useRef<{ mats: THREE.MeshStandardMaterial[]; nextScan: number }>({ mats: [], nextScan: 0 });
@@ -1555,6 +1600,24 @@ function ExteriorLighting({
       light.shadow.map = null;
     }
   }, [shadowMap]);
+
+  // The sun's shadow map is drawn when what is in it can have changed, not on
+  // every frame (softSunShadows.ts, SUN_SHADOW_CADENCE). Its own loop: the
+  // one below returns early on a page that holds the film still.
+  const sunShadow = useRef<SunShadowState>({ owed: SUN_SHADOW_CADENCE.onMount, frame: 0 });
+  // The estate arriving (or replaced): its meshes are merged in the frames
+  // after it loads, and the map owes them a draw before anyone sees the house.
+  useEffect(() => {
+    sunShadow.current.owed = Math.max(sunShadow.current.owed, SUN_SHADOW_CADENCE.onMount);
+  }, [estate]);
+  useFrame(() => {
+    const light = key.current;
+    if (!light || !light.castShadow) return;
+    light.shadow.autoUpdate = false;
+    if (sunShadowDue(sunShadow.current, doorwayState.mode === 'running', light.shadow.map === null)) {
+      light.shadow.needsUpdate = true;
+    }
+  });
 
   // A LAYOUT effect, so the fog leaves in the same commit that hides the
   // exterior and shows the hall. As a passive effect its cleanup ran after the
@@ -1601,22 +1664,22 @@ function ExteriorLighting({
   useEffect(
     () => () => {
       scene.backgroundIntensity = 1;
+      // Off the exterior, no filter: the hall's print must never inherit it.
+      // BUT NOT WHEN THE HALL HAS TAKEN THE FRAME. This runs after the commit
+      // that changes the sets, a frame into the hall, whose own stage has been
+      // writing the filter since (InteriorStage): zeroed here, the header's
+      // band was gone for exactly one frame — MEASURED through the open door
+      // (2026-10-03), the top sixth of the picture three to five times
+      // brighter for a frame, a flash at the one cut that must not show.
+      if (doorwayState.sceneLeg === 'interior') return;
+      lensFilter.stops = 0;
+      lensFilter.top = 0;
+      headerBandReach();
     },
     [scene],
   );
 
-  useFrame(() => {
-    // THE DOORWAY'S LIGHT ON THE PORTICO. When the front doors open, the light
-    // behind them has to land on something or it reads as a lamp inside a box:
-    // the entry bay's own area light — already sized to the opening and already
-    // facing out of it — carries it onto the columns, the steps and the
-    // fountain. An existing light, so a passage adds no light to the scene and
-    // recompiles no shader.
-    if (entry.current) {
-      entry.current.intensity =
-        (day ? 0.25 : 2.2) + doorwayState.channels.exteriorGlow * PORTICO_GLOW;
-    }
-
+  useFrame((_, delta) => {
     if (!driveByScroll) return;
 
     // LEG progress, not document scroll — and that is a fix, not a detail.
@@ -1634,11 +1697,48 @@ function ExteriorLighting({
     // correct now. Clamped to 1 past the crossover, so the last exterior frame
     // before the cut is the fully-fallen one rather than a rewind.
     const legS =
-      journeyState.leg === 'exterior' ? journeyState.legProgress : 1;
+      holdTime ?? (journeyState.leg === 'exterior' ? journeyState.legProgress : 1);
     const a = atmosphereAt(legS);
     const fog = scene.fog as THREE.Fog | null;
     // The print's exposure rides the same evening (FilmGrade, filmState).
     filmState.evening = day ? a.evening : 0;
+    // The header's band across the top of the lens: by day, and lightly again
+    // while the lit house passes behind it on the approach (lensFilter.ts).
+    lensFilter.top = film && day ? Math.max(headerBandOutside(a.evening), headerBandApproach(legS)) : 0;
+    // Through the open door (doorway.ts, 'through') the header's band goes to
+    // the hall's own with the print, so it is already there when the sets
+    // change behind the doorway.
+    if (film && passageLight.grade > 0) lensFilter.top += (HEADER_BAND.hall - lensFilter.top) * passageLight.grade;
+    // And the lens's filter (lensFilter.ts): on a wide frame, the holdings'
+    // grad over the sunset; on any other, the sky grad that rides with the
+    // copy. The page's own question, asked the same way (copyZone.filmIsWide).
+    // NOT ON THE WAY OUT BY THE DOOR. There this mounts with the hall still the
+    // whole picture (the sets change a pace inside the doorway), and the
+    // hall's stage is still easing ITS filter off the copy that has just gone
+    // (InteriorStage, establishNd). This loop runs after the stage's and has
+    // the last word: MEASURED (2026-10-04) the establishing copy's half stop
+    // gone in one frame, the lower left of the picture up to 55% brighter
+    // from one frame to the next. At the door this leg's own filter is none,
+    // so there is nothing of its own to write until the passage is over.
+    const hallsFilter =
+      doorwayState.mode === 'running' && doorwayState.dir === 'exit' && doorwayState.style === 'through';
+    if (!hallsFilter) {
+      const out = journeyState.leg === 'exterior';
+      if (out) headerBandReach();
+      if (filmIsWide(window.innerWidth, window.innerHeight)) {
+        const cover = out ? copyZone.panes.find((p) => p.id === 'hero') : undefined;
+        holdingsFilter(
+          out ? legS : 0,
+          window.innerWidth / Math.max(1, window.innerHeight),
+          cover ? copyPresence(cover.weight) : 0,
+        );
+      } else {
+        phoneSkyFilter(out ? copyZone.panes : [], legS, delta);
+      }
+      // And the foot of the frame while the lit portico passes behind the
+      // approach's copy (APPROACH_ND).
+      if (out && film) approachFilter(legS);
+    }
 
     if (!day) {
       if (fog && fog.isFog) {
@@ -1646,6 +1746,9 @@ function ExteriorLighting({
         fog.far = a.far;
       }
       if (key.current) key.current.intensity = a.key;
+      filmState.night = 0;
+      poolLight.gain = 1;
+      applyPoolGain();
       return;
     }
 
@@ -1662,6 +1765,10 @@ function ExteriorLighting({
     // over the last chapter fixes the cut and the sphere at once, with no
     // change to either.
     const e = a.evening;
+    // NIGHT, across the approach: the sun, which held the house through the
+    // evening, sets while the camera comes down the flank and onto the axis.
+    const n = legS <= NIGHT_FROM ? 0 : smooth01((legS - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM));
+    filmState.night = n;
 
     if (fog && fog.isFog) {
       // near stays at 60 throughout: the building's nearest corner is 39.8m
@@ -1682,13 +1789,20 @@ function ExteriorLighting({
     // horizon is reddened by the air it is coming through, so this is the same
     // physics the fog is.
     if (key.current) {
-      key.current.intensity = keyIntensity * (1 - 0.35 * e);
+      key.current.intensity = keyIntensity * (1 - 0.35 * e) * (1 - NIGHT_KEY_LOSS * n);
       key.current.color.copy(KEY_DAY).lerp(KEY_EVENING, e);
     }
-    // The FILL DIES. The hemisphere is sky light, and there is no sky left to
-    // fill with. This is what lets the shadowed elevation go dark enough for
-    // the sphere above it to read.
-    if (hemi.current) hemi.current.intensity = hemiIntensity * (1 - 0.78 * e);
+    // The FILL RISES, and warms (FILL_EVENING, above): to EVENING_FILL of
+    // itself — it used to fall to 0.22, for a sphere of additive light that
+    // has since left the film — and from the day's blue to the dusk's own
+    // colour.
+    if (hemi.current) {
+      hemi.current.intensity = hemiIntensity * (1 + (EVENING_FILL - 1) * e) * (1 - NIGHT_FILL_LOSS * n);
+      hemi.current.color.copy(FILL_DAY).lerp(FILL_EVENING, e).lerp(FILL_NIGHT, n);
+    }
+
+    // (The portico's lantern comes on with the same evening: PorticoLantern
+    // reads filmState.)
 
     // The photographic environment recedes rather than being replaced. It keeps
     // its cloud structure and its hill silhouettes at a tenth of the luminance,
@@ -1712,7 +1826,11 @@ function ExteriorLighting({
       });
       glow.mats = [...found];
     }
-    for (const m of glow.mats) m.emissiveIntensity = WINDOW_EVENING_GLOW * e;
+    for (const m of glow.mats) m.emissiveIntensity = WINDOW_EVENING_GLOW * e + WINDOW_NIGHT_GLOW * n;
+    // And the pools those rooms throw on the ground outside (nightPools.ts),
+    // on the same drive.
+    poolLight.gain = WINDOW_EVENING_GLOW * e + WINDOW_NIGHT_GLOW * n;
+    applyPoolGain();
   });
 
   return (
@@ -1748,6 +1866,7 @@ function ExteriorLighting({
           position would now be pointing at nothing. */}
       <directionalLight
         ref={key}
+        userData={OUTSIDE}
         // Daylight puts the sun where Blender's SUN_KEY actually is: rotation
         // (55.1, 0, 63.9) resolves to 34.9 degrees elevation, which converts to
         // three-space (0.737, 0.572, 0.361) and out to 89m. Its colour is
@@ -1830,92 +1949,26 @@ function ExteriorLighting({
           carrying that shot either. */}
       {/* Off in daylight: it exists to keep a dusk silhouette off the navy,
           and with a lit sky and a 0.8 hemisphere it only flattens the roof. */}
-      <directionalLight position={[34, 22, -40]} intensity={day ? 0 : 0.3} color="#7FB4D6" />
+      {day ? null : <directionalLight position={[34, 22, -40]} intensity={0.3} color="#7FB4D6" userData={OUTSIDE} />}
 
-      {/* PHYSICAL SPILL FROM THE WINDOWS.
+      {/* THE PORTICO'S LANTERN, and nothing else that is not in the picture.
 
-          Emissive materials in three light NOTHING — there is no GI in a
-          real-time forward renderer, so the glowing reveals were self-lit
-          stickers and the stone around them stayed black. That is exactly the
-          "neon sticker" read. These are the light those windows actually cast.
-
-          Positioned just OUTSIDE the facade planes rather than inside the
-          rooms, so the falloff lands on the wall face, the entry steps and the
-          fountain instead of on the back of a reveal nobody sees. `distance` is
-          tight on every one: an unbounded point light is evaluated against
-          every lit fragment in the scene, and five of those would cost more
-          than the building.
-
-          INTENSITY DROPPED 80%. Raising these to ~2.5x to "pay for" decay was
-          wrong: MeshStandardMaterial accumulates them in scene-linear space,
-          and the sum was arriving at the ACES curve far past the point where it
-          still has roll-off left, so the facade clipped to white and took the
-          limestone texture with it. Tone mapping cannot rescue a value that
-          entered the buffer already blown. These are a warm architectural wash
-          now, not a floodlight.
-
-          decay={2} on all remaining lights is physically correct inverse-square falloff —
-          intensity / d^2 — which is why they needed roughly 2.5x the raw
-          intensity to reach the same surfaces. Under-decayed light is what
-          makes a source read as a sticker rather than as illumination.
-
-          NOTE for the "floating glowing dots" observation: a THREE.PointLight
-          has NO geometry and cannot be seen. There are no helpers in this tree
-          and never were. The visible discs are the emissive window reveals
-          crossing the bloom threshold, plus the GodRays sun disc — the only
-          added mesh, and one the pass requires. Both are addressed above and
-          below rather than by deleting a helper that does not exist. */}
-      {/* RectAreaLight planes aligned INSIDE the archways, replacing the front
-          point lights. A point light radiates in every direction from a
-          singularity, which is why its falloff on a flat facade reads as a
-          circular hotspot — a sticker. A rect area light is a lit RECTANGLE:
-          it throws the shape of the opening onto the stone and the steps, which
-          is what a real window does.
-
-          rotation-y turns each one to face out along +z. They are not visible
-          geometry — a RectAreaLight has no mesh — so nothing new appears in
-          frame. */}
-      {/* ALL BUT EXTINGUISHED IN DAYLIGHT.
-
-          Everything this rig is for is an argument about darkness — an unlit
-          wall through the back of the orbit, a facade with nowhere to catch
-          light, reveals that read as stickers because the stone around them is
-          black. At midday the sun and a 0.7 environment do that work, and a
-          warm interior wash on a sunlit limestone wall reads as exactly what
-          the reference does not show: lamps on at noon.
-
-          Not zero. 0.25 on the entry bay alone keeps the portico from going
-          flat where the roof overhangs it, which is the one place the key
-          genuinely cannot reach. The side and fountain lights go out entirely —
-          in daylight both surfaces are lit by the sky. */}
-      {/* V7: at the new frontispiece — the arched windows either side of the
-          door under the portico, and the door itself, 0.35 m out from the
-          wall face at z 8.40. */}
-      <rectAreaLight
-        position={[-2.95, 2.6, 8.75]} width={1.4} height={2.9}
-        intensity={day ? 0 : 1.8} color="#FFAA55"
-      />
-      <rectAreaLight
-        ref={entry}
-        position={[0, 2.3, 8.75]} width={2.6} height={3.4}
-        intensity={day ? 0.25 : 2.2} color={day ? '#FFE2C4' : '#FFB068'}
-      />
-      <rectAreaLight
-        position={[2.95, 2.6, 8.75]} width={1.4} height={2.9}
-        intensity={day ? 0 : 1.8} color="#FFAA55"
-      />
-      {/* The side elevation — what the camera faces from theta 70 onward.
-          Without it the last third of the orbit plays against an unlit wall. */}
-      <pointLight
-        position={[14.4, 2.8, 0]} intensity={day ? 0 : 5.6}
-        distance={22} decay={2} color="#FFAA55"
-      />
-      {/* Uplight on the fountain, so the centre of the composition has a source
-          of its own rather than borrowing from the windows either side. */}
-      <pointLight
-        position={[0, 1.3, 30]} intensity={day ? 0 : 4.4}
-        distance={14} decay={2} color="#FFC98A"
-      />
+          The entry used to be lit at night by three RectAreaLights the size of
+          the door and of the arched window either side of it, standing 35 cm
+          in front of the wall and aimed at it, with a point light off the east
+          flank and (at dusk) another over the fountain. None of them had a
+          source: the door stood in a rectangle of white stone exactly the
+          panel's size, and the refinement brief (2026-10-03) read the front as
+          lighting that "visibly announces itself". What the lit rooms throw on
+          the ground is the pools' work (nightPools.ts); what lights the porch
+          is the lantern that hangs in it (PorticoLantern), with the columns'
+          shadows; and the flank's light is gone with the orbit it was for —
+          no frame of the film sees the east wall after dark. */}
+      <PorticoLantern tier={tier} />
+      {/* The dusk rollback's own fountain uplight. */}
+      {day ? null : (
+        <pointLight position={[0, 1.3, 30]} intensity={4.4} distance={14} decay={2} color="#FFC98A" userData={OUTSIDE} />
+      )}
 
       {/* Cool sky, warm ground bounce. Keeps the shadowed side from reading as
           black without lifting it toward the key's colour. */}
@@ -1928,6 +1981,7 @@ function ExteriorLighting({
           CONSTRUCTOR arguments — driving the fall through them would rebuild
           the light sixty times a second. */}
       <hemisphereLight
+        userData={OUTSIDE}
         ref={hemi}
         args={
           day
@@ -1969,24 +2023,72 @@ function ExteriorLighting({
  * picture light is not a trade worth making.
  */
 const PORTRAIT_LIGHT = {
-  // V7: LGT_portrait's own place, carried with the portrait when the hall was
-  // extended — hung 1.28m higher and 2.4m further back, 5% larger — and again
-  // when it was made imperial: over the central landing, a quarter larger.
-  position: [0, 9.11, -7.34] as [number, number, number],
-  aim: [0, 6.84, -7.62] as [number, number, number],
-  angle: 0.9076,
-  colour: '#FFE6C6',
+  // THE LIGHT OFF THE CANVAS (the fourth art-direction critique, 2026-09-30:
+  // the portrait read "literally cut-and-pasted"). The lamp used to shine from
+  // LGT_portrait's own place, 28 cm in front of the canvas and 2.3 m above its
+  // centre, and a point that close falls off as the inverse square of almost
+  // nothing: the top of the print took 97 times the light its middle did — a
+  // hot spot burnt into the hair and a face lit like a flash photograph. The
+  // lamp bar stays where it hangs (it is a fixture of the frame); the light
+  // that models the canvas now comes from a framing spot 3.2 m out from the
+  // wall and 3.6 m above the centre — a gallery's projector, its cone cut to
+  // the frame so the ivory walls either side stay in the room's dusk — and
+  // the print falls off gently from its top to its foot, the way a picture
+  // under a real spot does.
+  position: [0, 10.4, -4.4] as [number, number, number],
+  aim: [0, 7.1, -7.62] as [number, number, number],
+  angle: 0.5,
+  colour: '#FFE3C0',
 };
+
+/** The picture light's candela. It stood at 70, measured against the print on
+ *  the portrait beat; the client asked for the light to come down (2026-10-01:
+ *  "reduce the intensity of the light" — from the door its glow stood over the
+ *  sitter's hair). Two-thirds: the print is lit, not flooded. */
+const PORTRAIT_LIGHT_INTENSITY = 46;
+/** The same spot, for the hall drawn through the open door (HallPortal). */
+const PORTAL_SPOT: PortalLight = {
+  position: PORTRAIT_LIGHT.position,
+  aim: PORTRAIT_LIGHT.aim,
+  angle: PORTRAIT_LIGHT.angle,
+  colour: PORTRAIT_LIGHT.colour,
+  intensity: PORTRAIT_LIGHT_INTENSITY,
+};
+
+/** The scene's ambient floor; inside, on the house-light dimmer (hallLight.ts). */
+/** The exterior's lights carry this: they are no part of the hall's light
+ *  state when the room is photographed or drawn through the door (hallProbe,
+ *  HallPortal). */
+const OUTSIDE = { outside: true } as const;
+
+function HallAmbient({ intensity, interior }: { intensity: number; interior: boolean }) {
+  const light = useRef<THREE.AmbientLight>(null);
+  useFrame(() => {
+    if (light.current) light.current.intensity = intensity * (interior ? hallLight.level : 1);
+  });
+  return <ambientLight ref={light} intensity={intensity} />;
+}
 
 function InteriorLighting() {
   const spot = useRef<THREE.SpotLight>(null);
   const aim = useRef<THREE.Object3D>(null);
 
+
   // three does not update a SpotLight's target for you, and a target that is
   // not in the scene keeps an identity matrixWorld — which would aim this at
   // the room's origin, i.e. at the middle of the floor.
-  useEffect(() => {
-    if (spot.current && aim.current) spot.current.target = aim.current;
+  //
+  // A LAYOUT effect, so the lamp is aimed in the commit that mounts it. As a
+  // passive one it was aimed a frame later, and the hall's first frame had the
+  // picture light on the carpet and the portrait in the dark — under the dark
+  // threshold nobody saw it; through the open door (2026-10-03) it was one
+  // frame of the wrong room, MEASURED: the floor sixty per cent brighter and
+  // the portrait at a seventh, for a sixtieth of a second.
+  useLayoutEffect(() => {
+    if (spot.current && aim.current) {
+      spot.current.target = aim.current;
+      aim.current.updateMatrixWorld();
+    }
   }, []);
 
   return (
@@ -1996,7 +2098,7 @@ function InteriorLighting() {
         ref={spot}
         position={PORTRAIT_LIGHT.position}
         angle={PORTRAIT_LIGHT.angle}
-        penumbra={0.6}
+        penumbra={0.45}
         decay={2}
         // `distance` is NOT a soft bound in three — it is a windowing term,
         // pow(1 - d/cutoff, decay), applied on top of the inverse square. At a
@@ -2004,10 +2106,10 @@ function InteriorLighting() {
         // window alone, which is why the first intensity did almost nothing.
         // 12m puts the window at 0.71 here and still leaves the stair foot, 6m
         // away, at under 3% of the portrait's illumination.
-        distance={12}
+        distance={16}
         // 40 -> 62 with the imperial hall: the lamp stands 2.3 m from the
         // canvas's centre where it stood 1.8, and inverse-square takes the rest.
-        intensity={62}
+        intensity={PORTRAIT_LIGHT_INTENSITY}
         color={PORTRAIT_LIGHT.colour}
       />
     </>
@@ -2018,7 +2120,9 @@ function InteriorLighting() {
  *  rebuilt; passing them to <Canvas> only seeds the first one. */
 function CameraClipping({ set }: { set: SceneSet }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
-  useEffect(() => {
+  // With the set, in its commit: the first frame of a set is drawn through its
+  // own planes (the continuous door shows that frame).
+  useLayoutEffect(() => {
     camera.near = CLIP[set].near;
     camera.far = CLIP[set].far;
     camera.updateProjectionMatrix();
@@ -2101,18 +2205,7 @@ function ColorPipeline({ exposure, tier }: { exposure: number; tier: DeviceTier 
     gl.toneMapping = THREE.ACESFilmicToneMapping;
     gl.toneMappingExposure = exposure;
     gl.transmissionResolutionScale = TRANSMISSION_SCALE[tier];
-    // The doorway lifts exposure through its peak — the eye adjusting to the
-    // light — as a MULTIPLE of this value, so it has to know what this value is.
-    doorwaySurfaces.gl = gl;
-    doorwaySurfaces.exposure = exposure;
-    doorwaySurfaces.blur = tier !== 'low';
   }, [gl, exposure, tier]);
-  useEffect(
-    () => () => {
-      if (doorwaySurfaces.gl === gl) doorwaySurfaces.gl = null;
-    },
-    [gl],
-  );
   return null;
 }
 
@@ -2261,7 +2354,11 @@ function RoomCubeAtStart() {
 // daylight key's bearing, exposed to the painted sky's median and given the
 // painted sky's haze below the horizon (tools/gltf/make_sky_ph_v7.py; the
 // painted original, make_sky_v7.py, remains the fallback).
-const SKY_EQUIRECT_URL = '/textures/sky_estate_v7_4k.jpg';
+// v8 (the second art-direction audit, "the sky looks a bit muddy"): the same
+// photograph graded deeper toward the zenith and cleaner in its blue, the sun's
+// glow kept (tools/gltf/grade_sky_v8.py). The plate only: the lighting
+// environment below is the v7 one, untouched.
+const SKY_EQUIRECT_URL = '/textures/sky_estate_v8_4k.jpg';
 /**
  * What the estate is LIT by, as opposed to what it is seen against: the same
  * sky, with the lawn's bounce below the horizon where the backdrop carries
@@ -2275,6 +2372,7 @@ const SKY_LIGHTING_URL = '/textures/sky_estate_v7_env.jpg';
 // Contact-hardening sun shadows, installed before the first frame compiles a
 // shadow-receiving material (softSunShadows.ts).
 installSoftSunShadows();
+installCloudShadows();
 // The depth-in-alpha write the exterior lens reads (LensFocus.tsx).
 installFocusDepth();
 
@@ -2300,11 +2398,80 @@ function DebugHandle() {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('debug') !== '1') return;
     const w = window as unknown as { __estate?: unknown };
-    w.__estate = { gl, scene, camera, THREE, journey: journeyState, doorway: doorwayState };
+    w.__estate = {
+      gl,
+      scene,
+      camera,
+      THREE,
+      journey: journeyState,
+      doorway: doorwayState,
+      lens: lensFilter,
+      map: mapStage,
+      copy: copyZone,
+    };
     return () => {
       delete w.__estate;
     };
   }, [gl, scene, camera]);
+  return null;
+}
+
+/**
+ * WHAT THE SCENE IS ACTUALLY SHOWING, written by the commit that changes it.
+ *
+ * The doorway will not let go of a passage until this names the far model and
+ * the scene has drawn it (doorway.ts), and while the door stands open on the
+ * hall it is what tells the rig, the lens and HallPortal which set they are
+ * still in.
+ *
+ * It used to be written by an effect of WorldCanvas itself — the page's React
+ * tree. The canvas is a second root: it takes the same `set` and commits it
+ * LATER, in its own time, and on a busy frame a frame or more later. In that gap
+ * the flag said 'interior' while the scene was still the estate: HallPortal put
+ * the hall back on the default layer, and the next frame drew the whole room
+ * under the sun, the lantern, the sky's hemisphere and the estate's fog — a
+ * light state none of its programs had been compiled for. MEASURED at the door
+ * with the continuous entry (2026-10-03): 33 programs built in one frame of
+ * 11.9 s, the exact stall the brief asks never to see ("anything that makes the
+ * user think a new 3D scene is loading"). The dark threshold had hidden the
+ * same race under its cover.
+ *
+ * A layout effect of a component INSIDE the canvas runs in the commit that
+ * flips the two groups' visibility and unmounts the estate's lights, after its
+ * mutations and before the next frame is drawn: the flag and the scene change
+ * together.
+ */
+function SceneLegMark({ set }: { set: SceneSet }) {
+  const gl = useThree((s) => s.gl);
+  /** Frames of the estate still to be drawn without its shadow pass. */
+  const hold = useRef(0);
+  const held = useRef(false);
+  useLayoutEffect(() => {
+    doorwayState.sceneLeg = set;
+    // THE ESTATE'S FIRST FRAME BACK, ON THE WAY OUT BY THE SAME DOOR. three
+    // draws a frame's shadow maps BEFORE it sets that frame's lights up, so
+    // the shadow pass is keyed on the lights the previous frame left — and on
+    // this frame those are the hall's. MEASURED (2026-10-04): five depth and
+    // distance programs built for "no sun, no lantern, one spot" on the frame
+    // the sets change, 130 ms in the middle of a continuous move, and never
+    // used again. So that one frame is drawn without its shadow pass (the
+    // camera is in the doorway and the opening fills the picture; nothing the
+    // sun or the lantern lights is in it), and the next has the estate's own
+    // lights to key on.
+    if (set === 'exterior' && doorwayState.mode === 'running' && doorwayState.dir === 'exit') hold.current = 1;
+  }, [set]);
+  useFrame(() => {
+    if (hold.current > 0) {
+      hold.current -= 1;
+      if (gl.shadowMap.autoUpdate) {
+        gl.shadowMap.autoUpdate = false;
+        held.current = true;
+      }
+    } else if (held.current) {
+      gl.shadowMap.autoUpdate = true;
+      held.current = false;
+    }
+  });
   return null;
 }
 
@@ -2347,10 +2514,28 @@ function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
   const gl = useThree((s) => s.gl);
   const [env, setEnv] = useState<THREE.Texture | null>(null);
   const [lighting, setLighting] = useState<THREE.Texture | null>(null);
+  /** The prefiltered environment, and what it was made from. */
+  const made = useRef<{ gl: THREE.WebGLRenderer; source: THREE.Texture; target: THREE.WebGLRenderTarget } | null>(null);
   const wants = set === 'exterior' && grade === 'daylight';
 
-  useEffect(() => (wants ? loadSky(SKY_EQUIRECT_URL, setEnv) : undefined), [wants]);
-  useEffect(() => (wants ? loadSky(SKY_LIGHTING_URL, setLighting) : undefined), [wants]);
+  // LOADED ONCE, AND KEPT WHILE THE VISITOR IS IN THE HALL. Both skies used to
+  // be loaded each time the estate became the set, and the prefiltered
+  // environment made again: nothing on the way in, where a dark threshold
+  // covered the way back out. On the continuous way out (doorway.ts,
+  // throughOutChannels) it is the frame the sets change. MEASURED (2026-10-04,
+  // a CPU profile of that frame): 67 ms, of which 46.8 in texSubImage2D — the
+  // panorama uploaded a second time for three's cube of the background — 6.5
+  // prefiltering the lighting copy again and 4.7 building the prefilter's own
+  // programs; four frames dropped in the middle of the move. The textures were
+  // never released while inside (the state held them), so keeping what is made
+  // from them costs the room nothing but the small prefiltered target.
+  const [armed, setArmed] = useState(wants);
+  useEffect(() => {
+    if (wants) setArmed(true);
+  }, [wants]);
+
+  useEffect(() => (armed ? loadSky(SKY_EQUIRECT_URL, setEnv) : undefined), [armed]);
+  useEffect(() => (armed ? loadSky(SKY_LIGHTING_URL, setLighting) : undefined), [armed]);
 
   useEffect(() => {
     const prev = scene.background;
@@ -2366,20 +2551,31 @@ function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
   // The lighting environment: the lighting copy of the panorama (lawn below
   // the horizon), falling back to the backdrop itself if that copy is missing.
   // Exterior only: inside, RoomEnvironmentMap owns scene.environment and the
-  // bake is calibrated against it.
+  // bake is calibrated against it. Made once for each source; only bound while
+  // the estate is the set.
   const source = lighting ?? env;
   useEffect(() => {
     if (!wants || !source) return;
-    const pmrem = new THREE.PMREMGenerator(gl);
-    const target = pmrem.fromEquirectangular(source);
-    pmrem.dispose();
+    if (made.current?.source !== source || made.current.gl !== gl) {
+      // Not bound at this point: the cleanup below has already run.
+      made.current?.target.dispose();
+      const pmrem = new THREE.PMREMGenerator(gl);
+      made.current = { gl, source, target: pmrem.fromEquirectangular(source) };
+      pmrem.dispose();
+    }
     const prev = scene.environment;
-    scene.environment = target.texture;
+    scene.environment = made.current.target.texture;
     return () => {
       scene.environment = prev;
-      target.dispose();
     };
   }, [gl, scene, source, wants]);
+  useEffect(
+    () => () => {
+      made.current?.target.dispose();
+      made.current = null;
+    },
+    [],
+  );
 
   useEffect(() => () => env?.dispose(), [env]);
   useEffect(() => () => lighting?.dispose(), [lighting]);
@@ -2403,7 +2599,16 @@ export function WorldCanvas() {
   // So the leg is mirrored into state by <JourneyDriver>, which fires exactly
   // twice per visit — once when the interior is armed for loading, once when
   // the crossover is passed.
-  const onJourney = poseFor(place).path === true;
+  // The journey is the FILM's (the home page). /start-here shares its place —
+  // the arrival — but is a page for reading: with the journey live it played
+  // the whole film, door passage and hall included, under 891px of scroll, and
+  // by two-thirds of the way down its cards stood on the founder's portrait
+  // (seen). Off the film, a path place holds the film's first frame instead
+  // (the journey's state is inert at leg 0), at the film's own night
+  // (readingLight.ts).
+  const onPath = poseFor(place).path === true;
+  const onJourney = onPath && isFilmRoute(pathname);
+  const pathStill = onPath && !onJourney;
   const [leg, setLeg] = useState<SceneSet>('exterior');
   const [interiorArmed, setInteriorArmed] = useState(false);
 
@@ -2416,6 +2621,16 @@ export function WorldCanvas() {
   const set: SceneSet = onJourney ? leg : setFor(place);
   const look = useLook(set);
 
+  // A film-path page that is not the film reads at a reading light
+  // (readingLight.ts). The interior's stills dim their own house lights
+  // (InteriorStage), so this is the exterior path's alone.
+  useEffect(() => {
+    readingLight.want = pathStill ? READING_STOPS : 0;
+    return () => {
+      readingLight.want = 0;
+    };
+  }, [pathStill]);
+
   // Reset when leaving the journey, so navigating away mid-interior and coming
   // back does not open the home page standing in the hall.
   useEffect(() => {
@@ -2423,13 +2638,12 @@ export function WorldCanvas() {
   }, [onJourney]);
 
   const onLeg = useCallback((l: 'exterior' | 'interior') => setLeg(l), []);
+  /** The tier, for the doorway's host (registered once, read per passage). */
+  const tierNow = useRef(tier);
+  tierNow.current = tier;
 
-  // What the scene is ACTUALLY showing, once React has committed it. The
-  // doorway will not clear its white until this names the far model and the
-  // scene has drawn it (doorway.ts, FAR_FRAMES).
-  useEffect(() => {
-    doorwayState.sceneLeg = set;
-  }, [set]);
+  // (What the scene is ACTUALLY showing is written from inside the canvas:
+  // SceneLegMark.)
   const onArmed = useCallback(() => setInteriorArmed(true), []);
 
   // The loaded hall, handed up so the interaction layer can adopt its
@@ -2483,6 +2697,11 @@ export function WorldCanvas() {
         });
       },
       canAnimate: () => lenisInstance !== null && !prefersReducedMotion(),
+      // The hall drawn through the doorway is a second draw of the room for
+      // the length of the passage: not on the low tier, which keeps the dark
+      // threshold. (?door=threshold asks for it anywhere, for comparison.)
+      canGoThrough: () =>
+        tierNow.current !== 'low' && new URLSearchParams(window.location.search).get('door') !== 'threshold',
     });
 
     // A crossing only becomes a passage if the visitor made it. The scroll keys
@@ -2515,20 +2734,10 @@ export function WorldCanvas() {
     };
   }, []);
 
-  const onFrame = useCallback((el: HTMLDivElement | null) => {
-    doorwaySurfaces.frame = el;
-    doorwaySurfaces.paintedFilter = '';
-  }, []);
-
   // Per-frame channels out of the journey. Refs, not state, for the usual
   // reason — these change 60 times a second and re-rendering the canvas tree on
   // each one would undo everything the scroll driver exists to avoid.
-  const constellationReveal = useRef(0);
   const interiorLeg = useRef(0);
-  /** The district field's chapter presence. Its own channel rather than a
-   *  threshold on interiorLeg, because the field has to be dark for the whole
-   *  interior and only ignite on the last chapter. */
-  const cityReveal = useRef(0);
   const veilRef = useRef<HTMLDivElement>(null);
 
   // Three published projects, three stations. The count drives the interior
@@ -2538,41 +2747,23 @@ export function WorldCanvas() {
   const stationCount = Math.min(4, sceneCards.length);
 
   /**
-   * Leg progress at which the district field's chapter opens.
+   * The published projects, in the shape the map table's pins read (MapTable).
    *
-   * Derived from CHAPTER_WEIGHTS and the station count rather than written as a
-   * number, because buildInteriorBeats renormalises the leg by exactly this sum
-   * — so a fourth published project moves the chapter and this moves with it.
-   * The alternative is the failure journey.ts already records: the same
-   * constant in two files, edited in one of them.
+   * Same store the hologram tables bind to, so a pin and a plan can never
+   * disagree about what is published — and `total` is carried because a pin's
+   * LENGTH is its plot count, the one real magnitude these projects have.
    */
-  const cityFrom = useMemo(() => {
-    const W = CHAPTER_WEIGHTS;
-    const span = W.establish + stationCount * W.station + W.portrait + W.city;
-    return (W.establish + stationCount * W.station + W.portrait) / span;
-  }, [stationCount]);
-
-  /**
-   * The published projects, in the shape the district field's layout reads.
-   *
-   * Same store the hologram tables bind to, so a beacon and a plan can never
-   * disagree about what is published — and `total` is carried because the
-   * beacon's SIZE is its unit count, which is the one piece of real magnitude
-   * these three projects have.
-   */
-  const cityProjects = useMemo(
+  const pinProjects = useMemo(
     () =>
       sceneCards.map((c) => ({
         slug: c.slug,
         name: c.name,
-        locality: c.locality,
         city: c.city,
         totalUnits: c.total ?? 0,
-        availableUnits: c.available ?? 0,
-        soldOut: c.soldOut,
       })),
     [sceneCards],
   );
+  const openProject = useCallback((slug: string) => veiledPush(`/projects/${slug}`), []);
 
   /** Clicking a hologram or the portrait is a real navigation. Routed rather
    *  than location-assigned so the App Router transition is a client one and
@@ -2625,8 +2816,10 @@ export function WorldCanvas() {
     // below — otherwise the frame the GLB has not painted yet shows navy under
     // a daylight scene. Same rule, same source of truth.
     <div
-      ref={onFrame}
       aria-hidden="true"
+      // The one layer that stays behind the open menu (globals.css, THE MENU
+      // OVER THE FILM).
+      data-film=""
       className="fixed inset-0 z-0"
       style={{ background: set === 'exterior' ? GRADE_BG[look.grade] : GRADE_BG.dusk }}
     >
@@ -2641,12 +2834,11 @@ export function WorldCanvas() {
           // a scene this dark, and it is the single biggest mobile cost.
           dpr={[1, tier === 'high' ? 2 : 1.5]}
           // Measured by LAYOUT size, not the bounding box. The door passage
-          // scales this frame with a CSS transform to hide its blur's soft edge
-          // (paintDoorway), and a bounding box includes transforms: r3f read
-          // every blur step as a resize and reallocated the renderer and every
-          // composer buffer mid-passage — MEASURED 149 ms in setSize at the
-          // swap, the canvas "growing" 1280 -> 1329 px for pixels CSS was
-          // already scaling.
+          // once scaled this frame with a CSS transform (to hide the soft edge
+          // of a blur it no longer has), and a bounding box includes
+          // transforms: r3f read every step as a resize and reallocated the
+          // renderer and every composer buffer mid-passage — MEASURED 149 ms in
+          // setSize at the swap. Kept: layout size is the right measure anyway.
           resize={{ offsetSize: true }}
           // DELIBERATELY no toneMapping / toneMappingExposure here. r3f
           // re-applies this object on every re-render, and the postprocessing
@@ -2676,32 +2868,35 @@ export function WorldCanvas() {
             active={onJourney}
             onLeg={onLeg}
             onArmed={onArmed}
-            reveal={constellationReveal}
             interiorLeg={interiorLeg}
-            cityReveal={cityReveal}
-            cityFrom={cityFrom}
             veil={veilRef}
           />
           <CameraClipping set={set} />
+          <SceneLegMark set={set} />
           {/* Inside: GI is baked into the lightmap, so a real-time rig would
               double-count it and this only lifts the instanced ornament, which
               carries no lightmap because instancing and per-placement UVs are
               exclusive. Outside: kept very low, because the sky is the
               hemisphere light and a flat ambient would cancel the relief the
               key light exists to create. */}
-          <ambientLight intensity={look.ambient} />
+          <HallAmbient intensity={look.ambient} interior={set === 'interior'} />
+          {/* The dust in the estate's air. Halved on low tier: the field is
+              atmosphere, and a phone should get thinner air rather than no
+              air. Mounted whichever set is showing and drawn only outside
+              (Motes, `shown`). */}
+          <Motes count={tier === 'low' ? 1100 : 2400} shown={set === 'exterior'} />
           {set === 'exterior' && (
             <>
               <ExteriorLighting
-                driveByScroll={poseFor(place).path === true}
+                driveByScroll={onPath}
+                holdTime={pathStill ? READING_TIME : undefined}
+                film={onJourney}
                 grade={look.grade}
                 keyIntensity={look.key}
                 hemiIntensity={look.hemi}
                 tier={tier}
+                estate={exteriorRoot}
               />
-              {/* Halved on low tier: the field is atmosphere, and a phone
-                  should get thinner air rather than no air. */}
-              <Motes count={tier === 'low' ? 1100 : 2400} />
               {/* <Terrain /> IS DELIBERATELY ABSENT.
                   It drew procedural karst relief because the exported
                   ground_plane was a flat, untextured, pure-white 450m square —
@@ -2711,22 +2906,8 @@ export function WorldCanvas() {
                   formal garden, flat through it, with a gravel forecourt, a
                   drive on axis and lawn parterres driven by a baked zone mask.
                   Drawing a procedural approximation over that would be a worse
-                  landscape rendered twice. The component is kept in the tree
-                  for reference but is no longer mounted. */}
-              {/* THE CONSTELLATION. Mounted with the exterior because it lives
-                  in that model's coordinate space, but faded by its own chapter
-                  rather than by the leg — it has to be dark through the hero
-                  and the revolution and only ignite as the camera turns onto
-                  it. Halved on low tier: a phone gets a thinner constellation,
-                  not a missing one. */}
-              {onJourney ? (
-                <Constellation
-                  position={CONSTELLATION}
-                  radius={CONSTELLATION_RADIUS}
-                  reveal={constellationReveal}
-                  density={tier === 'low' ? 0.45 : 1}
-                />
-              ) : null}
+                  landscape rendered twice, and the component has since been
+                  removed. */}
             </>
           )}
           <Suspense fallback={null}>
@@ -2772,12 +2953,27 @@ export function WorldCanvas() {
             <Suspense fallback={null}>
               {onJourney ? (
                 interiorArmed ? (
-                  <group visible={set === 'interior'}>
+                  <group
+                    visible={set === 'interior'}
+                    // The doorway shows the hall through itself while it is
+                    // open (HallPortal): it needs the group React hides.
+                    ref={(g: THREE.Group | null) => {
+                      if (hallPortal.wrapper) hallPortal.roots.delete(hallPortal.wrapper);
+                      hallPortal.wrapper = g;
+                      if (g) hallPortal.roots.add(g);
+                    }}
+                  >
                     <HallModel onRoot={setHallRoot} />
+                    {/* The map table in the court of the stair: furniture of
+                        the room, so it lives and hides with it. */}
+                    {hallRoot ? <MapTable projects={pinProjects} onOpen={openProject} tier={tier} /> : null}
                   </group>
                 ) : null
               ) : set === 'interior' ? (
-                <HallModel onRoot={setHallRoot} />
+                <>
+                  <HallModel onRoot={setHallRoot} />
+                  {hallRoot ? <MapTable projects={pinProjects} onOpen={openProject} tier={tier} /> : null}
+                </>
               ) : null}
             </Suspense>
             {/* Metals need something to reflect or they read as flat paint.
@@ -2819,19 +3015,7 @@ export function WorldCanvas() {
               legProgress={interiorLeg}
               onOpen={openHref}
               mode="still"
-            />
-          ) : null}
-          {/* THE DISTRICT FIELD, beyond the entry doors. Mounted with the
-              interior because it lives in the hall's coordinate space and is
-              framed by the hall's own opening; dark, and off the raycaster's
-              list, for every chapter but the last. */}
-          {onJourney && interiorArmed ? (
-            <CityField
-              projects={cityProjects}
-              reveal={cityReveal}
-              root={hallRoot}
-              onOpen={(slug) => openHref(`/projects/${slug}`)}
-              tier={tier}
+              stillLevel={hallReadingLevel(pathname)}
             />
           ) : null}
           {look.free ? (
@@ -2839,6 +3023,11 @@ export function WorldCanvas() {
           ) : (
             <Rig place={place} stationCount={stationCount} onTier={onTier} />
           )}
+          {/* AFTER the rig, so the pass is drawn from the pose the rig has just
+              placed; before the composer, which draws the frame. */}
+          {onJourney && interiorArmed && !look.free ? (
+            <HallPortal tier={tier} spot={PORTAL_SPOT} ambient={LOOK.interior.ambient} env={LOOK.interior.env} />
+          ) : null}
           {/* LAST child on purpose: r3f's EffectComposer wraps whatever the
               scene rendered, so it has to mount after the content it filters.
               Skipped entirely in free-camera look-dev, where an unfiltered
@@ -2852,29 +3041,8 @@ export function WorldCanvas() {
         </Canvas>
       </SceneBoundary>
 
-      {/*
-        The scrim, now carrying far less of the load — see SCRIM above.
-        pointer-events-none: this must never intercept a tap meant for the
-        canvas beneath or the copy above.
-      */}
-      <div
-        className="pointer-events-none absolute inset-0 z-[1]"
-        style={{ background: SCRIM[set].linear }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1]"
-        style={{ background: SCRIM[set].radial }}
-      />
-
-      {/* The lens and the print: grain, the sun-side leak, and the frame.
-          Over the scrims, under the page's own copy. */}
-      <CinemaOverlay set={set} grade={look.grade} />
-      {set === 'exterior' && look.grade === 'daylight' && (
-        <div
-          className="pointer-events-none absolute inset-0 z-[1]"
-          style={{ background: DAYLIGHT_COLUMN_SCRIM }}
-        />
-      )}
+      {/* The print: grain, under the page's own copy. */}
+      <CinemaOverlay />
 
       {/*
         THE THRESHOLD.
@@ -2890,7 +3058,7 @@ export function WorldCanvas() {
         light from a door that is still open — keeps it from reading as a
         browser tab that stopped painting.
 
-        z-[2], above both scrim layers and above the canvas, below the page
+        z-[2], above the canvas and the grain, below the page
         content at z-10. The page's own copy stays legible through the
         transition, which is what stops the passage feeling like a stall.
       */}

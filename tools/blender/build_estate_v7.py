@@ -21,8 +21,9 @@ WHAT IS KEPT (appended from P3F, untouched): the front door leaves, their carved
 relief and handles - the doorway passage opens those exact leaves - and the lion
 frieze. WHAT IS KEPT AS VOCABULARY: a pedimented centre, a columned portico
 carrying the lion frieze, arched ground-floor windows with keystones, a
-balustraded parapet with urns, long-and-short quoins, a hipped slate roof, and the
-cupola with the pointed spire the brief asks for.
+balustraded parapet with urns, and long-and-short quoins. NOT KEPT: the hipped
+slate roof, its cupola and the pointed spire on it - the client had the roof
+made fully flat (2026-10-01; see build_roof).
 
 UNITS AND AXES: metres, Blender Z up, the entrance front faces -Y (three.js +z).
 """
@@ -72,6 +73,7 @@ COLUMN_Y = -10.85
 ROOF_EAVE_X, ROOF_EAVE_Y, ROOF_EAVE_Z = 12.5, 7.2, 9.42
 ROOF_PITCH = math.radians(19)
 PEDIMENT_PITCH = math.radians(17)
+PEDIMENT_DEPTH = 0.8        # how far a pediment's gable runs back from its face
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +168,16 @@ def build_materials():
     M["rustic"] = principled("MAT_Stone_Rustic", tex=t("v7_limestone"), tint=(0.9, 0.87, 0.82), normal_strength=0.9)
     M["paving"] = principled("MAT_Stone_Paving", tex=t("v7_paving"), normal_strength=0.8)
     M["steps"] = principled("MAT_Stone_Steps", tex=t("v7_paving"), tint=(0.96, 0.95, 0.93), normal_strength=0.8)
+    # THE GROUND'S OWN SURFACES (the refinement brief, 2026-10-03; the scans
+    # are fitted by tools/gltf/ph_surfaces_v7.py). The carriage ring, the avenue
+    # and the garden walks of a house like this are raked gravel, and its
+    # terrace is laid in flags: all of them were MAT_Stone_Paving, four flat
+    # squares of one tan. Without the scans the paving stands in.
+    if os.path.exists(f"{TEX}/v7_gravel_basecolor.png"):
+        M["gravel"] = principled("MAT_Gravel", tex=t("v7_gravel"), normal_strength=1.0)
+        M["flags"] = principled("MAT_Stone_Flags", tex=t("v7_flags"), normal_strength=0.8)
+    else:
+        M["gravel"] = M["flags"] = M["paving"]
     M["roof"] = principled("MAT_Roof_Slate", tex={"base": f"{SLATE}/p4c_basecolor.png", "rough": f"{SLATE}/p4c_roughness.png",
                                                   "normal": f"{SLATE}/normal.png"}, normal_strength=0.7)
     M["spire"] = principled("MAT_Roof", tex={"base": f"{SLATE}/p4c_basecolor.png", "rough": f"{SLATE}/p4c_roughness.png",
@@ -421,7 +433,9 @@ def finish(name, bm, mats, col, uv_tiles=None, smooth_angle=35.0):
 
 TILE = {"MAT_Stone_Wall": 3.0, "MAT_Stone_Trim": 2.0, "MAT_Stone_Rustic": 3.0, "MAT_Stone_Paving": 2.0,
         "MAT_Stone_Steps": 2.0, "MAT_Roof_Slate": 3.0, "MAT_Roof": 2.0, "MAT_Lawn": 6.0,
-        "MAT_Stone_Terrace": 2.4, "MAT_Helipad_Deck": 4.0}
+        "MAT_Stone_Terrace": 2.4, "MAT_Helipad_Deck": 4.0,
+        # The scans' own size on the ground (Poly Haven: 3 m a tile).
+        "MAT_Gravel": 3.0, "MAT_Stone_Flags": 3.0}
 
 
 def box_uv(ob, _unused):
@@ -442,6 +456,59 @@ def box_uv(ob, _unused):
             else:
                 u, v = co.x, co.z
             uv[li].uv = (u / tile, v / tile)
+
+
+def ease_arrises(ob, width, min_edge=0.09, min_angle=55.0):
+    """Take the knife edge off dressed stone: a chamfer of `width` on every
+    convex arris.
+
+    The refinement brief (2026-10-03): "Refine the asset so close camera
+    positions do not expose ... overly clean edges". Every block here is a box
+    with edges of zero radius, which no mason leaves and no stone keeps: a real
+    arris is eased a few millimetres when it is cut and a few more by a century
+    of weather, and that narrow face is what catches the light along a step, a
+    plinth or a quoin. One flat chamfer (not a rounded one: the faces either
+    side stay flat and keep their own shading), on edges long enough to be an
+    edge of a block and not a facet of something turned (`min_edge`: a
+    baluster's rings and a column's are shorter, and keep their mouldings).
+    """
+    me = ob.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    hard = []
+    for e in bm.edges:
+        if len(e.link_faces) != 2 or not e.is_convex or e.calc_length() < min_edge:
+            continue
+        try:
+            if e.calc_face_angle() < math.radians(min_angle):
+                continue
+        except ValueError:
+            continue
+        hard.append(e)
+    before = len(bm.faces)
+    if hard:
+        bmesh.ops.bevel(bm, geom=hard, offset=width, offset_type="OFFSET", segments=1, profile=0.5,
+                        affect="EDGES", clamp_overlap=True)
+    bm.to_mesh(me)
+    after = len(bm.faces)
+    bm.free()
+    box_uv(ob, {})
+    for p in me.polygons:
+        p.use_smooth = True
+    try:
+        me.set_sharp_from_angle(angle=math.radians(35.0))
+    except Exception:
+        pass
+    print("ARRIS", ob.name, "edges", len(hard), "faces", before, "->", after)
+
+
+# What the film's camera comes close to, and the chamfer each takes (metres).
+ARRISES = {
+    "portico_trim": 0.012, "portico_steps": 0.014, "garden_steps": 0.014, "podium_walls": 0.016,
+    "mansion_quoins": 0.012, "mansion_window_trim": 0.008, "mansion_bands": 0.010,
+    "mansion_pediments": 0.010, "mansion_parapet": 0.009, "podium_balustrade": 0.009,
+    "fountain_stone": 0.012, "hardscape_kerbs": 0.010, "pool_coping": 0.010, "garden_planters": 0.010,
+}
 
 
 def bool_apply(target, cutters, col_name, operation="DIFFERENCE"):
@@ -833,6 +900,10 @@ def build_parapet(M, col, gold_bm):
     finish("mansion_parapet", bm, [M["trim"]], col)
 
 
+# A step's tread: how far it oversails the riser, and its thickness (metres).
+NOSING = (0.028, 0.045)
+
+
 def build_portico(M, col, gold_bm):
     bm = new_bm()      # trim
     st = new_bm()      # steps / paving
@@ -842,7 +913,11 @@ def build_portico(M, col, gold_bm):
     # Steps down to the forecourt
     for k in range(3):
         top = FLOOR_Z - 0.15 * (k + 1)
-        add_box(st, -FX, FX, PORTICO_FRONT - 0.15, PORTICO_FRONT - 0.15 - 0.42 * (k + 1), 0.0, top)
+        front = PORTICO_FRONT - 0.15 - 0.42 * (k + 1)
+        add_box(st, -FX, FX, PORTICO_FRONT - 0.15, front, 0.0, top - NOSING[1])
+        # The tread: a slab that oversails its riser (NOSING), so a step has a
+        # nosing and a line of shadow under it, as a stone step does.
+        add_box(st, -FX, FX, PORTICO_FRONT - 0.15, front - NOSING[0], top - NOSING[1], top)
     # Cheek walls with urns
     for s in (-1, 1):
         x0, x1 = s * (FX + 0.02), s * (FX + 0.62)
@@ -909,11 +984,15 @@ def build_pediments(M, col, gold_bm):
         U = Vector((1, 0, 0)) if side < 0 else Vector((-1, 0, 0))
         N = Vector((0, side, 0))
         base = CORNICE_TOP
-        # Tympanum, set back from the face.
-        add_prism(bm, [(-FX, base), (FX, base), (0, base + FX * math.tan(PEDIMENT_PITCH))], o, U, N, -3.0, -0.22)
+        # Tympanum, set back from the face. A GABLE ON THE FACADE, NOT A ROOF: it
+        # ran 3 m back over the frontispiece, a pitched stone roof in miniature,
+        # and with the house's roof made flat (build_roof) the two of them stood
+        # on it like sheds. They are the thickness of the wall they stand on now,
+        # and the flat runs up to their backs.
+        add_prism(bm, [(-FX, base), (FX, base), (0, base + FX * math.tan(PEDIMENT_PITCH))], o, U, N, -PEDIMENT_DEPTH + 0.18, -0.22)
         # Raking cornices: a sloped slab and a bed moulding under it.
         for s in (-1, 1):
-            for (d0, d1, t0, t1) in ((-3.2, overhang, 0.0, 0.3), (-3.2, 0.22, -0.06, 0.0)):
+            for (d0, d1, t0, t1) in ((-PEDIMENT_DEPTH, overhang, 0.0, 0.3), (-PEDIMENT_DEPTH, 0.22, -0.06, 0.0)):
                 x0, z0 = s * half, base + t0
                 x1, z1 = 0.0, base + rise + t0 + 0.02
                 pts = [(x0, z0), (x1, z1), (x1, z1 + (t1 - t0) + 0.02), (x0, z0 + (t1 - t0))]
@@ -932,102 +1011,48 @@ def build_pediments(M, col, gold_bm):
 
 
 def build_roof(M, col):
-    bm = new_bm()
-    rise = ROOF_EAVE_Y * math.tan(ROOF_PITCH)
-    rz = ROOF_EAVE_Z + rise
-    rx = ROOF_EAVE_X - ROOF_EAVE_Y
-    e = ROOF_EAVE_Z
-    v = {k: bm.verts.new(p) for k, p in {
-        "fl": (-ROOF_EAVE_X, -ROOF_EAVE_Y, e), "fr": (ROOF_EAVE_X, -ROOF_EAVE_Y, e),
-        "br": (ROOF_EAVE_X, ROOF_EAVE_Y, e), "bl": (-ROOF_EAVE_X, ROOF_EAVE_Y, e),
-        "rl": (-rx, 0, rz), "rr": (rx, 0, rz)}.items()}
-    face(bm, [v["fl"], v["fr"], v["rr"], v["rl"]], 0)
-    face(bm, [v["br"], v["bl"], v["rl"], v["rr"]], 0)
-    face(bm, [v["fr"], v["br"], v["rr"]], 0)
-    face(bm, [v["bl"], v["fl"], v["rl"]], 0)
-    # Cross gables behind each pediment, dying into the hip.
-    half = FX + 0.3
-    prise = half * math.tan(PEDIMENT_PITCH)
-    pz = CORNICE_TOP + prise + 0.3
-    for side in (-1, 1):
-        y_front = side * (FD - 0.15)
-        # where the hip reaches the gable ridge height
-        y_back = side * max(0.4, ROOF_EAVE_Y - (pz - e) / math.tan(ROOF_PITCH))
-        a = bm.verts.new((-half, y_front, CORNICE_TOP + 0.3))
-        b = bm.verts.new((0, y_front, pz))
-        c = bm.verts.new((0, y_back, pz))
-        d = bm.verts.new((-half, y_back + side * 0.0, CORNICE_TOP + 0.3))
-        a2 = bm.verts.new((half, y_front, CORNICE_TOP + 0.3))
-        d2 = bm.verts.new((half, y_back, CORNICE_TOP + 0.3))
-        if side < 0:
-            face(bm, [a, b, c, d], 0)
-            face(bm, [b, a2, d2, c], 0)
-        else:
-            face(bm, [d, c, b, a], 0)
-            face(bm, [c, d2, a2, b], 0)
-    me_ob = finish("mansion_roof", bm, [M["roof"]], col)
-    # Slate courses run along each slope: re-map UVs so u follows the eave and v
-    # climbs the slope, 3 m per tile.
-    me = me_ob.data
-    uv = me.uv_layers["UVMap"].data
-    for p in me.polygons:
-        n = p.normal
-        horiz = Vector((n.x, n.y, 0))
-        if horiz.length < 1e-4:
-            continue
-        horiz.normalize()
-        along = Vector((-horiz.y, horiz.x, 0))
-        for li in p.loop_indices:
-            co = me.vertices[me.loops[li].vertex_index].co
-            up = -(co.x * horiz.x + co.y * horiz.y) / math.cos(ROOF_PITCH)
-            uv[li].uv = ((co.x * along.x + co.y * along.y) / 3.0, up / 3.0)
-    return rz
+    """A FLAT ROOF, from parapet to parapet.
 
+    The house carried a hipped slate roof behind its balustrade, a cupola on the
+    ridge and a pointed spire on that. The client had the spire taken off first
+    (2026-10-01: "remove the top part of the roof and replace it with a flat
+    roof"), saw the cupola still standing on the hip under a flat lid, and was
+    plain about it: "not this i said i want fully flat roof". So the hip, the
+    cross gables behind the pediments and the cupola are all gone, and the
+    house ends where a Palladian house with a flat ends: at its balustraded
+    parapet and its urns, with the pediments as the only thing that rises
+    above them.
 
-def build_cupola(M, col, gold_bm, ridge_z):
-    wall, trim, spire, louvre = new_bm(), new_bm(), new_bm(), new_bm()
-    h = 2.5
-    z0, z1 = ridge_z - 1.0, ridge_z + 1.75
-    add_box(wall, -h, h, -h, h, z0, z1)
-    sq = [(-h, -h), (h, -h), (h, h), (-h, h)]
-    add_sweep(trim, sq, [(0.0, z1), (0.06, z1), (0.1, z1 + 0.06), (0.32, z1 + 0.1), (0.32, z1 + 0.24), (0.36, z1 + 0.28),
-                         (0.26, z1 + 0.34), (0.0, z1 + 0.34)])
-    for x, y in sq:
-        add_box(trim, x - 0.24, x + 0.24, y - 0.24, y + 0.24, ridge_z - 0.3, z1)
-    sill, spring, r = ridge_z + 0.25, ridge_z + 1.0, 0.55
-    for o, u, n in (((0, -h, 0), (1, 0, 0), (0, -1, 0)), ((0, h, 0), (-1, 0, 0), (0, 1, 0)),
-                    ((-h, 0, 0), (0, -1, 0), (-1, 0, 0)), ((h, 0, 0), (0, 1, 0), (1, 0, 0))):
-        O, U, N = Vector(o), Vector(u), Vector(n)
-        add_prism(louvre, arch_poly(2 * r, sill, spring, 14), O, U, N, 0.0, 0.012)
-        for k in range(14):
-            a0, a1 = math.pi * k / 14, math.pi * (k + 1) / 14
-            b = 0.12
-            ring = [(r * math.cos(a0), spring + r * math.sin(a0)), ((r + b) * math.cos(a0), spring + (r + b) * math.sin(a0)),
-                    ((r + b) * math.cos(a1), spring + (r + b) * math.sin(a1)), (r * math.cos(a1), spring + r * math.sin(a1))]
-            add_prism(trim, ring, O, U, N, 0.0, 0.07)
-        for sx in (-1, 1):
-            add_oriented_box(trim, O, U, N, sx * r, sx * (r + 0.12), sill, spring, 0.0, 0.07)
-        add_oriented_box(trim, O, U, N, -r - 0.18, r + 0.18, sill - 0.1, sill, -0.02, 0.12)
-    bal_z = z1 + 0.34
-    for a, b in (((-h + 0.2, -h + 0.2), (h - 0.2, -h + 0.2)), ((h - 0.2, -h + 0.2), (h - 0.2, h - 0.2)),
-                 ((h - 0.2, h - 0.2), (-h + 0.2, h - 0.2)), ((-h + 0.2, h - 0.2), (-h + 0.2, -h + 0.2))):
-        balustrade_run(trim, a, b, bal_z, 0.62, die_w=0.42, spacing=0.24)
-    for x, y in ((-h + 0.2, -h + 0.2), (h - 0.2, -h + 0.2), (h - 0.2, h - 0.2), (-h + 0.2, h - 0.2)):
-        add_lathe(gold_bm, [(rr * 1.4, zz * 1.4) for rr, zz in FINIAL], 14, x, y, bal_z + 0.62 + 0.22)
-    # The spire: an octagonal pyramid on a plinth, a gilt collar, a gilt finial.
-    base_r = 1.95
-    foot = bal_z - 0.2
-    apex = foot + 5.6
-    add_lathe(spire, [(0.0, 0.0), (base_r + 0.1, 0.0), (base_r + 0.1, 0.18), (base_r, 0.2), (0.0, apex - foot)], 8, 0, 0, foot)
-    add_lathe(gold_bm, [(0.0, 0.0), (base_r + 0.13, 0.0), (base_r + 0.13, 0.1), (base_r + 0.02, 0.12), (0.0, 0.12)], 8, 0, 0, foot + 0.19)
-    tip = [(0.0, 0.0), (0.2, 0.0), (0.2, 0.08), (0.1, 0.16), (0.24, 0.36), (0.24, 0.46), (0.08, 0.62), (0.05, 0.9), (0.0, 1.25)]
-    tip_base = apex - 0.3
-    add_lathe(gold_bm, tip, 16, 0, 0, tip_base)
-    finish("cupola_walls", wall, [M["wall"]], col)
-    finish("cupola_trim", trim, [M["trim"]], col)
-    finish("cupola_louvres", louvre, [M["louvre"]], col)
-    finish("spire_body", spire, [M["spire"]], col, smooth_angle=10)
-    return tip_base + 1.25
+    What lies behind the parapet is a slate flat, as a lead or slate flat is
+    laid: one sheet from wall head to wall head, a stone kerb round its edge
+    (the gutter runs between the kerb and the balustrade's plinth), and its
+    middle raised one shallow step so the flat sheds its water outward. Flags,
+    not courses: the runtime weathers this material flag by flag
+    (exteriorSurfaces.ts), which on a level surface reads as paving.
+    """
+    bm = new_bm()       # the flat
+    kerb = new_bm()     # its stone kerb
+    z = ROOF_EAVE_Z
+    # The wall heads' inner faces stand at the old eave line; the sheet laps
+    # them by 6 cm so no seam shows from above.
+    X, Y = ROOF_EAVE_X + 0.06, ROOF_EAVE_Y + 0.06
+    add_box(bm, -X, X, -Y, Y, z - 0.08, z + 0.01)
+    # The frontispieces' heads, front and back, under the pediments.
+    fx = FX - WALL_T + 0.06
+    for s_ in (-1, 1):
+        y0, y1 = sorted((s_ * (ROOF_EAVE_Y - 0.1), s_ * (FD - WALL_T + 0.06)))
+        add_box(bm, -fx, fx, y0, y1, z - 0.08, z + 0.01)
+    # The raised middle: one step of 8 cm, clear of the pediments' backs.
+    rx, ry = X - 2.4, Y - 2.4
+    add_box(bm, -rx, rx, -ry, ry, z + 0.01, z + 0.09)
+    # The kerb, 28 cm of stone standing 15 cm over the sheet.
+    k = 0.28
+    for x0, x1, y0, y1 in ((-X, X, -Y, -Y + k), (-X, X, Y - k, Y),
+                           (-X, -X + k, -Y + k, Y - k), (X - k, X, -Y + k, Y - k)):
+        add_box(kerb, x0, x1, y0, y1, z + 0.005, z + 0.16)
+    finish("mansion_roof", bm, [M["roof"]], col, smooth_angle=10)
+    finish("mansion_roof_kerb", kerb, [M["trim"]], col, smooth_angle=10)
+    return z + 0.09
 
 
 def build_podium(M, col):
@@ -1042,9 +1067,11 @@ def build_podium(M, col):
     steps = new_bm()
     for k in range(3):
         top_z = PODIUM_Z - 0.15 * (k + 1)
-        add_box(steps, -3.6, 3.6, Y, Y + 0.42 * (k + 1), 0.0, top_z + 0.0001)
+        front = Y + 0.42 * (k + 1)
+        add_box(steps, -3.6, 3.6, Y, front, 0.0, top_z - NOSING[1])
+        add_box(steps, -3.6 - NOSING[0], 3.6 + NOSING[0], Y, front + NOSING[0], top_z - NOSING[1], top_z + 0.0001)
     finish("podium_walls", bm, [M["rustic"]], col)
-    finish("terrace_upper", top, [M["paving"]], col)
+    finish("terrace_upper", top, [M["flags"]], col)
     finish("garden_steps", steps, [M["steps"]], col)
 
 
@@ -1098,6 +1125,8 @@ def append_kept(M, col):
 # THE ESTATE
 # ---------------------------------------------------------------------------
 FOUNTAIN_Y = -30.0
+APRON_X = 7.0               # half width of the gravel apron between the steps and the ring
+RING_R = (8.0, 14.0)        # the carriage ring round the fountain lawn
 AVENUE_X = 7.6
 WALL_X, WALL_FRONT, WALL_BACK = 72.0, -214.0, 84.0
 
@@ -1176,18 +1205,33 @@ def build_hardscape(M, col):
     pav, kerb = new_bm(), new_bm()
     # The forecourt: a paved carriage ring round the fountain lawn.
     segs = 72
-    r0, r1 = 8.0, 14.0
+    r0, r1 = RING_R
     inner = [pav.verts.new((r0 * math.cos(2 * math.pi * k / segs), FOUNTAIN_Y + r0 * math.sin(2 * math.pi * k / segs), 0.012)) for k in range(segs)]
     outer = [pav.verts.new((r1 * math.cos(2 * math.pi * k / segs), FOUNTAIN_Y + r1 * math.sin(2 * math.pi * k / segs), 0.012)) for k in range(segs)]
     for k in range(segs):
         k2 = (k + 1) % segs
         face(pav, [inner[k], outer[k], outer[k2], inner[k2]], 0)
-    for r in (r0, r1):
-        add_sweep(kerb, [(r * math.cos(2 * math.pi * k / segs), FOUNTAIN_Y + r * math.sin(2 * math.pi * k / segs)) for k in range(segs)],
-                  [(-0.08, 0.0), (0.08, 0.0), (0.08, 0.1), (-0.08, 0.1)], closed=True, prof_closed=True)
+    kerb_prof = [(-0.08, 0.0), (0.08, 0.0), (0.08, 0.1), (-0.08, 0.1)]
+    add_sweep(kerb, [(r0 * math.cos(2 * math.pi * k / segs), FOUNTAIN_Y + r0 * math.sin(2 * math.pi * k / segs)) for k in range(segs)],
+              kerb_prof, closed=True, prof_closed=True)
+    # THE OUTER KERB STOPS WHERE THE DRIVE RUNS THROUGH IT. It was one closed
+    # circle, so a ten-centimetre kerb lay across the apron at the steps and
+    # across the avenue at the far side: a drive nobody could drive (seen in the
+    # approach, the refinement brief's "roads ... must feel like they inhabit
+    # the same physical world"). Two arcs, east and west, each ending on the
+    # straight kerb of the apron (x = 7) and of the avenue (x = 4.4).
+    apron_at = math.degrees(math.acos(APRON_X / r1))
+    avenue_at = math.degrees(math.acos(4.4 / r1))
+    for a0, a1 in ((-avenue_at, apron_at), (180.0 - apron_at, 180.0 + avenue_at)):
+        steps = max(2, int(round((a1 - a0) / 5.0)))
+        arc = [math.radians(a0 + (a1 - a0) * k / steps) for k in range(steps + 1)]
+        add_sweep(kerb, [(r1 * math.cos(t), FOUNTAIN_Y + r1 * math.sin(t)) for t in arc],
+                  kerb_prof, closed=False, prof_closed=True)
     # Apron from the portico steps to the ring, the avenue to the gate, a walk
-    # round the podium, and the rear walk to the canal.
-    add_box(pav, -7.0, 7.0, -13.0, FOUNTAIN_Y + r1 - 0.8, 0.0, 0.013)
+    # round the podium, and the rear walk to the canal. The apron runs to where
+    # its own kerbs meet the ring's: it stopped 0.8 m inside the circle's top,
+    # which left a wedge of lawn inside the kerbs at each corner.
+    add_box(pav, -APRON_X, APRON_X, -13.0, FOUNTAIN_Y + math.sqrt(r1 * r1 - APRON_X * APRON_X), 0.0, 0.013)
     add_box(pav, -4.4, 4.4, FOUNTAIN_Y - r1 + 0.8, WALL_FRONT, 0.0, 0.013)
     add_box(pav, -17.4, 17.4, -12.2, 12.2, 0.0, 0.011)
     add_box(pav, -3.8, 3.8, 11.4, 17.6, 0.0, 0.013)
@@ -1203,7 +1247,7 @@ def build_hardscape(M, col):
         # the avenue, from the ring's outer kerb to the gate
         kerb_run(s * 4.4 - 0.08, s * 4.4 + 0.08, WALL_FRONT, FOUNTAIN_Y - ring_at(4.4))
         # the apron, from the ring's outer kerb to the podium walk
-        kerb_run(s * 7.0 - 0.08, s * 7.0 + 0.08, FOUNTAIN_Y + ring_at(7.0), -12.2)
+        kerb_run(s * APRON_X - 0.08, s * APRON_X + 0.08, FOUNTAIN_Y + ring_at(APRON_X), -12.2)
         # the rear walk, from the podium walk to the canal
         kerb_run(s * 3.8 - 0.08, s * 3.8 + 0.08, 12.2, 17.6)
     # the podium walk: its east side, and its front and back either side of the
@@ -1213,7 +1257,7 @@ def build_hardscape(M, col):
     kerb_run(7.0, 17.48, -12.28, -12.12)
     kerb_run(TERRACE["x1"], -3.8, 12.12, 12.28)
     kerb_run(3.8, 17.48, 12.12, 12.28)
-    finish("drive_forecourt", pav, [M["paving"]], col)
+    finish("drive_forecourt", pav, [M["gravel"]], col)
     finish("hardscape_kerbs", kerb, [M["trim"]], col)
 
 
@@ -1510,6 +1554,27 @@ def scatter(col, me, name, points):
     return parent
 
 
+TRIPO_LIB = "C:/dev/Blender/_tripo/tripo_web.blend"
+
+
+def tripo_mesh(key, lod=None):
+    """A mesh of one of the client's generated models (Tripo; sized, lightened
+    and filed by tools/blender/tripo_assets_v7.py), or None when the library or
+    the model is not there: the build never depends on one having been
+    generated. `lod` asks for a lighter copy the library keeps (tripo_<key>_
+    <lod>) and takes the full one if it has none."""
+    if not os.path.exists(TRIPO_LIB):
+        return None
+    base = "tripo_" + key
+    wanted = [base + "_" + lod, base] if lod else [base]
+    missing = [m for m in wanted if m not in bpy.data.meshes]
+    if missing:
+        with bpy.data.libraries.load(TRIPO_LIB, link=False) as (src, dst):
+            dst.meshes = [m for m in missing if m in src.meshes]
+    name = next((m for m in wanted if m in bpy.data.meshes), None)
+    return bpy.data.meshes[name] if name else None
+
+
 PH_TREES = ("rain", "mango", "neem")
 PH_LIB = "C:/dev/Blender/_polyhaven/ph_trees_web.blend"
 
@@ -1566,9 +1631,18 @@ def build_vegetation(M, col):
     buckets = [[] for _ in royal]
     for a in avenue:
         buckets[rng.randrange(len(royal))].append(a)
-    for k, b in enumerate(buckets):
-        if b:
-            scatter(col, royal[k], "veg_palm_avenue" + ("" if k == 0 else f"_{'bcd'[k - 1]}"), b)
+    # The client's own royal palm down the drive too, where it has been made
+    # (its lighter `avenue` copy: tools/blender/tripo_assets_v7.py): the
+    # scripted palm it replaces was a pale pole under a tuft, thirty-six times.
+    t_avenue = tripo_mesh("palm_royal", "avenue")
+    if t_avenue is not None and t_avenue.name.endswith("_avenue"):
+        # One mesh, so each tree's own turn and height (12.3 to 15.4 m, as the
+        # four scripted ones ran) is what tells it from its neighbour.
+        scatter(col, t_avenue, "veg_palm_avenue", avenue)
+    else:
+        for k, b in enumerate(buckets):
+            if b:
+                scatter(col, royal[k], "veg_palm_avenue" + ("" if k == 0 else f"_{'bcd'[k - 1]}"), b)
     # The forecourt ring is planted only on its far half and flanks, so no palm
     # stands between the camera and the front of the house.
     ring = []
@@ -1589,15 +1663,34 @@ def build_vegetation(M, col):
         if x < -6.0 and y > -48.0:
             continue
         ring.append((x, y, rng.uniform(0, 6.28), rng.uniform(0.95, 1.05)))
-    scatter(col, royal[1], "veg_palm_forecourt", ring)
-    groves = []
+    # THE PALMS THE FILM PASSES NEAR ARE THE CLIENT'S GENERATED ONES, where
+    # they have been made (the refinement brief, 2026-10-03: "trees, palms,
+    # roads, cars ... must feel like they inhabit the same physical world as
+    # the architecture"; the scripted palm is a white pole and a fan of cards,
+    # and in the hero it stands twenty-five metres from the lens). The forecourt's
+    # royals, and the coconut groves - at full weight flanking the forecourt,
+    # where the hero and the approach look across them, lighter in the groves
+    # behind the house and down the drive. The avenue and the belt beyond the
+    # wall, seen from eighty metres and more, keep the scripted palm: a
+    # generated one is solid leaf, eight thousand triangles a crown.
+    t_royal = tripo_mesh("palm_royal")
+    t_coco = tripo_mesh("palm_coconut")
+    t_coco_far = tripo_mesh("palm_coconut", "far")
+    scatter(col, t_royal or royal[1], "veg_palm_forecourt", ring)
+    near, far = [], []
     # Groves stand off the camera's orbit: flanking the forecourt well out,
     # at the back corners of the house, behind the canal, and down the drive.
     for cx, cy, n in ((-56, -40, 5), (56, -40, 5), (-46, 30, 6), (46, 30, 6), (-26, 70, 4), (26, 70, 4), (-55, -75, 5), (55, -75, 5)):
         for i in range(n):
-            groves.append((cx + rng.uniform(-7, 7), cy + rng.uniform(-7, 7), rng.uniform(0, 6.28), rng.uniform(0.85, 1.15)))
-    scatter(col, coco[0], "veg_palm_coconut", groves[0::2])
-    scatter(col, coco[1], "veg_palm_coconut_b", groves[1::2])
+            (near if cy == -40 else far).append(
+                (cx + rng.uniform(-7, 7), cy + rng.uniform(-7, 7), rng.uniform(0, 6.28), rng.uniform(0.85, 1.15)))
+    if t_coco is not None:
+        scatter(col, t_coco, "veg_palm_coconut", near)
+        scatter(col, t_coco_far or t_coco, "veg_palm_coconut_b", far)
+    else:
+        groves = near + far
+        scatter(col, coco[0], "veg_palm_coconut", groves[0::2])
+        scatter(col, coco[1], "veg_palm_coconut_b", groves[1::2])
     fr = [(sx * 12.5, 20 + 7.5 * k, rng.uniform(0, 6.28), rng.uniform(0.9, 1.1)) for k in range(6) for sx in (-1, 1)]
     fr += [(sx * 20.5, -40.0 - 7 * k, rng.uniform(0, 6.28), 1.0) for k in range(3) for sx in (-1, 1)]
     scatter(col, frangi, "veg_frangipani", fr)
@@ -1684,7 +1777,14 @@ def build_gardens(M, col):
         for x in (7.45, 10.15):
             for y in (-9.35, 9.35):
                 add_lathe(planters, [(0.0, 0.0), (0.42, 0.0), (0.5, 0.08), (0.46, 0.55), (0.52, 0.62), (0.0, 0.62)], 24, s * x, y, PODIUM_Z)
-                add_lathe(hedge, [(0.0, 0.0), (0.46, 0.0), (0.42, 0.3), (0.0, 2.0)], 16, s * x, y, PODIUM_Z + 0.6)
+                # A CLIPPED YEW, not a cone (the refinement brief, 2026-10-03:
+                # "planting is cones and red masses"). The first was a
+                # straight-sided lathe run to a needle's point, which is a
+                # traffic cone painted green. Topiary is cut by hand to a
+                # template: full at the foot, its sides a shallow curve, and
+                # the top rounded off where the shears turn.
+                add_lathe(hedge, [(0.0, 0.0), (0.43, 0.0), (0.47, 0.16), (0.46, 0.42), (0.41, 0.78), (0.33, 1.14),
+                                  (0.23, 1.48), (0.13, 1.74), (0.06, 1.88), (0.0, 1.93)], 20, s * x, y, PODIUM_Z + 0.6)
     # Flower beds of bougainvillea colour in the parterres are shrubs (see veg).
     finish("garden_hedges", hedge, [M["hedge"]], col)
     finish("garden_beds", soil, [M["soil"]], col)
@@ -1903,16 +2003,75 @@ def car(body, glassbm, chrome, cx, cy, rot, L=4.92, W=1.96):
             add_lathe_oriented(chrome, prof, 18, hub, Nv * sy, Vector((0, 0, 1)))
 
 
+# The drive's own level (build_hardscape lays the ring at 12 mm).
+DRIVE_Z = 0.012
+
+
+def tripo_object(key, name, col, x, y, rot, z=DRIVE_Z, far=False):
+    """One of the client's generated models (Tripo; sized, lightened and filed
+    by tools/blender/tripo_assets_v7.py), stood at (x, y) and turned so its nose
+    points the way the scripted car's did. None when the library or the model
+    is not there: the build never depends on one having been generated.
+
+    Placed twice, a model is one mesh and two objects - the exporter writes the
+    geometry and its textures once. `far` asks for the lighter copy the library
+    keeps for a car no camera comes near (and takes the full one if it has
+    none)."""
+    me = tripo_mesh(key, "far" if far else None)
+    if me is None:
+        return None
+    ob = bpy.data.objects.new(name, me)
+    col.objects.link(ob)
+    ob.location = (x, y, z)
+    # The library's models face -y; car() draws its nose at -U, U being
+    # (cos rot, sin rot).
+    ob.rotation_euler = (0, 0, rot - math.pi / 2)
+    return ob
+
+
+def ring_berth(theta, radius=None):
+    """A berth on the carriage ring: along its outer kerb at `theta` round the
+    fountain (degrees from east, anticlockwise), nose the way a ring is driven
+    where traffic keeps left - clockwise, the kerb on the driver's left. The
+    scripted cars stood ACROSS the carriageway, nose to the fountain lawn, which
+    is how nobody leaves a car on a drive six metres wide."""
+    t = math.radians(theta)
+    r = radius if radius is not None else RING_R[1] - 1.6
+    # car() and tripo_object() put the nose at -U, U = (cos rot, sin rot); the
+    # clockwise tangent is (sin t, -cos t).
+    return r * math.cos(t), FOUNTAIN_Y + r * math.sin(t), math.atan2(math.cos(t), -math.sin(t))
+
+
 def motor_court(M, col):
+    """Two on the carriage ring either side of the axis, one at the steps.
+
+    From the generated models where they have been made (the refinement brief,
+    2026-10-03: the cars "must feel like they inhabit the same physical world as
+    the architecture"; its audits read the scripted one as a block): a saloon
+    waiting at the steps and another across the ring, and a coupe of an older
+    decade opposite it. The scripted silhouette stands in for whichever is
+    missing."""
     body, bodyp, glassbm, chrome = new_bm(), new_bm(), new_bm(), new_bm()
-    # Two on the carriage ring either side of the axis, one at the steps.
-    car(body, glassbm, chrome, -10.6, FOUNTAIN_Y + 1.2, math.radians(8))
-    car(bodyp, glassbm, chrome, 10.6, FOUNTAIN_Y - 1.6, math.radians(186))
-    car(body, glassbm, chrome, 6.4, -14.6, math.radians(96), L=5.15, W=2.02)
-    finish("court_car_dark", body, [M["carpaint"]], col, smooth_angle=48)
-    finish("court_car_pale", bodyp, [M["carpaint2"]], col, smooth_angle=48)
-    finish("court_car_glass", glassbm, [M["carglass"]], col, smooth_angle=48)
-    finish("court_car_chrome", chrome, [M["chrome"]], col, smooth_angle=55)
+    places = (
+        # arriving, up the west side; leaving, down the east
+        ("car_saloon", "court_car_saloon_ring", body, *ring_berth(174.0), {"far": True}),
+        ("car_classic", "court_car_classic", bodyp, *ring_berth(-8.0), {"far": True}),
+        # At the steps: on the apron's east edge, nose out, clear of the stair's
+        # pedestal behind it (y -13.25) and of the kerb beside it (x 6.92). It
+        # stood at (6.4, -14.6): its tail in the podium wall, a wheel on the
+        # lawn.
+        ("car_saloon", "court_car_saloon_steps", body, 5.4, -16.6, math.radians(92), {"L": 5.15, "W": 2.02}),
+    )
+    for key, name, paint, x, y, rot, opts in places:
+        size = {k: v for k, v in opts.items() if k in ("L", "W")}
+        if tripo_object(key, name, col, x, y, rot, far=opts.get("far", False)) is None:
+            car(paint, glassbm, chrome, x, y, rot, **size)
+    for name, bm, mat, angle in (("court_car_dark", body, "carpaint", 48), ("court_car_pale", bodyp, "carpaint2", 48),
+                                 ("court_car_glass", glassbm, "carglass", 48), ("court_car_chrome", chrome, "chrome", 55)):
+        if bm.verts:
+            finish(name, bm, [M[mat]], col, smooth_angle=angle)
+        else:
+            bm.free()
 
 
 def podium_balustrade(M, col, gold_bm):
@@ -1982,7 +2141,7 @@ def west_parterre(M, col):
     # A stone urn on a plinth at the centre, on the cross of the walks.
     add_box(stone, cx - 0.62, cx + 0.62, cy - 0.62, cy + 0.62, 0.0, 0.72)
     add_lathe(stone, [(r * 1.5, zz * 1.5) for r, zz in URN], 24, cx, cy, 0.72)
-    finish("parterre_gravel", gravel, [M["paving"]], col)
+    finish("parterre_gravel", gravel, [M["gravel"]], col)
     finish("parterre_kerb", kerb, [M["trim"]], col)
     finish("parterre_hedge", hedge, [M["hedge"]], col)
     finish("parterre_urn", stone, [M["trim"]], col)
@@ -1999,8 +2158,27 @@ def podium_beds(M, col):
     finish("podium_beds", soil, [M["soil"]], col)
 
 
+# The portico's lantern (PorticoLantern.tsx, LANTERN): on the axis, midway
+# between the wall and the columns, hung half a metre under the soffit.
+LANTERN_AT = (0.0, -9.62)
+LANTERN_TOP = 4.4 - 0.5
+LANTERN_HEIGHT = 0.8        # tripo_assets_v7.ASSETS["lantern"]
+
+
+def portico_lantern(M, col):
+    """The lantern's body, from the client's generated model where it has been
+    made: bronze, six-sided, its glass lit by the site at dusk. The site hangs
+    it (rose and chain) and puts the lamp in it; without the model it draws a
+    cage of its own, as it did."""
+    ob = tripo_object("lantern", "portico_lantern_body", col, LANTERN_AT[0], LANTERN_AT[1], math.pi / 2,
+                      z=LANTERN_TOP - LANTERN_HEIGHT)
+    if ob is not None:
+        print("LANTERN at", [round(v, 3) for v in ob.location])
+
+
 def build_luxury(M, col):
     gold = new_bm()
+    portico_lantern(M, col)
     pool_terrace(M, col)
     west_parterre(M, col)
     podium_beds(M, col)
@@ -2074,12 +2252,13 @@ def main():
         build_parapet(M, col, gold)
         build_portico(M, col, gold)
         build_pediments(M, col, gold)
-        ridge = build_roof(M, col)
-        tip = build_cupola(M, col, gold, ridge)
+        flat = build_roof(M, col)
         build_podium(M, col)
         append_kept(M, col)
         finish("mansion_gold", gold, [M["gold"]], col, smooth_angle=40)
-        print("SPIRE_TIP", round(tip, 3), "RIDGE", round(ridge, 3))
+        # The highest thing on the house: the gilt finials on the corner urns.
+        tip = CORNICE_TOP + 1.22 + 1.1 + max(zz for _, zz in FINIAL) * 1.2
+        print("ROOF_TOP", round(tip, 3), "FLAT", round(flat, 3))
     if "land" in STAGES:
         build_ground(M, col)
         build_hardscape(M, col)
@@ -2092,6 +2271,10 @@ def main():
         build_vegetation(M, col)
     if "lux" in STAGES:
         build_luxury(M, col)
+    for name, width in ARRISES.items():
+        ob = bpy.data.objects.get(name)
+        if ob is not None and ob.type == "MESH":
+            ease_arrises(ob, width)
     bpy.ops.wm.save_as_mainfile(filepath=OUT)
     print("SAVED", OUT)
     if "preview" in STAGES:

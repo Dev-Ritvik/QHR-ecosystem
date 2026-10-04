@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { BAND_M, LAWN_MAP_FRAGMENT, dressLawn, sharpenTextures } from './exteriorLawn';
+import { BAND_M, GRAVEL_MAP_FRAGMENT, GRAVEL_TILE_M, LAWN_MAP_FRAGMENT, dressLawn, sharpenTextures } from './exteriorLawn';
 
 function mesh(name: string, map = true) {
   const mat = new THREE.MeshStandardMaterial({ name });
@@ -43,6 +43,24 @@ describe('the estate lawn', () => {
     expect(LAWN_MAP_FRAGMENT).toContain(`m.x / ${BAND_M.toFixed(2)}`);
     expect(LAWN_MAP_FRAGMENT).toContain('cameraPosition - vLawnWorld');
     expect(LAWN_MAP_FRAGMENT).toContain('fwidth(t)');
+  });
+
+  it('reads the gravel twice, so its three-metre tile is no lattice, and mows no bands into it', () => {
+    const root = new THREE.Group();
+    const gravel = mesh('MAT_Gravel_AOG');
+    root.add(gravel, mesh('MAT_Lawn_AOG'), mesh('MAT_Stone_Flags_AOG'));
+    expect(dressLawn(root)).toBe(2);
+    expect((gravel.material as THREE.Material).customProgramCacheKey()).toBe('estate-gravel');
+    const shader = {
+      uniforms: {},
+      vertexShader: 'void main() {\n#include <begin_vertex>\n}',
+      fragmentShader: 'void main() {\n#include <map_fragment>\n}',
+    } as unknown as THREE.WebGLProgramParametersWithUniforms;
+    (gravel.material as THREE.Material).onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    expect(shader.fragmentShader).toContain('texture2D( map, turned )');
+    expect(shader.fragmentShader).not.toContain('#include <map_fragment>');
+    expect(shader.fragmentShader).not.toContain('fwidth(t)');
+    expect(GRAVEL_MAP_FRAGMENT).toContain(`vMapUv * ${GRAVEL_TILE_M.toFixed(1)}`);
   });
 
   it('filters every estate texture anisotropically, once', () => {

@@ -51,29 +51,29 @@ export default function CareersPage() {
               key={r.title}
               className="border-t border-white/10 pt-6 first:border-0 first:pt-0"
             >
-              <h2 className="font-serif text-xl text-[#F2EDE4]">{r.title}</h2>
+              <h2 className="font-serif text-step-1 text-[#F2EDE4]">{r.title}</h2>
               <dl className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-3">
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
+                  <dt className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
                     Experience
                   </dt>
-                  <dd className="mt-1 text-[15px] text-[#F2EDE4]/80">
+                  <dd className="mt-1 text-step-0 text-[#F2EDE4]/80">
                     {r.experience}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
+                  <dt className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
                     Education
                   </dt>
-                  <dd className="mt-1 text-[15px] text-[#F2EDE4]/80">
+                  <dd className="mt-1 text-step-0 text-[#F2EDE4]/80">
                     {r.education}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
+                  <dt className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
                     Location
                   </dt>
-                  <dd className="mt-1 text-[15px] text-[#F2EDE4]/80">
+                  <dd className="mt-1 text-step-0 text-[#F2EDE4]/80">
                     {r.location}
                   </dd>
                 </div>
@@ -82,7 +82,7 @@ export default function CareersPage() {
           ))}
         </div>
 
-        <h2 className="mt-14 font-serif text-xl text-[#F2EDE4]">How to apply</h2>
+        <h2 className="mt-14 font-serif text-step-1 text-[#F2EDE4]">How to apply</h2>
         <p>
           Send a CV to{' '}
           <a
@@ -102,7 +102,7 @@ export default function CareersPage() {
           if you would rather ask about a role before applying.
         </p>
 
-        <p className="mt-10 text-sm leading-relaxed text-[#F2EDE4]/55">
+        <p className="mt-10 text-step--1 text-[#F2EDE4]/55">
           A CV sent to us is handled as set out in the{' '}
           <Link className="underline underline-offset-4" href="/privacy">
             privacy notice

@@ -54,15 +54,15 @@ export function MapLocationFallback({
 
       <div className="relative z-10 flex h-full flex-col justify-between p-6 sm:p-8">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-300">Location</p>
-          <h3 className="mt-2 text-xl font-semibold text-white sm:text-2xl">{projectName}</h3>
-          {place && <p className="mt-1 text-sm text-brand-200">{place}</p>}
+          <p className="text-step--2 font-semibold uppercase tracking-[0.3em] text-brand-300">Location</p>
+          <h3 className="mt-2 text-step-1 font-semibold text-white sm:text-step-2">{projectName}</h3>
+          {place && <p className="mt-1 text-step--1 text-brand-200">{place}</p>}
         </div>
 
         {pois.length > 0 ? (
           <ul className="mt-6 space-y-2">
             {pois.slice(0, 5).map((poi) => (
-              <li key={poi.id} className="flex items-baseline justify-between gap-4 border-b border-white/10 pb-2 text-sm last:border-0">
+              <li key={poi.id} className="flex items-baseline justify-between gap-4 border-b border-white/10 pb-2 text-step--1 last:border-0">
                 <span className="flex items-center gap-2 text-brand-100">
                   <span aria-hidden>{CATEGORY_GLYPHS[poi.properties.category] ?? '📌'}</span>
                   {poi.properties.name}
@@ -75,7 +75,7 @@ export function MapLocationFallback({
             ))}
           </ul>
         ) : (
-          <p className="mt-6 text-sm text-brand-300">Interactive map temporarily unavailable.</p>
+          <p className="mt-6 text-step--1 text-brand-300">Interactive map temporarily unavailable.</p>
         )}
       </div>
     </div>

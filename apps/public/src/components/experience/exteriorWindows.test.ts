@@ -7,8 +7,17 @@
 
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { dressWindows, markRooms } from './exteriorWindows';
-import { dressSurfaces } from './exteriorSurfaces';
+import {
+  DAY_INTERIOR,
+  EVENING_DRIVE_MAX,
+  EVENING_INTERIOR,
+  INTERIOR_FRAGMENT,
+  LAMP_DAY,
+  dressWindows,
+  markRooms,
+  roomOn,
+} from './exteriorWindows';
+import { ASHLAR, SKY_FACE, dressSurfaces } from './exteriorSurfaces';
 
 /** Two separate window panes, split at a crease like the export splits them. */
 function twoPanes(): THREE.BufferGeometry {
@@ -65,6 +74,41 @@ describe('the rooms behind the windows', () => {
     expect(shader.fragmentShader).toContain('vec3 interiorRoom(');
     // unlit: the room is all the plane emits
     expect(shader.fragmentShader).toContain('vec3 outgoingLight = totalEmissiveRadiance;');
+    // and it is seen by its own light: the contact occlusion leaves it alone
+    expect((panes.material as THREE.Material).defines).toHaveProperty('ESTATE_EMITTER');
+  });
+
+  it('is a lived-in house: a quarter of its rooms dark, most with their lamps on, no two alike', () => {
+    const on = Array.from({ length: 2000 }, (_, i) => roomOn((i + 0.5) / 2000));
+    const dark = on.filter((v) => v < 0.1).length / on.length;
+    const lit = on.filter((v) => v > 0.6).length / on.length;
+    expect(dark).toBeGreaterThan(0.2);
+    expect(dark).toBeLessThan(0.3);
+    expect(lit).toBeGreaterThan(0.5);
+    expect(lit).toBeLessThan(0.6);
+    // the lit rooms are spread over their range, not at one strength
+    const lamps = on.filter((v) => v > 0.6);
+    expect(Math.max(...lamps) - Math.min(...lamps)).toBeGreaterThan(0.3);
+    // and the shader decides it the same way
+    expect(INTERIOR_FRAGMENT).toContain(
+      'r < 0.25 ? 0.035 : r < 0.45 ? 0.16 + 0.2 * fract(r * 7.13) : 0.62 + 0.38 * fract(r * 7.13)',
+    );
+  });
+
+  it('shows daylight by day and lamps by night, and never a light box', () => {
+    // By day the lamps are a fraction of the daylight the window lets in.
+    expect(LAMP_DAY).toBeLessThan(DAY_INTERIOR / 2);
+    // At full night the brightest wall of the brightest room (0.7 ivory under
+    // 1.5 of lamp) stays within a stop and a half of the print's white: the
+    // old drive put it at five times white and every lit pane clipped alike.
+    const night = LAMP_DAY + EVENING_INTERIOR * EVENING_DRIVE_MAX;
+    expect(0.7 * 1.5 * night).toBeLessThan(2.8);
+    expect(night).toBeGreaterThan(1.5);
+    // The daylight dies into the room, and goes with the evening.
+    expect(INTERIOR_FRAGMENT).toContain('exp(-depth / ');
+    expect(INTERIOR_FRAGMENT).toContain('uInteriorDay * (1.0 - 0.92 * dusk)');
+    // The drapes' folds are filtered before they alias.
+    expect(INTERIOR_FRAGMENT).toContain('fwidth(a0)');
   });
 });
 
@@ -90,5 +134,66 @@ describe('the ageing of the surfaces', () => {
     expect(gold.customProgramCacheKey()).not.toContain('estate-aged');
     // idempotent
     expect(dressSurfaces(root)).toEqual({ stone: 0, slate: 0, hedge: 0 });
+  });
+
+  it('lays the wall in courses, and neither the trim nor the rusticated base', () => {
+    const root = new THREE.Group();
+    const mk = (name: string) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.MeshStandardMaterial({ name }));
+      root.add(m);
+      return m.material as THREE.MeshStandardMaterial;
+    };
+    const wall = mk('MAT_Stone_Wall_AO');
+    const trim = mk('MAT_Stone_Trim_AO');
+    const rustic = mk('MAT_Stone_Rustic_AO');
+    dressSurfaces(root);
+    expect(wall.defines).toHaveProperty('ESTATE_ASHLAR');
+    expect(trim.defines ?? {}).not.toHaveProperty('ESTATE_ASHLAR');
+    expect(rustic.defines ?? {}).not.toHaveProperty('ESTATE_ASHLAR');
+    expect(trim.defines).toHaveProperty('ESTATE_TRIM');
+    const shader = {
+      uniforms: {},
+      vertexShader: 'void main() { #include <begin_vertex> }',
+      fragmentShader: 'void main() { #include <color_fragment> #include <roughnessmap_fragment> }',
+    } as unknown as THREE.WebGLProgramParametersWithUniforms;
+    wall.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    // a joint as wide as it is, drawn at its share of a pixel, so it cannot alias
+    expect(shader.fragmentShader).toContain('float px = max(length(fwidth(w)), 1.0e-4);');
+    expect(shader.fragmentShader).toContain('- min(dh, dv)) / px, 0.0, 1.0)');
+    // quiet: a joint a few millimetres wide, a stone a couple of per cent from the next
+    expect(ASHLAR.joint).toBeLessThanOrEqual(0.012);
+    expect(ASHLAR.tone).toBeLessThanOrEqual(0.03);
+    // courses a mason would lay: a stone two to three times as long as it is high
+    expect(ASHLAR.stone / ASHLAR.course).toBeGreaterThan(2);
+    expect(ASHLAR.stone / ASHLAR.course).toBeLessThan(3);
+  });
+
+  it('weathers what faces the sky, and leaves every upright face its hone', () => {
+    // The honed trim's level tops were white strips under a low sun seen from
+    // behind it (the roof balustrade on the revolve): the sun's glint, gone at
+    // full roughness. Only a face that looks up is roughened, and only ever
+    // roughened — never polished.
+    const root = new THREE.Group();
+    const trim = new THREE.MeshStandardMaterial({ name: 'MAT_Stone_Trim_AO' });
+    root.add(new THREE.Mesh(new THREE.PlaneGeometry(), trim));
+    dressSurfaces(root);
+    const shader = {
+      uniforms: {},
+      vertexShader: 'void main() { #include <begin_vertex> }',
+      fragmentShader: 'void main() { #include <color_fragment> #include <roughnessmap_fragment> }',
+    } as unknown as THREE.WebGLProgramParametersWithUniforms;
+    trim.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    const frag = shader.fragmentShader;
+    // the face's own normal, toward the eye: a soffit seen from below looks down
+    expect(frag).toContain('normalize(cross(dFdx(vAgeWorld), dFdy(vAgeWorld)))');
+    expect(frag).toContain(`smoothstep(${SKY_FACE.from.toFixed(2)}, ${SKY_FACE.to.toFixed(2)}, faceUp.y)`);
+    expect(frag).toContain(`max(roughnessFactor, ${SKY_FACE.rough.toFixed(2)})`);
+    // after the stone's own roughness has been read, not instead of it
+    expect(frag.indexOf('#include <roughnessmap_fragment>')).toBeLessThan(frag.indexOf('faceUp'));
+    // a wall (its normal level) and a soffit (looking down) are below the ramp
+    expect(SKY_FACE.from).toBeGreaterThan(0.3);
+    expect(SKY_FACE.to).toBeLessThan(1);
+    expect(SKY_FACE.rough).toBeGreaterThan(0.85);
+    expect(SKY_FACE.rough).toBeLessThanOrEqual(1);
   });
 });

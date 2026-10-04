@@ -57,14 +57,16 @@ export function chapterLabel(id: string): string {
       return 'the arrival';
     case 'revolution':
       return 'the house';
-    case 'constellation':
-      return 'the constellation';
+    case 'holdings':
+      return 'the holdings';
     case 'approach':
       return 'the front door';
     case 'establish':
       return 'the hall';
     case 'portrait':
       return 'the portrait';
+    case 'city':
+      return 'the map table';
     default:
       return 'where you were';
   }

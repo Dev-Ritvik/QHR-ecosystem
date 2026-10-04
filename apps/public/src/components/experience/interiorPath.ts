@@ -167,17 +167,22 @@ export const STATION_ANCHORS: readonly StationAnchor[] = [
   // between the flight and S1's table, which the urns no longer occupy. The
   // clear run lets it stand back 3.4 m again, so the lens comes back to 30.
   { id: 'S2', position: [-6.07, 0, -5.52], inward: [0.25, 0.97], standoff: 3.4, dz: 0, laneX: -5.3, holoY: 1.401, fov: 30 },
-  // RIGHT BACK. The hard one.
+  // RIGHT BACK. Shot as S1 is, mirrored: from the room, onto the right wall.
   //
-  // inward was [-1, -0.35], which stands the camera at z -1.74 and puts the
-  // descent from the promenade straight through urn_1. Pitched to [-0.8, -0.6]
-  // it stands off the urn's corner instead, and the run down from laneX 6.90
-  // clears the urn's x by 0.98m at the moment it crosses the urn's z band. Same
-  // subject distance (2.55m), same framing, clearance instead of none.
-  // At the old-money pass's 3.75m standoff [-0.8, -0.6] put the approach 6cm
-  // inside urn_r again (the collision test caught it); [-0.62, -0.78] swings the
-  // viewpoint to x 5.53, outside the urn's x, and the run down clears it.
-  { id: 'S3', position: [7.85, 0, -1.31], inward: [-0.62, -0.78], standoff: 3.75, dz: 0, laneX: 6.9, holoY: 1.441 },
+  // RE-CUT FOR THE CLIENT ("the camera angle of station 3 ... change it
+  // fully"). The old [-0.62, -0.78] was chosen to dodge the urns, and it stood
+  // the camera 51 degrees off the way this table's plan faces: every plan is
+  // raked 38 degrees up and turned square to its own wall (measured from the
+  // GLB: S3's plate faces -x), so from there the plan read as a skewed sliver
+  // and the frame jammed into the corner behind it. The urns are at the doors
+  // now. [-0.94, 0.34] looks at the plan 20 degrees off square — as near square
+  // as the right flight allows: dead square, a 3.3 m standoff stands on its
+  // balustrade, and this stands 0.8 m outside it (the dwell's pull-back too).
+  // The descent is a straight run down a lane at x 5.0, clear of the flight.
+  // A 30-degree lens: this plan is the widest of the three, and at 27 it met
+  // the frame's edge.
+  // The storyboard's A3 beat is exactly this: the camera faces right, at A3.
+  { id: 'S3', position: [7.85, 0, -1.31], inward: [-0.94, 0.34], standoff: 3.3, dz: 0, laneX: 5.0, holoY: 1.441, fov: 30 },
   // RIGHT FRONT. No project is published for this pedestal today, so it stays
   // dark furniture until one is. Described here so a fourth project lights it
   // up with no code change.
@@ -311,16 +316,10 @@ export const CHAPTER_WEIGHTS = {
   /** Withdrawal, the foot of the stairs, and the portrait. */
   portrait: 0.18,
   /**
-   * THE THRESHOLD AND THE DISTRICT FIELD.
-   *
-   * The film's last chapter, and the one the Phase 6 report records as missing
-   * outright: no city plane, no beacons, no dive. It is placed here, after the
-   * portrait, because the hall has NO WINDOW — parsed from the delivered GLB,
-   * the only opening in 545 nodes is `int_door_arch` with `int_doors` in it, on
-   * the entry axis at z 7.63. So the region is revealed through the door the
-   * visitor came in by, which is both the model's only aperture and the right
-   * sentence: the film ends by turning round and looking out at the land the
-   * house is here to sell.
+   * THE MAP TABLE. The film's last chapter: down from the portrait into the
+   * court of the stair, onto the land the house is here to sell, carved into
+   * a table (MapTable.tsx). Its id stays `city` — the chapter's address and
+   * the resume link are unchanged — though the land is no longer out of doors.
    */
   city: 0.2,
 } as const;
@@ -602,51 +601,36 @@ export function buildInteriorBeats(count: number): InteriorBeat[] {
     roll: 0,
   });
 
-  // TURN OUT. The camera comes off the portrait, down the axis, and starts to
-  // face the way it came in. A beat of its own so the reversal is a MOVE — the
-  // longest one in the room, from the back wall to the middle of the floor —
-  // rather than a cut from a portrait to a doorway.
+  // INTO THE COURT. The camera comes off the portrait and down through the air
+  // in front of the landing, out of the ivory and toward the table standing
+  // in the court between the flights' feet (MapTable.tsx). A beat of its own
+  // so the descent is a MOVE and the table arrives as a place, not a cut.
   beats.push({
-    id: 'turn-out',
+    id: 'court',
     at: W.establish + n * W.station + W.portrait + W.city * 0.45,
-    // Down out of the air over the court to its mouth, between the flights'
-    // feet, facing the doors: the two flights frame the turn.
-    position: [0, 3.0, 0.4],
-    target: [0, 2.8, 7.7],
+    position: [0.55, 4.3, 1.7],
+    target: [0.1, 0.95, -3.05],
     fov: LENS.traverse,
     roll: 0,
   });
 
-  // THE THRESHOLD. Square onto the entry doors, framing the opening.
-  //
-  // z 5.70 is derived, and the first attempt — standing far enough back to hold
-  // the whole opening — is why it is stated: that frame was a keyhole, a doorway
-  // seen from across the room with the region a slot in the middle of a wall.
-  // The chapter is supposed to be a revelation, not a peephole.
-  //
-  // So the standoff comes from the opening instead. 1.95m back from a doorway
-  // that is now 2.99m wide (it grew with the room), the jambs subtend 75
-  // degrees against the frame's own 80 — they sit at the extreme edges and
-  // everything between them is region. The visitor is standing IN the doorway
-  // rather than looking at it, and the head and sill leave frame, which is what
-  // they do when you step into a door.
-  //
-  // Eye height 2.30, and the aim at 1.60, so the horizon sits a little above
-  // centre: the sight line to the field's ground at y -2.4 first meets it about
-  // 7.6m beyond the camera, which is why FIELD.near is 26 and not less.
-  //
-  // z 5.70 -> 6.20. At 5.70 the jambs sat exactly at the frame's edges, and
-  // any aim offset brought one of them in: the second client review's frame
-  // had the walnut panelling beside the door as a beige band down the left of
-  // the region. Half a metre further into the doorway the jambs subtend 90
-  // degrees, outside a frame of ~78, and the offset is faded out on the way
-  // here (CameraRig) — the visitor stands IN the door.
+  // THE MAP TABLE, the film's last frame (the fourth art-direction critique:
+  // "keep the camera inside the architectural world ... a highly realistic,
+  // beautifully lit topographical map on the grand table"). From the mouth
+  // of the court, above it and 35 degrees down: the two flights curve round
+  // the frame's edges and hold the table between them like a pair of arms,
+  // the walnut face of the landing stands behind it, the ranges stand up off
+  // the plain in the low sun and the pins stand on it, and the left of the
+  // frame is the court's shaded stone and the dark of the left flight for the
+  // list of layouts. On the axis of the mouth, 3.7 m from the horseshoe's
+  // centre and clear of both flights' feet (the left ends at 234 degrees,
+  // the right begins at 306; this stands at 277).
   beats.push({
-    id: 'city',
+    id: 'map',
     at: W.establish + n * W.station + W.portrait + W.city,
-    position: [0, 2.3, 6.2],
-    target: [0, 1.6, 16.5],
-    fov: LENS.establish,
+    position: [0.45, 3.7, 0.6],
+    target: [0.15, 0.95, -3.05],
+    fov: 42,
     roll: 0,
   });
 
@@ -769,12 +753,13 @@ export function stationEmphasis(
  * The same rise and fall for any beat, found by its id — the portrait.
  *
  * The portrait's emphasis used to be read off the LAST two beats of the leg,
- * which was right while the portrait was the last beat. The district field
- * added `turn-out` and `city` after it, and from then on the portrait's
- * emphasis rose across the city chapter, with the camera facing the front
- * doors: its hover glow lit behind the viewer's back, and at the portrait beat
- * itself the click that opens About sat below its gate. Found by id, it peaks
- * where the camera is actually looking at the painting.
+ * which was right while the portrait was the last beat. The last chapter
+ * added beats after it (now `court` and `map`), and from then on the
+ * portrait's emphasis rose across that chapter, with the camera looking
+ * elsewhere: its hover glow lit behind the viewer's back, and at the portrait
+ * beat itself the click that opens About sat below its gate. Found by id, it
+ * peaks where the camera is actually looking at the painting — and the map
+ * table's peaks on the table.
  */
 export function beatEmphasis(
   beats: readonly InteriorBeat[],

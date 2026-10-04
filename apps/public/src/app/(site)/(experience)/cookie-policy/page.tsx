@@ -74,7 +74,7 @@ export default function CookiePolicyPage() {
         title="What this site stores on your device"
         lede="Two cookies are needed to run the site. Everything else is off until you switch it on, and can be switched off again at any time."
       >
-        <h2 className="font-serif text-xl text-[#F2EDE4]">Needed to run the site</h2>
+        <h2 className="font-serif text-step-1 text-[#F2EDE4]">Needed to run the site</h2>
         <p>
           These carry no profiling and nothing that outlives your visit beyond
           remembering your own choices. They cannot be turned off, because
@@ -83,7 +83,7 @@ export default function CookiePolicyPage() {
         </p>
         <CookieTable rows={ESSENTIAL} />
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           Only if you agree
         </h2>
         <p>
@@ -94,7 +94,7 @@ export default function CookiePolicyPage() {
         </p>
         <CookieTable rows={OPTIONAL} />
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           Changing your mind
         </h2>
         <p>
@@ -105,7 +105,7 @@ export default function CookiePolicyPage() {
           will simply be asked for your choices again.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Questions</h2>
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">Questions</h2>
         <p>
           Written enquiries about cookies or personal data go to{' '}
           <a className="underline underline-offset-4" href="mailto:devritvik70@gmail.com">Dev Ritvik, devritvik70@gmail.com</a> at Quality
@@ -113,7 +113,7 @@ export default function CookiePolicyPage() {
           Shantipuram, Shankara Matam Road, Visakhapatnam 530 016, Andhra
           Pradesh.
         </p>
-        <p className="text-sm text-[#F2EDE4]/60">
+        <p className="text-step--1 text-[#F2EDE4]/60">
           See also our <Link className="underline underline-offset-4" href="/privacy">privacy notice</Link>.
         </p>
       </Surface>
@@ -128,9 +128,9 @@ function CookieTable({
 }) {
   return (
     <div className="mt-6 overflow-x-auto">
-      <table className="w-full min-w-[34rem] border-collapse text-left text-sm">
+      <table className="w-full min-w-[34rem] border-collapse text-left text-step--1">
         <thead>
-          <tr className="border-b border-white/15 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/50">
+          <tr className="border-b border-white/15 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/[0.62]">
             <th className="py-3 pr-4 font-normal">Cookie</th>
             <th className="py-3 pr-4 font-normal">Purpose</th>
             <th className="py-3 font-normal">Lasts</th>
@@ -139,10 +139,10 @@ function CookieTable({
         <tbody>
           {rows.map((r) => (
             <tr key={r.name} className="border-b border-white/10 align-top">
-              <td className="py-4 pr-4 font-mono text-[13px] text-[#F2EDE4]">
+              <td className="py-4 pr-4 tabular-nums text-step--1 text-[#F2EDE4]">
                 {r.name}
                 {r.group && (
-                  <span className="mt-1 block text-[10px] uppercase tracking-widest text-[#F2EDE4]/60">
+                  <span className="mt-1 block text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
                     {r.group}
                   </span>
                 )}

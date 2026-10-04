@@ -106,15 +106,19 @@ describe('the walnut panels', () => {
 });
 
 describe('the portrait beat', () => {
-  it('peaks where the camera is on the painting, not facing the front doors', () => {
+  it('peaks where the camera is on the painting, not over the map table', () => {
     const beats = buildInteriorBeats(3);
     const at = (id: string) => beats.find((b) => b.id === id)!.at;
     expect(beatEmphasis(beats, at('portrait'), 'portrait')).toBe(1);
     // Clickable (gate 0.15) on the approach and just after it...
     expect(beatEmphasis(beats, (at('stair-foot') + at('portrait') * 3) / 4, 'portrait')).toBeGreaterThan(0.15);
-    // ...and dark by the time the camera has turned to the doors.
-    expect(beatEmphasis(beats, at('turn-out'), 'portrait')).toBe(0);
-    expect(beatEmphasis(beats, at('city'), 'portrait')).toBe(0);
+    // ...and dark by the time the camera has come down into the court.
+    expect(beatEmphasis(beats, at('court'), 'portrait')).toBe(0);
+    expect(beatEmphasis(beats, at('map'), 'portrait')).toBe(0);
+    // And the table's own emphasis is whole at the last beat, where its pins
+    // become targets (MapTable, mapStage).
+    expect(beatEmphasis(beats, at('map'), 'map')).toBe(1);
+    expect(beatEmphasis(beats, at('portrait'), 'map')).toBe(0);
   });
 });
 

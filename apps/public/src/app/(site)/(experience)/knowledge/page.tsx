@@ -54,14 +54,14 @@ export default function KnowledgePage() {
           {LIVE.map((a) => (
             <article key={a.href} className="border-t border-white/10 pt-6 first:border-0 first:pt-0">
               <Link href={a.href} className="group">
-                <h2 className="font-serif text-xl text-[#F2EDE4] underline-offset-4 group-hover:underline">
+                <h2 className="font-serif text-step-1 text-[#F2EDE4] underline-offset-4 group-hover:underline">
                   {a.title}
                 </h2>
               </Link>
-              <p className="mt-2 text-[15px] leading-relaxed text-[#F2EDE4]/70">
+              <p className="mt-2 text-step-0 text-[#F2EDE4]/70">
                 {a.blurb}
               </p>
-              <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
+              <p className="mt-2 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
                 {a.minutes} min read
               </p>
             </article>
@@ -69,15 +69,15 @@ export default function KnowledgePage() {
         </div>
 
         <section className="mt-14 border-t border-white/10 pt-6">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
+          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
             Being written
           </h2>
-          <ul className="mt-3 space-y-1.5 text-[15px] text-[#F2EDE4]/55">
+          <ul className="mt-3 space-y-1.5 text-step-0 text-[#F2EDE4]/55">
             {PLANNED.map((p) => (
               <li key={p}>{p}</li>
             ))}
           </ul>
-          <p className="mt-4 text-sm leading-relaxed text-[#F2EDE4]/50">
+          <p className="mt-4 text-step--1 text-[#F2EDE4]/[0.62]">
             Listed rather than published as stubs. A thin article costs more
             trust than a short list does.
           </p>

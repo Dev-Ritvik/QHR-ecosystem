@@ -137,21 +137,21 @@ export function ConsentPanel() {
         aria-labelledby="consent-title"
         aria-describedby="consent-body"
         onKeyDown={onKeyDown}
-        className="relative w-full max-w-2xl overflow-hidden rounded-lg border border-white/10 bg-neutral-950/95 text-neutral-100 shadow-2xl"
+        className="relative w-full max-w-2xl overflow-hidden rounded-[2px] border border-[#F2EDE4]/10 bg-[#0A1120]/95 text-[#F2EDE4] shadow-2xl"
       >
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-amber-200/70 to-transparent" />
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-[#E8B98A]/60 to-transparent" />
 
         <div className="px-6 py-6 sm:px-8 sm:py-7">
           <h2
             id="consent-title"
-            className="font-serif text-lg tracking-[0.18em] text-neutral-50 sm:text-xl"
+            className="font-serif text-step-1 tracking-[0.18em] text-neutral-50 sm:text-step-1"
           >
             BEFORE YOU EXPLORE
           </h2>
 
           <p
             id="consent-body"
-            className="mt-3 text-sm leading-relaxed text-neutral-300"
+            className="mt-3 text-step--1 font-light text-[#F2EDE4]/[0.72]"
           >
             We keep what is needed to run the experience. Beyond that, you decide.
             Turning these on lets us show you the projects and plots you actually
@@ -162,14 +162,14 @@ export function ConsentPanel() {
           {detail && (
             <ul className="mt-6 space-y-4 border-t border-white/10 pt-5">
               <li className="flex items-start gap-4">
-                <span className="mt-1 shrink-0 rounded border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-neutral-400">
+                <span className="mt-1 shrink-0 rounded border border-white/15 px-2 py-0.5 text-step--2 uppercase tracking-[0.3em] text-neutral-400">
                   Always on
                 </span>
                 <div>
-                  <p className="text-sm font-medium text-neutral-100">
+                  <p className="text-step--1 font-medium text-neutral-100">
                     {CONSENT_COPY.essential.title}
                   </p>
-                  <p className="mt-1 text-xs leading-relaxed text-neutral-400">
+                  <p className="mt-1 text-step--1 text-neutral-400">
                     {CONSENT_COPY.essential.body}
                   </p>
                 </div>
@@ -184,15 +184,15 @@ export function ConsentPanel() {
                       onChange={(e) =>
                         setChoice((c) => ({ ...c, [cat]: e.target.checked }))
                       }
-                      className="h-4 w-4 cursor-pointer rounded border-white/25 bg-transparent text-brand-400 focus:ring-2 focus:ring-brand-400 focus:ring-offset-0"
+                      className="h-4 w-4 cursor-pointer rounded-[1px] border-[#F2EDE4]/30 bg-transparent accent-[#E8B98A] text-[#E8B98A] focus:ring-1 focus:ring-[#E8B98A] focus:ring-offset-0"
                     />
                     <span className="sr-only">{CONSENT_COPY[cat].title}</span>
                   </label>
                   <div>
-                    <p className="text-sm font-medium text-neutral-100">
+                    <p className="text-step--1 font-medium text-neutral-100">
                       {CONSENT_COPY[cat].title}
                     </p>
-                    <p className="mt-1 text-xs leading-relaxed text-neutral-400">
+                    <p className="mt-1 text-step--1 text-neutral-400">
                       {CONSENT_COPY[cat].body}
                     </p>
                   </div>
@@ -206,21 +206,21 @@ export function ConsentPanel() {
             <button
               type="button"
               onClick={acceptAll}
-              className="flex-1 rounded border border-white/20 px-5 py-3 min-h-[44px] text-xs uppercase tracking-[0.16em] text-neutral-100 transition hover:border-amber-200/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="flex-1 rounded-[1px] border border-[#F2EDE4]/25 px-5 py-3 min-h-[44px] text-step--2 font-normal uppercase tracking-[0.3em] text-[#F2EDE4]/90 transition hover:border-[#E8B98A]/80 hover:text-[#E8B98A] focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-[#E8B98A]"
             >
               Accept all
             </button>
             <button
               type="button"
               onClick={rejectAll}
-              className="flex-1 rounded border border-white/20 px-5 py-3 min-h-[44px] text-xs uppercase tracking-[0.16em] text-neutral-100 transition hover:border-amber-200/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="flex-1 rounded-[1px] border border-[#F2EDE4]/25 px-5 py-3 min-h-[44px] text-step--2 font-normal uppercase tracking-[0.3em] text-[#F2EDE4]/90 transition hover:border-[#E8B98A]/80 hover:text-[#E8B98A] focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-[#E8B98A]"
             >
               Essential only
             </button>
             <button
               type="button"
               onClick={() => (detail ? save(choice) : setDetail(true))}
-              className="flex-1 rounded border border-white/20 px-5 py-3 min-h-[44px] text-xs uppercase tracking-[0.16em] text-neutral-100 transition hover:border-amber-200/60 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="flex-1 rounded-[1px] border border-[#F2EDE4]/25 px-5 py-3 min-h-[44px] text-step--2 font-normal uppercase tracking-[0.3em] text-[#F2EDE4]/90 transition hover:border-[#E8B98A]/80 hover:text-[#E8B98A] focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-[#E8B98A]"
             >
               {detail ? 'Save choices' : 'Choose'}
             </button>
@@ -233,7 +233,7 @@ export function ConsentPanel() {
           {detail && (
             <div className="mt-5 border-t border-white/10 pt-4">
               {erased ? (
-                <p className="text-xs text-neutral-400">
+                <p className="text-step--1 text-neutral-400">
                   Deleted. Nothing from this visit is retained.
                 </p>
               ) : (
@@ -242,12 +242,12 @@ export function ConsentPanel() {
                     type="button"
                     onClick={erase}
                     disabled={erasing}
-                    className="text-xs uppercase tracking-[0.14em] text-neutral-400 underline-offset-4 transition hover:text-neutral-100 hover:underline disabled:opacity-50"
+                    className="text-step--2 uppercase tracking-[0.3em] text-neutral-400 underline-offset-4 transition hover:text-neutral-100 hover:underline disabled:opacity-50"
                   >
                     {erasing ? 'Deleting…' : 'Delete the data from this visit'}
                   </button>
                   {eraseFailed && (
-                    <p className="mt-2 text-xs text-amber-200/80">
+                    <p className="mt-2 text-step--1 text-amber-200/80">
                       We could not complete that just now, so nothing was
                       deleted. Please try again.
                     </p>
@@ -276,7 +276,7 @@ export function PrivacyControl({ className }: { className?: string }) {
         // in the footer, so hovering it took the label to near-black on
         // #0A1120. tap-target brings the 16px-tall trigger up to a 44px hit
         // area without changing how it looks.
-        'tap-target text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60 underline-offset-4 transition hover:text-[#F2EDE4] hover:underline'
+        'tap-target text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60 underline-offset-4 transition hover:text-[#F2EDE4] hover:underline'
       }
     >
       Privacy &amp; data choices

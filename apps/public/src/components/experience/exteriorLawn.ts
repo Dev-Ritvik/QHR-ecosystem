@@ -19,6 +19,13 @@
 //   patches and drier ones, the thing that makes ground read as ground at a
 //   distance and a tiled texture never does.
 //
+//   NO TILE (the fourth art-direction critique, 2026-09-30: "The grass texture
+//   is repetitive"). The turf is still one 6 m tile, and at 40 m its clumps
+//   recur in a lattice the eye finds at once. So it is read twice — once as
+//   laid, once at 0.61 of the scale turned 37 degrees — and the two are mixed
+//   by a slow 9 m noise, with a 4 m clump field over both: no feature of the
+//   tile falls on the same lattice twice, and the lawn reads as grown.
+//
 // And every exterior texture is filtered anisotropically: a lawn, a drive and
 // a terrace seen at a grazing angle through plain trilinear filtering smear to
 // mush, which reads as low resolution even when the texture is not.
@@ -33,6 +40,9 @@ export const BAND_AMP = 0.085;
 export const LAWN_TILE_M = 6.0;
 
 const LAWN_RE = /^MAT_Lawn/;
+/** The gravel scan's tile, metres (build_estate_v7.py TILE, MAT_Gravel). */
+export const GRAVEL_TILE_M = 3.0;
+const GRAVEL_RE = /^MAT_Gravel/;
 
 const NOISE = /* glsl */ `
   float lawnHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -54,11 +64,18 @@ export const LAWN_MAP_FRAGMENT = /* glsl */ `
   vec4 sampledDiffuseColor = texture2D( map, vMapUv );
   {
     vec2 m = vMapUv * ${LAWN_TILE_M.toFixed(1)};
+    // The tile read a second time, turned and rescaled, mixed in by a slow
+    // noise; then a 4 m clump field over both.
+    vec2 turned = mat2(0.8, -0.6, 0.6, 0.8) * vMapUv * 0.61 + vec2(0.37, 0.71);
+    vec4 second = texture2D( map, turned );
+    float mixw = smoothstep(0.3, 0.7, lawnNoise(m / 9.0 + vec2(4.1, 1.3)) * 0.5 + 0.5);
+    sampledDiffuseColor = mix(sampledDiffuseColor, second, mixw);
+    sampledDiffuseColor.rgb *= 1.0 + 0.05 * lawnNoise(m / 4.0 + vec2(8.7, 2.2));
     // Macro: richer and drier patches, 25 m and 90 m across.
     float p1 = lawnNoise(m / 25.0 + vec2(3.1, 7.7));
     float p2 = lawnNoise(m / 90.0 + vec2(11.3, 2.9));
     float dry = smoothstep(0.25, 0.85, p2 * 0.7 + p1 * 0.3);
-    sampledDiffuseColor.rgb *= 1.0 + 0.09 * p1 + 0.06 * p2;
+    sampledDiffuseColor.rgb *= 1.0 + 0.11 * p1 + 0.07 * p2;
     sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb, sampledDiffuseColor.rgb * vec3(1.22, 1.08, 0.7), 0.35 * dry);
     // Bands along the entrance axis: which way this band's blades lean
     // (world -z is the build's +y), and how much of that the camera sees.
@@ -76,7 +93,33 @@ export const LAWN_MAP_FRAGMENT = /* glsl */ `
 #endif
 `;
 
-/** Dress the estate's lawn material(s). Returns how many were dressed. */
+/**
+ * The gravel's map_fragment (the refinement brief, 2026-10-03). The carriage
+ * ring and the avenue are a photographed gravel now (tools/gltf/
+ * ph_surfaces_v7.py), three metres to the tile, and from the hero's height a
+ * three-metre tile is a lattice like any other. So, as on the lawn: the scan is
+ * read twice, the second time turned and rescaled, the two mixed by a slow
+ * noise; and the drive is lighter where it is worn and darker where it holds
+ * the damp, over seven metres and thirty.
+ */
+export const GRAVEL_MAP_FRAGMENT = /* glsl */ `
+#ifdef USE_MAP
+  vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+  {
+    vec2 m = vMapUv * ${GRAVEL_TILE_M.toFixed(1)};
+    vec2 turned = mat2(0.8, -0.6, 0.6, 0.8) * vMapUv * 0.73 + vec2(0.37, 0.71);
+    vec4 second = texture2D( map, turned );
+    float mixw = smoothstep(0.3, 0.7, lawnNoise(m / 5.0 + vec2(4.1, 1.3)) * 0.5 + 0.5);
+    sampledDiffuseColor = mix(sampledDiffuseColor, second, mixw);
+    float p1 = lawnNoise(m / 7.0 + vec2(3.1, 7.7));
+    float p2 = lawnNoise(m / 30.0 + vec2(11.3, 2.9));
+    sampledDiffuseColor.rgb *= 1.0 + 0.06 * p1 + 0.05 * p2;
+  }
+  diffuseColor *= sampledDiffuseColor;
+#endif
+`;
+
+/** Dress the estate's lawn and gravel material(s). Returns how many were dressed. */
 export function dressLawn(root: THREE.Object3D): number {
   const done = new Set<THREE.Material>();
   root.traverse((o) => {
@@ -84,7 +127,9 @@ export function dressLawn(root: THREE.Object3D): number {
     if (!mesh.isMesh) return;
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
       const mat = m as THREE.MeshStandardMaterial & { __lawn?: boolean };
-      if (!mat || mat.__lawn || !LAWN_RE.test(mat.name) || !mat.map) continue;
+      if (!mat || mat.__lawn || !mat.map) continue;
+      const gravel = GRAVEL_RE.test(mat.name);
+      if (!gravel && !LAWN_RE.test(mat.name)) continue;
       mat.__lawn = true;
       done.add(mat);
       const prev = mat.onBeforeCompile;
@@ -99,9 +144,9 @@ export function dressLawn(root: THREE.Object3D): number {
           );
         shader.fragmentShader = shader.fragmentShader
           .replace('void main() {', `varying vec3 vLawnWorld;\n${NOISE}\nvoid main() {`)
-          .replace('#include <map_fragment>', LAWN_MAP_FRAGMENT);
+          .replace('#include <map_fragment>', gravel ? GRAVEL_MAP_FRAGMENT : LAWN_MAP_FRAGMENT);
       };
-      mat.customProgramCacheKey = () => 'estate-lawn';
+      mat.customProgramCacheKey = () => (gravel ? 'estate-gravel' : 'estate-lawn');
       mat.needsUpdate = true;
     }
   });

@@ -1,6 +1,6 @@
 {
   "model": "interior_hall.glb",
-  "size_mb": 24.44,
+  "size_mb": 25.26,
   "loaders_required": {
     "KTX2Loader": "all 37 textures are KTX2/Basis (KHR_texture_basisu is in extensionsRequired). setTranscoderPath('/basis/') and detectSupport(renderer) before loading; the transcoder is served from apps/public/public/basis/.",
     "DRACOLoader": "geometry is Draco compressed. setDecoderPath('/draco/'); the decoder is served from apps/public/public/draco/."
@@ -10,12 +10,13 @@
     "uv": "TEXCOORD_1",
     "atlas_px": 4096,
     "codec": "UASTC (RDO lambda 2.0, zstd 20)",
-    "intensity": 8.294,
+    "intensity": 5.2441,
     "encoding": "sRGB",
     "note": "glTF has no lightmap slot, so baked GI rides in occlusion. On load promote aoMap -> lightMap and set colorSpace = SRGBColorSpace: the atlas is normalised then sRGB-encoded for precision, because linear 8-bit puts the room near value 13 and bands.",
     "intensity_note": "RE-DERIVED for the extended hall: the bake normalises the atlas by its own 99.5th percentile and this is that divisor, straight from lightmap_manifest.json. HallModel.tsx carries it as LIGHTMAP_INTENSITY.",
     "note_rebake": "2026-09-22 old-money pass: re-baked on the existing UVLightmap layout at 1024 spp (tools/blender/rebake_hall_lightmap_v7.py), denoised with OIDN (normal + coverage guides), dilated in a 32 px band and normalised by its own p99.5 (tools/gltf/finish_hall_lightmap.py), then swapped into image 3 with tools/gltf/glb_replace_image.py. UASTC because ETC1S turned the lamplit walls into pink/green 4x4 blocks (chroma error p99 0.46 vs 0.17).",
-    "note_imperial": "2026-09-24 the imperial hall (tools/blender/imperial_hall_v7.py): new geometry, so bake_lightmap.py re-packed the UVLightmap layout (277 shell objects, 62,691 tris), then re-baked on it at 768 spp (rebake_hall_lightmap_v7.py), finished with finish_hall_lightmap.py (OIDN, 32 px dilation, p99.5 = 8.294), UASTC RDO 2.0 zstd 20, and swapped into image 3 with glb_replace_image.py."
+    "note_imperial": "2026-09-24 the imperial hall (tools/blender/imperial_hall_v7.py): new geometry, so bake_lightmap.py re-packed the UVLightmap layout (277 shell objects, 62,691 tris), then re-baked on it at 768 spp (rebake_hall_lightmap_v7.py), finished with finish_hall_lightmap.py (OIDN, 32 px dilation, p99.5 = 8.294), UASTC RDO 2.0 zstd 20, and swapped into image 3 with glb_replace_image.py.",
+    "note_refined": "2026-10-03 the refinement brief: the refined hall (tools/blender/refine_hall_v7.py: Attic column bases, the stair's apron frames) re-packed by bake_lightmap.py with every pilaster shaft unrolled to one lightmap island (their stepped seams were an unwrap fault), then baked as TWO families of light at 384 spp on that layout (rebake_hall_lightmap_v7.py, GROUP lamps | sky; the normals once, GROUP normals), each finished apart (finish_hall_lightmap.py --save-float; the lamps' pass diffused within its islands, --smooth 5), and mixed at lamps 1.6 : sky 0.55 by tools/gltf/mix_hall_passes.py (p99.5 = 5.2441). UASTC RDO 2.0 zstd 20, swapped into image 3 with glb_replace_image.py. The raw passes are in C:/dev/Blender/_v7ref_lamps and _v7ref_sky: another balance is a re-mix, not a re-bake."
   },
   "textures": {
     "count": 37,
@@ -26,10 +27,10 @@
     "multiple_of_four": "Enforced in the pipeline by tools/gltf/round4_textures.py after the resize pass: ETC1S/UASTC upload fails in the browser on any other size, which is how four plates shipped blank in August."
   },
   "geometry": {
-    "meshes": 269,
-    "nodes": 663,
-    "materials": 40,
-    "drawn_triangles": 609485,
+    "meshes": 412,
+    "nodes": 882,
+    "materials": 43,
+    "drawn_triangles": 913513,
     "shell_objects_lightmapped": 160,
     "shell_triangles": 39471,
     "decimated": [

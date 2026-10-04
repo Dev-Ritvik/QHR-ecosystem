@@ -66,13 +66,13 @@ export default function PropertiesPage() {
     <>
       <RouteTelemetry routeId="properties" />
       <main className="relative z-10 mx-auto w-full max-w-4xl px-6 py-16 md:py-24">
-        <p className="text-xs uppercase tracking-[0.2em] text-[#F2EDE4]/50">
+        <p className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/[0.62]">
           Plots
         </p>
-        <h1 className="mt-3 font-serif text-3xl text-[#F2EDE4] md:text-4xl">
+        <h1 className="mt-3 font-serif text-step-3 text-[#F2EDE4] md:text-step-4">
           What is on offer, and where
         </h1>
-        <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-[#F2EDE4]/70">
+        <p className="mt-4 max-w-2xl text-step-0 text-[#F2EDE4]/70">
           Sizes and road widths are taken from the approved layout plans, so they
           are exact. Which individual plots remain is not published here — it
           changes weekly, and a stale availability list is worse than none.
@@ -81,8 +81,8 @@ export default function PropertiesPage() {
         <div className="mt-12 space-y-10">
           {INVENTORY.map((i) => (
             <section key={i.slug} className="border-t border-white/10 pt-8">
-              <h2 className="font-serif text-2xl text-[#F2EDE4]">{i.name}</h2>
-              <p className="mt-1 text-sm text-[#F2EDE4]/55">
+              <h2 className="font-serif text-step-2 text-[#F2EDE4]">{i.name}</h2>
+              <p className="mt-1 text-step--1 text-[#F2EDE4]/55">
                 {i.where} &middot; {i.district} district
               </p>
 
@@ -90,14 +90,14 @@ export default function PropertiesPage() {
                 {i.sizes.map((s) => (
                   <span
                     key={s}
-                    className="rounded border border-white/15 px-3 py-1.5 font-mono text-[13px] text-[#F2EDE4]/85"
+                    className="rounded border border-white/15 px-3 py-1.5 tabular-nums text-step--1 text-[#F2EDE4]/85"
                   >
                     {s}
                   </span>
                 ))}
               </div>
 
-              <dl className="mt-5 space-y-2 text-[15px]">
+              <dl className="mt-5 space-y-2 text-step-0">
                 <div className="flex flex-wrap gap-x-3">
                   <dt className="text-[#F2EDE4]/60">Roads</dt>
                   <dd className="text-[#F2EDE4]/80">{i.roads}</dd>
@@ -108,15 +108,15 @@ export default function PropertiesPage() {
                 </div>
               </dl>
 
-              <p className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <p className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-step--1">
                 <Link
-                  className="uppercase tracking-[0.14em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
+                  className="uppercase tracking-[0.3em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
                   href={`/projects/${i.slug}`}
                 >
                   The layout
                 </Link>
                 <Link
-                  className="uppercase tracking-[0.14em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
+                  className="uppercase tracking-[0.3em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
                   href="/hall"
                 >
                   See it raised
@@ -127,10 +127,10 @@ export default function PropertiesPage() {
         </div>
 
         <section className="mt-14 border-t border-white/10 pt-8">
-          <h2 className="font-serif text-xl text-[#F2EDE4]">
+          <h2 className="font-serif text-step-1 text-[#F2EDE4]">
             Checking what is free
           </h2>
-          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-[#F2EDE4]/70">
+          <p className="mt-3 max-w-2xl text-step-0 text-[#F2EDE4]/70">
             Ask the branch that holds the layout and they will tell you which
             plot numbers are open that day, with the current price for the size
             you want. No price is published on this site, because a figure that
@@ -139,7 +139,7 @@ export default function PropertiesPage() {
           <p className="mt-5">
             <Link
               href="/contact"
-              className="inline-block rounded border border-white/20 px-5 py-3 text-xs uppercase tracking-[0.14em] text-[#F2EDE4] transition hover:border-amber-200/60"
+              className="inline-block rounded border border-white/20 px-5 py-3 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4] transition hover:border-amber-200/60"
             >
               Ask about availability
             </Link>

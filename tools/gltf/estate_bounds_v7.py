@@ -112,11 +112,12 @@ arch = []
 # The house: podium, walls, parapet and its urns, pediments, portico and steps.
 mn, mx = hull(['podium_walls', 'mansion_walls', 'mansion_bands', 'mansion_parapet', 'mansion_pediments',
                'portico_trim', 'portico_steps', 'mansion_window_trim', 'mansion_quoins', 'mansion_roof', 'garden_planters'])
-mx[1] = max(mx[1], 12.6)  # the corner urns' gilt finials, which live in mansion_gold with the spire
+# The roof is flat (2026-10-01: the hip, the cupola and the spire were taken
+# off at the client's word), so the house ends at the gilt finials on its
+# corner urns, which live in mansion_gold.
+ROOF_TOP = float(named['mansion_gold'][1][1])
+mx[1] = max(mx[1], ROOF_TOP)
 arch.append(('mansion', mn, mx))
-arch.append(('cupola', *hull(['cupola_walls', 'cupola_trim', 'cupola_louvres'])))
-sp_mn, sp_mx = named['spire_body']
-arch.append(('spire', sp_mn, np.array([sp_mx[0], named['mansion_gold'][1][1], sp_mx[2]])))
 arch.append(('fountain', *hull(['fountain_stone', 'fountain_water'])))
 arch.append(('canal', *hull(['canal_stone'])))
 
@@ -166,12 +167,12 @@ lines.append('/** The front door leaves with their carved relief. */')
 lines.append("export const ESTATE_DOOR: SolidBox = { name: 'door', min: %s, max: %s };" % (fmt(door[0]), fmt(door[1])))
 lines.append('/** The portico: platform, columns, entablature, balcony and cheek walls. */')
 lines.append("export const ESTATE_PORTICO: SolidBox = { name: 'portico', min: %s, max: %s };" % (fmt(portico[0]), fmt(portico[1])))
-lines.append('/** Spire tip, the highest point of the house. */')
-lines.append('export const ESTATE_SPIRE_TIP = %.2f;' % float(named['mansion_gold'][1][1]))
+lines.append("/** The highest point of the house: the gilt finials on the parapet's corner urns. */")
+lines.append('export const ESTATE_ROOF_TOP = %.2f;' % ROOF_TOP)
 lines.append('')
 lines.append('export const ESTATE_PLANTING: readonly SolidBox[] = [')
 for name, a, b in trees:
     lines.append("  { name: '%s', min: %s, max: %s }," % (name, fmt(a), fmt(b)))
 lines.append('];')
 open(out, 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
-print('BOUNDS', out, 'architecture', len(arch), 'planting', len(trees), 'spire', float(named['mansion_gold'][1][1]))
+print('BOUNDS', out, 'architecture', len(arch), 'planting', len(trees), 'roof top', ROOF_TOP)

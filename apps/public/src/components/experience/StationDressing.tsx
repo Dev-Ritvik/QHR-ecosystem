@@ -39,6 +39,7 @@ import type { StationAnchor } from './interiorPath';
 import { hallEnv } from './HallModel';
 import { PROBE_DEFINES, warmHallPrograms } from './hallProbe';
 import { NO_DEPTH } from './LensFocus';
+import { trackHallMaterial, untrackHallMaterials } from './hallLight';
 
 /** What a station shows. `total`/`available` are the plot counts. */
 export interface StationDetails {
@@ -78,6 +79,8 @@ const LENS_TOP = 0.088;
 function probe(mat: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
   mat.defines = { ...(mat.defines ?? {}), ...PROBE_DEFINES, ESTATE_FOCUS: '' };
   mat.envMap = hallEnv.texture ?? hallEnv.stand;
+  // It reflects the room, so it dims with the room's lights (hallLight.ts).
+  trackHallMaterial(mat);
   return mat;
 }
 
@@ -100,7 +103,7 @@ function lightLayer<T extends THREE.Material>(mat: T): T {
   return mat;
 }
 
-function cssFamily(variable: string, fallback: string): string {
+export function cssFamily(variable: string, fallback: string): string {
   if (typeof document === 'undefined') return fallback;
   const v = getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
   return v ? `${v}, ${fallback}` : fallback;
@@ -108,7 +111,7 @@ function cssFamily(variable: string, fallback: string): string {
 
 /** Draw letter-spaced text centred on x, since canvas letterSpacing is not
  *  everywhere yet. */
-function spaced(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, tracking: number) {
+export function spaced(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, tracking: number) {
   const chars = [...text];
   const widths = chars.map((c) => ctx.measureText(c).width);
   const total = widths.reduce((a, b) => a + b, 0) + tracking * (chars.length - 1);
@@ -322,22 +325,52 @@ function depthStamp(u: LabelUniforms) {
 }
 
 /**
- * THE UNDER-GLOW. The third review: "add a subtle, volumetric under-glow to the
- * tables so the models appear as curated, high-value museum exhibits". A pool
- * of warm light on the marble round each table's foot and a halo on its top
- * round the instrument — the light a lit exhibit spills — both answering the
- * station's emphasis, so the table the camera is at is the one that glows.
- * Additive in colour; the alpha (the lens's depth) is left alone.
+ * THE UNDER-GLOW, AND THE GROUND. The third review asked for "a subtle,
+ * volumetric under-glow to the tables so the models appear as curated,
+ * high-value museum exhibits": a pool of warm light on the marble round each
+ * table and a halo on its top, answering the station's emphasis.
+ *
+ * It was ADDITIVE, and that is what the client then saw as a broken base: an
+ * additive pool adds the same warm amount to whatever is under it, so on white
+ * marble it vanished into the white and on the dark ground at the table's foot
+ * it painted a flat tan disc. Light does not add colour to a surface; it
+ * multiplies the surface's own. So both planes now MULTIPLY what is beneath
+ * them (the "2x multiply" blend: the plane writes half its factor, the blend
+ * doubles it back against the framebuffer, so a factor can brighten as well as
+ * darken in any target format):
+ *
+ *   the floor   a soft shadow under the round top, a thin contact line where the
+ *               foot meets the marble — the tables are lit live and turn, so
+ *               their grounding is drawn here, not baked
+ *               (tools/gltf/clear_table_shadows.py cleared the bake's) — and
+ *               the warm lift of a lit exhibit, which follows the emphasis;
+ *   the top     the warm lift alone, round the instrument.
+ *
+ * Colour only; the alpha (the lens's depth) is left alone.
  */
 const GLOW_FRAG = /* glsl */ `
   uniform vec3  uWarm;
   uniform float uAmount;
-  uniform float uEdge;
+  uniform float uHalf;     // the plane's half-size, metres
+  uniform float uFoot;     // the foot's radius (0 on the top plane: no ground)
+  uniform float uShade;    // how dark the shadow under the top is
   varying vec2 vUv;
   void main() {
-    float r = length(vUv - 0.5) * 2.0;
-    float pool = exp(-r * r * 3.0) * (1.0 - smoothstep(uEdge, 1.0, r));
-    gl_FragColor = vec4(uWarm * pool * uAmount, 0.0);
+    float r = length(vUv - 0.5) * 2.0 * uHalf;
+    float lift = exp(-r * r / (2.0 * 0.55 * 0.55 * uHalf * uHalf));
+    vec3 light = vec3(1.0) + uWarm * lift * uAmount;
+    float ground = 1.0;
+    if (uFoot > 0.0) {
+      // under the top: soft, deepest at the foot, gone by a metre
+      ground *= 1.0 - uShade * (1.0 - smoothstep(uFoot * 0.7, 1.0, r));
+      // the contact line, outside the foot only
+      float d = max(r - uFoot, 0.0);
+      ground *= 1.0 - 0.3 * exp(-d * d / (2.0 * 0.035 * 0.035)) * step(uFoot * 0.98, r);
+    }
+    vec3 f = light * ground;
+    // fade the whole effect to exactly 1 at the plane's edge
+    f = mix(vec3(1.0), f, 1.0 - smoothstep(0.8, 1.0, r / uHalf));
+    gl_FragColor = vec4(f * 0.5, 0.0);
   }
 `;
 const GLOW_VERT = /* glsl */ `
@@ -347,17 +380,81 @@ const GLOW_VERT = /* glsl */ `
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
-function glowMaterial(power: number, edge: number) {
+/** The table's foot, from the GLB (table_base_Sn: r 0.396 at the floor). */
+const FOOT_R = 0.4;
+export function glowMaterial(power: number, half: number, foot: number) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uWarm: { value: new THREE.Color('#FFC98A').multiplyScalar(power) },
       uAmount: { value: 0.3 },
-      uEdge: { value: edge },
+      uHalf: { value: half },
+      uFoot: { value: foot },
+      uShade: { value: 0.3 },
     },
     vertexShader: GLOW_VERT,
     fragmentShader: GLOW_FRAG,
     transparent: true,
     depthWrite: false,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.DstColorFactor,
+    blendDst: THREE.SrcColorFactor,
+    blendEquationAlpha: THREE.AddEquation,
+    blendSrcAlpha: THREE.ZeroFactor,
+    blendDstAlpha: THREE.OneFactor,
+  });
+}
+
+/**
+ * THE FROSTED PANE. The art-direction audit (2026-09-30): the floating map
+ * "doesn't look like a video game; it looks like a glowing, frosted-glass
+ * hologram". The plan is drawn in light (HallModel's plate shader, now nearly
+ * monochrome champagne); behind it stands a pane of frosted glass a little
+ * larger than the sheet — a breath of milky light across its face, brighter
+ * where it turns from the lens, and an etched edge — so the drawing has a
+ * surface to be projected into. Additive, colour only.
+ */
+const GLASS_VERT = /* glsl */ `
+  varying vec2 vUv;
+  varying vec3 vN;
+  varying vec3 vV;
+  void main() {
+    vUv = uv;
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vN = normalize(normalMatrix * normal);
+    vV = normalize(-mv.xyz);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const GLASS_FRAG = /* glsl */ `
+  uniform vec3  uFrost;
+  uniform float uAmount;
+  varying vec2 vUv;
+  varying vec3 vN;
+  varying vec3 vV;
+  void main() {
+    float fres = pow(1.0 - clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0), 2.0);
+    // The etched edge: a hairline just inside the pane's border.
+    vec2 d = min(vUv, 1.0 - vUv);
+    float border = min(d.x, d.y);
+    float etch = 1.0 - smoothstep(0.0, max(fwidth(border) * 1.5, 1e-4), abs(border - 0.012));
+    // The frost: faint, and a little denser toward the middle of the pane.
+    float body = 0.012 + 0.014 * (1.0 - length(vUv - 0.5) * 1.4);
+    float a = (body + fres * 0.06 + etch * 0.22) * uAmount;
+    gl_FragColor = vec4(uFrost * a, 0.0);
+  }
+`;
+function glassMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uFrost: { value: new THREE.Color('#EFE9DF') },
+      uAmount: { value: 0.3 },
+    },
+    vertexShader: GLASS_VERT,
+    fragmentShader: GLASS_FRAG,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
     blending: THREE.CustomBlending,
     blendEquation: THREE.AddEquation,
     blendSrc: THREE.OneFactor,
@@ -464,6 +561,7 @@ export function StationDressing({
 
     store.brass = [brass, crystal];
     undo.push(() => {
+      untrackHallMaterials([brass, crystal]);
       box.remove(body, dome, core);
       brass.dispose();
       crystal.dispose();
@@ -472,22 +570,46 @@ export function StationDressing({
       (core.material as THREE.Material).dispose();
     });
 
-    // THE UNDER-GLOW: a pool on the floor round the table, a halo on its top.
+    // THE UNDER-GLOW: the ground and a warm lift under the table, a halo on
+    // its top (see GLOW_FRAG).
     {
       const at = box.getWorldPosition(new THREE.Vector3());
-      const floorMat = glowMaterial(0.55, 0.55);
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4).rotateX(-Math.PI / 2), floorMat);
+      const floorMat = glowMaterial(0.5, 1.2, FOOT_R);
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4).rotateX(-Math.PI / 2), floorMat);
       floor.name = `station_floor_glow_${anchor.id}`;
       floor.position.copy(root.worldToLocal(new THREE.Vector3(at.x, 0.012, at.z)));
       floor.renderOrder = 1;
       root.add(floor);
-      const topMat = glowMaterial(0.16, 0.7);
+      const topMat = glowMaterial(0.35, 0.75, 0);
       const top = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2), topMat);
       top.name = `station_top_glow_${anchor.id}`;
       top.position.copy(root.worldToLocal(new THREE.Vector3(at.x, TABLE_TOP + 0.006, at.z)));
       top.renderOrder = 1;
       root.add(top);
       store.glows = [floorMat, topMat];
+      // THE FROSTED PANE, behind the plan, turning with it (see GLASS_FRAG).
+      const plate = root.getObjectByName(`holo3d_${anchor.id}_plate`) as THREE.Mesh | undefined;
+      if (plate?.isMesh && plate.parent) {
+        const glassMat = glassMaterial();
+        const pane = new THREE.Mesh(plate.geometry, glassMat);
+        pane.name = `station_glass_${anchor.id}`;
+        pane.position.copy(plate.position);
+        pane.quaternion.copy(plate.quaternion);
+        pane.scale.copy(plate.scale).multiplyScalar(1.07);
+        // A centimetre behind the drawing, along the pane's own normal.
+        const n = new THREE.Vector3();
+        const nAttr = plate.geometry.getAttribute('normal');
+        if (nAttr) n.fromBufferAttribute(nAttr as THREE.BufferAttribute, 0).applyQuaternion(plate.quaternion);
+        pane.position.addScaledVector(n, -0.012);
+        pane.renderOrder = 2;
+        plate.parent.add(pane);
+        store.glows.push(glassMat);
+        void warmHallPrograms(gl, camera, pane, hallEnv.stand);
+        undo.push(() => {
+          pane.removeFromParent();
+          glassMat.dispose();
+        });
+      }
       // Compiled with the hall, like the instrument below.
       void warmHallPrograms(gl, camera, floor, hallEnv.stand);
       void warmHallPrograms(gl, camera, top, hallEnv.stand);

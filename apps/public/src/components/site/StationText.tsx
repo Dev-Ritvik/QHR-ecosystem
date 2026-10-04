@@ -14,13 +14,18 @@
 // removing the link would remove the product.
 
 import Link from 'next/link';
-import { Arrow } from './Arrow';
 import { InferSelectModel } from 'drizzle-orm';
 import { projectsPub } from '@estate/db/src/schema/projection';
 
 type Project = InferSelectModel<typeof projectsPub>;
 
-export function StationText({ project }: { project: Project }) {
+/**
+ * `numeral` is the table's number in the collection ("II · III"). On a wide
+ * frame site-home sets it as an eyebrow over a hairline above this block; on
+ * any other the block stands in four short lines under the header, above the
+ * plan, and the numeral closes its last line instead.
+ */
+export function StationText({ project, numeral }: { project: Project; numeral?: string }) {
   const place = [project.locality, project.city].filter(Boolean).join(' · ');
 
   return (
@@ -28,15 +33,34 @@ export function StationText({ project }: { project: Project }) {
       href={`/projects/${project.slug}`}
       className="tap-target group block outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-[#E8B98A]"
     >
-      <h3 className="t-h2 text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A] group-focus-visible:text-[#E8B98A]">
+      <h3 className="t-station text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A] group-focus-visible:text-[#E8B98A]">
         {project.name}
       </h3>
-      {place ? <p className="t-body mt-4 text-[#F2EDE4]/65">{place}</p> : null}
-      <p className="t-eyebrow mt-8 text-[#E8B98A]/90 [font-variant-numeric:tabular-nums]">
-        {project.isSoldOut
-          ? 'Fully sold'
-          : `${project.availableUnits} of ${project.totalUnits} plots open`}
-        <Arrow className="ml-3 inline-block align-middle" />
+      {/* Full ivory (it was 90%): at the second table, which stands against
+          the ivory wall, the place measured 4.23:1 on a phone held sideways
+          once the hall's lamps led its light (2026-10-04). */}
+      {place ? <p className="t-body mt-1 text-[#F2EDE4] wide:mt-4">{place}</p> : null}
+      {/* The numeral follows the count, a gap on: set out at the line's far
+          end it stood directly over the first plan's own "Open" marker on a
+          phone's short frame (seen at 390x664, ten pixels apart).
+          THE COUNT IN IVORY, AND IN WORDS. It was gilt, and small gilt needs a
+          ground under a luma of 80; this line stands at the foot of the
+          block, on the pilaster the lens has burnt in, at 72 to 89. And it
+          was set in tracked capitals, a third register under the name and the
+          place: with the refinement brief (2026-10-03, "tiny uppercase labels
+          ... micro-metadata") it is a line of the same small text as any
+          other, read as a sentence. */}
+      <p className="t-small mt-2 flex items-baseline gap-8 text-[#F2EDE4] [font-variant-numeric:tabular-nums] wide:mt-3 wide:block">
+        <span>
+          {project.isSoldOut
+            ? 'Fully sold'
+            : `${project.availableUnits} of ${project.totalUnits} plots open`}
+        </span>
+        {numeral ? (
+          <span aria-hidden className="shrink-0 text-[#E8B98A] wide:hidden">
+            {numeral}
+          </span>
+        ) : null}
       </p>
     </Link>
   );

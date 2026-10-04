@@ -2,6 +2,16 @@ r"""
 Finish a raw hall lightmap bake into the shipped atlas.
 
     python finish_hall_lightmap.py <bake_dir> <out_png> [--scale S] [--no-oidn]
+        [--normals <normal_raw.npy>] [--save-float <out.npy>] [--smooth SIGMA]
+
+--normals takes the room's normals from another pass's directory (a bake made
+as two families of light has one set of normals: rebake_hall_lightmap_v7.py,
+GROUP). --save-float writes the denoised, dilated light as it stands before it
+is normalised and quantised, so two passes can be finished apart and then mixed
+at any balance without denoising again (tools/gltf/mix_hall_passes.py).
+--smooth diffuses the denoised light WITHIN each island by about SIGMA texels
+(see smooth_islands): for a pass of small, bright sources that is then
+weighted up, whose leftover mottle the weight multiplies.
 
 Reads <bake_dir>/lightmap_raw.npy and normal_raw.npy, written by
 tools/blender/rebake_hall_lightmap_v7.py (float16, top-down, linear
@@ -44,11 +54,14 @@ ap.add_argument("bake_dir")
 ap.add_argument("out_png")
 ap.add_argument("--scale", type=float, default=None)
 ap.add_argument("--no-oidn", action="store_true")
+ap.add_argument("--normals", default=None)
+ap.add_argument("--save-float", default=None)
+ap.add_argument("--smooth", type=float, default=0.0)
 args = ap.parse_args()
 
 rgb = np.load(os.path.join(args.bake_dir, "lightmap_raw.npy")).astype(np.float32)
 H, W, _ = rgb.shape
-nrm_path = os.path.join(args.bake_dir, "normal_raw.npy")
+nrm_path = args.normals or os.path.join(args.bake_dir, "normal_raw.npy")
 normal_raw = np.load(nrm_path).astype(np.float32) if os.path.exists(nrm_path) else None
 # COVERAGE comes from the normal pass, never from the light. A texel on an
 # island that receives no light (a moulding's underside, the wall behind a
@@ -116,6 +129,58 @@ if not args.no_oidn:
     print("denoised")
 
 
+def smooth_islands(img, m, sigma):
+    """Diffuse the light inside each island: never across an island's edge, and
+    never across an edge of the light itself.
+
+    WHY. The lamps' pass is lit by small sources - a sconce's flame, a
+    chandelier's bulbs - and at 384 samples what the denoiser leaves on a wall
+    is a soft mottle a hand's width across. At 1 : 1 it is under the eye's
+    threshold; a dusk room weights the lamps four or five times over, and the
+    mottle with them (seen on the column shafts at the first table). A lamp's
+    light on plaster has no detail at that scale: its pools are metres wide.
+
+    WITHIN ISLANDS ONLY. Two islands that touch in the atlas are two surfaces
+    anywhere in the room; a plain blur would trade light between them and draw
+    every island's outline on the walls.
+
+    AND NOT ACROSS A SHADOW OR A CREASE. The first version averaged everything
+    inside an island, and a moulding's island is a few texels wide: its lit
+    side and its shaded side became one grey, the median texel of the pass rose
+    sixfold, and the room's small forms went flat - the opposite of the brief.
+    So the diffusion has a conductance on every pair of neighbours, fixed from
+    the denoised light before it starts: near 1 where the two differ by a per
+    cent or two (a gradient, or the mottle), near 0 where they differ by a
+    tenth (a shadow's edge, a crease). It is written as fluxes between
+    neighbours, the same in both directions, so the island's light is conserved
+    exactly: what leaves one texel arrives in the next."""
+    labels = cv2.connectedComponents((m > 0).astype(np.uint8), connectivity=4)[1]
+    luma = img @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    lam = 0.2                                   # stable for four neighbours
+    steps = max(1, int(round(sigma * sigma / (2 * lam))))
+
+    def conductance(a, b, la, lb):
+        d = np.abs(la - lb) / (la + lb + 0.02)
+        return ((a == b) & (a > 0)).astype(np.float32) * np.exp(-((d / 0.04) ** 2))
+
+    wx = conductance(labels[:, 1:], labels[:, :-1], luma[:, 1:], luma[:, :-1])[..., None] * lam
+    wy = conductance(labels[1:, :], labels[:-1, :], luma[1:, :], luma[:-1, :])[..., None] * lam
+    out = img.astype(np.float32).copy()
+    for _ in range(steps):
+        fx = wx * (out[:, 1:] - out[:, :-1])
+        fy = wy * (out[1:, :] - out[:-1, :])
+        out[:, :-1] += fx
+        out[:, 1:] -= fx
+        out[:-1, :] += fy
+        out[1:, :] -= fy
+    print("smoothed within islands, edges kept: %d steps, about %.1f texels" % (steps, sigma))
+    return out * (m[..., None] > 0)
+
+
+if args.smooth > 0:
+    rgb = smooth_islands(rgb, mask, args.smooth)
+
+
 def push_pull(img, m):
     """Fill every empty texel from the nearest islands, smoothly, by building a
     mask-weighted pyramid down to 1x1 and pulling coarse values back up into
@@ -144,6 +209,10 @@ BAND = 32
 band = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=BAND) > 0
 rgb = np.where(mask[..., None] > 0, rgb, np.where(band[..., None], push_pull(rgb, mask), 0.0))
 print("dilated (%d px band)" % BAND)
+if args.save_float:
+    np.save(args.save_float, rgb.astype(np.float16))
+    np.save(os.path.splitext(args.save_float)[0] + "_mask.npy", (mask > 0))
+    print("saved float", args.save_float)
 
 lit = rgb[mask > 0]
 lit = lit[lit.max(axis=1) > 1e-4]

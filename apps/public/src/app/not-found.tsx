@@ -54,7 +54,7 @@ export default function NotFound() {
               <span className="t-h3 text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A]">
                 {r.label}
               </span>
-              <span className="t-small hidden text-right text-[#F2EDE4]/50 sm:block">
+              <span className="t-small hidden text-right text-[#F2EDE4]/[0.62] sm:block">
                 {r.hint}
               </span>
             </Link>
@@ -62,7 +62,7 @@ export default function NotFound() {
         ))}
       </ul>
 
-      <p className="t-small mt-14 text-[#F2EDE4]/50">
+      <p className="t-small mt-14 text-[#F2EDE4]/[0.62]">
         Or call the head office on{' '}
         <a
           href="tel:+919553513366"

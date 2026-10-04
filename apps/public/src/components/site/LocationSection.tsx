@@ -96,13 +96,13 @@ export function LocationSection({ pois, projectCentroid }: LocationSectionProps)
               className="flex flex-col gap-2 border-b border-white/10 px-1 py-4"
             >
               <div className="flex items-start justify-between gap-3">
-                <h3 className="text-[15px] leading-snug text-[#F2EDE4]">{poi.name}</h3>
-                <span className="t-eyebrow shrink-0 whitespace-nowrap text-[#F2EDE4]/50">
+                <h3 className="text-step-0 text-[#F2EDE4]">{poi.name}</h3>
+                <span className="t-eyebrow shrink-0 whitespace-nowrap text-[#F2EDE4]/[0.62]">
                   {poi.category}
                 </span>
               </div>
               <div
-                className="flex items-center gap-3 text-sm text-[#F2EDE4]/60"
+                className="flex items-center gap-3 text-step--1 text-[#F2EDE4]/60"
                 style={{ fontVariantNumeric: 'tabular-nums' }}
               >
                 <span className="text-[#E8B98A]">

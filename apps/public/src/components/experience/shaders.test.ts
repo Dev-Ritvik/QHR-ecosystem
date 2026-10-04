@@ -5,7 +5,7 @@ import { join } from 'node:path';
 /**
  * Guards the failure mode that silently disabled the terrain.
  *
- * Terrain.tsx declared `float flat = ...` in its vertex shader. `flat` is a
+ * Terrain.tsx (the procedural ground, since removed) declared `float flat = ...` in its vertex shader. `flat` is a
  * reserved interpolation qualifier in GLSL ES 3.00, and three compiles a
  * ShaderMaterial as `#version 300 es` on a WebGL2 context — it upgrades the
  * source rather than leaving it at GLSL1. So the vertex shader never compiled,
@@ -26,18 +26,26 @@ import { join } from 'node:path';
  */
 
 const SHADER_FILES = [
-  'Terrain.tsx',
   'Motes.tsx',
-  'Constellation.tsx',
-  'CityField.tsx',
+  'MapTable.tsx',
+  'DoorwayRig.tsx',
   'exteriorFoliage.ts',
+  'FilmGrade.tsx',
+  'LensFocus.tsx',
+  'nightPools.ts',
   'exteriorLawn.ts',
   'exteriorSurfaces.ts',
   'exteriorWindows.ts',
   'hallDetail.ts',
   'PortraitBeam.tsx',
+  'WindowLight.tsx',
   'StationDressing.tsx',
+  'StationModel.tsx',
 ];
+
+/** The print's grade and the lens are one fragment shader each; every other
+ *  file has two or more. */
+const MIN_BLOCKS: Readonly<Record<string, number>> = { 'FilmGrade.tsx': 1, 'LensFocus.tsx': 1 };
 
 /**
  * Reserved in GLSL ES 3.00 and therefore unusable as identifiers, but legal in
@@ -106,7 +114,7 @@ describe('custom GLSL sources', () => {
     const blocks = glslBlocks(read(file));
     // If this fails the extraction broke, and every assertion below would be
     // vacuously true — which is worse than the bug.
-    expect(blocks.length).toBeGreaterThanOrEqual(2);
+    expect(blocks.length).toBeGreaterThanOrEqual(MIN_BLOCKS[file] ?? 2);
   });
 
   it.each(SHADER_FILES)(

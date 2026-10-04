@@ -15,6 +15,18 @@ interface EnquiryFormProps {
   unitNumber?: string;
 }
 
+// SET FOR THE DARK SITE. The form was drawn for a white card — neutral-900
+// labels, white fields, a black button — and the one page that uses it (the
+// contact surface) sets it in a dark panel, where its labels and its note were
+// dark grey on near-black (measured: 1.2:1 and 1.6:1). Ivory labels, hairline
+// fields with the house's gilt on focus, and the site's own tracked capitals
+// on the button. The fields keep the browser's 16px, so a phone does not zoom
+// into them on focus.
+const LABEL = 'block text-step--1 font-medium text-[#F2EDE4]/80';
+const FIELD =
+  'block w-full rounded-none border border-white/20 bg-transparent px-4 py-2.5 text-[#F2EDE4] placeholder:text-[#F2EDE4]/40 transition-colors focus:border-[#E8B98A]/70 focus:outline-none focus:ring-1 focus:ring-[#E8B98A]/40';
+const ERROR = 'mt-1 text-step--1 text-[#F2A38C]';
+
 export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: EnquiryFormProps) {
   const [isPending, startTransition] = useTransition();
   // form_start on first focus, form_submit on send, form_abandon on unmount.
@@ -72,8 +84,8 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
 
   if (status === 'success') {
     return (
-      <div className="bg-neutral-50 p-8 border border-neutral-200 flex flex-col items-center justify-center text-center space-y-4">
-        <div className="w-12 h-12 bg-neutral-900 text-white rounded-full flex items-center justify-center mb-2">
+      <div className="flex flex-col items-center justify-center space-y-4 border border-white/10 bg-white/[0.03] p-8 text-center">
+        <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full border border-[#E8B98A]/60 text-[#E8B98A]">
           <svg
             className="w-6 h-6"
             fill="none"
@@ -84,8 +96,8 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
             <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h3 className="text-xl font-medium tracking-tight text-neutral-900">Enquiry Received</h3>
-        <p className="text-neutral-600 max-w-sm">
+        <h3 className="text-step-1 text-[#F2EDE4]">Enquiry received</h3>
+        <p className="max-w-sm text-step-0 text-[#F2EDE4]/70">
           Thank you for your interest. A member of our team will be in touch with you shortly.
         </p>
       </div>
@@ -95,10 +107,8 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <h3 className="text-xl font-medium tracking-tight text-neutral-900">
-          Request Information
-        </h3>
-        <p className="text-neutral-600 text-sm">
+        <h3 className="text-step-1 text-[#F2EDE4]">Request information</h3>
+        <p className="text-step--1 text-[#F2EDE4]/70">
           Leave your details and we will reach out to schedule a consultation.
         </p>
       </div>
@@ -111,7 +121,7 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="name" className="block text-sm font-medium text-neutral-900">
+          <label htmlFor="name" className={LABEL}>
             Full Name
           </label>
           <input
@@ -120,13 +130,13 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
             onFocus={() => onFieldFocus(0)}
             id="name"
             required
-            className="block w-full border border-neutral-300 px-4 py-2.5 text-neutral-900 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 transition-colors"
+            className={FIELD}
           />
-          {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name[0]}</p>}
+          {errors.name && <p className={ERROR}>{errors.name[0]}</p>}
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="phone" className="block text-sm font-medium text-neutral-900">
+          <label htmlFor="phone" className={LABEL}>
             Phone Number
           </label>
           <input
@@ -137,20 +147,20 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
             required
             placeholder="+91"
             defaultValue="+91"
-            className="block w-full border border-neutral-300 px-4 py-2.5 text-neutral-900 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 transition-colors"
+            className={FIELD}
           />
-          {errors.phone && <p className="text-sm text-red-600 mt-1">{errors.phone[0]}</p>}
+          {errors.phone && <p className={ERROR}>{errors.phone[0]}</p>}
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="preferredTime" className="block text-sm font-medium text-neutral-900">
+          <label htmlFor="preferredTime" className={LABEL}>
             Preferred Contact Time
           </label>
           <select
             name="preferredTime"
             onFocus={() => onFieldFocus(2)}
             id="preferredTime"
-            className="block w-full border border-neutral-300 px-4 py-2.5 text-neutral-900 bg-white focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 transition-colors"
+            className={`${FIELD} bg-[#0A1120]`}
           >
             <option value="any">Any time</option>
             <option value="morning">Morning</option>
@@ -160,7 +170,7 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="message" className="block text-sm font-medium text-neutral-900">
+          <label htmlFor="message" className={LABEL}>
             Message (Optional)
           </label>
           <textarea
@@ -168,12 +178,12 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
             onFocus={() => onFieldFocus(3)}
             id="message"
             rows={3}
-            className="block w-full border border-neutral-300 px-4 py-2.5 text-neutral-900 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 transition-colors resize-none"
+            className={`${FIELD} resize-none`}
           />
         </div>
 
         {globalError && (
-          <div className="p-4 bg-red-50 border border-red-200 text-sm text-red-800">
+          <div className="border border-[#F2A38C]/40 bg-[#F2A38C]/10 p-4 text-step--1 text-[#F7C9BC]">
             {globalError}
           </div>
         )}
@@ -181,23 +191,23 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
         <button
           type="submit"
           disabled={isPending}
-          className="w-full bg-neutral-900 text-white px-4 py-3.5 font-medium hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-900 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
+          className="w-full border border-[#E8B98A]/60 px-4 py-4 text-step--2 font-medium uppercase tracking-[0.3em] text-[#F2EDE4] transition-colors hover:bg-[#E8B98A]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E8B98A]/60 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isPending ? 'Submitting...' : 'Submit Enquiry'}
+          {isPending ? 'Sending' : 'Send the enquiry'}
         </button>
       </form>
 
       {whatsappNumber && (
-        <div className="pt-6 border-t border-neutral-200 space-y-4">
-          <p className="text-sm text-neutral-600 text-center">Or connect with us instantly</p>
+        <div className="space-y-4 border-t border-white/10 pt-6">
+          <p className="text-center text-step--1 text-[#F2EDE4]/70">Or write to us on WhatsApp</p>
           <a
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center w-full bg-[#25D366] text-white px-4 py-3.5 font-medium hover:bg-[#20bd5a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#25D366] transition-colors"
+            className="flex w-full items-center justify-center border border-white/20 px-4 py-4 text-step--2 font-medium uppercase tracking-[0.3em] text-[#F2EDE4] transition-colors hover:border-[#25D366]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]/60"
           >
             <svg
-              className="w-5 h-5 mr-2"
+              className="mr-3 h-4 w-4 text-[#25D366]"
               fill="currentColor"
               viewBox="0 0 24 24"
               xmlns="http://www.w3.org/2000/svg"

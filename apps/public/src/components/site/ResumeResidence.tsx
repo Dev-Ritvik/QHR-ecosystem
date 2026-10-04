@@ -56,7 +56,7 @@ export function ResumeResidence({ className = '' }: { className?: string }) {
     <Link
       href={residenceHref(chapter)}
       className={
-        'tap-target whitespace-nowrap text-[11px] text-[#E8B98A]/75 ' +
+        'tap-target whitespace-nowrap text-step--2 text-[#E8B98A]/75 ' +
         'transition-colors hover:text-[#E8B98A] ' +
         className
       }
@@ -66,7 +66,7 @@ export function ResumeResidence({ className = '' }: { className?: string }) {
           aria-hidden: a screen reader should hear the sentence, not the
           furniture. */}
       <span aria-hidden className="mr-[0.5em]">&larr;</span>
-      <span className="uppercase tracking-[0.22em]">The residence</span>
+      <span className="uppercase tracking-[0.3em]">The residence</span>
       <span className="sr-only"> — resume at {chapterLabel(chapter)}</span>
     </Link>
   );

@@ -34,11 +34,19 @@ def want(tex_ref, px):
     limit[src] = min(limit.get(src, 1 << 14), px)
 
 
+# A thing a hand's width across on the screen does not carry a facade's maps:
+# the portico's lantern is 0.4 m of bronze, never nearer the lens than two
+# metres.
+SMALL = {"MAT_Lantern_Bronze": 512}
+
 for m in doc.get("materials", []):
     pbr = m.get("pbrMetallicRoughness", {})
-    want(pbr.get("baseColorTexture"), 1024)
-    want(pbr.get("metallicRoughnessTexture"), 1024)
-    want(m.get("normalTexture"), 512)
+    cap = SMALL.get(m.get("name", ""), 1 << 14)
+    want(pbr.get("baseColorTexture"), min(1024, cap))
+    want(pbr.get("metallicRoughnessTexture"), min(1024, cap))
+    want(m.get("normalTexture"), min(512, cap))
+    # (Only the generated lantern carries one: the mask of its glass.)
+    want(m.get("emissiveTexture"), min(1024, cap))
 
 for i, img in enumerate(images):
     uri = img.get("uri")

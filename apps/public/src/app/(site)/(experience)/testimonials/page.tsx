@@ -101,10 +101,10 @@ export default function TestimonialsPage() {
           <div className="space-y-10">
             {publishable.map((t) => (
               <figure key={t.name} className="border-t border-white/10 pt-6">
-                <blockquote className="font-serif text-lg leading-relaxed text-[#F2EDE4]/90">
+                <blockquote className="font-serif text-step-1 text-[#F2EDE4]/90">
                   &ldquo;{t.quote}&rdquo;
                 </blockquote>
-                <figcaption className="mt-3 text-sm text-[#F2EDE4]/55">
+                <figcaption className="mt-3 text-step--1 text-[#F2EDE4]/55">
                   {t.name} &middot; {t.project}
                 </figcaption>
               </figure>

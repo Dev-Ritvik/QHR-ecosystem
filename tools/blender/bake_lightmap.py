@@ -167,6 +167,78 @@ try:
 except TypeError:
     bpy.ops.uv.smart_project(island_margin=0.0)
 
+bpy.ops.object.mode_set(mode='OBJECT')
+
+# THE COLUMN SHAFTS, UNROLLED (the refinement brief, 2026-10-03). A fluted
+# shaft is the worst case smart_project has: it sorts faces by the way they
+# face, so a round shaft comes apart into six or eight strips, each foreshortened
+# at its edges, and twenty flutes of five and a half metres get a few texels
+# each. In the room that was every column beside every table: a dark seam up
+# the shaft where two strips met (the atlas's black showing through the
+# filter), and the light stepping from texel to texel up each arris. A shaft
+# is a developable surface: rolled out flat it is ONE rectangle, its girth by
+# its height, with a single seam turned to the wall where nobody stands. The
+# end caps (inside the base and the capital, never seen) are given a point.
+def unroll_shaft(o):
+    me = o.data
+    uvl = me.uv_layers["UVLightmap"].data
+    mw = o.matrix_world
+    ws = [mw @ v.co for v in me.vertices]
+    cx = sum(w.x for w in ws) / len(ws)
+    cy = sum(w.y for w in ws) / len(ws)
+    # The seam faces the nearest side wall (the hall's are at x = +/-9.9).
+    seam = 0.0 if cx > 0 else math.pi
+    ang = lambda x, y: (math.atan2(y - cy, x - cx) - seam) % (2 * math.pi)
+    zmin = min(w.z for w in ws)
+    zmax = max(w.z for w in ws)
+    # Girth along the foot ring, flutes and all: each vertex's distance round.
+    foot = sorted((i for i, w in enumerate(ws) if w.z < zmin + 1e-3), key=lambda i: ang(ws[i].x, ws[i].y))
+    if len(foot) < 8:
+        return False
+    run = {}
+    s = 0.0
+    for k, i in enumerate(foot):
+        if k:
+            a, b = ws[foot[k - 1]], ws[i]
+            s += math.hypot(b.x - a.x, b.y - a.y)
+        run[i] = s
+    girth = s + math.hypot(ws[foot[0]].x - ws[foot[-1]].x, ws[foot[0]].y - ws[foot[-1]].y)
+    by_angle = [(ang(ws[i].x, ws[i].y), run[i]) for i in foot]
+
+    def along(w):
+        # The foot vertex at this bearing (the shaft is an extrusion: its head
+        # ring stands over its foot ring, a little inside it).
+        a = ang(w.x, w.y)
+        return min(by_angle, key=lambda t: min(abs(t[0] - a), 2 * math.pi - abs(t[0] - a)))[1]
+    for p in me.polygons:
+        if abs(p.normal.z) > 0.9:
+            for li in p.loop_indices:
+                uvl[li].uv = (0.0, 0.0)
+            continue
+        c = mw @ p.center
+        s0 = along(c)
+        for li in p.loop_indices:
+            w = ws[me.loops[li].vertex_index]
+            u = along(w)
+            # A face that straddles the seam keeps its corners on one side.
+            if u - s0 > girth / 2:
+                u -= girth
+            elif s0 - u > girth / 2:
+                u += girth
+            uvl[li].uv = (u, w.z - zmin)
+    return True
+
+
+unrolled = sum(1 for o in shell if o.name.startswith("pilaster_") and unroll_shaft(o))
+print("UV|shafts unrolled=%d" % unrolled)
+
+bpy.ops.object.mode_set(mode='EDIT')
+bpy.ops.mesh.select_all(action='SELECT')
+bpy.ops.uv.select_all(action='SELECT')
+# One texel density for the whole room, the unrolled shafts included (they are
+# in metres; smart_project's islands are in its own units).
+bpy.ops.uv.average_islands_scale()
+
 # smart_project's own packer leaves a lot of the square empty on a set like
 # this - 147 objects of cornice and moulding produce mostly thin slivers.
 # Repacking with the concave shape method nests them properly and buys back a

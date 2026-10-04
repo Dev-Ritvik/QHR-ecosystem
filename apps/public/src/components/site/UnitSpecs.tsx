@@ -43,9 +43,9 @@ export function UnitSpecs({ unit }: { unit: UnitPub }) {
 function SpecItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col justify-center px-5 py-4">
-      <span className="t-eyebrow mb-1.5 text-[#F2EDE4]/50">{label}</span>
+      <span className="t-eyebrow mb-1.5 text-[#F2EDE4]/[0.62]">{label}</span>
       <span
-        className="text-[15px] text-[#F2EDE4]"
+        className="text-step-0 text-[#F2EDE4]"
         style={{ fontVariantNumeric: 'tabular-nums' }}
       >
         {value}

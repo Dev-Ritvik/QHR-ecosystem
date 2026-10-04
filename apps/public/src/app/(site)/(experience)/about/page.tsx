@@ -58,20 +58,20 @@ export default function AboutPage() {
         <dl className="grid grid-cols-2 gap-x-6 gap-y-8 border-y border-white/10 py-8 sm:grid-cols-4">
           {FIGURES.map((f) => (
             <div key={f.label}>
-              <dt className="font-serif text-3xl text-[#F2EDE4]">
+              <dt className="font-serif text-step-3 text-[#F2EDE4]">
                 {f.value}
                 {f.unit ? (
-                  <span className="ml-1.5 text-sm tracking-wide text-[#F2EDE4]/50">{f.unit}</span>
+                  <span className="ml-1.5 text-step--1 tracking-wide text-[#F2EDE4]/[0.68]">{f.unit}</span>
                 ) : null}
               </dt>
-              <dd className="mt-1 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
+              <dd className="mt-1 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
                 {f.label}
               </dd>
             </div>
           ))}
         </dl>
 
-        <p className="mt-10 text-[15px] leading-relaxed text-[#F2EDE4]/75">
+        <p className="mt-10 text-step-0 text-[#F2EDE4]/75">
           The business has always been built around one idea: that a planned,
           gated address should not be a luxury reserved for the state capital.
           Most of what the company has sold is plotted land, bought by families
@@ -80,20 +80,20 @@ export default function AboutPage() {
         </p>
 
         <figure className="mt-12 border-l-2 border-amber-200/40 pl-6">
-          <blockquote lang="te" className="font-serif text-xl leading-relaxed text-[#F2EDE4]">
+          <blockquote lang="te" className="font-serif text-step-1 text-[#F2EDE4]">
             భూమిలో పెట్టుబడి పెట్టండి, అది ఎప్పుడూ నిరాశపరచదు.
           </blockquote>
-          <p className="mt-3 text-[15px] leading-relaxed text-[#F2EDE4]/60">
+          <p className="mt-3 text-step-0 text-[#F2EDE4]/60">
             Invest in land — it will never disappoint you.
           </p>
-          <figcaption className="mt-4 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
+          <figcaption className="mt-4 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
             Managing Director
           </figcaption>
         </figure>
 
         <section className="mt-14">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">Vision</h2>
-          <p className="mt-3 text-[15px] leading-relaxed text-[#F2EDE4]/75">
+          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">Vision</h2>
+          <p className="mt-3 text-step-0 text-[#F2EDE4]/75">
             To be acknowledged as India&rsquo;s leading and most trusted real estate
             enterprise by nurturing a transparent, trustworthy and professional
             work culture that endears us to discerning customers, and by
@@ -102,8 +102,8 @@ export default function AboutPage() {
         </section>
 
         <section className="mt-10">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">Mission</h2>
-          <p className="mt-3 text-[15px] leading-relaxed text-[#F2EDE4]/75">
+          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">Mission</h2>
+          <p className="mt-3 text-step-0 text-[#F2EDE4]/75">
             To be the provider of choice for global-standard residential
             properties by delivering projects enriched with innovative design,
             exceptional location, harmonious environs, superior quality,
@@ -112,13 +112,13 @@ export default function AboutPage() {
         </section>
 
         <section className="mt-10">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">Values</h2>
+          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">Values</h2>
           <ul className="mt-4 flex flex-wrap gap-x-3 gap-y-2">
             {['Quality', 'On-time possession', 'Integrity', 'Reliability', 'Transparency'].map(
               (v) => (
                 <li
                   key={v}
-                  className="rounded border border-white/15 px-3 py-1.5 text-sm text-[#F2EDE4]/80"
+                  className="rounded border border-white/15 px-3 py-1.5 text-step--1 text-[#F2EDE4]/80"
                 >
                   {v}
                 </li>
@@ -127,7 +127,7 @@ export default function AboutPage() {
           </ul>
         </section>
 
-        <p className="mt-14 border-t border-white/10 pt-6 text-sm leading-relaxed text-[#F2EDE4]/55">
+        <p className="mt-14 border-t border-white/10 pt-6 text-step--1 text-[#F2EDE4]/55">
           Three layouts are open right now, in Vizianagaram and Srikakulam
           districts. You can see{' '}
           <Link className="underline underline-offset-4 hover:text-[#F2EDE4]" href="/properties">

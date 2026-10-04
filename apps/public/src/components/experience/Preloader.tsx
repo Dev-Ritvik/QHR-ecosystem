@@ -2,8 +2,23 @@
 
 // apps/public/src/components/experience/Preloader.tsx
 //
-// A typography-driven percentage counter that holds the page until the scene
-// has actually arrived.
+// A quiet cover that holds the page until the scene has actually arrived.
+//
+// THE ART-DIRECTION AUDIT (2026-09-30) saw it as "a clunky black '100%'
+// loading screen" after a jump to a flat page — it was: a counter in 8rem
+// figures, shown again on every return to the film. It is now the house's name
+// in micro capitals over a hairline that fills, and it dissolves slowly. And it
+// is not shown at all on a return to the film within the same document, when
+// the scene is already in memory (see `sceneInMemory`).
+//
+// THE SECOND AUDIT (2026-09-30) caught what the first fix did on a RELOAD. The
+// "warm" test read sessionStorage, which survives a reload — so a reloaded page
+// started with the cover clear, showed half a second of the empty canvas (a
+// blurred sky, white over the copy), then faded a translucent navy veil in over
+// it and out again: exactly the "massive, heavy black gradients" the audit saw
+// at 00:08. A reload has nothing in memory. The flag is now a module variable,
+// which a reload resets and a client-side return keeps, and a cold load is
+// covered from its very first paint.
 //
 // The reference build does this and we did not, which is why every review so
 // far has been written against a half-hydrated frame: the exterior is 2.3MB and
@@ -29,6 +44,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useProgress } from '@react-three/drei';
+import { coverState } from './coverState';
 
 /**
  * drei's progress store, read at most once per animation frame.
@@ -107,10 +123,22 @@ function useCoalescedProgress() {
   return snapshot;
 }
 
-export function Preloader() {
+
+export function Preloader({ onMount }: { onMount?: () => void }) {
   const { progress, active } = useCoalescedProgress();
   const [done, setDone] = useState(false);
   const [gone, setGone] = useState(false);
+  // A return within the document: the scene is already built, so there is
+  // nothing to cover and the cover is never drawn. Read once, at mount; on the
+  // server and on a cold load it is false, so the markup the server sends and
+  // the first client render agree, and the cover is up from the first paint.
+  const [warm] = useState(() => coverState.sceneInMemory);
+  // The server-rendered cover (ExperienceCanvasHost) held the frame until this
+  // chunk arrived; this one is identical and above it, so it can go.
+  useEffect(() => {
+    onMount?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Never runs backwards. The manager's total climbs as new dependencies are
   // discovered mid-load, so a raw percentage visibly drops — which looks like
   // a fault to the one person we most need to trust it.
@@ -169,69 +197,49 @@ export function Preloader() {
 
   useEffect(() => {
     if (!done) return;
-    const t = setTimeout(() => setGone(true), 900);
+    coverState.sceneInMemory = true;
+    const t = setTimeout(() => setGone(true), 1400);
     return () => clearTimeout(t);
   }, [done]);
 
   // Release the scroll lock as soon as the fade begins, not when it ends.
   useEffect(() => {
-    document.documentElement.style.overflow = done ? '' : 'hidden';
+    // Never on a warm return: there is no cover to wait for.
+    document.documentElement.style.overflow = done || warm ? '' : 'hidden';
     return () => {
       document.documentElement.style.overflow = '';
     };
-  }, [done]);
+  }, [done, warm]);
 
-  if (gone) return null;
-
-  const shown = Math.round(peak);
+  if (gone || warm) return null;
 
   return (
     <div
       // aria-hidden with a live region below: a screen reader should hear
-      // "loading" once, not a counter ticking a hundred times.
-      className="fixed inset-0 z-[60] flex items-end justify-between bg-[#0A1120] px-6 pb-10 transition-opacity duration-[900ms] ease-out md:px-12 md:pb-14"
+      // "loading" once, not a progress bar.
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-[#0A1120] transition-opacity duration-[1400ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
       style={{ opacity: done ? 0 : 1 }}
     >
       <span className="sr-only" role="status">
         Loading the scene
       </span>
 
-      <span
-        aria-hidden
-        className="t-eyebrow text-[#F2EDE4]/60"
-        style={{ letterSpacing: '0.18em' }}
-      >
+      <span aria-hidden className="t-micro text-[#F2EDE4]/[0.62]">
         Quality Homes Reality
       </span>
 
-      {/* Tabular figures so the counter does not reflow as digits change —
-          a number that jitters while it counts undoes the composure. */}
-      <span
-        aria-hidden
-        className="text-[#F2EDE4]"
-        style={{
-          fontVariantNumeric: 'tabular-nums',
-          fontSize: 'clamp(3rem, 11vw, 8rem)',
-          lineHeight: 0.82,
-          letterSpacing: '-0.03em',
-        }}
-      >
-        {shown}
-        <span className="text-[#E8B98A]" style={{ fontSize: '0.3em', verticalAlign: 'super' }}>
-          %
-        </span>
+      {/* A hairline that fills with the load — the only motion on the cover.
+          No figures: a number counting to a hundred is a progress report, and
+          this is a curtain. */}
+      <span aria-hidden className="relative mt-6 block h-px w-28 bg-[#F2EDE4]/[0.12]">
+        <span
+          className="absolute inset-y-0 left-0 block w-full origin-left bg-[#E8B98A]/70"
+          style={{
+            transform: `scaleX(${peak / 100})`,
+            transition: 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
+          }}
+        />
       </span>
-
-      {/* A hairline that tracks the same number. The counter is the content;
-          this is only there so the eye has something continuous to follow. */}
-      <div
-        aria-hidden
-        className="absolute inset-x-0 bottom-0 h-px origin-left bg-[#E8B98A]/50"
-        style={{
-          transform: `scaleX(${peak / 100})`,
-          transition: 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1)',
-        }}
-      />
     </div>
   );
 }

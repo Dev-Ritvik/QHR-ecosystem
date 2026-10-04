@@ -29,7 +29,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ProjectStation, tickStations, type StationProject } from './ProjectStation';
-import { journeyState } from './journey';
+import { establishCopyGone, journeyState, tableCopyHold } from './journey';
 import {
   clicksSuppressed,
   lockCanvasScroll,
@@ -47,9 +47,24 @@ import {
 } from './interiorPath';
 import { PortraitNameplate } from './PortraitNameplate';
 import { PortraitBeam } from './PortraitBeam';
+import { WindowLight } from './WindowLight';
 import { hallEnv } from './HallModel';
+import { registerHallRoot } from './doorPortal';
 import { isShown, warmHallPrograms } from './hallProbe';
 import { lensSubject } from './LensFocus';
+import { HALL_READING, hallLight, houseKeys, houseLevelAt } from './hallLight';
+import { MAP_TABLE, mapStage } from './mapTablePlan';
+import {
+  HEADER_BAND,
+  codaFilter,
+  codaFilterClear,
+  headerBandReach,
+  lensFilter,
+  phoneRoomFilter,
+  stationFilter,
+  tableBandFilter,
+} from './lensFilter';
+import { copyPresence, copyZone, filmIsWide } from './copyZone';
 
 /**
  * The portrait, measured from the GLB.
@@ -228,6 +243,9 @@ interface HoloTarget {
   station: string | null;
 }
 
+const HALL_DEV =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
+
 export function InteriorStage({
   root,
   projects,
@@ -236,6 +254,7 @@ export function InteriorStage({
   legProgress,
   onOpen,
   mode = 'journey',
+  stillLevel = HALL_READING,
 }: {
   root: THREE.Object3D | null;
   projects: StationProject[];
@@ -244,6 +263,9 @@ export function InteriorStage({
   /** 'journey' on the home page's scroll film; 'still' on /hall, where there is
    *  no choreography for a station to take emphasis from. */
   mode?: 'journey' | 'still';
+  /** The house lights on a still (hallLight.hallReadingLevel): the reading
+   *  level, and the room's own on the page that is the room. */
+  stillLevel?: number;
 }) {
   const beats: InteriorBeat[] = useMemo(
     () => buildInteriorBeats(projects.length),
@@ -274,11 +296,11 @@ export function InteriorStage({
   useEffect(() => {
     if (!root || !stage.current) return;
     void warmHallPrograms(gl, camera, stage.current, hallEnv.stand);
+    // And the stage is part of the hall the doorway shows (HallPortal).
+    return registerHallRoot(stage.current);
   }, [root, gl, camera]);
 
   const portraitEmphasis = useRef(0);
-  const portraitHover = useRef(0);
-  const portraitFrame = useRef<THREE.Mesh | null>(null);
 
   // ── Collect the hologram materials once per load ─────────────────────────
   const holos = useRef<HoloTarget[]>([]);
@@ -415,19 +437,106 @@ export function InteriorStage({
     [],
   );
 
+  // THE HOUSE LIGHTS (hallLight.ts), keyed to the path and to how long each
+  // chapter's copy is up: dim in the ivory room while its copy stands on the
+  // plaster, up through the turn once that copy has gone, and up at each
+  // table for as long as its copy stands. Between keys, eased.
+  const keys = useMemo(
+    () => houseKeys(beats, tableCopyHold(projects.length), establishCopyGone(projects.length)),
+    [beats, projects.length],
+  );
+
+  useEffect(
+    () => () => {
+      hallLight.level = 1;
+      mapStage.emphasis = 0;
+      lensFilter.stops = 0;
+      lensFilter.top = 0;
+      codaFilterClear();
+      headerBandReach();
+    },
+    [],
+  );
+
+  const stationWeights = useMemo<Record<string, number>>(() => ({}), []);
+  /** How much of the establishing copy's filter is on, eased (0..1). */
+  const establishNd = useRef(0);
+
   // ── THE ONE LOOP ─────────────────────────────────────────────────────────
   useFrame((_, delta) => {
     const s = legProgress.current;
+    {
+      // A still is a reading page: the house lights at a reading light
+      // (readingLight.ts). The film sets its own level by where the camera is.
+      let want = mode === 'still' ? stillLevel : houseLevelAt(keys, s);
+      // The coda (WorldCanvas): past the film's end the house lights go down
+      // round the map table, whose own light stays.
+      if (mode !== 'still') want *= 1 - 0.9 * journeyState.coda;
+      // Look-dev only (?debug=1): window.__estateHall.level holds the house
+      // lights at a level, so a beat's level can be judged on a running build
+      // before it is written into hallLight.ts.
+      if (HALL_DEV) {
+        const dev = (window as unknown as { __estateHall?: { level?: number } }).__estateHall;
+        if (dev && typeof dev.level === 'number') want = dev.level;
+      }
+      hallLight.level += (want - hallLight.level) * Math.min(1, delta * 3);
+    }
     if (stage.current) stage.current.visible = isShown(root);
 
     for (const a of STATION_ANCHORS) {
       emphasis.current[a.id].current =
         mode === 'still' ? STILL_EMPHASIS : stationEmphasis(beats, s, a.id);
     }
+    // The lens's edge at the tables whose copy stands on ivory (lensFilter).
+    // The header's band across the top of the lens: on the film only (a
+    // still's page has a bar behind its header).
+    lensFilter.top = mode === 'still' ? 0 : HEADER_BAND.hall;
+    if (mode === 'still') {
+      lensFilter.stops = 0;
+      codaFilterClear();
+      headerBandReach();
+    } else {
+      // The lens's edge, for as long as the copy it is for is up: the weights
+      // are the chapters' own opacities (copyZone), not the camera's beat —
+      // the copy outlives the beat.
+      for (const a of STATION_ANCHORS) stationWeights[a.id] = 0;
+      stationWeights.portrait = 0;
+      stationWeights.establish = 0;
+      for (const p of copyZone.panes) {
+        const m = /^station-(\d+)$/.exec(p.id);
+        if (m) stationWeights[`S${m[1]}`] = copyPresence(p.weight);
+        else if (p.id === 'portrait') stationWeights.portrait = copyPresence(p.weight);
+        else if (p.id === 'establish') stationWeights.establish = copyPresence(p.weight);
+      }
+      // The establishing copy's half stop COMES ON, it does not appear: the
+      // door lands the page where that copy is already a quarter up, and its
+      // filter stood at full on the first frame inside — MEASURED, the lower
+      // left of the picture forty per cent darker from one frame to the next.
+      // A third of a second, either way.
+      establishNd.current += (stationWeights.establish - establishNd.current) * Math.min(1, delta * 6);
+      stationWeights.establish = establishNd.current;
+      // The page's own question (copyZone.filmIsWide): a column down the left
+      // of a wide frame, or across the top or foot of any other.
+      const wide = filmIsWide(window.innerWidth, window.innerHeight);
+      stationFilter(stationWeights, wide, window.innerWidth / Math.max(1, window.innerHeight));
+      if (wide) headerBandReach();
+      else {
+        // The grad that rides with the reframed chapters' copy, and the
+        // header's band down over the tables' (lensFilter.ts; phoneFraming.ts).
+        phoneRoomFilter(copyZone.panes, delta);
+        tableBandFilter(copyZone.panes, delta);
+      }
+      // And the film's last light, for the colophon that comes up over it:
+      // the lens closes down while any of its lines stands on the map table.
+      codaFilter(copyZone.lines, mapStage.screen, delta);
+    }
 
     // The portrait's own beat, found by id: it is no longer the last beat of
     // the leg (see beatEmphasis).
     portraitEmphasis.current = mode === 'still' ? 0 : beatEmphasis(beats, s, 'portrait');
+    // The map table's (MapTable.tsx): its pins are targets only while the film
+    // is on it. /hall has no path, so there it is always on.
+    mapStage.emphasis = mode === 'still' ? 1 : beatEmphasis(beats, s, 'map');
 
     // THE LENS SUBJECT (LensFocus): the station the camera is most on, or the
     // portrait once the climb begins. Squared, so the long lens only closes
@@ -445,7 +554,12 @@ export function InteriorStage({
           subject = a;
         }
       }
-      if (portraitEmphasis.current > best) {
+      if (mapStage.emphasis > best && mapStage.emphasis > portraitEmphasis.current) {
+        // The long lens on the table: the relief sharp, the court behind it
+        // soft.
+        lensSubject.point.set(MAP_TABLE.x, MAP_TABLE.topY + 0.03, MAP_TABLE.z);
+        lensSubject.weight = mapStage.emphasis ** 2;
+      } else if (portraitEmphasis.current > best) {
         lensSubject.point.set(...PORTRAIT.centre);
         lensSubject.weight = portraitEmphasis.current ** 2;
       } else if (subject) {
@@ -487,16 +601,12 @@ export function InteriorStage({
       h.mat.emissiveIntensity = h.base * (0.6 + 0.6 * e);
     }
 
-    // Portrait: a light response rather than a scale. The frame's emissive lifts
-    // as the camera arrives, and again on hover — the picture catching more of
-    // its own spot, which is what a portrait under a gallery light does when you
-    // step toward it.
-    const fr = portraitFrame.current;
-    if (fr) {
-      const mat = fr.material as THREE.MeshBasicMaterial;
-      const want = portraitEmphasis.current * (0.1 + 0.5 * portraitHover.current);
-      mat.opacity += (want - mat.opacity) * Math.min(1, delta * 6);
-    }
+    // (The portrait has no light response. It had one: a warm additive plane
+    // over the canvas that lifted as the camera arrived and again under the
+    // pointer, and on hover it bleached the print to a pale ghost of itself.
+    // The client had it taken off, 2026-10-01: "remove the hover effect on this
+    // image". The portrait is still the way to the About page, and the pointer
+    // still says so.)
 
     tickStations(delta);
   });
@@ -505,13 +615,11 @@ export function InteriorStage({
   const portraitEnter = useCallback((e: ThreeEvent<PointerEvent>) => {
     if (portraitEmphasis.current < 0.15) return;
     e.stopPropagation();
-    portraitHover.current = 1;
     document.body.style.cursor = 'pointer';
   }, []);
 
   const portraitLeave = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
-    portraitHover.current = 0;
     document.body.style.cursor = '';
   }, []);
 
@@ -552,7 +660,7 @@ export function InteriorStage({
         />
       ))}
 
-      {/* PORTRAIT — hit volume and light response.
+      {/* PORTRAIT — its hit volume.
           The hit box stands 12cm proud of the wall so a click near the frame
           edge still lands; the canvas itself is only 3cm deep. */}
       <mesh
@@ -572,23 +680,8 @@ export function InteriorStage({
       <PortraitNameplate />
       {/* The picture light's beam, made visible (PortraitBeam.tsx). */}
       <PortraitBeam />
-
-      {/* The response itself: a soft warm plane just in front of the canvas,
-          additively blended. Not a scale, not an outline — the brief is
-          explicit that hover should read as light and focus rather than as a
-          CSS transform, and additive light over a painting is what a gallery
-          does. depthWrite off so it never occludes the frame it sits on. */}
-      <mesh ref={portraitFrame} position={[0, 7.035, -7.5]} renderOrder={2}>
-        <planeGeometry args={[3.29, 4.4]} />
-        <meshBasicMaterial
-          color="#F2D9A8"
-          transparent
-          opacity={0}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          toneMapped={false}
-        />
-      </mesh>
+      {/* The clerestory's light in the air (WindowLight.tsx). */}
+      <WindowLight />
     </group>
   );
 }

@@ -91,7 +91,7 @@ UVN = "UVLightmap"
 # shelter of the portico - and they are a few thousand faces between them.
 ARCH = [
     "mansion_walls", "mansion_bands", "mansion_quoins", "mansion_pediments",
-    "mansion_roof", "portico_steps", "podium_walls", "cupola_walls", "spire_body",
+    "mansion_roof", "portico_steps", "podium_walls",
     "garden_steps", "fountain_stone", "canal_stone", "pool_coping", "pool_terrace",
 ]
 GROUND = [
@@ -178,7 +178,7 @@ def parked_mask(o):
     everybody does: undersides resting on the ground, the top of the podium
     box (the terrace plate lies on it), the inside of the house's walls (the
     windows are backed, so the rooms are never seen), the underside of the
-    roof, and the cupola box's buried top and bottom."""
+    roof."""
     nor, cen = world_arrays(o)
     m = (nor[:, 2] < -0.9) & (cen[:, 2] < 0.06)
     if o.name == "podium_walls":
@@ -189,8 +189,6 @@ def parked_mask(o):
         m |= inward & inside & (np.abs(nor[:, 2]) < 0.3)
     elif o.name == "mansion_roof":
         m |= nor[:, 2] < -0.5
-    elif o.name == "cupola_walls":
-        m |= np.abs(nor[:, 2]) > 0.9
     return m
 
 

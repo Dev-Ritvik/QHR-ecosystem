@@ -49,7 +49,12 @@ const FRAG = /* glsl */ `
   void main() {
     // v: 1 at the lamp, 0 at the canvas's foot. u: across the fan.
     float fromLamp = 1.0 - vUv.y;
-    float falloff = exp(-fromLamp * 2.4);
+    // Spent before it reaches the sitter. At a fall of 2.4 the sheet was still
+    // at six-tenths over the hair, a quarter of the way down the canvas, and
+    // from the door that read as the light covering it (the client,
+    // 2026-10-01). At 9 it is a tenth there: brightest in the hand's breadth
+    // of air under the lamp, gone by the brow.
+    float falloff = exp(-fromLamp * 9.0);
     float edges = smoothstep(0.0, 0.22, vUv.x) * smoothstep(0.0, 0.22, 1.0 - vUv.x);
     // Air, not glass: a slow drift of density through the sheet...
     float air = 0.75 + 0.25 * n2(vec2(vUv.x * 6.0, vUv.y * 3.0 - uTime * 0.05));
@@ -81,7 +86,8 @@ export function PortraitBeam() {
       new THREE.ShaderMaterial({
         uniforms: {
           uTime: { value: 0 },
-          uPower: { value: 0.055 },
+          // 0.055 -> 0.03, with the lamp turned down (HallModel.PICTURE_LAMP).
+          uPower: { value: 0.03 },
           uWarm: { value: new THREE.Color('#FFD7A0') },
         },
         vertexShader: VERT,

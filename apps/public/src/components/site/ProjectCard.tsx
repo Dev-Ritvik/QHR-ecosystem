@@ -74,7 +74,7 @@ export function ProjectCard({ project }: { project: Project }) {
             }}
           >
             <div className="qhr-sheen absolute inset-0" />
-            <span className="absolute inset-x-0 bottom-5 text-center text-[10px] uppercase tracking-[0.22em] text-[#F2EDE4]/50">
+            <span className="absolute inset-x-0 bottom-5 text-center text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/[0.62]">
               Plan image pending
             </span>
           </div>
@@ -85,18 +85,18 @@ export function ProjectCard({ project }: { project: Project }) {
             called the old white pills Bootstrap, and it was right. */}
         <div className="absolute right-4 top-4">
           {isSoldOut ? (
-            <span className="rounded-[2px] border border-white/15 bg-[#060A14]/80 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[#F2EDE4]/70 backdrop-blur-sm">
+            <span className="rounded-[2px] border border-white/15 bg-[#060A14]/80 px-2.5 py-1.5 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/70 backdrop-blur-sm">
               Fully sold
             </span>
           ) : (
-            <span className="rounded-[2px] border border-[#C08A5D]/40 bg-[#060A14]/75 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.18em] text-[#E8B98A] backdrop-blur-sm">
+            <span className="rounded-[2px] border border-[#C08A5D]/40 bg-[#060A14]/75 px-2.5 py-1.5 text-step--2 uppercase tracking-[0.3em] text-[#E8B98A] backdrop-blur-sm">
               {project.availableUnits} available
             </span>
           )}
         </div>
 
         <div className="absolute bottom-4 left-4">
-          <span className="rounded-[2px] bg-[#060A14]/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-[#F2EDE4]/60 backdrop-blur-sm">
+          <span className="rounded-[2px] bg-[#060A14]/70 px-2.5 py-1 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60 backdrop-blur-sm">
             {assetClassMap[project.assetClass]}
           </span>
         </div>

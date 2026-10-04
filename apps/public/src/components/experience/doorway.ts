@@ -2,35 +2,48 @@
 //
 // THE DOORWAY — how the film goes through the front door.
 //
-// WHAT THE CLIENT REVIEW REJECTED. The exterior used to end on the
+// WHAT THE FIRST CLIENT REVIEW REJECTED. The exterior used to end on the
 // constellation, forty-eight metres behind the house and eighteen up, and a
-// black veil closed over that frame while the models swapped. The review's
-// words: the transition "opens here in the site, this is not acceptable — it
-// must open from the actual door", with "a proper animation like acceleration
-// and calculated deceleration with white screen", so that the visitor feels
-// "he is wearing a VR headset and he is entering a new world".
+// black veil closed over that frame while the models swapped. The review: the
+// transition "must open from the actual door", with "acceleration and
+// calculated deceleration", so the visitor feels "he is entering a new world".
+// So the exterior film ends square on the front door (cameraPath.ts, the
+// approach), and this module takes the camera through it.
 //
-// So the exterior film now ends square on the front door (cameraPath.ts, the
-// approach), and this module takes the camera through it:
+// WHAT THE FOURTH ART-DIRECTION CRITIQUE (2026-09-30) REJECTED, AND WHAT THE
+// PASSAGE IS NOW. The doorway used to pour light: a panel of unlit white behind
+// the leaves, then a white DOM layer over the whole frame at the swap. The
+// critique: "a harsh, blinding white flash ... like a stock video transition
+// masking a loading state", and its premium version, word for word: "The camera
+// pushes into the actual dark threshold of the door, using depth-of-field and
+// exposure adjustments (like a real camera iris adjusting to indoors) to reveal
+// the interior smoothly." And its principle: if a cinematographer could not do
+// it practically, do not force it digitally. A white-out cannot be shot; a dark
+// doorway can. So:
 //
-//   1. the two door leaves swing inward and light pours out of the opening;
+//   1. the two door leaves swing inward onto the house's unlit vestibule — dark,
+//      with only a far glimmer in it (DoorwayRig);
 //   2. the camera ACCELERATES down its own view axis, over the fountain and
-//      through the doorway, the lens widening as it reaches the door;
-//   3. the light fills the frame — the white is a DOM layer over everything,
-//      so it is exactly white, not white-through-a-tone-curve — and under it
-//      the models swap and the page lands on the first chapter inside;
-//   4. the camera is already moving when the white begins to clear: it comes
-//      through the hall's own doorway and DECELERATES onto the threshold frame,
-//      the lens narrowing and the exposure settling as the eye adjusts.
+//      into the doorway, the lens holding focus on the door frame so the dark
+//      beyond it is soft, and widening a little as it reaches the door;
+//   3. the vestibule's dark fills the frame — the camera is inside the
+//      threshold — and in that dark the models swap. A near-black DOM layer
+//      covers exactly the frames the render is already black on, so the swap
+//      is never a visible frame even if the hall's first draw stalls;
+//   4. inside, the camera is still moving and the exposure is where the night
+//      outside left it — five stops too dark for the room. It DECELERATES onto
+//      the threshold frame while the iris opens: the windows and the chandelier
+//      come up first, then the walls, as an eye adjusts on walking indoors, and
+//      the focus racks from the door at its back out to the far wall.
 //
-// Scrolling back up plays the same passage in reverse, shorter: backing out
-// through the hall doors into the light, and out of the front doors onto the
-// forecourt as they close.
+// Scrolling back up plays the same passage the other way, shorter: the camera
+// backs toward the doors as the room goes dark round it, and outside the
+// exposure opens onto the night as the leaves close in front of it.
 //
 // WHY IT IS TIMED AND NOT SCRUBBED. Everything else in the film is bound to the
 // scroll position, and this is the one move that must not be. An acceleration
 // is a shape in TIME; tied to a wheel it becomes whatever the visitor's hand
-// did, and a visitor who stops halfway is left standing in a white screen. So a
+// did, and a visitor who stops halfway is left standing in the dark. So a
 // crossing made by hand starts a fixed, authored move, the page holds still for
 // it, and it hands back to the scroll-driven camera at exactly the pose the
 // scroll would have produced.
@@ -41,20 +54,48 @@
 // of two models), under a brief dip from black. Reduced motion keeps the
 // scrubbed veil it always had.
 //
+// THE REFINEMENT BRIEF (2026-10-03), AND THE PASSAGE INWARD AS IT IS NOW. Two
+// audits, one sentence: "the current black-void transition should be replaced
+// with a continuous physical/cinematic entry through the architecture"; "avoid
+// anything that makes the user think a new 3D scene is loading". The dark
+// threshold was a cut with a reason, and it was still a cut. The hall has
+// always stood where a hall would: its front wall half a metre behind the
+// exterior's door leaves, on the same axis, its floor 55 cm under the door's
+// sill (the two models were laid out to one origin). So going in is now ONE
+// MOVE THROUGH ('through', below):
+//
+//   1. the leaves open, and what stands behind them is the hall itself, lit —
+//      drawn through the doorway from where it is (HallPortal: the room is
+//      rendered from the camera's own eye into a buffer, and the opening shows
+//      that buffer), not a card of dark;
+//   2. the camera makes one eased move down its axis, over the fountain,
+//      through the opening and on to the threshold frame: it is slowing as it
+//      crosses the sill, at a walking pace, and comes to rest a second later.
+//      No rush, no widening lens beyond what the room wants, no dark;
+//   3. once the opening fills the frame the sets change behind it — the frame
+//      before and the frame after are the same picture — and the print, which
+//      has been easing from the night's grade to the room's as the camera
+//      closed on the door, is the room's by then.
+//
+// The dark threshold remains as the fallback ('threshold'): a phone on the low
+// tier, a hall that has not finished loading when the visitor reaches the door,
+// and the way OUT, which is a return and keeps its shorter ceremony.
+//
 // Module-level state, for the reason journeyState and diveState are: this
 // changes every frame during the move, and it is read inside useFrame by the
-// rig, the door leaves, the district field and the lighting.
+// rig, the door leaves, the lens and the print.
 
 import { CROSSOVER, DOOR_IN, DOOR_OUT } from './journey';
 
 export type DoorwayDirection = 'enter' | 'exit';
 type Vec3 = [number, number, number];
 
-/** Length of the passage inward. Long enough to be a passage, short enough
- *  that a visitor who has decided to go in is not made to wait. */
-export const ENTER_MS = 2800;
+/** Length of the passage inward. Long enough to be a passage, and for an eye
+ *  to adjust; short enough that a visitor who has decided to go in is not made
+ *  to wait. */
+export const ENTER_MS = 3000;
 /** Backing out is a return, not an arrival, and gets less ceremony. */
-export const EXIT_MS = 2000;
+export const EXIT_MS = 2200;
 
 /**
  * The passage inward, on a 0..1 clock. Every threshold is a fraction of
@@ -63,12 +104,10 @@ export const EXIT_MS = 2000;
 export const ENTER = {
   /** The leaves part before the camera moves: the door opens for you. */
   doorsTo: 0.3,
-  glowFrom: 0.02,
-  glowTo: 0.28,
   /** The acceleration, from rest to the far side of the door plane. */
   moveFrom: 0.07,
-  moveTo: 0.47,
-  aimTo: 0.35,
+  moveTo: 0.5,
+  aimTo: 0.36,
   /**
    * The lens widens only in the last stretch of the rush.
    *
@@ -80,42 +119,104 @@ export const ENTER = {
    * camera is within eight metres keeps that product falling at every frame
    * (asserted in doorway.test.ts), so the door only ever grows.
    */
-  warpFrom: 0.39,
-  /** Exposure lifts with the light, not before it — lifted early it greyed the
-   *  whole facade while the doors were still opening. */
-  exposureFrom: 0.4,
-  /** Light fills the frame, growing out of the doorway. */
-  whiteFrom: 0.28,
-  whiteTo: 0.47,
-  /** Model swap and scroll landing, under full white. */
-  swap: 0.49,
-  /** The white clears from the centre outward while the camera decelerates. */
-  clearFrom: 0.55,
-  clearTo: 0.9,
-  /** The hall's doorway closes behind the camera once it is through. */
-  hallCloseFrom: 0.7,
-  hallCloseTo: 0.78,
+  warpFrom: 0.415,
+  /** The lens finds the door frame as the camera sets off, and holds it. */
+  focusFrom: 0.1,
+  focusTo: 0.42,
+  /** The vestibule's dark covers the frame, from the doorway outward. */
+  darkFrom: 0.43,
+  darkTo: 0.5,
+  /** Model swap and scroll landing, in the dark. */
+  swap: 0.52,
+  /** The dark layer lifts while the room is still five stops under — so what
+   *  it uncovers is the render's own dark, not the room. */
+  clearFrom: 0.54,
+  clearTo: 0.66,
+  /** The iris opens: the room comes up from the dark. */
+  irisFrom: 0.54,
+  irisTo: 0.95,
+  /** And the focus racks from the door behind the camera to the far wall. */
+  rackFrom: 0.56,
+  rackTo: 0.93,
   /** The page accepts scrolling again. */
   release: 0.9,
 } as const;
 
-/** The passage outward. */
+/** How a passage is made: one move through the open door onto the lit hall,
+ *  or the dark threshold that covers a swap. */
+export type DoorwayStyle = 'through' | 'threshold';
+
+/** Length of the continuous passage inward. Longer than the threshold's: it
+ *  is a walk in, not a rush at a dark doorway, and every frame of it is seen. */
+export const THROUGH_MS = 4600;
+
+/**
+ * The continuous passage inward, on a 0..1 clock.
+ *
+ * ONE EASE OVER THE WHOLE DISTANCE. The camera's travel is a single
+ * ease-in-out from where it stood to the threshold frame inside, and the door
+ * is `doorShare` of the way along it (26.4 m of 27.2: the forecourt, then
+ * eighty centimetres of hall). So the sill is crossed late in the ease-out,
+ * slowing — measured in doorThrough.test.ts: about three metres a second — and
+ * the sets change at that moment, with the opening filling the frame. A SINE,
+ * not the cubic the rush used: over this distance a cubic's middle is seventy
+ * kilometres an hour, and a sine's is half that — a dolly on a long track.
+ */
+export const THROUGH = {
+  /** The leaves part first, onto the lit hall. */
+  doorsTo: 0.24,
+  moveFrom: 0.05,
+  /** The share of the move that lies outside the door plane. */
+  doorShare: 0.9705,
+  aimTo: 0.5,
+  /** The lens opens toward the room's own over the last of the approach, as a
+   *  fraction of the travel OUTSIDE (so the door never shrinks: see ENTER). */
+  lensFrom: 0.72,
+  /** The print eases from the night's grade to the hall's, over the same. */
+  gradeFrom: 0.8,
+  gradeTo: 0.985,
+  /** The lens at the sill, degrees: between the door beat's 30 and the room's. */
+  sillFov: 46,
+  /** How soft the far land goes while the lens holds the door (0..1). */
+  defocus: 0.3,
+  release: 0.9,
+} as const;
+
+/**
+ * THE WAY OUT, BY THE SAME DOOR (the refinement brief, 2026-10-04: "Transitions
+ * should feel continuous. Avoid anything that makes the user think a new 3D
+ * scene is loading" — and the way out still went by the dark). The continuous
+ * passage, run backwards: the camera backs out of the room along the line it
+ * came in by, the sets change as it crosses the sill with the opening still
+ * filling the frame, the hall stays where it is behind the open leaves
+ * (HallPortal), and the leaves close on it as the camera comes to rest on the
+ * forecourt. Every frame of it is a frame of the way in. Shorter than the way
+ * in: a visitor leaving has seen the walk.
+ */
+export const THROUGH_OUT_MS = 3800;
+
+/** The passage outward, by the dark threshold (a low-tier device, an estate
+ *  not yet drawn, `?door=threshold`). */
 export const EXIT = {
   moveTo: 0.45,
   aimTo: 0.3,
   /** Backing out, the widening is what sells the speed; the doorway is behind
    *  the camera, so there is no subject for it to shrink. */
   warpFrom: 0.1,
-  exposureFrom: 0.3,
-  whiteFrom: 0.25,
-  whiteTo: 0.45,
+  /** The room goes dark round the camera as it backs into the threshold. */
+  dimFrom: 0.08,
+  dimTo: 0.42,
+  darkFrom: 0.36,
+  darkTo: 0.44,
   swap: 0.47,
-  clearFrom: 0.53,
-  clearTo: 0.82,
-  doorsCloseFrom: 0.62,
+  clearFrom: 0.49,
+  clearTo: 0.6,
+  irisFrom: 0.49,
+  irisTo: 0.92,
+  rackFrom: 0.5,
+  rackTo: 0.88,
+  doorsCloseFrom: 0.55,
   doorsCloseTo: 1.0,
-  glowFadeFrom: 0.58,
-  glowFadeTo: 0.92,
   release: 0.9,
 } as const;
 
@@ -135,39 +236,50 @@ export const EXIT = {
  *             fountain       y 0..3.38 over z 26.05..33.95
  *   hall      int_doors      x -1.50..1.50  y 0..4.26     z 7.57..7.69
  *             int_wall_front                              z 7.70..8.00
- *
- * V7 moved the front door from z 5.1 to 8.2 with the larger house; the
- * exterior points below moved with it, 0.7 m past the leaves as before.
  */
 export const DOORWAY = {
-  /** Exterior: where the camera is when the frame is fully white — through the
-   *  opening and 0.66 m past the door plane, still 0.8 m short of the light
-   *  panel behind it (the near plane outside is 0.5 m). */
+  /** Exterior: where the camera is when the frame is fully dark — through the
+   *  opening and 0.66 m past the door plane, still 0.8 m short of the
+   *  vestibule panel behind it (the near plane outside is 0.5 m). */
   exteriorPass: [0, 2.2, 7.5] as Vec3,
   /** Straight in through the door, level. */
   exteriorGaze: [0, 2.15, -21] as Vec3,
-  /** Hall: where the camera is at the swap — outside the front wall, square on
-   *  its doorway, which the district field's wall shader holds open while the
-   *  camera comes through (CityField.tsx, doorwayState.channels.hallOpen). */
-  hallStart: [0, 1.95, 10.6] as Vec3,
+  /** Hall: where the camera is at the swap — INSIDE the room, a pace in from
+   *  the doors at its back (int_doors z 7.57), on the axis. The white passage
+   *  started this outside the front wall and needed a hole cut in it to fly
+   *  through; in the dark there is nothing to fly through for, and the camera
+   *  simply is in the room when the eye begins to adjust. */
+  hallStart: [0, 1.72, 7.3] as Vec3,
   hallGaze: [0, 1.9, -24] as Vec3,
-  /** Exit, near side: backing out of the hall through its doorway. */
-  hallPass: [0, 1.95, 10.3] as Vec3,
+  /** Exit, near side: backed up to the same place, in the dark. */
+  hallPass: [0, 1.72, 7.3] as Vec3,
   /** Exit, far side: just outside the front doors, under the portico and short
    *  of its inner columns, at a height whose line back to the door beat passes
    *  under the entablature and over the fountain (doorway.test.ts). */
   exteriorStart: [0, 2.4, 9.6] as Vec3,
   /** The lens at full rush. Wide enough that the door frame streams past the
    *  edges of the image; not so wide that the hall arrives as a fisheye. */
-  warpFov: 76,
+  warpFov: 66,
   /** How far the leaves swing, radians. Short of 90 so they read as opened
    *  doors rather than as panels folded flat against the reveal. */
   leafSwing: 1.45,
-  /** Exposure multiplier at the peak — the eye adjusting to the light. */
-  exposureBoost: 0.9,
-  /** Blur at the peak, CSS pixels, on devices that can afford a filter. */
-  blurPx: 7,
+  /** The exposure the room is first seen at, as a multiplier: 2^-5.3, five
+   *  and a third stops under — what a lens metered for the night forecourt
+   *  makes of a lamplit hall before its iris opens. */
+  exposureFloor: 1 / 40,
+  /** Where the focus rack starts and ends, metres: the door frame at the
+   *  camera's back, then the far wall of the room. */
+  rackNear: 0.8,
+  rackFar: 40,
+  /** The door plane outside (mansion_doors' outer face), which the lens holds
+   *  while the camera rushes it. */
+  doorPlaneZ: 8.25,
 } as const;
+
+/** The layer that covers the swap. The vestibule's own near-black, a breath
+ *  warm, so a frame that shows it and a frame of the render's dark doorway are
+ *  the same frame. */
+export const THRESHOLD_DARK = '#040405';
 
 /** How recently the visitor must have scrolled by hand for a crossing to count
  *  as theirs. Lenis keeps easing for most of a second after the last wheel
@@ -185,7 +297,7 @@ export const DOOR_ZONE = 0.05;
  *  there (journey.ts, DOOR_BAND). */
 export const EDGE = 0.0006;
 
-/** If the hall has not finished loading when the white peaks, the white holds
+/** If the hall has not finished loading when the dark is full, the dark holds
  *  — for at most this long, after which the passage completes regardless. */
 export const MAX_HOLD_MS = 12_000;
 
@@ -193,21 +305,21 @@ export const MAX_HOLD_MS = 12_000;
 export const CUT_MS = 420;
 
 /**
- * Frames the far model must have been ON SCREEN, under full white, before the
- * white may begin to clear.
+ * Frames the far model must have been ON SCREEN, under the dark, before the
+ * dark may begin to lift.
  *
- * MEASURED, on a machine rendering the scene at under two frames a second: the
- * clock ran from the peak straight past the clearing in one frame, and the
- * first clear frame showed the EXTERIOR model around a camera already standing
- * in hall coordinates — the shell of the house from inside, under the hall's
- * copy. The swap is a React commit, and a commit lands a frame or more after
- * the scroll that asks for it; on a phone that frame is also the one that
- * compiles the hall's shaders. So the white holds, with the clock stopped at
- * the peak, until the scene reports the far model and has drawn it twice.
+ * MEASURED (with the white this replaced), on a machine rendering the scene at
+ * under two frames a second: the clock ran from the peak straight past the
+ * clearing in one frame, and the first clear frame showed the EXTERIOR model
+ * around a camera already standing in hall coordinates. The swap is a React
+ * commit, and a commit lands a frame or more after the scroll that asks for
+ * it; on a phone that frame is also the one that compiles the hall's shaders.
+ * So the dark holds, with the clock stopped at the peak, until the scene
+ * reports the far model and has drawn it twice.
  */
 export const FAR_FRAMES = 2;
 
-/** A scene that never reports the swap must not strand a visitor in white. */
+/** A scene that never reports the swap must not strand a visitor in the dark. */
 export const MAX_FAR_WAIT_MS = 1500;
 
 // ── easing ──────────────────────────────────────────────────────────────────
@@ -216,12 +328,28 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const span = (u: number, a: number, b: number) => clamp01((u - a) / (b - a));
 const inQuad = (t: number) => t * t;
 const inCubic = (t: number) => t * t * t;
-const outQuad = (t: number) => 1 - (1 - t) * (1 - t);
 const outCubic = (t: number) => 1 - (1 - t) ** 3;
 const outQuart = (t: number) => 1 - (1 - t) ** 4;
 const inOutSine = (t: number) => (1 - Math.cos(Math.PI * t)) / 2;
 const inOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const smooth = (t: number) => t * t * (3 - 2 * t);
+
+/** Stops under at the floor (negative): the iris works in stops, so the room
+ *  comes up at an even perceptual pace rather than all at the end. */
+const FLOOR_STOPS = Math.log2(DOORWAY.exposureFloor);
+
+/** The clock at which the continuous passage crosses the door plane: where its
+ *  ease reaches THROUGH.doorShare (inOutSine, inverted). */
+export const THROUGH_SWAP =
+  THROUGH.moveFrom + ((1 - THROUGH.moveFrom) * Math.acos(1 - 2 * THROUGH.doorShare)) / Math.PI;
+
+/**
+ * The hall, in the exterior's coordinates: the two models share an origin and
+ * an axis, and the hall's floor lies this far under the exterior's door sill
+ * (exterior mansion_doors y 0.55.., hall int_doors y 0..). A pose in the hall
+ * is the same eye in the exterior's space plus this.
+ */
+export const HALL_IN_EXTERIOR: Vec3 = [0, 0.55, 0];
 
 // ── channels ────────────────────────────────────────────────────────────────
 
@@ -242,21 +370,24 @@ export interface DoorwayChannels {
   settle: number;
   /** 0..1 lens warp toward DOORWAY.warpFov. */
   warp: number;
-  /** 0..1 white coverage, and how it is shaped. 'bloom' grows from the centre
-   *  of the frame outward; 'iris' is clear at the centre and closes in from the
-   *  edges. */
-  white: number;
-  whiteShape: 'bloom' | 'iris';
-  /** 0..1 of DOORWAY.blurPx. */
-  blur: number;
-  /** Exposure multiplier, 1 at rest. */
+  /** 0..1 coverage of the threshold's dark layer (THRESHOLD_DARK). */
+  dark: number;
+  /** Exposure multiplier on the print, 1 at rest (passageLight, FilmGrade). */
   exposure: number;
+  /** 0..1 how far the lens is thrown out of focus beyond `focus`. */
+  defocus: number;
+  /** Where the lens is focused, metres; 0 means "on the door plane". */
+  focus: number;
   /** 0..1 how far the exterior door leaves are open. */
   exteriorDoors: number;
-  /** 0..1 light pouring from the exterior doorway. */
-  exteriorGlow: number;
-  /** 0..1 how far the hall's front wall is held open for the camera. */
-  hallOpen: number;
+  /** 0..1 presence of the dark vestibule behind the leaves. */
+  vestibule: number;
+  /** 0..1 the hall itself behind the leaves, drawn through the doorway
+   *  (HallPortal). The continuous passage only. */
+  portal: number;
+  /** 0..1 how far the print has gone from the night's grade to the hall's
+   *  (passageLight.grade, FilmGrade). The continuous passage only. */
+  grade: number;
 }
 
 export function restingChannels(): DoorwayChannels {
@@ -267,14 +398,97 @@ export function restingChannels(): DoorwayChannels {
     arrive: 0,
     settle: 0,
     warp: 0,
-    white: 0,
-    whiteShape: 'bloom',
-    blur: 0,
+    dark: 0,
     exposure: 1,
+    defocus: 0,
+    focus: 0,
     exteriorDoors: 0,
-    exteriorGlow: 0,
-    hallOpen: 0,
+    vestibule: 0,
+    portal: 0,
+    grade: 0,
   };
+}
+
+/** The far side's shared shape: the dark lifts, the iris opens, the focus
+ *  racks out, whichever way the camera came. */
+function farSide(
+  t: number,
+  T: { clearFrom: number; clearTo: number; irisFrom: number; irisTo: number; rackFrom: number; rackTo: number },
+  out: DoorwayChannels,
+) {
+  out.dark = 1 - outCubic(span(t, T.clearFrom, T.clearTo));
+  out.exposure = 2 ** (FLOOR_STOPS * (1 - inOutSine(span(t, T.irisFrom, T.irisTo))));
+  const r = smooth(span(t, T.rackFrom, T.rackTo));
+  out.focus = DOORWAY.rackNear * (DOORWAY.rackFar / DOORWAY.rackNear) ** r;
+  out.defocus = 1 - r;
+}
+
+/** The continuous passage inward (THROUGH). */
+function throughChannels(t: number, out: DoorwayChannels): DoorwayChannels {
+  const T = THROUGH;
+  const travel = inOutSine(span(t, T.moveFrom, 1));
+  const near = t < THROUGH_SWAP;
+  out.side = near ? 'near' : 'far';
+  out.leave = Math.min(1, travel / T.doorShare);
+  out.arrive = near ? 0 : clamp01((travel - T.doorShare) / (1 - T.doorShare));
+  out.aim = inOutSine(span(t, T.moveFrom, T.aimTo));
+  // The aim rises to the room's own once the camera is in it.
+  out.settle = near ? 0 : inOutSine(span(t, THROUGH_SWAP, 1));
+  // The lens: toward the sill's as the door comes close, then on to the room's.
+  out.warp = near ? smooth(span(out.leave, T.lensFrom, 1)) : 1 - smooth(span(t, THROUGH_SWAP, 1));
+  out.dark = 0;
+  out.exposure = 1;
+  // The lens holds the door, a little soft beyond it, then finds the room.
+  if (near) {
+    out.focus = 0;
+    out.defocus = T.defocus * smooth(span(t, 0.1, 0.45)) * (1 - smooth(span(out.leave, 0.9, 1)));
+  } else {
+    out.focus = DOORWAY.rackFar;
+    out.defocus = 0;
+  }
+  // The leaves stay open: they are still in the picture until the sets change.
+  out.exteriorDoors = inOutCubic(span(t, 0, T.doorsTo));
+  out.vestibule = 0;
+  out.portal = t > 0 ? 1 : 0;
+  out.grade = near ? smooth(span(out.leave, T.gradeFrom, T.gradeTo)) : 1;
+  return out;
+}
+
+/**
+ * The continuous passage outward: THROUGH on a clock run backwards. `near` is
+ * the hall (the camera backs from where it stood to the point inside the
+ * door), `far` the estate (from that same point out to the pose the scroll
+ * gives), and each channel is the way in's at the mirrored instant.
+ */
+function throughOutChannels(t: number, out: DoorwayChannels): DoorwayChannels {
+  const T = THROUGH;
+  const r = 1 - t;
+  const travel = inOutSine(span(r, T.moveFrom, 1));
+  const near = r >= THROUGH_SWAP;
+  // How far out along the forecourt's share of the line the camera has come
+  // (1 at the door, 0 where it will rest).
+  const outside = Math.min(1, travel / T.doorShare);
+  out.side = near ? 'near' : 'far';
+  out.leave = near ? 1 - clamp01((travel - T.doorShare) / (1 - T.doorShare)) : 1;
+  out.aim = near ? 1 - inOutSine(span(r, THROUGH_SWAP, 1)) : 1;
+  out.arrive = near ? 0 : 1 - outside;
+  out.settle = near ? 0 : 1 - inOutSine(span(r, T.moveFrom, T.aimTo));
+  out.warp = near ? 1 - smooth(span(r, THROUGH_SWAP, 1)) : smooth(span(outside, T.lensFrom, 1));
+  out.dark = 0;
+  out.exposure = 1;
+  if (near) {
+    out.focus = DOORWAY.rackFar;
+    out.defocus = 0;
+  } else {
+    out.focus = 0;
+    out.defocus = T.defocus * smooth(span(r, 0.1, 0.45)) * (1 - smooth(span(outside, 0.9, 1)));
+  }
+  // The leaves stand open until the camera is well out, then close on the room.
+  out.exteriorDoors = inOutCubic(span(r, 0, T.doorsTo));
+  out.vestibule = 0;
+  out.portal = r > 0 ? 1 : 0;
+  out.grade = near ? 1 : smooth(span(outside, T.gradeFrom, T.gradeTo));
+  return out;
 }
 
 /** The whole passage as a pure function of the clock. Writes into `out`. */
@@ -282,8 +496,12 @@ export function doorwayChannels(
   dir: DoorwayDirection,
   u: number,
   out: DoorwayChannels = restingChannels(),
+  style: DoorwayStyle = 'threshold',
 ): DoorwayChannels {
   const t = clamp01(u);
+  out.portal = 0;
+  out.grade = 0;
+  if (style === 'through') return dir === 'enter' ? throughChannels(t, out) : throughOutChannels(t, out);
   if (dir === 'enter') {
     const T = ENTER;
     const near = t < T.swap;
@@ -293,23 +511,16 @@ export function doorwayChannels(
     out.arrive = near ? 0 : outQuart(span(t, T.swap, 1));
     out.settle = near ? 0 : inOutSine(span(t, T.clearFrom, 1));
     out.warp = near ? inQuad(span(t, T.warpFrom, T.moveTo)) : 1 - outCubic(span(t, T.swap, 1));
-    if (t < T.clearFrom) {
-      out.whiteShape = 'bloom';
-      out.white = t < T.whiteTo ? inQuad(span(t, T.whiteFrom, T.whiteTo)) : 1;
+    if (near) {
+      out.dark = inQuad(span(t, T.darkFrom, T.darkTo));
+      out.exposure = 1;
+      out.focus = 0;
+      out.defocus = 0.75 * smooth(span(t, T.focusFrom, T.focusTo));
     } else {
-      out.whiteShape = 'iris';
-      out.white = 1 - outCubic(span(t, T.clearFrom, T.clearTo));
+      farSide(t, T, out);
     }
-    out.blur = near
-      ? inQuad(span(t, 0.32, T.whiteTo))
-      : 1 - outQuad(span(t, T.clearFrom, T.clearFrom + 0.2));
-    out.exposure =
-      1 +
-      DOORWAY.exposureBoost *
-        (near ? inQuad(span(t, T.exposureFrom, T.whiteTo)) : 1 - outCubic(span(t, T.clearFrom, 0.95)));
     out.exteriorDoors = near ? inOutCubic(span(t, 0, T.doorsTo)) : 0;
-    out.exteriorGlow = near ? smooth(span(t, T.glowFrom, T.glowTo)) : 0;
-    out.hallOpen = near ? 0 : 1 - smooth(span(t, T.hallCloseFrom, T.hallCloseTo));
+    out.vestibule = near && t > 0 ? 1 : 0;
   } else {
     const T = EXIT;
     const near = t < T.swap;
@@ -319,47 +530,18 @@ export function doorwayChannels(
     out.arrive = near ? 0 : outQuart(span(t, T.swap, 1));
     out.settle = near ? 0 : inOutSine(span(t, T.clearFrom, 1));
     out.warp = near ? inQuad(span(t, T.warpFrom, T.moveTo)) : 1 - outCubic(span(t, T.swap, 1));
-    if (t < T.clearFrom) {
-      // Backing out into the light: it closes in from the edges of the frame,
-      // the way a doorway's light surrounds you as you pass through it.
-      out.whiteShape = 'iris';
-      out.white = t < T.whiteTo ? inQuad(span(t, T.whiteFrom, T.whiteTo)) : 1;
+    if (near) {
+      out.dark = inQuad(span(t, T.darkFrom, T.darkTo));
+      out.exposure = 2 ** (FLOOR_STOPS * inOutSine(span(t, T.dimFrom, T.dimTo)));
+      out.focus = 0;
+      out.defocus = 0;
     } else {
-      // And outside it retreats INTO the doorway you have just left.
-      out.whiteShape = 'bloom';
-      out.white = 1 - outCubic(span(t, T.clearFrom, T.clearTo));
+      farSide(t, T, out);
     }
-    out.blur = near
-      ? inQuad(span(t, 0.3, T.whiteTo))
-      : 1 - outQuad(span(t, T.clearFrom, T.clearFrom + 0.2));
-    out.exposure =
-      1 +
-      DOORWAY.exposureBoost *
-        (near ? inQuad(span(t, T.exposureFrom, T.whiteTo)) : 1 - outCubic(span(t, T.clearFrom, 0.95)));
     out.exteriorDoors = near ? 0 : 1 - inOutCubic(span(t, T.doorsCloseFrom, T.doorsCloseTo));
-    out.exteriorGlow = near ? 0 : 1 - smooth(span(t, T.glowFadeFrom, T.glowFadeTo));
-    out.hallOpen = near ? 1 : 0;
+    out.vestibule = near ? 0 : out.exteriorDoors > 0.001 ? 1 : 0;
   }
   return out;
-}
-
-/**
- * The white layer's background for a coverage and a shape.
- *
- * A radial gradient rather than an opacity, because a flat fade is a screen
- * going white and a gradient is LIGHT: it grows out of the doorway at the
- * centre of the frame, and on arrival it opens from the centre like an eye.
- * `circle` sizes to the farthest corner, so 120% is past every pixel.
- */
-export function whiteGradient(shape: 'bloom' | 'iris', coverage: number): string {
-  const c = clamp01(coverage);
-  const W = '255,248,238';
-  if (shape === 'bloom') {
-    const r = -60 + 180 * c;
-    return `radial-gradient(circle at 50% 50%, rgba(${W},1) ${r.toFixed(1)}%, rgba(${W},0) ${(r + 60).toFixed(1)}%)`;
-  }
-  const h = 120 - 180 * c;
-  return `radial-gradient(circle at 50% 50%, rgba(${W},0) ${h.toFixed(1)}%, rgba(${W},1) ${(h + 60).toFixed(1)}%)`;
 }
 
 // ── the director ────────────────────────────────────────────────────────────
@@ -377,17 +559,22 @@ export interface DoorwayHost {
   glideTo(progress: number, seconds: number, done: () => void): void;
   /** Whether the animated passage may run at all. */
   canAnimate(): boolean;
+  /** Whether this machine can draw the hall through the doorway (HallPortal):
+   *  not the low tier. Absent means no. */
+  canGoThrough?(): boolean;
 }
 
 export interface DoorwayState {
   mode: 'idle' | 'running';
   dir: DoorwayDirection;
+  /** How this passage is being made (decided when it begins). */
+  style: DoorwayStyle;
   /** Clock origin, performance.now(). */
   t0: number;
   u: number;
   swapped: boolean;
   released: boolean;
-  /** When the white began holding for a hall that had not loaded, or -1. */
+  /** When the dark began holding for a hall that had not loaded, or -1. */
   holdingSince: number;
   /** Set by the rig on the first frame of a run. */
   captured: boolean;
@@ -404,6 +591,10 @@ export interface DoorwayState {
   hallReady: boolean;
   /** Which model the scene is actually showing, as React last committed it. */
   sceneLeg: 'exterior' | 'interior';
+  /** The estate has been on screen in this visit: its programs are compiled
+   *  and it can be shown again at once (a visit that opened inside the hall
+   *  leaves it by the dark threshold the first time). */
+  estateSeen: boolean;
   /** Frames drawn with the far model since the swap; -1 when not waiting. */
   farFrames: number;
   /** performance.now() of the swap. */
@@ -419,6 +610,7 @@ export interface DoorwayState {
 export const doorwayState: DoorwayState = {
   mode: 'idle',
   dir: 'enter',
+  style: 'threshold',
   t0: 0,
   u: 0,
   swapped: false,
@@ -433,6 +625,7 @@ export const doorwayState: DoorwayState = {
   cutAt: -Infinity,
   hallReady: false,
   sceneLeg: 'exterior',
+  estateSeen: false,
   farFrames: -1,
   swappedAt: 0,
   lastProgress: -1,
@@ -460,6 +653,11 @@ function begin(dir: DoorwayDirection, now: number, h: DoorwayHost) {
   const st = doorwayState;
   st.mode = 'running';
   st.dir = dir;
+  // Through the open door onto the lit hall, where the hall is there to be
+  // seen and the machine can draw it twice; the dark threshold otherwise. And
+  // out by the same door, where the estate has already been seen.
+  const through = st.hallReady && h.canGoThrough?.() === true && (dir === 'enter' || st.estateSeen);
+  st.style = through ? 'through' : 'threshold';
   st.t0 = now;
   st.u = 0;
   st.swapped = false;
@@ -480,6 +678,7 @@ function finish(h: DoorwayHost | null, now: number) {
   const st = doorwayState;
   if (!st.released) h?.hold(false);
   st.mode = 'idle';
+  st.style = 'threshold';
   st.released = true;
   st.holdingSince = -1;
   st.farFrames = -1;
@@ -512,6 +711,7 @@ export function stepDoorway(now: number): void {
     const s = h.progress();
     const prev = st.lastProgress;
     st.lastProgress = s;
+    if (st.sceneLeg === 'exterior') st.estateSeen = true;
 
     let dir: DoorwayDirection | null = null;
     let requested = false;
@@ -545,6 +745,10 @@ export function stepDoorway(now: number): void {
   }
 
   // ── running ──
+  if (st.style === 'through') {
+    stepThrough(st, h, now);
+    return;
+  }
   const T = st.dir === 'enter' ? ENTER : EXIT;
   const duration = st.dir === 'enter' ? ENTER_MS : EXIT_MS;
   let u = (now - st.t0) / duration;
@@ -553,7 +757,7 @@ export function stepDoorway(now: number): void {
     const ready = st.dir === 'enter' ? st.hallReady : true;
     if (st.holdingSince < 0) st.holdingSince = now;
     if (!ready && now - st.holdingSince < MAX_HOLD_MS) {
-      // Hold the white. The clock is re-based so that when the hall arrives the
+      // Hold the dark. The clock is re-based so that when the hall arrives the
       // passage resumes from the peak instead of jumping to wherever the wall
       // clock has got to.
       st.t0 = now - T.swap * duration + 1;
@@ -591,8 +795,35 @@ export function stepDoorway(now: number): void {
 }
 
 /**
+ * One frame of the continuous passage. Nothing holds and nothing waits: the
+ * page lands inside as the camera crosses the door plane, the opening shows the
+ * hall for as long as the scene still shows the exterior (HallPortal), and the
+ * move ends when its clock does — or, on a machine so slow the sets have not
+ * changed by then, as soon as they have.
+ */
+function stepThrough(st: DoorwayState, h: DoorwayHost, now: number): void {
+  const entering = st.dir === 'enter';
+  const u = (now - st.t0) / (entering ? THROUGH_MS : THROUGH_OUT_MS);
+  // The sill is crossed at the same place on the line either way.
+  if (!st.swapped && u >= (entering ? THROUGH_SWAP : 1 - THROUGH_SWAP)) {
+    h.jumpTo(entering ? DOOR_IN + EDGE : DOOR_OUT - EDGE);
+    st.lastProgress = h.progress();
+    st.swapped = true;
+    st.swappedAt = now;
+  }
+  st.u = clamp01(u);
+  doorwayChannels(st.dir, st.u, st.channels, 'through');
+  if (!st.released && st.u >= THROUGH.release) {
+    h.hold(false);
+    st.released = true;
+  }
+  const far = entering ? 'interior' : 'exterior';
+  if (st.u >= 1 && (st.sceneLeg === far || now - st.swappedAt >= MAX_FAR_WAIT_MS)) finish(h, now);
+}
+
+/**
  * Abandon a passage — the route changed, or the canvas is going away. The page
- * must never be left unscrollable or white behind a navigation.
+ * must never be left unscrollable or dark behind a navigation.
  */
 export function cancelDoorway() {
   const st = doorwayState;

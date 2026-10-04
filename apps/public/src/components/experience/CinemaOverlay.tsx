@@ -15,10 +15,11 @@
 //           the shadows and the highlights, which is where film grain lives. It
 //           also does the one useful technical job a grain pass has: it breaks
 //           up the banding a wide, smooth sky gradient shows on an 8-bit display.
-//   leak    a warm radial on the sun's own bearing (front-left, where the
-//           daylight key is), at 7%. A real lens flares toward its light source
-//           and the absence of any such spill is part of what makes a clean
-//           render read as synthetic.
+//
+// THERE IS NO LEAK. A warm CSS radial stood on the sun's bearing for a while;
+// the second art-direction audit (2026-09-30) asked for everything that reads
+// as a "CSS effect" to go, and over the top of the sky it was also half of why
+// the sky read as muddy. The sun's warmth is in the sky and the grade now.
 //
 // THERE IS NO FRAME. There was, for one release: a hairline inset in the
 // site's gold with corner ticks. The client's art-direction review asked for it
@@ -26,44 +27,22 @@
 // and the review is right about what an inset border does to a view that is
 // meant to open out to a horizon.
 //
-// COSTS NOTHING TO ANIMATE. Three fixed-position composited layers, no paint on
+// COSTS NOTHING TO ANIMATE. One fixed-position composited layer, no paint on
 // scroll, `pointer-events-none` throughout so nothing here can take a click
 // meant for the canvas or the copy. The grain animation is dropped under
 // prefers-reduced-motion, where a flickering field is exactly what the setting
 // is asking not to see.
 
-import type { SceneSet } from './poses';
-import type { Grade } from './WorldCanvas';
-
 /** One 180px tile of fractal noise, inline so it costs no request. */
 const GRAIN_TILE =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.86' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E\")";
 
-export function CinemaOverlay({ set, grade }: { set: SceneSet; grade: Grade }) {
-  const day = set === 'exterior' && grade === 'daylight';
+export function CinemaOverlay() {
   return (
-    <>
-      {/* THE LIGHT LEAK. Only in daylight outside, and only on the sun's side:
-          the key stands at DAY_SUN (front-right), which from the hero is the
-          right of frame — away from the copy column, which it used to wash. */}
-      {day && (
-        <div
-          className="pointer-events-none absolute inset-0 z-[1]"
-          style={{
-            background:
-              'radial-gradient(58% 48% at 88% 16%, rgba(255,203,138,0.14) 0%, rgba(255,186,110,0.06) 38%, rgba(255,186,110,0) 72%)',
-            mixBlendMode: 'screen',
-          }}
-        />
-      )}
-
-      {/* THE GRAIN. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-[1] estate-grain"
-        style={{ backgroundImage: GRAIN_TILE }}
-      />
-
-    </>
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 z-[1] estate-grain"
+      style={{ backgroundImage: GRAIN_TILE }}
+    />
   );
 }

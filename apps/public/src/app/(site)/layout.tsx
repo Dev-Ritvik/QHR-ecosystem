@@ -33,7 +33,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
                 control in the site's own palette rather than a browser default. */}
             <a
               href="#site-content"
-              className="sr-only focus:not-sr-only focus:fixed focus:left-5 focus:top-4 focus:z-50 focus:rounded-[3px] focus:border focus:border-[#C08A5D]/50 focus:bg-[#0A1120] focus:px-4 focus:py-3 focus:text-[11px] focus:uppercase focus:tracking-[0.16em] focus:text-[#E8B98A] focus:outline-none focus:ring-2 focus:ring-amber-200/60"
+              className="sr-only focus:not-sr-only focus:fixed focus:left-5 focus:top-4 focus:z-50 focus:rounded-[3px] focus:border focus:border-[#C08A5D]/50 focus:bg-[#0A1120] focus:px-4 focus:py-3 focus:text-step--2 focus:uppercase focus:tracking-[0.3em] focus:text-[#E8B98A] focus:outline-none focus:ring-2 focus:ring-amber-200/60"
             >
               Skip to content
             </a>

@@ -27,6 +27,11 @@
 // The choice is remembered for this visitor (localStorage, guarded).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+
+/** Where the control is set: a place the film's header keeps for it
+ *  (SiteHeader), beside Enquire and Menu. */
+export const SOUND_SLOT_ID = 'film-sound';
 
 const KEY = 'estate.sound';
 
@@ -156,16 +161,36 @@ function build(): Rig {
 
 export function AmbientSound() {
   const [on, setOn] = useState(false);
-  // Out of the way once the footer arrives: its privacy control lives in
-  // the same corner.
-  const [tucked, setTucked] = useState(false);
+  // THE CONTROL STANDS IN THE HEADER (globals.css, .sound-toggle, for why):
+  // the page owns the sound and its state, the header owns the place, and a
+  // portal joins them. The header is in the layout and is there before this
+  // mounts; the retry is for a route change that commits them a frame apart.
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
-    const f = document.querySelector('footer');
-    if (!f) return;
-    const io = new IntersectionObserver(([e]) => setTucked(e.intersectionRatio > 0.2), { threshold: [0, 0.2, 0.4] });
-    io.observe(f);
-    return () => io.disconnect();
+    let raf = 0;
+    let tries = 0;
+    const find = () => {
+      const el = document.getElementById(SOUND_SLOT_ID);
+      if (el) setSlot(el);
+      else if ((tries += 1) < 120) raf = requestAnimationFrame(find);
+    };
+    find();
+    return () => cancelAnimationFrame(raf);
   }, []);
+  // And not on the opening frame (the third art-direction critique: "Only the
+  // absolute essential UI elements are visible"). It arrives once the film is
+  // under way — half a viewport in — and stays. A visitor who turned it on
+  // last time sees it from the start, lit.
+  const [underway, setUnderway] = useState(false);
+  useEffect(() => {
+    if (underway) return;
+    const check = () => {
+      if (window.scrollY > window.innerHeight * 0.5) setUnderway(true);
+    };
+    check();
+    window.addEventListener('scroll', check, { passive: true });
+    return () => window.removeEventListener('scroll', check);
+  }, [underway]);
   const rig = useRef<Rig | null>(null);
 
   const apply = useCallback((next: boolean) => {
@@ -247,14 +272,16 @@ export function AmbientSound() {
     [],
   );
 
-  return (
+  const away = !underway && !on;
+  if (!slot) return null;
+  return createPortal(
     <button
       type="button"
       onClick={toggle}
       aria-pressed={on}
       aria-label={on ? 'Turn sound off' : 'Turn sound on'}
-      className={'sound-toggle group' + (tucked ? ' is-tucked' : '')}
-      tabIndex={tucked ? -1 : 0}
+      className={'sound-toggle tap-target group' + (away ? ' is-tucked' : '')}
+      tabIndex={away ? -1 : 0}
     >
       <span aria-hidden className={'sound-bars' + (on ? ' is-on' : '')}>
         <i />
@@ -262,7 +289,12 @@ export function AmbientSound() {
         <i />
         <i />
       </span>
-      <span className="sound-label">{on ? 'Sound on' : 'Sound'}</span>
-    </button>
+      {/* The word on a frame with room for it; the bars alone on a phone,
+          whose header already carries the mark, Enquire and Menu. */}
+      <span className="sound-label max-md:hidden">
+        {on ? 'Sound on' : 'Sound'}
+      </span>
+    </button>,
+    slot,
   );
 }

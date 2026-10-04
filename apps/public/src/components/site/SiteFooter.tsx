@@ -16,16 +16,14 @@
 // review: "the transition from the interactive 3D WebGL environment to the
 // standard, dark-blue text footer is jarring ... a completely separate, basic
 // HTML webpage appended to the bottom of a 3D application." It was: a solid
-// navy slab with a rule across the top, arriving under the district field. On
-// the home page the footer is now transparent at its head and deepens into
-// the page colour, so the field's glowing markers stay in frame behind a
-// closing line set in the film's own type; the rules are gilt hairlines, as
-// the film's are. Every other page keeps the plain footer it had.
+// navy slab with a rule across the top, arriving under the film's last frame.
+// On the home page the footer has no ground of its own: it is set over the
+// film's closing picture (FilmColophon, below), in the film's own type. Every
+// other page keeps the plain footer it had.
 
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Arrow } from './Arrow';
 import { PrivacyControl } from '@/components/consent/ConsentPanel';
 import { Logo } from './Logo';
 import { BRANCHES } from '@estate/domain/leads/branches';
@@ -58,58 +56,141 @@ const LEGAL = [
   { href: '/cookie-policy', label: 'Cookies' },
 ];
 
+/**
+ * THE FILM'S FOOTER IS A COLOPHON. The second art-direction audit (2026-09-30):
+ * "a standard, heavy, multi-column web footer ... far too visually dense and
+ * purely functional, breaking the immersive spell", and it should rest "gently"
+ * in the last frame. By now the house lights have gone down round the map
+ * table and the camera has risen off it (WorldCanvas, the coda), so the footer
+ * is set over the court's darkened stone: the sign-off, then every link the
+ * footer ever carried as one quiet
+ * line of tracked capitals, the three offices as three short lines, and the
+ * legal line — no logo block, no columns, no rules, no ground behind it.
+ *
+ * AND THAT LAST FRAME IS COMPOSED FOR IT (codaFrame.ts): the lit table ends
+ * beside the sign-off on a wide frame and above it on a phone, with the dark
+ * of the court's floor under both for the quiet lines. Where the colophon is
+ * taller than the frame and its lines must still cross the table, the lens
+ * closes down as they reach it, the way a cinema's picture goes when the
+ * credits come (lensFilter.codaFilter) — never a ground laid behind the words.
+ *
+ * ON THE FILM'S STAGE (globals.css): it is the film's last frame, so it is set
+ * in the film's unit and on the film's grid — its left edge under the mark's
+ * and the copy's at every size of frame, not 72rem's.
+ *
+ * AND NO GROUND BEHIND IT MEANS EVERY LINE AT A STRENGTH THE STONE ALLOWS.
+ * The quiet lines were ivory at 42 to 55% and gilt at 60%, and the court's
+ * stone under them is not a navy slab: measured per line at 1440x900 and
+ * 390x844, a p90 luma of 19 to 62 and the links, the offices and the legal
+ * line at 4.0 to 4.4:1. They are 85 to 90% now, the gilt whole; what keeps
+ * them quiet is their size.
+ *
+ * AND NO BAR ABOVE IT EITHER: over the film the header is air, so each of the
+ * colophon's lines (`data-line`) dissolves as it comes to the header's edge
+ * rather than ride up through the mark and the controls (ChapterFade,
+ * LINES_MODE) — which is what they did on every frame shorter than the
+ * colophon is: a phone, a small laptop.
+ */
+function FilmColophon({ year }: { year: number }) {
+  const links = COLUMNS.flatMap((c) => c.links);
+  return (
+    <footer className="film-stage relative z-10">
+      <div data-chapter-fade="lines" className="mx-auto max-w-[var(--grid-max)] px-6 pb-16 pt-[22vh]">
+        <p data-line className="t-eyebrow text-[#E8B98A]">Visit</p>
+        <p data-line data-reveal className="t-h1 mt-6 max-w-[16ch] text-[#F2EDE4]">
+          The land is best seen <span className="t-display-em">from the land.</span>
+        </p>
+        <p data-line className="t-hero-lede mt-6 max-w-[40ch] text-[#F2EDE4]/90">
+          Every open layout can be walked. The branch that holds it will take
+          you there.
+        </p>
+        <div data-line className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-5">
+          <Link href="/contact" className="cta-primary">
+            Arrange a site visit
+          </Link>
+          <a href="tel:+919553513366" className="cta-quiet">
+            <span className="cta-quiet-label">+91 95535 13366</span>
+          </a>
+        </div>
+
+        <nav aria-label="Footer" className="mt-[16vh]">
+          <ul className="flex flex-wrap gap-x-7 gap-y-1">
+            {links.map((l) => (
+              <li data-line key={l.href + l.label}>
+                <Link
+                  href={l.href}
+                  className="t-micro flex min-h-[44px] items-center text-[#F2EDE4]/85 transition-colors hover:text-[#E8B98A]"
+                >
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="mt-8 grid gap-6 sm:grid-cols-3">
+          {(['visakhapatnam', 'vizianagaram', 'srikakulam'] as const).map((id) => {
+            const b = BRANCHES[id];
+            return (
+              <div data-line key={b.id}>
+                <p className="t-micro text-[#F2EDE4]/90">
+                  {b.name}
+                  <span className="ml-3 text-[#E8B98A]">
+                    {b.role === 'head_office' ? 'Head office' : 'Branch'}
+                  </span>
+                </p>
+                <address className="mt-2 not-italic text-step--2 text-[#F2EDE4]/85">
+                  {b.address} &ndash; {b.pincode}
+                </address>
+              </div>
+            );
+          })}
+        </div>
+
+        <div data-line className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 text-step--2 text-[#F2EDE4]/85">
+          <span>&copy; {year} Quality Homes Reality</span>
+          <a className="tap-target transition-colors hover:text-[#F2EDE4]" href="mailto:qualityhomesreality@gmail.com">
+            qualityhomesreality@gmail.com
+          </a>
+          {LEGAL.map((l) => (
+            <Link key={l.href} href={l.href} className="tap-target transition-colors hover:text-[#F2EDE4]">
+              {l.label}
+            </Link>
+          ))}
+          {/* At its row's own strength: at the control's 60% it was the one
+              line of the colophon under AA where the stone is at its lightest
+              (measured at 390x844: 3.98:1 on a p90 luma of 72). */}
+          <span className="ml-auto">
+            <PrivacyControl className="tap-target text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/85 underline-offset-4 transition hover:text-[#F2EDE4] hover:underline" />
+          </span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
 export function SiteFooter() {
   const year = new Date().getFullYear();
   const pathname = usePathname() || '/';
   const overFilm = pathname === '/' || pathname === '/site-home';
-  const rule = overFilm ? 'border-[#E8B98A]/[0.16]' : 'border-white/[0.08]';
+  if (overFilm) return <FilmColophon year={year} />;
+  const rule = 'border-white/[0.08]';
 
   return (
-    <footer
-      className={
-        'relative z-10 ' +
-        (overFilm
-          ? 'bg-gradient-to-b from-transparent via-[#060A14]/82 via-40% to-[#060A14]'
-          : 'border-t border-white/[0.08] bg-[#060A14]')
-      }
-    >
-      {overFilm ? (
-        // THE SIGN-OFF. The film's last word, over its last frame: one line
-        // in the display serif, one sentence, one action.
-        <div className="mx-auto max-w-6xl px-6 pb-20 pt-[18vh]">
-          <p className="t-eyebrow text-[#E8B98A]/85">Visit</p>
-          <p data-reveal className="t-h1 mt-6 max-w-[16ch] text-[#F2EDE4] [text-shadow:0_1px_28px_rgba(6,10,20,0.6)]">
-            The land is best seen <em className="t-display-em">from the land.</em>
-          </p>
-          <p className="t-hero-lede mt-7 max-w-[40ch] text-[#F2EDE4]/80">
-            Every open layout can be walked. The branch that holds it will take
-            you there.
-          </p>
-          <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-5">
-            <Link href="/contact" className="cta-primary group">
-              Arrange a site visit
-              <Arrow />
-            </Link>
-            <a href="tel:+919553513366" className="cta-quiet group">
-              <span className="cta-quiet-label">+91 95535 13366</span>
-              <Arrow />
-            </a>
-          </div>
-        </div>
-      ) : null}
-      <div className={'mx-auto max-w-6xl px-6 py-16 ' + (overFilm ? `border-t ${rule}` : '')}>
+    <footer className="relative z-10 border-t border-white/[0.08] bg-[#060A14]">
+      <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-[1.1fr_2fr]">
           <div>
             <Logo size={34} href={null} />
-            <p className="mt-5 max-w-xs text-[14px] leading-relaxed text-[#F2EDE4]/55">
+            <p className="mt-5 max-w-xs text-step--1 text-[#F2EDE4]/55">
               Approved plotted layouts in the northern coastal districts of
               Andhra Pradesh, developed and sold directly.
             </p>
-            <p className="mt-5 text-[14px] text-[#F2EDE4]/70">
+            <p className="mt-5 text-step--1 text-[#F2EDE4]/70">
               <a className="tap-target transition-colors hover:text-[#F2EDE4]" href="tel:+919553513366">
                 +91 95535 13366
               </a>
-              <span className="mx-2 text-[#F2EDE4]/50">·</span>
+              <span className="mx-2 text-[#F2EDE4]/[0.62]">·</span>
               <a
                 className="tap-target transition-colors hover:text-[#F2EDE4]"
                 href="mailto:qualityhomesreality@gmail.com"
@@ -135,7 +216,7 @@ export function SiteFooter() {
                     <li key={l.href + l.label}>
                       <Link
                         href={l.href}
-                        className="flex min-h-[44px] items-center text-[14px] text-[#F2EDE4]/62 transition-colors hover:text-[#F2EDE4]"
+                        className="flex min-h-[44px] items-center text-step--1 text-[#F2EDE4]/[0.62] transition-colors hover:text-[#F2EDE4]"
                       >
                         {l.label}
                       </Link>
@@ -152,11 +233,11 @@ export function SiteFooter() {
             const b = BRANCHES[id];
             return (
               <div key={b.id}>
-                <p className="text-[13px] text-[#F2EDE4]/80">{b.name}</p>
-                <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-[#C08A5D]/70">
+                <p className="text-step--1 text-[#F2EDE4]/80">{b.name}</p>
+                <p className="mt-0.5 text-step--2 uppercase tracking-[0.3em] text-[#D9B07A]/[0.78]">
                   {b.role === 'head_office' ? 'Head office' : 'Branch'}
                 </p>
-                <address className="mt-2 not-italic text-[13px] leading-relaxed text-[#F2EDE4]/60">
+                <address className="mt-2 not-italic text-step--1 text-[#F2EDE4]/60">
                   {b.address} &ndash; {b.pincode}
                 </address>
               </div>
@@ -165,7 +246,7 @@ export function SiteFooter() {
         </div>
 
         <div className={`mt-12 flex flex-wrap items-center gap-x-6 gap-y-4 border-t ${rule} pt-8`}>
-          <p className="text-[12px] text-[#F2EDE4]/60">
+          <p className="text-step--1 text-[#F2EDE4]/60">
             &copy; {year} Quality Homes Reality
           </p>
           {/* Laid out horizontally, so the invisible expander is safe here —
@@ -176,14 +257,14 @@ export function SiteFooter() {
               <li key={l.href}>
                 <Link
                   href={l.href}
-                  className="tap-target text-[12px] text-[#F2EDE4]/60 transition-colors hover:text-[#F2EDE4]"
+                  className="tap-target text-step--1 text-[#F2EDE4]/60 transition-colors hover:text-[#F2EDE4]"
                 >
                   {l.label}
                 </Link>
               </li>
             ))}
           </ul>
-          <div className="ml-auto text-[12px] text-[#F2EDE4]/60">
+          <div className="ml-auto text-step--1 text-[#F2EDE4]/60">
             <PrivacyControl />
           </div>
         </div>

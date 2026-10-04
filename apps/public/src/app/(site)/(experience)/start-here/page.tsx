@@ -52,13 +52,13 @@ export default function StartHerePage() {
     <>
       <RouteTelemetry routeId="start-here" />
       <main className="relative z-10 mx-auto w-full max-w-3xl px-6 py-16 md:py-24">
-        <p className="text-xs uppercase tracking-[0.2em] text-[#F2EDE4]/50">
+        <p className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/75">
           Start here
         </p>
-        <h1 className="mt-3 font-serif text-3xl text-[#F2EDE4] md:text-4xl">
+        <h1 className="mt-3 font-serif text-step-3 text-[#F2EDE4] md:text-step-4">
           The short version
         </h1>
-        <p className="mt-4 text-[15px] leading-relaxed text-[#F2EDE4]/75">
+        <p className="mt-4 text-step-0 text-[#F2EDE4]/[0.82]">
           Quality Homes Reality sells plotted land in the northern coastal
           districts of Andhra Pradesh, from offices in Visakhapatnam,
           Vizianagaram and Srikakulam. Three layouts are open. Every one of them
@@ -67,7 +67,7 @@ export default function StartHerePage() {
         </p>
 
         <section className="mt-12">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
+          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/75">
             The three layouts
           </h2>
           <ul className="mt-4 space-y-3">
@@ -75,11 +75,11 @@ export default function StartHerePage() {
               <li key={p.slug} className="flex flex-wrap items-baseline gap-x-3">
                 <Link
                   href={`/projects/${p.slug}`}
-                  className="font-serif text-lg text-[#F2EDE4] underline-offset-4 hover:underline"
+                  className="font-serif text-step-1 text-[#F2EDE4] underline-offset-4 hover:underline"
                 >
                   {p.name}
                 </Link>
-                <span className="text-sm text-[#F2EDE4]/50">
+                <span className="text-step--1 text-[#F2EDE4]/75">
                   {p.locality} &middot; {p.district}
                 </span>
               </li>
@@ -88,7 +88,7 @@ export default function StartHerePage() {
         </section>
 
         <section className="mt-12">
-          <h2 className="text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
+          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/75">
             Where do you want to go?
           </h2>
           <ul className="mt-4 space-y-3">
@@ -96,12 +96,12 @@ export default function StartHerePage() {
               <li key={p.href}>
                 <Link
                   href={p.href}
-                  className="block rounded border border-white/12 px-5 py-4 transition hover:border-amber-200/50"
+                  className="block rounded border border-white/[0.12] px-5 py-4 transition hover:border-amber-200/50"
                 >
-                  <span className="font-serif text-lg text-[#F2EDE4]">
+                  <span className="font-serif text-step-1 text-[#F2EDE4]">
                     {p.label}
                   </span>
-                  <span className="mt-1 block text-sm leading-relaxed text-[#F2EDE4]/60">
+                  <span className="mt-1 block text-step--1 text-[#F2EDE4]/75">
                     {p.blurb}
                   </span>
                 </Link>
@@ -110,7 +110,7 @@ export default function StartHerePage() {
           </ul>
         </section>
 
-        <p className="mt-12 text-sm leading-relaxed text-[#F2EDE4]/55">
+        <p className="mt-12 text-step--1 text-[#F2EDE4]/75">
           Prefer to look around instead? The three layouts stand as raised models
           in{' '}
           <Link className="underline underline-offset-4 hover:text-[#F2EDE4]" href="/hall">

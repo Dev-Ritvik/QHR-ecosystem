@@ -81,7 +81,8 @@ import {
   Noise,
   Vignette,
 } from '@react-three/postprocessing';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import {
   BlendFunction,
   type BloomEffect,
@@ -93,6 +94,7 @@ import { Vector2 } from 'three';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { FILM_GRADE, FilmGrade, HALL_GRADE, type FilmGradeEffect } from './FilmGrade';
 import { LensFocus } from './LensFocus';
+import { passageLight } from './passageLight';
 import type { SceneSet } from './poses';
 import type { Grade } from './WorldCanvas';
 
@@ -120,8 +122,13 @@ import type { Grade } from './WorldCanvas';
  *                       lens actually has it
  */
 const GRADE = { contrast: 0.055, saturation: 0.09, grain: 0.028 } as const;
-/** Sub-pixel, and deliberately: visible fringing is a filter, not a lens. */
-const ABERRATION = new Vector2(0.00042, 0.00042);
+/** At the corners only (radially modulated), and small: the art-direction
+ *  audit asked for "subtle chromatic aberration" as part of a photographic
+ *  logic, and at 0.00042 there was none to see. 0.0009 (about 1.3 px at the
+ *  corner of a 1440 frame) split every bright leaf and lawn stripe at the
+ *  frame's edge into red and cyan — the third critique's "glittery" dusk — so
+ *  0.00065: still a lens at the corners, no longer a prism. */
+const ABERRATION = new Vector2(0.00065, 0.00065);
 
 /**
  * Bloom, per set. The threshold is in SCENE-LINEAR light, because bloom runs
@@ -137,7 +144,14 @@ const ABERRATION = new Vector2(0.00042, 0.00042);
  * milky veil the hall had. Inside, only the light sources bloom: the
  * chandelier's crystal, the sconce flames, the holograms.
  */
-const BLOOM = { intensity: 0.74, threshold: 0.82, smoothing: 0.3 } as const;
+// OUTSIDE, ONLY SOURCES NOW (the refinement brief, 2026-10-03: bloom is not
+// to be "a primary carrier of luxury"). At 0.82 the sunlit trim, the pale
+// loungers and every baluster the low sun caught stood over the threshold: a
+// soft haze over the whole lit front by day, and at dusk a row of haloes along
+// the parapet that read as a string of lamps. At 1.0 what blooms is what
+// emits or mirrors light: the lantern, the lamps in the lit rooms, the path
+// lights, the sun on the water.
+const BLOOM = { intensity: 0.5, threshold: 1.0, smoothing: 0.25 } as const;
 const HALL_BLOOM = { intensity: 0.55, threshold: 1.25, smoothing: 0.35 } as const;
 /** A touch heavier than outside since the second client review: the room
  *  is lamp-lit, and its edges fall away toward the corners (FilmGrade HALL_GRADE). */
@@ -180,6 +194,30 @@ function exposeComposer(composer: unknown) {
   w.__estateGrades = { film: FILM_GRADE, hall: HALL_GRADE };
 }
 
+type Look = { intensity: number; threshold: number; smoothing: number; offset: number; darkness: number };
+
+/** The bloom and the vignette at `rest`, carried `toHall` (0..1) of the way to
+ *  the hall's. */
+function applyLook(
+  b: BloomEffect | null,
+  v: VignetteEffect | null,
+  rest: Look,
+  toHall: number,
+  tier: DeviceTier,
+): void {
+  const mix = (from: number, to: number) => from + (to - from) * toHall;
+  if (b) {
+    b.intensity = mix(rest.intensity, HALL_BLOOM.intensity);
+    b.luminanceMaterial.threshold = mix(rest.threshold, HALL_BLOOM.threshold);
+    b.luminanceMaterial.smoothing = mix(rest.smoothing, HALL_BLOOM.smoothing);
+  }
+  if (v) {
+    // The low tier's pair is one pair, in and out.
+    v.offset = tier === 'low' ? rest.offset : mix(rest.offset, HALL_VIGNETTE.offset);
+    v.darkness = tier === 'low' ? rest.darkness : mix(rest.darkness, HALL_VIGNETTE.darkness);
+  }
+}
+
 export function PostFX({
   tier,
   set = 'exterior',
@@ -220,25 +258,39 @@ export function PostFX({
   const [print, bindPrint] = useEffectRef<FilmGradeEffect>();
   const [vignette, bindVignette] = useEffectRef<VignetteEffect>();
   const [bloom, bindBloom] = useEffectRef<BloomEffect>();
-  useEffect(() => {
+  // What the set asks of the bloom and the vignette, kept so the door can carry
+  // them across (below).
+  const rest = useRef<Look>({ ...BLOOM, offset: 0.28, darkness: 0.7 });
+  // A LAYOUT effect: these land in the commit that changes the sets. As a
+  // passive one they landed a frame after it, the hall's first frame under the
+  // estate's bloom and vignette.
+  useLayoutEffect(() => {
     if (contrast.current) contrast.current.contrast = printed ? 0 : GRADE.contrast;
     if (saturation.current) saturation.current.saturation = printed ? 0 : GRADE.saturation;
     if (print.current) print.current.amount = printed ? 1 : 0;
-    const b = bloom.current;
-    if (b) {
-      const look = hall ? HALL_BLOOM : BLOOM;
-      b.intensity = look.intensity;
-      b.luminanceMaterial.threshold = look.threshold;
-      b.luminanceMaterial.smoothing = look.smoothing;
-    }
-    const v = vignette.current;
-    if (v) {
+    const look = hall ? HALL_BLOOM : BLOOM;
+    rest.current = {
+      ...look,
       // Lighter under the print, whose toe already darkens the corners the
       // vignette used to be responsible for. Low tier keeps its own pair.
-      v.offset = tier === 'low' ? 0.32 : hall ? HALL_VIGNETTE.offset : film ? 0.3 : 0.28;
-      v.darkness = tier === 'low' ? 0.62 : hall ? HALL_VIGNETTE.darkness : film ? 0.55 : 0.7;
-    }
+      offset: tier === 'low' ? 0.32 : hall ? HALL_VIGNETTE.offset : film ? 0.3 : 0.28,
+      darkness: tier === 'low' ? 0.62 : hall ? HALL_VIGNETTE.darkness : film ? 0.55 : 0.7,
+    };
+    applyLook(bloom.current, vignette.current, rest.current, 0, tier);
   }, [film, hall, printed, tier, contrast, saturation, print, vignette, bloom]);
+
+  // THROUGH THE OPEN DOOR (doorway.ts, 'through') the room fills the frame
+  // before the sets change, so the bloom and the vignette go over to the
+  // room's with the print (passageLight.grade): they are the room's by the
+  // sill, and the change of sets moves nothing. Uniform writes, and only while
+  // a passage is carrying the grade.
+  const carried = useRef(0);
+  useFrame(() => {
+    const g = hall ? 0 : passageLight.grade;
+    if (g === carried.current) return;
+    carried.current = g;
+    applyLook(bloom.current, vignette.current, rest.current, g, tier);
+  });
 
   if (tier === 'low') {
     // A phone gets the grade but not the passes that cost a full-screen blur:

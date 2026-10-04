@@ -33,11 +33,12 @@ import {
   FILM_TARGET_CURVE,
   APPROACH_POSITION_CURVE,
   APPROACH_TARGET_CURVE,
+  APPROACH_AIM_FROM,
+  ROOFLINE_AIM,
+  curveTOver,
   exteriorPoseAtSwing,
   exteriorSwing,
   lensAt,
-  CONSTELLATION,
-  CONSTELLATION_RADIUS,
   ESTATE_SCALE,
 } from './cameraPath';
 import {
@@ -45,7 +46,7 @@ import {
   ESTATE_DOOR,
   ESTATE_PLANTING,
   ESTATE_PORTICO,
-  ESTATE_SPIRE_TIP,
+  ESTATE_ROOF_TOP,
 } from './estateBounds';
 import {
   buildInteriorBeats,
@@ -195,9 +196,11 @@ const FRAME: readonly [number, number] = [1440, 900];
 
 const HOUSE = ESTATE_ARCHITECTURE.find((b) => b.name === 'mansion')!;
 const SUBJECT_BOUNDS = {
-  // The house on its podium, and the spire that tops it.
-  mansion: { min: HOUSE.min, max: [HOUSE.max[0], ESTATE_SPIRE_TIP, HOUSE.max[2]] },
-  spire: { min: [-0.3, ESTATE_SPIRE_TIP - 1.2, -0.3], max: [0.3, ESTATE_SPIRE_TIP, 0.3] },
+  // The house on its podium, and its roofline: the roof is flat since the
+  // client had the spire, the cupola and the hip taken off (2026-10-01), so
+  // the balustraded parapet and its urns are the top of the house.
+  mansion: { min: HOUSE.min, max: [HOUSE.max[0], ESTATE_ROOF_TOP, HOUSE.max[2]] },
+  roofline: { min: [-13.3, ESTATE_ROOF_TOP - 2.2, -8.6], max: [13.3, ESTATE_ROOF_TOP, 8.6] },
 } as const;
 
 function frameAt(beat: (typeof BEATS)[number]) {
@@ -253,22 +256,10 @@ function frameAt(beat: (typeof BEATS)[number]) {
     };
   };
 
-  const c = project(new THREE.Vector3(...CONSTELLATION));
-  const rPx = (CONSTELLATION_RADIUS / (c.z * halfH)) * 0.5 * FRAME[1];
-  const conBox = [c.sx - rPx, c.sy - rPx, c.sx + rPx, c.sy + rPx];
-
   return {
     boxOf,
     mansion: boxOf(SUBJECT_BOUNDS.mansion),
-    spire: boxOf(SUBJECT_BOUNDS.spire),
-    constellation: {
-      inFrame:
-        c.z > 0 &&
-        Math.min(conBox[2], FRAME[0]) - Math.max(conBox[0], 0) > 0 &&
-        Math.min(conBox[3], FRAME[1]) - Math.max(conBox[1], 0) > 0,
-      box: conBox,
-      diameterPctH: ((rPx * 2) / FRAME[1]) * 100,
-    },
+    roofline: boxOf(SUBJECT_BOUNDS.roofline),
   };
 }
 
@@ -344,6 +335,61 @@ describe('exterior camera path', () => {
     }
   });
 
+  it("leaves the holdings beat on the flat roof's aim, and is on the approach's own curve by the flank", () => {
+    // The aim came down 4 m at the holdings beat with the roof (ROOFLINE_AIM).
+    // The approach's curve is still drawn from the old 16 m, so its frames from
+    // the flank beat on are the frames they were; the difference is blended
+    // out across the first segment.
+    const p = new THREE.Vector3();
+    const a = new THREE.Vector3();
+    const held = BEATS.find((b) => b.id === 'holdings')!;
+    const flank = BEATS.find((b) => b.id === 'dusk-flank')!;
+    exteriorPoseAtSwing(held.at + 1e-6, p, a);
+    expect(a.y).toBeCloseTo(ROOFLINE_AIM, 3);
+    // No step at the join, and never back up above where it left from.
+    let last = a.y;
+    for (let s = held.at + 0.002; s <= flank.at; s += 0.002) {
+      exteriorPoseAtSwing(s, p, a);
+      expect(Math.abs(a.y - last)).toBeLessThan(0.12);
+      expect(a.y).toBeLessThan(ROOFLINE_AIM + 0.05);
+      last = a.y;
+    }
+    // From the flank on, the raw curve: untouched.
+    for (const s of [flank.at, 0.8, 0.86, 0.95, 1]) {
+      exteriorPoseAtSwing(s, p, a);
+      const raw = APPROACH_TARGET_CURVE.getPoint(curveTOver(APPROACH_BEATS, s));
+      expect(a.distanceTo(raw)).toBeLessThan(1e-9);
+    }
+    expect(APPROACH_AIM_FROM).toBe(16);
+  });
+
+  it('keeps the old aim on an upright screen: its copy stands above the house, not beside it', () => {
+    const p = new THREE.Vector3();
+    const wide = new THREE.Vector3();
+    const tall = new THREE.Vector3();
+    for (const id of ['crane', 'holdings']) {
+      const beat = BEATS.find((b) => b.id === id)!;
+      exteriorPoseAtSwing(beat.at, p, wide);
+      exteriorPoseAtSwing(beat.at, p, tall, 1);
+      expect(wide.y).toBeCloseTo(ROOFLINE_AIM, 3);
+      expect(tall.y).toBeCloseTo(APPROACH_AIM_FROM, 3);
+    }
+    // The same camera, the same frames outside those two beats' reach (a
+    // segment is shaped by the point after it, so the stretch before the
+    // crane differs by a fraction of a millimetre), and no step where the two
+    // curves meet.
+    for (const s of [0, 0.1, 0.2, 0.86, 0.95, 1]) {
+      exteriorPoseAtSwing(s, p, wide);
+      const at = p.clone();
+      exteriorPoseAtSwing(s, p, tall, 1);
+      expect(p.distanceTo(at)).toBe(0);
+      expect(tall.distanceTo(wide)).toBeLessThan(s === 0.2 ? 1e-3 : 1e-6);
+    }
+    exteriorPoseAtSwing(FILM_SHARE, p, wide, 1);
+    exteriorPoseAtSwing(FILM_SHARE + 1e-6, p, tall, 1);
+    expect(tall.distanceTo(wide)).toBeLessThan(0.01);
+  });
+
   it('keeps the approved film exactly where it was, inside the first FILM_SHARE', () => {
     // The approach was ADDED, not blended in. The approved beats keep their
     // positions and their spacing, rescaled into the film's share of the leg, so
@@ -351,7 +397,7 @@ describe('exterior camera path', () => {
     // that was signed off — at the same number of viewports of scroll.
     const approved = [0, 0.3, 0.58, 0.82, 1.0];
     expect(FILM_BEATS.map((b) => b.id)).toEqual([
-      'hero', 'quarter', 'three-quarter', 'crane', 'constellation',
+      'hero', 'quarter', 'three-quarter', 'crane', 'holdings',
     ]);
     FILM_BEATS.forEach((b, i) => expect(b.at).toBeCloseTo(approved[i] * FILM_SHARE, 9));
     // Leg progress through the film maps onto swing space exactly as the old
@@ -364,31 +410,15 @@ describe('exterior camera path', () => {
     expect(APPROACH_BEATS[0]).toBe(FILM_BEATS[FILM_BEATS.length - 1]);
   });
 
-  it('holds the residence AND the network in one frame at the constellation', () => {
-    // WAS "finishes with ...", when the constellation was the last beat. It is
-    // now the held frame of its own chapter, with the approach to the door after
-    // it (the client review required the film to reach the actual door), and
-    // the composition contract below is unchanged — only which beat carries it.
-    //
-    // THIS REPLACES "finishes aimed at the constellation, not past it", which
-    // asserted that the final target IS the sphere centre.
-    //
-    // That assertion was satisfied by the shipped path and the shipped path was
-    // the defect. With the sphere 46m out in open field behind the estate, the
-    // only way to put it at frame centre was to turn the camera off the
-    // building — and the frame that produced was photographed and counted:
-    // mansion coverage 0.000 and FOUR draw calls, a terrain plane and a stock
-    // sky. The old test passed on every one of those frames, because "aimed at
-    // the sphere" says nothing about what else is in shot.
-    //
-    // The contract this chapter actually has is compositional, so the test is:
-    // both subjects in frame, the sphere above the roof, and the left of frame
-    // left clear for the copy column that sits beside them.
-    const held = BEATS.find((b) => b.id === 'constellation')!;
+  it('holds the residence at the holdings beat, with the left of frame clear', () => {
+    // The composition contract of the chapter that held the constellation until
+    // the second art-direction audit removed it: the house in frame as the
+    // anchor, its roofline in shot, and the left of frame left to the copy column.
+    const held = BEATS.find((b) => b.id === 'holdings')!;
     const shot = frameAt(held);
 
-    expect(shot.mansion.inFrame, 'the residence is in the final frame').toBe(true);
-    expect(shot.constellation.inFrame, 'so is the network above it').toBe(true);
+    expect(shot.mansion.inFrame, 'the residence is in the held frame').toBe(true);
+    expect(shot.roofline.inFrame, 'and so is its roofline').toBe(true);
 
     // Present, and present as the anchor rather than as a detail or as the
     // whole shot. Under a fifth of frame width it stops being readable as a
@@ -397,16 +427,14 @@ describe('exterior camera path', () => {
     expect(shot.mansion.widthPct).toBeGreaterThan(20);
     expect(shot.mansion.widthPct).toBeLessThan(66);
 
-    // The sphere crowns the roof: its lowest point is above the spire's
-    // highest, in SCREEN space, so nothing about the pose can bury one in the
-    // other.
-    expect(shot.constellation.box[3]).toBeLessThan(shot.spire.box[1]);
+    // The roofline stands about the middle of the frame, against the evening
+    // land, not at its foot: the aim came down with the roof (ROOFLINE_AIM).
+    expect(shot.roofline.box[1]).toBeLessThan(FRAME[1] * 0.5);
+    expect(shot.roofline.box[3]).toBeGreaterThan(FRAME[1] * 0.42);
 
     // The copy column runs down the left. Nothing may intrude on the first
     // quarter of the frame.
-    expect(Math.min(shot.mansion.box[0], shot.constellation.box[0])).toBeGreaterThan(
-      FRAME[0] * 0.25,
-    );
+    expect(shot.mansion.box[0]).toBeGreaterThan(FRAME[0] * 0.25);
   });
 
   it('ends square on the front door, on the entry axis', () => {

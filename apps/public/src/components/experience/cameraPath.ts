@@ -20,7 +20,9 @@
 // and one per palm and tree, and asserted against the whole path in
 // cameraPath.test.ts. In outline (three space, metres):
 //
-//   house + podium  x -15.5..15.5  y 0..12.6 (spire 20.34)  z -10.3..13.25
+//   house + podium  x -15.5..15.5  y 0..12.5 (a flat roof behind the parapet
+//                   since 2026-10-01; a hip, a cupola and a spire rose to
+//                   20.34 before it)  z -10.3..13.25
 //   fountain        centre (0, ·, 30), radius 3.95, 3.4 m tall
 //   palm avenue     x +/-7.6 from z 47 to 208; forecourt palms at r 17.5
 //   compound wall   x +/-72, z -84..215, a planted belt beyond it
@@ -52,6 +54,9 @@ import * as THREE from 'three';
  * same door, 3.4 m tall, and those beats are re-authored on it (see below).
  */
 export const ESTATE_SCALE = 1.6;
+/** Where the two high beats (the crane, the holdings) aim: just under the
+ *  flat roof's parapet, so the roofline stands at the middle of the frame. */
+export const ROOFLINE_AIM = 12.0;
 const grow = (v: readonly [number, number, number]): [number, number, number] => [
   v[0] * ESTATE_SCALE,
   v[1] * ESTATE_SCALE,
@@ -122,61 +127,18 @@ export interface CameraBeat {
   evening?: number;
 }
 
-/**
- * The constellation's centre, in exterior world metres.
- *
- * MOVED IN PHASE 6B, from [0, 16, -46] to directly above the spire, and the
- * reason is a measurement rather than a preference.
- *
- * The old placement put the sphere 46m out in open field behind the estate, so
- * the only way to frame it was to turn the camera away from the building. That
- * is exactly what the shipped path did — and the frame it produced was
- * photographed and counted:
- *
- *     mansion_walls on screen        coverage 0.000 from scroll 0.285 onward
- *     draw calls at the constellation          4     (955 at the hero)
- *     what remained in shot     a terrain plane, a stock equirect sky,
- *                               and a point cloud
- *
- * Four draw calls is the whole defect in one number. Every piece of authored
- * geometry in the project — the mansion, the portico, the fountain, the
- * hedges, the cypresses — was behind the camera for the last third of the
- * exterior film, leaving a photographic hillside as the accidental subject.
- *
- * And the brief had already said where it goes. CLAUDE.md: "at the top the
- * house there will be a pointed end ... and at the top there will be a glowing
- * ball made up of multiple glowing spheres". Above the spire, crowning the
- * building. The old comment argued the sphere needed "a frame of its own" and
- * traded the building away to get one; the brief asks for both in one frame,
- * and both in one frame is also the only composition that can hand off to the
- * city layer, because it is the one that establishes RESIDENCE beneath
- * NETWORK.
- *
- * CLEARANCE. The spire tips out at 11.72 (x, z within +/-0.18) and the corner
- * finials at 9.19. The shader pushes hovered points outward by 0.19 of a unit
- * radius, which at radius 6.2 is 1.18m, so the lowest a point can ever reach is
- * 19.8 - 6.2 - 1.18 = 12.42 — seven tenths of a metre above the spire tip. The
- * sphere crowns the roof and never sinks into it, at rest or under the pointer.
- */
 /*
- * V7: AT [0, 33.3, 0], radius 9.92. The approved placement grown with the estate
- * (19.8 x 1.6 = 31.7) would crown a spire that grew MORE than 1.6x — the tip is
- * 20.34, not 18.75 — and the hover push would reach 31.7 - 9.92 - 1.88 = 19.9,
- * inside the tip. So the centre is set by the same clearance rule the note
- * above states, at the new scale: tip 20.34 + 1.12 + radius 9.92 + push 1.88.
+ * THE CONSTELLATION IS GONE. It crowned the spire from Phase 6B (placement,
+ * clearance and size history are in git: cameraPath.ts before 2026-09-30), and
+ * the second art-direction audit asked for it to be removed outright — "the
+ * single most out-of-place element in the entire experience". Its chapter,
+ * HOLDINGS, keeps its beat: the rear three-quarter at dusk, the spire against
+ * the evening sky, the figures beside it.
  */
-export const CONSTELLATION: [number, number, number] = [0, 33.3, 0];
-
-/** World radius of the constellation. Re-scored against the Phase 6B arrival
- *  beat: the sphere centre is 48.4m from the eye at a 37-degree lens, where the
- *  frame is 32.4m tall, so a 12.4m sphere holds 38% of frame height and sits
- *  clear above a mansion holding 46% of frame width. Large enough to be the
- *  subject, small enough that the residence beneath it still reads as the
- *  thing the network belongs to. */
-export const CONSTELLATION_RADIUS = 6.2 * ESTATE_SCALE;
 
 /**
- * Where the constellation's held frame sits on the exterior leg.
+ * Where the holdings' held frame (once the constellation's) sits on the
+ * exterior leg.
  *
  * ADDED WITH THE APPROACH, BY CLIENT REVIEW. The film used to end on the
  * constellation and close a black veil over that frame — so the visitor passed
@@ -371,7 +333,11 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     // the sentence the chapter has to say.
     at: 0.82 * FILM_SHARE,
     position: grow([-21.0, 15.0, -32.0]),
-    target: grow([0.0, 10.0, 0.0]),
+    // The aim was 16 m up, for a house that rose 20 m to the tip of its spire.
+    // The roof is flat now (the client, 2026-10-01) and the house ends at its
+    // parapet's urns, 12.5 m up; the aim comes down 4 m with it, here and at
+    // the holdings beat, so the house holds the place in the frame it held.
+    target: [0.0, ROOFLINE_AIM, 0.0],
     fog: growFog([30, 165]),
     keyIntensity: 2.4,
     fov: 44,
@@ -391,27 +357,24 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     evening: 1,
   },
   {
-    id: 'constellation',
-    // CONSTELLATION. The rear three-quarter, craned to 18m and 48m out, holding
-    // the estate low-right with the sphere directly above its spire.
+    id: 'holdings',
+    // HOLDINGS (the constellation's chapter until the second art-direction
+    // audit removed the sphere). The rear three-quarter, craned high and far
+    // out, holding the estate low-right with its parapet against the evening
+    // land and the land beside it gone dark — the quiet ground the figures sit
+    // on.
     //
-    // MEASURED at 1440x900 with the projection in tools/capture/frame_solve.mjs:
-    //
-    //     mansion        box [497, 437, 1156, 919]   46% of frame width
-    //     constellation  centre [821, 255]           39% of frame height
-    //     spire          [812, 471, 826, 542]        between the two
-    //     left third     clear to x 497              the copy column's gutter
-    //
-    // The old beat at [0, 16, -24] aimed at [0, 16, -46] and measured mansion
-    // coverage 0.000. This is the same chapter with the building still in it.
+    // The aim came DOWN 5.8 m with the sphere: it was lifted to leave room above
+    // the spire for the ball, and with the ball gone that room was sky with
+    // nothing in it and the house pushed into the foot of the frame.
     //
     // No longer the end of the leg: the approach to the door follows it. It is
     // still where the camera slows almost to rest, which is what makes it the
     // held frame of its chapter.
     at: FILM_SHARE,
     position: grow([-24.0, 18.0, -42.0]),
-    // grown, then lifted 1.3 m with the constellation it frames (see above)
-    target: [0.0, 12.8 * ESTATE_SCALE + 1.3, 0.0],
+    // (And down again with the flat roof: see the crane, above.)
+    target: [0.0, ROOFLINE_AIM, 0.0],
     // Fog is doing MORE work here than anywhere else on the path, not less. The
     // authored terrain stops dead at +/-120m, and from this vantage the far edge
     // is 149m away and lands at y 453 — a hard line straight across the frame,
@@ -422,9 +385,8 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     keyIntensity: 2.6,
     fov: 37,
     roll: 0.0,
-    // Held open rather than closed. The subject is now a PAIR — residence and
-    // network — and the pair has to sit in the right of frame together with the
-    // text block beside it, which needs more offset than a lone sphere did.
+    // Held open: the house sits in the right of frame, the figures in the
+    // dark land to its left.
     frameOffset: 3.6 * ESTATE_SCALE,
     // Held, not still climbing. See the note on the beat above.
     evening: 1,
@@ -487,11 +449,22 @@ export const APPROACH_BEATS: readonly CameraBeat[] = [
     // between the house and the ring of palms, which is planted only on the
     // fountain's far side, so the camera comes onto the axis inside the ring
     // rather than through it. The lit front rakes away to the right.
-    position: [-11.8, 14.5, 20.5],
-    target: [0.0, 4.5, 7.2],
+    //
+    // LOWER, FURTHER OUT AND ON A LONGER LENS (the refinement brief,
+    // 2026-10-04: "avoid camera distances that expose the limitations of the
+    // model without providing photographic intimacy"). It stood at
+    // [-11.8, 14.5, 20.5] aiming at [0, 4.5, 7.2] on 45 degrees: 20 m from the
+    // corner and two and a half metres over the parapet, looking down — and a
+    // third of the frame was the flat roof, the one plane of the house with
+    // nothing on it, at the distance that shows it best. Under the parapet
+    // (12.5 m) the roof is behind its balustrade; 27 m out on 41 degrees the
+    // lit front is a three-quarter elevation against the evening sky, which
+    // is the photograph a house like this is sold by.
+    position: [-15.0, 10.6, 25.5],
+    target: [0.0, 5.4, 7.2],
     fog: growFog([32, 150]),
     keyIntensity: 2.45,
-    fov: 45,
+    fov: 41,
     roll: 0.025,
     frameOffset: 1.4 * ESTATE_SCALE,
     evening: 1,
@@ -506,7 +479,9 @@ export const APPROACH_BEATS: readonly CameraBeat[] = [
     // approach beats were searched against estateBounds.ts for the pose nearest
     // the intended shots that clears every palm by more than a metre and keeps
     // the descent under the path's vertical-kink bound.
-    position: [-5.3, 11.7, 38.1],
+    // (11.7 m up until the forecourt beat came down to 10.6: the descent is
+    // one way all the way to the door.)
+    position: [-5.3, 10.0, 38.1],
     target: [0.0, 3.4, 8.2],
     fog: growFog([30, 145]),
     keyIntensity: 2.4,
@@ -593,7 +568,34 @@ export const FILM_POSITION_CURVE = curveThrough(FILM_BEATS.map((b) => b.position
 export const FILM_TARGET_CURVE = curveThrough(FILM_BEATS.map((b) => b.target));
 /** The approach, from the constellation to the front door. */
 export const APPROACH_POSITION_CURVE = curveThrough(APPROACH_BEATS.map((b) => b.position));
-export const APPROACH_TARGET_CURVE = curveThrough(APPROACH_BEATS.map((b) => b.target));
+/**
+ * THE APPROACH'S AIM IS DRAWN FROM WHERE IT WAS DRAWN: 16 m up at the holdings
+ * beat. A Catmull-Rom segment is shaped by the point before it, so bringing
+ * that beat's aim down for the flat roof (ROOFLINE_AIM) re-shaped the whole
+ * stretch from the flank to the forecourt as well — measured, the picture 12
+ * px lower at leg 0.8, which stood the approach's eyebrow on a lit window
+ * (its ground from a p90 luma of 73 to 142). The curve keeps its old first
+ * point, so every frame from the flank beat to the door is the frame it was;
+ * the difference is taken up across the first segment alone (see
+ * exteriorPoseAtSwing), where the camera is leaving the holdings beat anyway.
+ */
+export const APPROACH_AIM_FROM = 16.0;
+export const APPROACH_TARGET_CURVE = curveThrough(
+  APPROACH_BEATS.map((b, i) => (i === 0 ? [b.target[0], APPROACH_AIM_FROM, b.target[2]] : b.target)),
+);
+/**
+ * AND AN UPRIGHT SCREEN KEEPS THE OLD AIM ALTOGETHER. The lowered aim is a
+ * wide frame's composition: there the copy stands beside the house, and the
+ * house wants the middle of the frame. On a phone the copy stands ABOVE the
+ * house, and lifting the house 8% of the frame put the holdings' gloss across
+ * its lit first-floor windows (seen at 390x844). So an upright frame aims
+ * where it always did — the film's curve with the crane and the holdings at
+ * 16 m — and every phone frame is the frame that was checked.
+ */
+const FILM_TARGET_CURVE_UPRIGHT = curveThrough(
+  FILM_BEATS.map((b) => (b.id === 'crane' || b.id === 'holdings' ? [b.target[0], APPROACH_AIM_FROM, b.target[2]] : b.target)),
+);
+const uprightAim = new THREE.Vector3();
 
 /**
  * Map progress to a parameter on one curve.
@@ -694,15 +696,26 @@ export function exteriorPoseAtSwing(
   swing: number,
   outPosition: THREE.Vector3,
   outTarget: THREE.Vector3,
+  /** How upright the frame is, 0..1 (phoneFraming.phoneWeight): an upright
+   *  frame keeps the aim it had before the roof was made flat. */
+  upright = 0,
 ): void {
   if (swing <= FILM_SHARE) {
     const u = curveTOver(FILM_BEATS, swing);
     FILM_POSITION_CURVE.getPoint(u, outPosition);
     FILM_TARGET_CURVE.getPoint(u, outTarget);
+    if (upright > 0) outTarget.lerp(FILM_TARGET_CURVE_UPRIGHT.getPoint(u, uprightAim), Math.min(1, upright));
   } else {
     const u = curveTOver(APPROACH_BEATS, swing);
     APPROACH_POSITION_CURVE.getPoint(u, outPosition);
     APPROACH_TARGET_CURVE.getPoint(u, outTarget);
+    // The aim leaves the holdings beat from where the flat roof put it and is
+    // back on the approach's own curve by the flank beat (APPROACH_AIM_FROM):
+    // the whole difference at the join, none of it by the first beat, and no
+    // slope at either end.
+    const k = Math.min(1, u * (APPROACH_BEATS.length - 1));
+    const w = 1 - k * k * k * (k * (k * 6 - 15) + 10);
+    outTarget.y += (ROOFLINE_AIM - APPROACH_AIM_FROM) * w * (1 - Math.min(1, Math.max(0, upright)));
   }
 }
 
@@ -711,8 +724,9 @@ export function exteriorPoseAt(
   legProgress: number,
   outPosition: THREE.Vector3,
   outTarget: THREE.Vector3,
+  upright = 0,
 ): void {
-  exteriorPoseAtSwing(exteriorSwing(legProgress), outPosition, outTarget);
+  exteriorPoseAtSwing(exteriorSwing(legProgress), outPosition, outTarget, upright);
 }
 
 /** Fog and key intensity, interpolated between the surrounding beats. Linear

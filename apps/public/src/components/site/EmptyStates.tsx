@@ -19,7 +19,7 @@ export function EmptyState({ title, description, icon: Icon = ComponentIcon }: E
     <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-white/10 bg-white/[0.02] px-6 py-16 text-center">
       <Icon className="mb-4 h-8 w-8 text-[#F2EDE4]/30" strokeWidth={1.25} />
       <h4 className="t-eyebrow mb-2 text-[#F2EDE4]/70">{title}</h4>
-      <p className="t-small max-w-sm text-[#F2EDE4]/50">{description}</p>
+      <p className="t-small max-w-sm text-[#F2EDE4]/[0.62]">{description}</p>
     </div>
   );
 }

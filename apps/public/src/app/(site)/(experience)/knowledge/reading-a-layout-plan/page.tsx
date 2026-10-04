@@ -35,7 +35,7 @@ export default function ReadingALayoutPlanPage() {
           buyer is handed that shows exactly what they are getting.
         </p>
 
-        <h2 className="mt-10 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-10 font-serif text-step-1 text-[#F2EDE4]">
           Start with the roads
         </h2>
         <p>
@@ -53,7 +53,7 @@ export default function ReadingALayoutPlanPage() {
           you.
         </p>
 
-        <h2 className="mt-10 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-10 font-serif text-step-1 text-[#F2EDE4]">
           Then the plot dimensions
         </h2>
         <p>
@@ -64,7 +64,7 @@ export default function ReadingALayoutPlanPage() {
           each edge separately; those are worth measuring rather than assuming.
         </p>
 
-        <h2 className="mt-10 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-10 font-serif text-step-1 text-[#F2EDE4]">
           Find the parcels that are not for sale
         </h2>
         <p>
@@ -81,7 +81,7 @@ export default function ReadingALayoutPlanPage() {
           maximised.
         </p>
 
-        <h2 className="mt-10 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-10 font-serif text-step-1 text-[#F2EDE4]">
           Read the boundary
         </h2>
         <p>
@@ -93,7 +93,7 @@ export default function ReadingALayoutPlanPage() {
           shown at the edge.
         </p>
 
-        <h2 className="mt-10 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-10 font-serif text-step-1 text-[#F2EDE4]">
           Last, the approval block
         </h2>
         <p>

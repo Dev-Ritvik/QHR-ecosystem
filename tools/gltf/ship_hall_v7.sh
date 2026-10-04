@@ -40,7 +40,11 @@ rm -rf "$WORK" && mkdir -p "$WORK/ex"
   python "$ROOT/tools/gltf/encode_ktx2.py" ex/scene.gltf
   gltf-transform copy ex/scene.gltf k.glb
   gltf-transform draco k.glb interior_hall.glb )
-cp "$WORK/interior_hall.glb" "$ROOT/apps/public/public/models/interior_hall.glb"
+# NO_INSTALL=1 leaves the site's model alone: the GLB stays in $WORK until its
+# final atlas has been swapped in (a quick bake's atlas is not for the site).
+if [ -z "${NO_INSTALL:-}" ]; then
+  cp "$WORK/interior_hall.glb" "$ROOT/apps/public/public/models/interior_hall.glb"
+fi
 python - "$BAKE/lightmap_manifest.json" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))

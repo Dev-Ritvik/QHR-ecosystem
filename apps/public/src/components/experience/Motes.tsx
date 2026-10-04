@@ -35,8 +35,17 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { filmState } from './FilmGrade';
 
 const COUNT = 2400;
+/**
+ * How much the dust shows. 0.34 until the refinement brief (2026-10-03:
+ * "reduce volumetric effects where they become the subject"): at that strength
+ * the field stood over the dusk approach as a fall of white specks in front of
+ * a house twenty-five metres off, which no lens sees. A breath of it in the low
+ * sun, and none once the sun has gone.
+ */
+export const MOTE_OPACITY = 0.13;
 
 /** The volume the motes occupy, in metres, centred on the approach axis. Sized
  *  to the camera path (z 9..30, x -15..2) plus margin, so they are always in
@@ -125,9 +134,9 @@ const FRAG = /* glsl */ `
  * That noise floor is larger than most changes worth measuring, so it was
  * hiding real differences and manufacturing false ones — a hall-only texture
  * change was flagged as a regression on an exterior frame purely because the
- * embers had been redrawn. Constellation.tsx already made this decision the
- * other way and says so in its own comment ("Deterministic per index — no
- * Math.random"); this brings the ember field into line.
+ * embers had been redrawn. The sphere of points over the spire (removed
+ * 2026-09-30) had already made this decision the other way ("Deterministic
+ * per index — no Math.random"); this brought the ember field into line.
  *
  * mulberry32: 32-bit state, one multiply-xorshift round, uniform enough for
  * scattering dust and small enough to read. The DISTRIBUTION is unchanged —
@@ -148,8 +157,9 @@ function mulberry32(a: number): () => number {
  *  it reads, which is exactly what a seed should be able to do. */
 const MOTE_SEED = 0x5eed1a11;
 
-export function Motes({ count = COUNT }: { count?: number }) {
+export function Motes({ count = COUNT, shown = true }: { count?: number; shown?: boolean }) {
   const mat = useRef<THREE.ShaderMaterial>(null);
+  const points = useRef<THREE.Points>(null);
 
   const geometry = useMemo(() => {
     const g = new THREE.BufferGeometry();
@@ -197,17 +207,27 @@ export function Motes({ count = COUNT }: { count?: number }) {
       uSize: { value: 2.6 },
       uSwirl: { value: new THREE.Vector2(FOUNTAIN.x, FOUNTAIN.z) },
       uColor: { value: new THREE.Color('#E8B98A') },
-      uOpacity: { value: 0.34 },
+      uOpacity: { value: MOTE_OPACITY },
     }),
     [],
   );
 
   useFrame((state) => {
-    if (mat.current) mat.current.uniforms.uTime.value = state.clock.elapsedTime;
+    if (!mat.current) return;
+    mat.current.uniforms.uTime.value = state.clock.elapsedTime;
+    // Dust is seen by the sun it catches: it goes with the light.
+    const opacity = MOTE_OPACITY * (1 - filmState.night);
+    mat.current.uniforms.uOpacity.value = opacity;
+    // Not drawn where it cannot be seen: inside the house (`shown`), and at
+    // night. It stays MOUNTED through both, so its program is the one it was
+    // compiled with: mounted with the estate's set alone, the material was
+    // thrown away at the door and built again on the way out — one of the
+    // programs compiled on the frame the sets change (measured 2026-10-04).
+    if (points.current) points.current.visible = shown && opacity > 0.002;
   });
 
   return (
-    <points geometry={geometry} frustumCulled={false} renderOrder={2}>
+    <points ref={points} geometry={geometry} frustumCulled={false} renderOrder={2}>
       <shaderMaterial
         ref={mat}
         uniforms={uniforms}

@@ -13,7 +13,9 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useState } from 'react';
 import { SmoothScroll } from './SmoothScroll';
+import { coverState } from './coverState';
 
 const ExperienceCanvas = dynamic(
   () => import('./WorldCanvas').then((m) => m.WorldCanvas),
@@ -23,20 +25,41 @@ const ExperienceCanvas = dynamic(
   },
 );
 
-// Split from the canvas import on purpose: the counter must be on screen while
-// the WebGL bundle itself is still downloading, so it cannot live behind the
-// same ssr:false boundary it is covering for.
+// Split from the canvas import on purpose: the cover must be live while the
+// WebGL bundle itself is still downloading, so it cannot live behind the same
+// ssr:false boundary it is covering for. (And since that is still after first
+// paint, a static copy of it is server-rendered below.)
 const ExperiencePreloader = dynamic(
   () => import('./Preloader').then((m) => m.Preloader),
   { ssr: false },
 );
 
+/**
+ * THE COVER, IN THE FIRST PAINT. The Preloader is a client-only chunk, so on a
+ * cold load the page painted its copy over an empty frame, then the canvas lit
+ * a bare sky behind it, and only then did the cover arrive over both — the
+ * flash the second art-direction audit saw at 00:08. This is the same cover,
+ * server-rendered, so it is on screen before any script runs; the Preloader,
+ * drawn identically above it, removes it the moment it mounts. On a return
+ * within the document the scene is already built and neither is drawn.
+ */
+function StaticCover() {
+  return (
+    <div aria-hidden className="fixed inset-0 z-[59] flex flex-col items-center justify-center bg-[#0A1120]">
+      <span className="t-micro text-[#F2EDE4]/[0.62]">Quality Homes Reality</span>
+      <span className="relative mt-6 block h-px w-28 bg-[#F2EDE4]/[0.12]" />
+    </div>
+  );
+}
+
 export function ExperienceCanvasHost() {
+  const [cover, setCover] = useState(() => !coverState.sceneInMemory);
   return (
     <>
       <SmoothScroll />
       <ExperienceCanvas />
-      <ExperiencePreloader />
+      {cover ? <StaticCover /> : null}
+      <ExperiencePreloader onMount={() => setCover(false)} />
     </>
   );
 }

@@ -69,7 +69,7 @@ export default function ExperienceError({
       </div>
 
       {error.digest ? (
-        <p className="t-small mt-16 text-[#F2EDE4]/50">
+        <p className="t-small mt-16 text-[#F2EDE4]/[0.62]">
           Reference {error.digest}
         </p>
       ) : null}

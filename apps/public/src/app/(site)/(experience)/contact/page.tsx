@@ -34,7 +34,7 @@ export default function ContactPage() {
           <EnquiryForm />
         </div>
 
-        <h2 className="mt-14 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-14 font-serif text-step-1 text-[#F2EDE4]">
           Or write to an office directly
         </h2>
         <div className="mt-6 grid gap-8 sm:grid-cols-3">
@@ -42,11 +42,11 @@ export default function ContactPage() {
             const b = BRANCHES[id];
             return (
               <div key={b.id}>
-                <p className="font-serif text-lg text-[#F2EDE4]">{b.name}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60">
+                <p className="font-serif text-step-1 text-[#F2EDE4]">{b.name}</p>
+                <p className="mt-1 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
                   {b.role === 'head_office' ? 'Head office' : 'Branch'}
                 </p>
-                <address className="mt-3 not-italic text-sm leading-relaxed text-[#F2EDE4]/70">
+                <address className="mt-3 not-italic text-step--1 text-[#F2EDE4]/70">
                   {b.address} &ndash; {b.pincode}
                 </address>
               </div>
@@ -54,7 +54,7 @@ export default function ContactPage() {
           })}
         </div>
 
-        <p className="mt-10 text-[15px] text-[#F2EDE4]/75">
+        <p className="mt-10 text-step-0 text-[#F2EDE4]/75">
           Or call{' '}
           <a className="underline underline-offset-4" href="tel:+919553513366">
             +91 95535 13366
@@ -69,7 +69,7 @@ export default function ContactPage() {
           .
         </p>
 
-        <p className="mt-6 text-sm text-[#F2EDE4]/55">
+        <p className="mt-6 text-step--1 text-[#F2EDE4]/55">
           What happens to what you send is set out in the{' '}
           <Link className="underline underline-offset-4 hover:text-[#F2EDE4]" href="/privacy">
             privacy notice

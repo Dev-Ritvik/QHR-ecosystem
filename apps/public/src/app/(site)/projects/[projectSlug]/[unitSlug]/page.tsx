@@ -97,9 +97,9 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
       
       {/* ── Print-only PDF Stamped Header (FR-W6 / NFR-D5) ── */}
       <div className="hidden print:block mb-8 border-b-2 border-foreground pb-4">
-        <h1 className="text-4xl font-bold tracking-tight">{project.name}</h1>
-        <h2 className="text-2xl font-medium mt-1">Unit {unit.unitNumber}</h2>
-        <div className="flex justify-between mt-4 text-sm text-muted-foreground font-mono">
+        <h1 className="text-step-4 font-bold tracking-tight">{project.name}</h1>
+        <h2 className="text-step-2 font-medium mt-1">Unit {unit.unitNumber}</h2>
+        <div className="flex justify-between mt-4 text-step--1 text-muted-foreground tabular-nums">
           <span>Generated on: {format(new Date(), 'MMM d, yyyy')}</span>
           {unit.priceVersionId && <span>Rate Version: {unit.priceVersionId.substring(0,8).toUpperCase()}</span>}
         </div>
@@ -108,11 +108,11 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
       {/* ── Interactive Web Header ── */}
       <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-8 print:hidden">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Unit {unit.unitNumber}</h1>
-          <p className="text-lg text-muted-foreground mt-1">{project.name}</p>
+          <h1 className="text-step-3 font-bold tracking-tight">Unit {unit.unitNumber}</h1>
+          <p className="text-step-1 text-muted-foreground mt-1">{project.name}</p>
         </div>
         <div className="flex items-center gap-4">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-secondary text-secondary-foreground capitalize">
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-step--1 font-medium bg-secondary text-secondary-foreground capitalize">
             {unit.presentationStatus.replace('_', ' ')}
           </span>
           <DownloadBrochureButton 
@@ -140,31 +140,31 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xl font-semibold border-b pb-2">Unit Specifications</h3>
+            <h3 className="text-step-1 font-semibold border-b pb-2">Unit Specifications</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
               <div>
-                <p className="text-sm text-muted-foreground">Dimensions</p>
-                <p className="font-medium mt-1">{unit.dimensionsLabel || 'N/A'}</p>
+                <p className="text-step--1 text-muted-foreground">Dimensions</p>
+                <p className="mt-1 text-step-0 font-medium">{unit.dimensionsLabel || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Facing</p>
-                <p className="font-medium mt-1 capitalize">{unit.facing || 'N/A'}</p>
+                <p className="text-step--1 text-muted-foreground">Facing</p>
+                <p className="mt-1 text-step-0 font-medium capitalize">{unit.facing || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Area</p>
-                <p className="font-medium mt-1">
+                <p className="text-step--1 text-muted-foreground">Area</p>
+                <p className="mt-1 text-step-0 font-medium">
                   {unit.areaSqYd && `${unit.areaSqYd} sq yd`}
                   {unit.areaSqYd && unit.areaSqFt && ' / '}
                   {unit.areaSqFt && `${unit.areaSqFt} sq ft`}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Road Width</p>
-                <p className="font-medium mt-1">{unit.roadWidthM ? `${unit.roadWidthM}m` : 'N/A'}</p>
+                <p className="text-step--1 text-muted-foreground">Road Width</p>
+                <p className="mt-1 text-step-0 font-medium">{unit.roadWidthM ? `${unit.roadWidthM}m` : 'N/A'}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Corner Plot</p>
-                <p className="font-medium mt-1">{unit.isCorner ? 'Yes' : 'No'}</p>
+                <p className="text-step--1 text-muted-foreground">Corner Plot</p>
+                <p className="mt-1 text-step-0 font-medium">{unit.isCorner ? 'Yes' : 'No'}</p>
               </div>
             </div>
           </div>
@@ -173,8 +173,8 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
         {/* Right Column: Pricing & Legal */}
         <div className="space-y-6">
           <div className="bg-muted/50 border rounded-xl p-6 shadow-sm">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Price</h3>
-            <div className="text-3xl font-bold">
+            <h3 className="text-step--2 font-semibold text-muted-foreground uppercase tracking-[0.3em] mb-2">Price</h3>
+            <div className="text-step-3 font-bold">
               {unit.priceOnRequest ? (
                 'Price on Request'
               ) : (
@@ -182,7 +182,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
               )}
             </div>
             {!unit.priceOnRequest && unit.pricePaise && (
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-step--1 text-muted-foreground mt-2">
                 * Prices are subject to change. Valid as of current rate version.
               </p>
             )}
@@ -190,12 +190,12 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
 
           {classDetails && classDetails.length > 0 && (
             <div className="border rounded-xl p-6 space-y-4 shadow-sm">
-              <h3 className="text-lg font-semibold border-b pb-2">Legal & Class Details</h3>
+              <h3 className="text-step-1 font-semibold border-b pb-2">Legal & Class Details</h3>
               <ul className="space-y-3">
                 {classDetails.map((detail, i) => (
                   <li key={i}>
-                    <p className="text-sm text-muted-foreground">{detail.label}</p>
-                    <p className="font-medium mt-1">{detail.value}</p>
+                    <p className="text-step--1 text-muted-foreground">{detail.label}</p>
+                    <p className="mt-1 text-step-0 font-medium">{detail.value}</p>
                   </li>
                 ))}
               </ul>
@@ -203,11 +203,11 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
           )}
           
           <div className="print:hidden border rounded-xl p-6 bg-primary/5 border-primary/20">
-            <h3 className="text-lg font-semibold mb-2">Interested?</h3>
-            <p className="text-sm text-muted-foreground mb-4">Contact our team to schedule a site visit or ask questions about this unit.</p>
+            <h3 className="text-step-1 font-semibold mb-2">Interested?</h3>
+            <p className="text-step--1 text-muted-foreground mb-4">Contact our team to schedule a site visit or ask questions about this unit.</p>
             <a 
               href={`#enquiry`}
-              className="flex min-h-[44px] items-center justify-center rounded-[3px] bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="flex min-h-[44px] items-center justify-center rounded-[3px] bg-primary px-5 text-step--1 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Enquire Now
             </a>
@@ -216,9 +216,9 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
           {/* Print-only Office Contact */}
           <div className="hidden print:block border rounded-xl p-6">
             <h3 className="font-bold border-b pb-2 mb-2">Office Contact</h3>
-            <p className="text-sm">{process.env.NEXT_PUBLIC_SITE_URL?.replace('https://', '')}</p>
+            <p className="text-step--1">{process.env.NEXT_PUBLIC_SITE_URL?.replace('https://', '')}</p>
             {process.env.NEXT_PUBLIC_WHATSAPP_NUMBER && (
-              <p className="text-sm mt-1">Phone: {process.env.NEXT_PUBLIC_WHATSAPP_NUMBER}</p>
+              <p className="text-step--1 mt-1">Phone: {process.env.NEXT_PUBLIC_WHATSAPP_NUMBER}</p>
             )}
           </div>
         </div>

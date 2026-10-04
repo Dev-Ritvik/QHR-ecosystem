@@ -29,7 +29,7 @@ export default function InvestmentGuidePage() {
         title="Buying land in north coastal Andhra"
         lede="What actually needs checking before money moves, and what the new airport does and does not change."
       >
-        <h2 className="font-serif text-xl text-[#F2EDE4]">
+        <h2 className="font-serif text-step-1 text-[#F2EDE4]">
           The airport is a real change, not a talking point
         </h2>
         <p>
@@ -48,7 +48,7 @@ export default function InvestmentGuidePage() {
           marketing rather than analysis.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           Check the layout is registered
         </h2>
         <p>
@@ -66,7 +66,7 @@ export default function InvestmentGuidePage() {
           it rather than accept a promise that it is &ldquo;in process&rdquo;.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           The four documents worth reading yourself
         </h2>
         <ol className="list-decimal space-y-3 pl-5 marker:text-[#F2EDE4]/60">
@@ -97,7 +97,7 @@ export default function InvestmentGuidePage() {
           </li>
         </ol>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           Questions that separate a good plot from a cheap one
         </h2>
         <ul className="list-disc space-y-2 pl-5 marker:text-[#F2EDE4]/60">
@@ -124,7 +124,7 @@ export default function InvestmentGuidePage() {
           </li>
         </ul>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           Before you transfer anything
         </h2>
         <p>
@@ -139,8 +139,8 @@ export default function InvestmentGuidePage() {
           .
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Sources</h2>
-        <ul className="list-disc space-y-2 pl-5 text-sm marker:text-[#F2EDE4]/60">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">Sources</h2>
+        <ul className="list-disc space-y-2 pl-5 text-step--1 marker:text-[#F2EDE4]/60">
           <li>
             <a
               className="underline underline-offset-4"
@@ -183,7 +183,7 @@ export default function InvestmentGuidePage() {
           </li>
         </ul>
 
-        <p className="mt-10 text-sm leading-relaxed text-[#F2EDE4]/55">
+        <p className="mt-10 text-step--1 text-[#F2EDE4]/55">
           This is general guidance, not legal or financial advice. Approval
           references and registration numbers change; verify current status on
           the AP-RERA portal and take your own legal advice before buying.

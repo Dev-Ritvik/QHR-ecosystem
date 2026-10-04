@@ -55,6 +55,8 @@ import { useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { StationAnchor } from './interiorPath';
 import { StationDressing, type StationDetails } from './StationDressing';
+import { StationModel } from './StationModel';
+import { stationStyle } from './stationStyle';
 import {
   clicksSuppressed,
   lockCanvasScroll,
@@ -132,6 +134,8 @@ export function ProjectStation({
 }) {
   const gl = useThree((s) => s.gl);
   const [cx, , cz] = anchor.position;
+  /** A site model on a stand, or the plan projected in light (stationStyle.ts). */
+  const style = stationStyle();
 
   const turntable = useRef<THREE.Object3D | null>(null);
   /** Where the drag started, and the table's angle at that moment. */
@@ -248,14 +252,16 @@ export function ProjectStation({
         // slowdown is frame-rate independent.
         g.rotation.y += spin.current;
         spin.current *= Math.exp(-delta * 3.2);
-      } else {
+      } else if (style === 'hologram') {
         // Idle: a very slow turn while the camera is on this station, so the
         // table advertises that it moves before anyone touches it. Stops when
         // the camera leaves, so an off-screen table is not burning frames.
+        // Under the projection only: a site model turns with its table
+        // (StationModel), and a model someone is reading holds still.
         g.rotation.y += delta * 0.055 * emphasis.current;
       }
     },
-    [emphasis],
+    [emphasis, style],
   );
 
   // Registered in an effect, not during render: a render-phase side effect runs
@@ -329,12 +335,21 @@ export function ProjectStation({
           Sceneless: it dresses nodes inside the hall, so its position here
           is irrelevant. The store's cards carry the plot counts beside the
           fields StationProject names. */}
-      <StationDressing
-        root={root}
-        anchor={anchor}
-        project={project as StationDetails | null}
-        emphasis={emphasis}
-      />
+      {style === 'hologram' ? (
+        <StationDressing
+          root={root}
+          anchor={anchor}
+          project={project as StationDetails | null}
+          emphasis={emphasis}
+        />
+      ) : (
+        <StationModel
+          root={root}
+          anchor={anchor}
+          project={project as (StationDetails & { slug?: string }) | null}
+          turntable={turntable}
+        />
+      )}
       {/* TABLE PROXY — the drag surface.
           A proxy rather than the table meshes themselves: raycasting 3,688
           triangles on every pointer move to decide whether a drag started is

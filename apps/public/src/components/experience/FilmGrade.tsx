@@ -18,9 +18,11 @@
 // contrast: deep shadows, bright highlights" is, in large part, a tone curve.
 //
 // It is done HERE, with its own exposure, rather than by letting three's
-// tone mapping back into the chain, because the doorway passage drives
-// gl.toneMappingExposure for its own effect; waking that knob up would change
-// a transition this pass has been asked to leave alone.
+// tone mapping back into the chain. That exposure is also the door passage's
+// iris (passageLight, doorway.ts): the hall comes up from five stops under as
+// the eye adjusts, and because it is an exposure BEFORE the curve, the lamps
+// and the windows reach the shoulder first and the walls last — which is how
+// a room looks when an eye adjusts to it, and not how a fade looks.
 //
 // THE GRADE, in display space after the curve:
 //
@@ -42,7 +44,10 @@
 import { forwardRef, useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Effect } from 'postprocessing';
-import { Uniform, Vector3 } from 'three';
+import { Uniform, Vector2, Vector3, Vector4 } from 'three';
+import { passageLight } from './passageLight';
+import { HEADER_BAND, lensFilter } from './lensFilter';
+import { READING_CEILING, READING_STOPS, readingLight } from './readingLight';
 
 /**
  * How far into evening the film is, 0..1, written each frame by
@@ -52,9 +57,24 @@ import { Uniform, Vector3 } from 'three';
  * rather than as underexposure. Without it the filmic toe took the evening
  * beats to a frame mean of 30.
  */
-export const filmState = { evening: 0 };
+export const filmState = { evening: 0, night: 0 };
 /** Exposure multiplier at full evening. */
 export const EVENING_LIFT = 0.55;
+/**
+ * The print's shadows at full evening. By day they lean a breath toward teal
+ * (FILM_GRADE.shadowTint): the planes the sky lights, against the planes the
+ * sun does. At dusk there is no blue sky to lean toward — the client,
+ * 2026-10-01: "the blue shadows of this look cheap" — so the lean comes off
+ * with the evening and the shadows print warm, the colour of the air they are
+ * in (WorldCanvas, HAZE_NIGHT).
+ *
+ * AND THEY ARE LIFTED OFF BLACK, the way a dusk exposure holds its shadows: of
+ * the forecourt at dusk the client wrote "this looks darker make it less
+ * dark", and the darkest of that frame — the shaded lawn, the hedges, the car
+ * — printed at a luma of 9, which no fill light brings out of the curve's
+ * toe. A print lifts them: this much at black, nothing by the middle grey.
+ */
+export const EVENING_SHADOW_TINT: [number, number, number] = [0.036, 0.028, 0.019];
 
 const FRAGMENT = /* glsl */ `
 uniform float exposure;
@@ -67,6 +87,12 @@ uniform vec3 highlightTint;
 uniform float contrast;
 uniform float saturation;
 uniform float amount;
+uniform vec4 ndShape;
+uniform float ndStops;
+uniform float ndInner;
+uniform vec4 ndTop;
+uniform float ndAll;
+uniform vec2 readCap;
 
 // three's ACESFilmicToneMapping (Stephen Hill's fit), with the exposure taken
 // from this effect's own uniform instead of the renderer's.
@@ -103,8 +129,61 @@ vec3 toRgb(vec3 c) {
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+// THE GRADUATED ND (lensFilter). A soft ellipse of neutral density, in
+// stops, in scene-linear light BEFORE the curve — a filter in front of the
+// lens, taking light away from a bright sky the way a photographer's grad
+// does: highlights come down into the shoulder, nothing is laid over them.
+//
+// AND THE TOP BAND (ndTop: stops, full to, gone by — as fractions of the
+// frame's height from its top edge): the grad a photographer sets on a bright
+// sky, for the header that stands on it. The denser of the two holds at each
+// point; they never add.
+//
+// AND THE WHOLE FRAME (ndAll: stops): the lens closed down, for the colophon
+// that comes up over the film's last light (lensFilter.codaFilter). The same
+// rule: the densest of the three holds.
+float ndFilter(vec2 uv) {
+  float d = ndAll;
+  if (ndStops > 0.0) {
+    vec2 q = (uv - ndShape.xy) / ndShape.zw;
+    d = max(d, ndStops * (1.0 - smoothstep(ndInner, 1.0, length(q))));
+  }
+  if (ndTop.x > 0.0) d = max(d, ndTop.x * (1.0 - smoothstep(ndTop.y, ndTop.z, 1.0 - uv.y)));
+  return exp2(-d);
+}
+
+// THE BAND'S HIGHLIGHTS, burnt in (lensFilter.ts, HEADER_BAND.ceiling): in the
+// print's gamma, a luma above the shoulder is rolled off under the ceiling —
+// a window behind the header prints as a pale pane, not a white one. Below
+// the shoulder nothing moves, and outside the band nothing at all.
+//
+// IT COMES IN WITHOUT AN EDGE. 'on' is how far the ceiling has come down, 0..1:
+// the ceiling goes from none to its own level with it, AND the knee comes
+// down off the ceiling over the first third of that — at nothing the knee is
+// the ceiling and the ceiling is white, so nothing moves. With the knee fixed
+// at seven-tenths of the ceiling from the start, the first sliver of the band
+// already rolled off everything above a luma of 178 by up to a ninth, and the
+// band's lower edge was a line across any white wall or window that crossed
+// it (measured in the hall: a step of 6 to 7 between two rows, at 23.9% of
+// the frame's height).
+vec3 shoulder(vec3 g, float ceiling, float on) {
+  float cap = mix(1.0, ceiling, on);
+  float knee = cap * mix(1.0, 0.7, smoothstep(0.0, 0.35, on));
+  float l = dot(g, vec3(0.2126, 0.7152, 0.0722));
+  if (l <= knee) return g;
+  float over = (l - knee) / max(1.0e-4, cap - knee);
+  return g * ((knee + (cap - knee) * (1.0 - exp(-over))) / l);
+}
+
+vec3 burnTop(vec3 g, vec2 uv) {
+  if (ndTop.x <= 0.0) return g;
+  float k = (1.0 - smoothstep(ndTop.y, ndTop.z, 1.0 - uv.y)) * min(1.0, ndTop.x);
+  if (k <= 0.0) return g;
+  return shoulder(g, ndTop.w, k);
+}
+
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
-  vec3 c = filmCurve(max(inputColor.rgb, vec3(0.0)) * whiteBalance);
+  vec3 c = filmCurve(max(inputColor.rgb, vec3(0.0)) * whiteBalance * ndFilter(uv));
   vec3 g = pow(c, vec3(1.0 / 2.2));
 
   vec3 hsv = toHsv(g);
@@ -121,6 +200,11 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   g = mix(g, g * g * (3.0 - 2.0 * g), contrast);
   l = dot(g, vec3(0.2126, 0.7152, 0.0722));
   g = mix(vec3(l), g, saturation);
+  g = burnTop(g, uv);
+  // A reading page's highlights, held over the whole frame (readingLight.ts,
+  // READING_CEILING): the same shoulder, coming down as the page's light does.
+  // (ceiling, how far down): 0 down is none.
+  if (readCap.y > 0.0) g = shoulder(g, readCap.x, readCap.y);
 
   // amount 0 is an exact passthrough (mix(x, y, 0) == x): the dusk rollback
   // runs through this pass untouched, and switching between the exterior's
@@ -195,16 +279,22 @@ export const HALL_GRADE: FilmGradeSettings = {
   // the approved renders' luma; this lets them fall below it so the room's
   // own lights — chandelier, sconces, the plans on the tables — carry the
   // frame, and the corners and the stair's underside go properly dark.
-  exposure: 1.95,
+  // AND DOWN AGAIN FOR THE IMPERIAL HALL (the art-direction audit: "the
+  // interior is moody, dramatically lit by light spilling through the
+  // windows"): a quarter-stop under, with more contrast, so the window light
+  // (WindowLight.tsx) and the lamps carry the room rather than the walls.
+  exposure: 1.72,
   whiteBalance: [0.87, 1.0, 1.1],
   greenSat: 1,
   greenHue: 0,
   greenValue: 1,
   shadowTint: [0.0, -0.002, -0.004],
   highlightTint: [0.004, 0.002, -0.004],
-  contrast: 0.2,
+  contrast: 0.27,
   saturation: 1.04,
 };
+
+const GRADE_TMP = new Vector3();
 
 export class FilmGradeEffect extends Effect {
   constructor(s: FilmGradeSettings = FILM_GRADE) {
@@ -220,6 +310,12 @@ export class FilmGradeEffect extends Effect {
         ['contrast', new Uniform(s.contrast)],
         ['saturation', new Uniform(s.saturation)],
         ['amount', new Uniform(1)],
+        ['ndShape', new Uniform(new Vector4(0.2, 0.5, 0.3, 0.2))],
+        ['ndStops', new Uniform(0)],
+        ['ndInner', new Uniform(0.35)],
+        ['ndTop', new Uniform(new Vector4(0, 0.07, 0.24, 0.4))],
+        ['ndAll', new Uniform(0)],
+        ['readCap', new Uniform(new Vector2(READING_CEILING, 0))],
       ]),
     });
   }
@@ -254,13 +350,63 @@ export const FilmGrade = forwardRef<FilmGradeEffect, { settings?: FilmGradeSetti
     useEffect(() => {
       effect.settings = settings;
     }, [effect, settings]);
-    useFrame(() => {
+    useFrame((_, delta) => {
       // Every uniform, every frame — eight writes — so a look-dev session
       // (?debug=1 publishes the grades on window.__estateGrades) can move any
       // of them live, and the exposure can ride the evening.
       effect.settings = settings;
       const lift = settings.ridesEvening ? 1 + EVENING_LIFT * filmState.evening : 1;
-      effect.uniforms.get('exposure')!.value = settings.exposure * lift;
+      // A reading page's light (readingLight.ts), eased so a route change
+      // dims rather than cuts.
+      readingLight.stops += (readingLight.want - readingLight.stops) * (1 - Math.exp(-Math.max(0, delta) / 0.35));
+      const reading = Math.pow(2, -readingLight.stops);
+      effect.uniforms.get('exposure')!.value = settings.exposure * lift * passageLight.exposure * reading;
+      // The shadows' lean, off the sky's blue as the evening falls
+      // (EVENING_SHADOW_TINT).
+      if (settings.ridesEvening && filmState.evening > 0) {
+        const e = filmState.evening;
+        const [r, g, b] = settings.shadowTint;
+        (effect.uniforms.get('shadowTint')!.value as Vector3).set(
+          r + (EVENING_SHADOW_TINT[0] - r) * e,
+          g + (EVENING_SHADOW_TINT[1] - g) * e,
+          b + (EVENING_SHADOW_TINT[2] - b) * e,
+        );
+      }
+      // THROUGH THE DOOR (passageLight.grade): the exterior's print goes to the
+      // hall's as the camera closes on the open doorway, so the sets can change
+      // behind it without the picture changing.
+      if (settings.ridesEvening && passageLight.grade > 0) {
+        const g = passageLight.grade;
+        const u = effect.uniforms;
+        const to = HALL_GRADE;
+        const mix = (name: string, target: number) => {
+          const x = u.get(name)!;
+          x.value = (x.value as number) + (target - (x.value as number)) * g;
+        };
+        mix('exposure', to.exposure * passageLight.exposure * reading);
+        mix('greenSat', to.greenSat);
+        mix('greenHue', to.greenHue);
+        mix('greenValue', to.greenValue);
+        mix('contrast', to.contrast);
+        mix('saturation', to.saturation);
+        const wb = to.whiteBalance ?? [1, 1, 1];
+        (u.get('whiteBalance')!.value as Vector3).lerp(GRADE_TMP.set(wb[0], wb[1], wb[2]), g);
+        (u.get('shadowTint')!.value as Vector3).lerp(GRADE_TMP.set(...to.shadowTint), g);
+        (u.get('highlightTint')!.value as Vector3).lerp(GRADE_TMP.set(...to.highlightTint), g);
+      }
+      // ...and its ceiling, coming down with the same ease.
+      const held = Math.min(1, Math.max(0, readingLight.stops / READING_STOPS));
+      (effect.uniforms.get('readCap')!.value as Vector2).set(READING_CEILING, held < 0.004 ? 0 : held);
+      effect.uniforms.get('ndStops')!.value = lensFilter.stops;
+      effect.uniforms.get('ndAll')!.value = lensFilter.all;
+      effect.uniforms.get('ndInner')!.value = lensFilter.inner;
+      (effect.uniforms.get('ndTop')!.value as Vector4).set(
+        lensFilter.top,
+        lensFilter.topFull,
+        lensFilter.topZero,
+        HEADER_BAND.ceiling,
+      );
+      (effect.uniforms.get('ndShape')!.value as Vector4).copy(lensFilter.shape);
     });
     // No dispose={null} on the primitive: r3f applies that as a PROPERTY and
     // nulls the method, which then threw here the first time the composer

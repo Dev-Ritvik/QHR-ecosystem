@@ -33,7 +33,7 @@ export default function RefundPolicyPage() {
       >
         <PendingNotice what="Every figure and period on this page is a commercial commitment, so none has been assumed. These are the questions buyers ask; the answers belong to Quality Homes Reality." />
 
-        <h2 className="font-serif text-xl text-[#F2EDE4]">
+        <h2 className="font-serif text-step-1 text-[#F2EDE4]">
           If you cancel before agreement
         </h2>
         <p>
@@ -43,7 +43,7 @@ export default function RefundPolicyPage() {
           <Pending>COOLING-OFF OR NOTICE PERIOD</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           If you cancel after agreement
         </h2>
         <p>
@@ -53,7 +53,7 @@ export default function RefundPolicyPage() {
           <Pending>CLAUSE REFERENCE</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           If we cannot proceed
         </h2>
         <p>
@@ -65,7 +65,7 @@ export default function RefundPolicyPage() {
           plainly.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           How a refund is made
         </h2>
         <p>
@@ -77,7 +77,7 @@ export default function RefundPolicyPage() {
           <Pending>TAX AND STATUTORY TREATMENT</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           How to request one
         </h2>
         <p>
@@ -87,7 +87,7 @@ export default function RefundPolicyPage() {
           <Pending>REFUND CONTACT AND EMAIL</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           If you are not satisfied
         </h2>
         <p>
@@ -97,7 +97,7 @@ export default function RefundPolicyPage() {
           and Development) Act 2016 or consumer protection law.
         </p>
 
-        <p className="mt-12 text-sm text-[#F2EDE4]/60">
+        <p className="mt-12 text-step--1 text-[#F2EDE4]/60">
           These terms sit alongside the{' '}
           <Link className="underline underline-offset-4" href="/terms">
             terms of use
@@ -105,7 +105,7 @@ export default function RefundPolicyPage() {
           and are subordinate to your signed sale agreement, which prevails if
           the two differ.
         </p>
-        <p className="mt-4 text-sm text-[#F2EDE4]/50">
+        <p className="mt-4 text-step--1 text-[#F2EDE4]/[0.62]">
           Last updated: <Pending>DATE ON PUBLICATION</Pending>.
         </p>
       </Surface>

@@ -3,11 +3,11 @@
 // The doorway, proved as arithmetic.
 //
 // A passage through the front door is a timed move across two models, and the
-// ways it can go wrong are all measurable without a browser: a white that is
-// not full at the instant the models swap, a camera that is not yet through the
+// ways it can go wrong are all measurable without a browser: a dark that is not
+// full at the instant the models swap, a camera that is not yet through the
 // door when the frame is covered, a flight line that clips the portico or the
-// fountain, an "acceleration" that is not one, a hand-back that jumps. Each is
-// asserted here.
+// fountain, an "acceleration" that is not one, an iris that does not open, a
+// hand-back that jumps. Each is asserted here.
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
@@ -30,7 +30,7 @@ import {
   noteDoorwayInput,
   setDoorwayHost,
   stepDoorway,
-  whiteGradient,
+  THRESHOLD_DARK,
   type DoorwayHost,
 } from './doorway';
 import { BEATS } from './cameraPath';
@@ -57,7 +57,7 @@ describe('the passage, as a clock', () => {
         const a = doorwayChannels(dir, 0);
         expect(a.side).toBe('near');
         expect(a.leave).toBe(0);
-        expect(a.white).toBe(0);
+        expect(a.dark).toBe(0);
         expect(a.exposure).toBe(1);
 
         // At 1 the far-side blend IS the live pose: nothing left to hand back.
@@ -66,33 +66,74 @@ describe('the passage, as a clock', () => {
         expect(z.arrive).toBe(1);
         expect(z.settle).toBe(1);
         expect(z.warp).toBeCloseTo(0, 9);
-        expect(z.white).toBeCloseTo(0, 9);
-        expect(z.blur).toBeCloseTo(0, 9);
+        expect(z.dark).toBeCloseTo(0, 9);
         expect(z.exposure).toBeCloseTo(1, 9);
-        expect(z.hallOpen).toBe(0);
+        expect(z.defocus).toBeCloseTo(0, 9);
         expect(z.exteriorDoors).toBeCloseTo(0, 9);
-        expect(z.exteriorGlow).toBeCloseTo(0, 9);
+        expect(z.vestibule).toBe(0);
       });
 
-      it('is fully white, and the camera through the doorway, before the models swap', () => {
+      it('is fully dark, and the camera through the doorway, before the models swap', () => {
         // The swap is the one instant in the film where a single visible frame
         // would show two models at once.
         const justBefore = doorwayChannels(dir, T.swap - 1e-6);
         expect(justBefore.side).toBe('near');
-        expect(justBefore.white).toBe(1);
+        expect(justBefore.dark).toBe(1);
         expect(justBefore.leave).toBe(1);
         const at = doorwayChannels(dir, T.swap);
         expect(at.side).toBe('far');
-        expect(at.white).toBe(1);
+        expect(at.dark).toBe(1);
         expect(at.arrive).toBe(0);
       });
 
-      it('holds full white from the end of the rush until the clearing begins', () => {
+      it('holds full dark from the end of the rush until the clearing begins', () => {
         for (const u of sample(200)) {
-          if (u >= T.whiteTo && u < T.clearFrom) {
-            expect(doorwayChannels(dir, u).white, `u=${u}`).toBe(1);
+          if (u >= T.darkTo && u < T.clearFrom) {
+            expect(doorwayChannels(dir, u).dark, `u=${u}`).toBe(1);
           }
         }
+      });
+
+      it('never goes to white: the passage only ever takes light away', () => {
+        // The fourth art-direction critique: "Remove the blinding white
+        // flash." Nothing in the passage may lift the exposure above rest or
+        // paint anything but the threshold's dark.
+        for (const u of sample(400)) {
+          const c = doorwayChannels(dir, u);
+          expect(c.exposure, `u=${u}`).toBeLessThanOrEqual(1);
+          expect(c.dark, `u=${u}`).toBeGreaterThanOrEqual(0);
+        }
+        const hex = THRESHOLD_DARK.replace('#', '');
+        const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+        expect(0.2126 * r + 0.7152 * g + 0.0722 * b).toBeLessThan(8);
+      });
+
+      it('opens the iris on the far side: the room comes up from five stops under', () => {
+        const T2 = T as typeof T & { irisFrom: number; irisTo: number };
+        const start = doorwayChannels(dir, T.swap + 1e-6);
+        expect(start.exposure).toBeCloseTo(DOORWAY.exposureFloor, 6);
+        let prev = start.exposure;
+        for (const u of sample(400)) {
+          if (u <= T.swap) continue;
+          const e = doorwayChannels(dir, u).exposure;
+          expect(e, `u=${u}`).toBeGreaterThanOrEqual(prev - 1e-12);
+          prev = e;
+        }
+        expect(doorwayChannels(dir, T2.irisTo).exposure).toBeCloseTo(1, 9);
+        // And the dark layer is gone while the room is still well under: what
+        // it uncovers is the render's own dark, not the room.
+        const T3 = T as typeof T & { clearTo: number };
+        expect(doorwayChannels(dir, T3.clearTo).exposure).toBeLessThan(0.12);
+      });
+
+      it('racks the focus out from the door to the room as the iris opens', () => {
+        const T2 = T as typeof T & { rackFrom: number; rackTo: number };
+        const a = doorwayChannels(dir, T2.rackFrom);
+        const b = doorwayChannels(dir, T2.rackTo);
+        expect(a.focus).toBeCloseTo(DOORWAY.rackNear, 6);
+        expect(b.focus).toBeCloseTo(DOORWAY.rackFar, 6);
+        expect(a.defocus).toBeCloseTo(1, 6);
+        expect(b.defocus).toBeCloseTo(0, 6);
       });
 
       it('ACCELERATES into the doorway and DECELERATES out of it', () => {
@@ -121,12 +162,15 @@ describe('the passage, as a clock', () => {
         let prev = doorwayChannels(dir, 0);
         for (let u = step; u <= 1; u += step) {
           const c = doorwayChannels(dir, u);
-          const keys = ['aim', 'settle', 'warp', 'white', 'blur', 'exteriorDoors', 'exteriorGlow'] as const;
+          // (`vestibule` is a visibility flag — the panel behind the open
+          // leaves — so it is not in this list.)
+          const keys = ['aim', 'settle', 'warp', 'dark', 'exposure', 'defocus', 'exteriorDoors'] as const;
+          // Continuous across the swap as well as within each side.
+          const across = new Set(['aim', 'settle', 'warp', 'dark']);
           for (const k of keys) {
-            // The near/far switch of `white` shape is continuous in coverage;
-            // exteriorDoors/Glow reset at the swap only on the side that is
-            // hidden under full white.
-            if ((k === 'exteriorDoors' || k === 'exteriorGlow') && prev.side !== c.side) continue;
+            // The rest reset at the swap, under full dark, where no frame of
+            // the change can be seen.
+            if (!across.has(k) && prev.side !== c.side) continue;
             expect(Math.abs(c[k] - prev[k]), `${k} at u=${u.toFixed(3)}`).toBeLessThan(0.2);
           }
           prev = c;
@@ -165,9 +209,10 @@ describe('the passage, as a clock', () => {
       const z = door[2] + (DOORWAY.exteriorPass[2] - door[2]) * c.leave;
       if (z < 6.16) {
         expect(c.exteriorDoors, `u=${u}`).toBe(1);
-        // And the light has all but filled the frame by the time the lens is at
-        // the door, so the inside of the shell is never what the camera sees.
-        if (z < 8.35) expect(c.white, `u=${u}`).toBeGreaterThan(0.85);
+        // And the vestibule's dark has all but filled the frame by the time the
+        // lens is at the door, so the inside of the shell is never what the
+        // camera sees.
+        if (z < 8.35) expect(c.dark, `u=${u}`).toBeGreaterThan(0.85);
       }
     }
   });
@@ -226,45 +271,28 @@ describe('the flight lines', () => {
     expect(Math.abs(p.x)).toBeLessThanOrEqual(0.85);
     expect(p.y).toBeGreaterThanOrEqual(1.05);
     expect(p.y).toBeLessThanOrEqual(3.45);
-    // And it stops short of the light panel behind the leaves (hinge z 8.17
+    // And it stops short of the vestibule panel behind the leaves (hinge z 8.17
     // less 1.42, DoorwayRig) by more than the near plane.
     expect(b.z - (8.17 - 1.42)).toBeGreaterThan(0.5);
   });
 
-  it('comes into the hall, and leaves it, through the hall doorway', () => {
-    // CityField holds int_wall_front open over x -1.54..1.54, y below 4.3 —
-    // the doorway's own rectangle in the extended hall — while the passage runs.
+  it('arrives inside the hall, and backs out, without ever leaving the room', () => {
+    // In the dark there is nothing to fly through the front wall for: the
+    // camera is simply a pace inside the doors (int_doors z 7.57..7.69) when
+    // the iris begins to open, and is there again, in the dark, when it backs
+    // out. The hall's near plane is 0.1 m; the doors stay behind it.
     const threshold = new THREE.Vector3(...buildInteriorBeats(3)[0].position);
     for (const [from, to] of [
       [new THREE.Vector3(...DOORWAY.hallStart), threshold],
       [threshold, new THREE.Vector3(...DOORWAY.hallPass)],
     ] as const) {
       for (const p of line(from, to)) {
-        if (p.z < 7.5 || p.z > 8.1) continue;
-        expect(Math.abs(p.x)).toBeLessThan(1.54 - 0.3);
-        expect(p.y).toBeGreaterThan(0.3);
-        expect(p.y).toBeLessThan(4.3 - 0.3);
+        expect(p.z, 'in front of the doors').toBeLessThan(7.57 - 0.15);
+        expect(Math.abs(p.x)).toBeLessThan(1.3);
+        expect(p.y).toBeGreaterThan(0.5);
+        expect(p.y).toBeLessThan(4.0);
       }
     }
-  });
-});
-
-describe('the white', () => {
-  const stops = (css: string) => [...css.matchAll(/(-?\d+(?:\.\d+)?)%/g)].map((m) => +m[1]).slice(2);
-
-  it('is nothing at zero coverage and everything at full, in both shapes', () => {
-    // bloom: opaque out to the first stop, transparent past the second.
-    const [bo0, bt0] = stops(whiteGradient('bloom', 0));
-    expect(bt0).toBeLessThanOrEqual(0); // transparent from the centre outward
-    const [bo1] = stops(whiteGradient('bloom', 1));
-    expect(bo1).toBeGreaterThanOrEqual(100); // opaque past the farthest corner
-    expect(bo0).toBeLessThan(bt0);
-
-    // iris: transparent out to the first stop, opaque past the second.
-    const [it0] = stops(whiteGradient('iris', 0));
-    expect(it0).toBeGreaterThanOrEqual(100);
-    const [, io1] = stops(whiteGradient('iris', 1));
-    expect(io1).toBeLessThanOrEqual(0);
   });
 });
 
@@ -404,7 +432,7 @@ describe('the director', () => {
     expect(doorwayState.snap).toBe(true);
   });
 
-  it('holds the white for a hall that has not loaded, then carries on', () => {
+  it('holds the dark for a hall that has not loaded, then carries on', () => {
     doorwayState.hallReady = false;
     progress = DOOR_OUT - 0.01;
     stepDoorway(0);
@@ -412,11 +440,11 @@ describe('the director', () => {
     progress = DOOR_OUT + 0.004;
     stepDoorway(16);
 
-    // Well past the authored swap, still on the near side, still white.
+    // Well past the authored swap, still on the near side, still dark.
     let t = run(16, ENTER_MS * ENTER.swap + 1500);
     expect(doorwayState.mode).toBe('running');
     expect(doorwayState.swapped).toBe(false);
-    expect(doorwayState.channels.white).toBe(1);
+    expect(doorwayState.channels.dark).toBe(1);
     expect(progress).toBeLessThan(DOOR_OUT);
 
     doorwayState.hallReady = true;
@@ -427,7 +455,7 @@ describe('the director', () => {
     expect(doorwayState.mode).toBe('idle');
   });
 
-  it('keeps the white full after the swap until the far model has been drawn', () => {
+  it('keeps the dark full after the swap until the far model has been drawn', () => {
     commits = false; // React has not committed the swap yet
     progress = DOOR_OUT - 0.01;
     stepDoorway(0);
@@ -439,14 +467,14 @@ describe('the director', () => {
     let t = run(16, ENTER_MS * ENTER.clearTo);
     expect(doorwayState.swapped).toBe(true);
     expect(doorwayState.u).toBeCloseTo(ENTER.swap, 9);
-    expect(doorwayState.channels.white).toBe(1);
+    expect(doorwayState.channels.dark).toBe(1);
 
     // The commit lands; the clock resumes only after FAR_FRAMES frames of it.
     doorwayState.sceneLeg = 'interior';
     for (let i = 0; i < FAR_FRAMES; i += 1) {
       t += 1000 / 60;
       stepDoorway(t);
-      expect(doorwayState.channels.white, `frame ${i}`).toBe(1);
+      expect(doorwayState.channels.dark, `frame ${i}`).toBe(1);
     }
     t = run(t + 1000 / 60, ENTER_MS, () => doorwayState.mode === 'idle');
     expect(doorwayState.mode).toBe('idle');
@@ -463,7 +491,7 @@ describe('the director', () => {
     expect(doorwayState.mode).toBe('idle');
   });
 
-  it('gives up holding after MAX_HOLD_MS rather than leaving a visitor in the light', () => {
+  it('gives up holding after MAX_HOLD_MS rather than leaving a visitor in the dark', () => {
     doorwayState.hallReady = false;
     progress = DOOR_OUT - 0.01;
     stepDoorway(0);
@@ -486,7 +514,7 @@ describe('the director', () => {
     expect(doorwayState.mode).toBe('idle');
     expect(calls.filter((c) => c === 'hold')).toHaveLength(1);
     expect(calls.filter((c) => c === 'release')).toHaveLength(1);
-    expect(doorwayState.channels.white).toBe(0);
+    expect(doorwayState.channels.dark).toBe(0);
   });
 
   it('"Step inside" glides to the door first, then plays the passage', () => {

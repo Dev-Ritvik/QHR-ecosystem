@@ -27,13 +27,13 @@ export default function HallPage() {
           world is the content here; this is the caption, not the page. */}
       <div className="pointer-events-none flex min-h-screen flex-col justify-end p-6 md:p-10">
         <div className="pointer-events-auto max-w-xl">
-          <p className="text-xs uppercase tracking-[0.2em] text-[#F2EDE4]/50">
+          <p className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/80">
             The presentation hall
           </p>
-          <h1 className="mt-3 font-serif text-3xl text-[#F2EDE4] md:text-4xl">
+          <h1 className="mt-3 font-serif text-step-3 text-[#F2EDE4] md:text-step-4">
             Three addresses, one room
           </h1>
-          <p className="mt-4 text-sm leading-relaxed text-[#F2EDE4]/70">
+          <p className="mt-4 text-step--1 text-[#F2EDE4]/80">
             Each layout stands on its own table. Move closer to read the plots.
           </p>
 
@@ -42,11 +42,11 @@ export default function HallPage() {
               <li key={p.slug}>
                 <Link
                   href={`/projects/${p.slug}`}
-                  className="text-sm text-[#F2EDE4]/80 underline-offset-4 transition hover:text-[#F2EDE4] hover:underline"
+                  className="text-step--1 text-[#F2EDE4] underline-offset-4 transition hover:text-[#E8B98A] hover:underline"
                 >
                   {p.name}
                 </Link>
-                <span className="ml-2 text-xs text-[#F2EDE4]/60">
+                <span className="ml-2 text-step--1 text-[#F2EDE4]/80">
                   {p.district}
                 </span>
               </li>

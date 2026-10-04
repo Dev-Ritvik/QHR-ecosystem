@@ -62,16 +62,16 @@ export default function DownloadsPage() {
             <li key={f.slug} className="border-t border-white/10 pt-6 first:border-0 first:pt-0">
               <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
                 <div className="min-w-0">
-                  <h2 className="font-serif text-xl text-[#F2EDE4]">{f.name}</h2>
-                  <p className="mt-1 text-sm text-[#F2EDE4]/55">{f.where}</p>
-                  <p className="mt-2 text-[15px] leading-relaxed text-[#F2EDE4]/75">
+                  <h2 className="font-serif text-step-1 text-[#F2EDE4]">{f.name}</h2>
+                  <p className="mt-1 text-step--1 text-[#F2EDE4]/55">{f.where}</p>
+                  <p className="mt-2 text-step-0 text-[#F2EDE4]/75">
                     {f.note}
                   </p>
                 </div>
                 <a
                   href={f.href}
                   download
-                  className="shrink-0 rounded border border-white/20 px-5 py-3 text-xs uppercase tracking-[0.14em] text-[#F2EDE4] transition hover:border-amber-200/60 focus:outline-none focus:ring-2 focus:ring-amber-200/50"
+                  className="shrink-0 rounded border border-white/20 px-5 py-3 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4] transition hover:border-amber-200/60 focus:outline-none focus:ring-2 focus:ring-amber-200/50"
                 >
                   Layout plan &middot; PDF {f.size}
                 </a>
@@ -80,7 +80,7 @@ export default function DownloadsPage() {
           ))}
         </ul>
 
-        <p className="mt-14 border-t border-white/10 pt-6 text-sm leading-relaxed text-[#F2EDE4]/55">
+        <p className="mt-14 border-t border-white/10 pt-6 text-step--1 text-[#F2EDE4]/55">
           Title documents, encumbrance certificates and the approval papers for a
           specific plot are not published here — they are shared on request, for
           the plot you are actually considering. Ask the branch handling your

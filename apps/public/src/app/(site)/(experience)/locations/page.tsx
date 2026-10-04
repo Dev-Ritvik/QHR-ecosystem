@@ -92,13 +92,13 @@ export default function LocationsPage() {
     <>
       <RouteTelemetry routeId="locations" />
       <main className="relative z-10 mx-auto w-full max-w-4xl px-6 py-16 md:py-24">
-        <p className="text-xs uppercase tracking-[0.2em] text-[#F2EDE4]/50">
+        <p className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/[0.62]">
           Locations
         </p>
-        <h1 className="mt-3 font-serif text-3xl text-[#F2EDE4] md:text-4xl">
+        <h1 className="mt-3 font-serif text-step-3 text-[#F2EDE4] md:text-step-4">
           Where the ground actually is
         </h1>
-        <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-[#F2EDE4]/70">
+        <p className="mt-4 max-w-2xl text-step-0 text-[#F2EDE4]/70">
           All three layouts sit in the northern coastal districts, within reach
           of the new Bhogapuram airport. What follows is taken from the approved
           layout plans and the project brochures — no distances or travel times
@@ -108,15 +108,15 @@ export default function LocationsPage() {
         <div className="mt-12 space-y-12">
           {SITES.map((s) => (
             <section key={s.slug} className="border-t border-white/10 pt-8">
-              <h2 className="font-serif text-2xl text-[#F2EDE4]">{s.name}</h2>
-              <p className="mt-1 text-sm text-[#F2EDE4]/55">
+              <h2 className="font-serif text-step-2 text-[#F2EDE4]">{s.name}</h2>
+              <p className="mt-1 text-step--1 text-[#F2EDE4]/55">
                 {s.where} &middot; {s.district} district
               </p>
 
-              <h3 className="mt-6 text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
+              <h3 className="mt-6 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
                 Getting there
               </h3>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-[15px] text-[#F2EDE4]/75 marker:text-[#F2EDE4]/50">
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-step-0 text-[#F2EDE4]/75 marker:text-[#F2EDE4]/50">
                 {s.access.map((a) => (
                   <li key={a}>{a}</li>
                 ))}
@@ -124,10 +124,10 @@ export default function LocationsPage() {
 
               {s.near.map((group) => (
                 <div key={group.label}>
-                  <h3 className="mt-6 text-xs uppercase tracking-[0.16em] text-[#F2EDE4]/60">
+                  <h3 className="mt-6 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
                     {group.label} nearby
                   </h3>
-                  <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[15px] text-[#F2EDE4]/75">
+                  <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-step-0 text-[#F2EDE4]/75">
                     {group.items.map((i) => (
                       <li key={i}>{i}</li>
                     ))}
@@ -138,7 +138,7 @@ export default function LocationsPage() {
               <p className="mt-6">
                 <Link
                   href={`/projects/${s.slug}`}
-                  className="text-sm uppercase tracking-[0.14em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
+                  className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
                 >
                   See the layout
                 </Link>
@@ -147,7 +147,7 @@ export default function LocationsPage() {
           ))}
         </div>
 
-        <p className="mt-14 text-sm text-[#F2EDE4]/55">
+        <p className="mt-14 text-step--1 text-[#F2EDE4]/55">
           Why the airport matters to this stretch of coast is set out in the{' '}
           <Link className="underline underline-offset-4 hover:text-[#F2EDE4]" href="/investment-guide">
             investment guide

@@ -140,6 +140,7 @@ export const JOURNEY_END = 0.9;
 
 import { CHAPTER_WEIGHTS } from './interiorPath';
 import { FILM_SHARE } from './cameraPath';
+import { CHAPTER_FADE_TRAVEL } from './copyZone';
 
 export type Leg = 'exterior' | 'interior';
 
@@ -151,6 +152,10 @@ export interface JourneyState {
   veil: number;
   /** True once the interior should be mounted, whether or not it is visible. */
   armed: boolean;
+  /** 0..1 how far the page has scrolled on past the film into its footer —
+   *  the coda, in which the house lights go down round the map table and the
+   *  camera rises off it (WorldCanvas). Written by the journey driver. */
+  coda: number;
 }
 
 /**
@@ -173,6 +178,7 @@ export const journeyState: JourneyState = {
   legProgress: 0,
   veil: 0,
   armed: false,
+  coda: 0,
 };
 
 /** GLSL smoothstep, matching the one the shaders use so eases agree across the
@@ -190,7 +196,7 @@ function smoothstep(e0: number, e1: number, x: number): number {
  * to fill instead — see `readJourney`.
  */
 export function journeyAt(scroll: number): JourneyState {
-  const out: JourneyState = { leg: 'exterior', legProgress: 0, veil: 0, armed: false };
+  const out: JourneyState = { leg: 'exterior', legProgress: 0, veil: 0, armed: false, coda: 0 };
   readJourney(scroll, out);
   return out;
 }
@@ -265,7 +271,7 @@ export function chapters(stationCount: number): Chapter[] {
   const out: Chapter[] = [
     { id: 'hero', from: 0, to: film * 0.3 },
     { id: 'revolution', from: film * 0.3, to: film * 0.62 },
-    { id: 'constellation', from: film * 0.62, to: holdEnd },
+    { id: 'holdings', from: film * 0.62, to: holdEnd },
     { id: 'approach', from: holdEnd, to: DOOR_IN },
   ];
 
@@ -293,4 +299,36 @@ export function chapters(stationCount: number): Chapter[] {
   // JOURNEY_END.
   if (out.length > 0) out[out.length - 1].to = JOURNEY_END;
   return out;
+}
+
+
+/**
+ * HOW LONG A TABLE'S COPY OUTLASTS ITS BEAT, as a fraction of the interior
+ * leg. A station's chapter begins on its beat; its pane is pinned for the
+ * chapter less one viewport (a pinned pane leaves over the last viewport of
+ * its section), and its copy is gone after CHAPTER_FADE_TRAVEL of that
+ * viewport's travel (ChapterFade). The house lights and the lens's edge hold
+ * for exactly that long (hallLight.ts).
+ */
+export function tableCopyHold(stations: number): number {
+  const n = Math.max(0, stations);
+  const W = CHAPTER_WEIGHTS;
+  const span = W.establish + n * W.station + W.portrait + W.city;
+  const viewport = 100 / TRACK_VH / (JOURNEY_END - DOOR_IN);
+  return Math.max(0, W.station / span - viewport) + CHAPTER_FADE_TRAVEL * viewport;
+}
+
+/**
+ * WHERE THE ESTABLISHING COPY HAS GONE, as a fraction of the interior leg: its
+ * chapter opens the leg, its pane is pinned for the chapter less one viewport
+ * and its copy is gone CHAPTER_FADE_TRAVEL of a viewport later. The house
+ * lights come up from here (hallLight.ts): the turn to the first table is
+ * made in a lit room.
+ */
+export function establishCopyGone(stations: number): number {
+  const n = Math.max(0, stations);
+  const W = CHAPTER_WEIGHTS;
+  const span = W.establish + n * W.station + W.portrait + W.city;
+  const viewport = 100 / TRACK_VH / (JOURNEY_END - DOOR_IN);
+  return Math.max(0, W.establish / span - viewport) + CHAPTER_FADE_TRAVEL * viewport;
 }

@@ -75,15 +75,15 @@ export default function WhyUsPage() {
         <ol className="space-y-10">
           {CLAIMS.map((c, i) => (
             <li key={c.title} className="border-t border-white/10 pt-8 first:border-0 first:pt-0">
-              <p className="text-xs tracking-[0.2em] text-[#F2EDE4]/50">
+              <p className="text-step--1 tracking-[0.2em] text-[#F2EDE4]/[0.68]">
                 {String(i + 1).padStart(2, '0')}
               </p>
-              <h2 className="mt-2 font-serif text-2xl text-[#F2EDE4]">{c.title}</h2>
-              <p className="mt-3 text-[15px] leading-relaxed text-[#F2EDE4]/75">{c.body}</p>
+              <h2 className="mt-2 font-serif text-step-2 text-[#F2EDE4]">{c.title}</h2>
+              <p className="mt-3 text-step-0 text-[#F2EDE4]/75">{c.body}</p>
               <p className="mt-4">
                 <Link
                   href={c.proof.href}
-                  className="text-xs uppercase tracking-[0.14em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
+                  className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
                 >
                   {c.proof.label}
                 </Link>
@@ -92,7 +92,7 @@ export default function WhyUsPage() {
           ))}
         </ol>
 
-        <p className="mt-14 border-t border-white/10 pt-6 text-sm leading-relaxed text-[#F2EDE4]/55">
+        <p className="mt-14 border-t border-white/10 pt-6 text-step--1 text-[#F2EDE4]/55">
           What we do not claim matters too. There is no availability counter on
           this site, because plot status changes weekly and a stale one would
           mislead you with the authority of a real listing. There are no site

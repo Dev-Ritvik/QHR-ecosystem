@@ -67,8 +67,8 @@ export default function FaqsPage() {
         <dl className="space-y-8">
           {FAQS.map((f) => (
             <div key={f.q} className="border-t border-white/10 pt-6 first:border-0 first:pt-0">
-              <dt className="font-serif text-lg text-[#F2EDE4]">{f.q}</dt>
-              <dd className="mt-2 text-[15px] leading-relaxed text-[#F2EDE4]/75">
+              <dt className="font-serif text-step-1 text-[#F2EDE4]">{f.q}</dt>
+              <dd className="mt-2 text-step-0 text-[#F2EDE4]/75">
                 {f.a}
               </dd>
             </div>

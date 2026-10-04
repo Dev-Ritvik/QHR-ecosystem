@@ -25,10 +25,8 @@ export function ApprovalBadges({ badges }: { badges: unknown }) {
         >
           <ShieldCheck className="h-4 w-4 shrink-0 text-[#C08A5D]" strokeWidth={1.5} />
           <div className="flex flex-col">
-            <span className="t-eyebrow mb-1 leading-none text-[#F2EDE4]/50">
-              {badge.label}
-            </span>
-            <span className="text-sm leading-none text-[#F2EDE4]">{badge.value}</span>
+            <span className="t-eyebrow mb-1 text-[#F2EDE4]/[0.62]">{badge.label}</span>
+            <span className="text-step--1 leading-4 text-[#F2EDE4]">{badge.value}</span>
           </div>
         </div>
       ))}

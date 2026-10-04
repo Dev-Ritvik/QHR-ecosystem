@@ -78,7 +78,7 @@ export default async function ProjectDetailPage({
       <div className="mx-auto max-w-6xl space-y-20 px-6">
         {/* Header & Narrative */}
         <section>
-          <p className="t-eyebrow text-[#F2EDE4]/50">
+          <p className="t-eyebrow text-[#F2EDE4]/[0.62]">
             {project.locality}
             {project.city ? `, ${project.city}` : ''}
           </p>
@@ -144,7 +144,7 @@ export default async function ProjectDetailPage({
               {(project.amenities as any[]).map((amenity, i) => (
                 <li
                   key={i}
-                  className="border-b border-white/10 py-4 text-[15px] text-[#F2EDE4]/80"
+                  className="border-b border-white/10 py-4 text-step-0 text-[#F2EDE4]/80"
                 >
                   {amenity.label}
                 </li>

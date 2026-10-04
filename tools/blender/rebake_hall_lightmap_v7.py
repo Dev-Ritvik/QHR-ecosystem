@@ -37,6 +37,17 @@ OUT = argv[0]
 SAMPLES = int(argv[1]) if len(argv) > 1 else 1024
 PX = int(argv[2]) if len(argv) > 2 else 4096
 TEXTURE_LIMIT = argv[3] if len(argv) > 3 else "2048"
+# WHICH LIGHT (the refinement brief, 2026-10-03). 'all' is the room as it is
+# lit. 'lamps' and 'sky' bake its two families apart — the chandelier, the
+# sconces and the room's washes; and the windows and the oculus — so their
+# balance can be set afterwards, in the sum, without baking again: each is
+# finished on its own (tools/gltf/finish_hall_lightmap.py --save-float) and the
+# two are mixed by tools/gltf/mix_hall_passes.py. Light adds: the two passes
+# summed are the one pass, to the noise. 'normals' bakes the denoiser's guide
+# alone.
+GROUP = argv[4] if len(argv) > 4 else "all"
+SKY_LIGHTS = ("LGT_win_", "LGT_oculus")
+SKY_EMITTERS = ("MAT_Clerestory", "MAT_OculusSky")
 os.makedirs(OUT, exist_ok=True)
 
 sc = bpy.context.scene
@@ -72,6 +83,40 @@ if missing:
     raise RuntimeError("no UVLightmap on %d shell objects (e.g. %s): this blend is not the baked one"
                        % (len(missing), ", ".join(missing[:5])))
 print("SHELL|objects=%d" % len(shell))
+
+
+def emission_off(material):
+    nt = material.node_tree
+    if not nt:
+        return
+    for n in nt.nodes:
+        if n.type == "BSDF_PRINCIPLED":
+            n.inputs["Emission Strength"].default_value = 0.0
+        elif n.type == "EMISSION":
+            n.inputs["Strength"].default_value = 0.0
+
+
+# 'normals' is the room without its light pass: the denoiser's guide alone, for a
+# bake whose light was saved and whose normals were not (the two do not depend
+# on each other, and each is the better part of an hour).
+if GROUP not in ("all", "normals"):
+    off_lights = 0
+    for o in bpy.data.objects:
+        if o.type != "LIGHT":
+            continue
+        sky = o.name.startswith(SKY_LIGHTS)
+        # The exterior's sun is no part of the room's light in either pass.
+        if o.data.type == "SUN" or (GROUP == "lamps" and sky) or (GROUP == "sky" and not sky):
+            o.hide_render = True
+            off_lights += 1
+    off_mats = 0
+    # Every emitter that is not the sky is a lamp: the chandelier's glass, the
+    # sconces' flames, the picture light, the holograms.
+    for m in bpy.data.materials:
+        if m.name.startswith(SKY_EMITTERS) == (GROUP == "lamps"):
+            emission_off(m)
+            off_mats += 1
+    print("GROUP|%s: %d lights and %d emitters put out" % (GROUP, off_lights, off_mats))
 
 for o in shell:
     me = o.data
@@ -181,24 +226,38 @@ def dump(img, name):
 
 
 # 1. Irradiance: direct + indirect diffuse, no colour (albedo stays in the maps).
-lm = target("LIGHTMAP_REBAKE")
-arm(lm)
-t0 = time.time()
-bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, margin=16, use_clear=True)
-t_lm = time.time() - t0
-lm_path, lm_arr = dump(lm, "lightmap_raw.npy")
-print("BAKE|irradiance|%.0fs|%s" % (t_lm, lm_path))
+lm_arr = None
+t_lm = 0.0
+if GROUP == "normals":
+    print("BAKE|irradiance|skipped: normals only")
+else:
+    lm = target("LIGHTMAP_REBAKE")
+    arm(lm)
+    t0 = time.time()
+    bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, margin=16, use_clear=True)
+    t_lm = time.time() - t0
+    lm_path, lm_arr = dump(lm, "lightmap_raw.npy")
+    print("BAKE|irradiance|%.0fs|%s" % (t_lm, lm_path), flush=True)
 
 # 2. Object-space normals, the denoiser's guide. No light transport involved,
 #    so a handful of samples is exact.
-nm = target("NORMAL_REBAKE")
-arm(nm)
-cy.samples = 8
-cy.use_adaptive_sampling = False
-t0 = time.time()
-bpy.ops.object.bake(type='NORMAL', normal_space='OBJECT', margin=16, use_clear=True)
-nm_path, _ = dump(nm, "normal_raw.npy")
-print("BAKE|normal|%.0fs|%s" % (time.time() - t0, nm_path))
+#
+#    NOT FOR THE SKY PASS. The normals are the room's, not the light's, and the
+#    sky pass is finished with the lamps' set (finish_hall_lightmap.py
+#    --normals <lamps_dir>/normal_raw.npy). The pass is not cheap either: 284
+#    objects each pay for their own scene sync, MEASURED 36 minutes for eight
+#    samples.
+if GROUP == "sky":
+    print("BAKE|normal|skipped: the lamps pass carries the room's normals")
+else:
+    nm = target("NORMAL_REBAKE")
+    arm(nm)
+    cy.samples = 8
+    cy.use_adaptive_sampling = False
+    t0 = time.time()
+    bpy.ops.object.bake(type='NORMAL', normal_space='OBJECT', margin=16, use_clear=True)
+    nm_path, _ = dump(nm, "normal_raw.npy")
+    print("BAKE|normal|%.0fs|%s" % (time.time() - t0, nm_path))
 
 for m in mats:
     n = m.node_tree.nodes.get("BAKE_TARGET")
@@ -207,6 +266,9 @@ for m in mats:
 if haze:
     haze.hide_render = False
 
+if lm_arr is None:
+    print("DONE")
+    sys.exit(0)
 rgb = lm_arr.astype(np.float32)
 lit = rgb[rgb.max(axis=2) > 1e-4]
 report = {
@@ -216,6 +278,7 @@ report = {
     "clamp_indirect": 8.0,
     "bake_seconds": round(t_lm, 1),
     "shell_objects": len(shell),
+    "group": GROUP,
     "p99_5_raw": float(np.percentile(lit, 99.5)) if lit.size else None,
 }
 json.dump(report, open(os.path.join(OUT, "rebake_manifest.json"), "w"), indent=1)

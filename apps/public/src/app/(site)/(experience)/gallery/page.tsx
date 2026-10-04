@@ -77,11 +77,11 @@ export default function GalleryPage() {
               <figcaption className="mt-4">
                 <Link
                   href={`/projects/${p.slug}`}
-                  className="font-serif text-lg text-[#F2EDE4] underline-offset-4 hover:underline"
+                  className="font-serif text-step-1 text-[#F2EDE4] underline-offset-4 hover:underline"
                 >
                   {p.name}
                 </Link>
-                <p className="mt-1 text-sm leading-relaxed text-[#F2EDE4]/65">
+                <p className="mt-1 text-step--1 text-[#F2EDE4]/65">
                   {p.caption}
                 </p>
               </figcaption>
@@ -89,7 +89,7 @@ export default function GalleryPage() {
           ))}
         </div>
 
-        <p className="mt-14 border-t border-white/10 pt-6 text-sm leading-relaxed text-[#F2EDE4]/55">
+        <p className="mt-14 border-t border-white/10 pt-6 text-step--1 text-[#F2EDE4]/55">
           Site photography and amenity images are not published here yet. When
           they are, they will be photographs of these three sites rather than
           stock imagery — a buyer can tell the difference, and being caught

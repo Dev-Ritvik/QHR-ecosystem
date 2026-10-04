@@ -9,13 +9,15 @@
 // their entrance precisely to camera arrival points." Each chapter's copy is a
 // sticky pane that arrives as its chapter does, so the pane's arrival IS the
 // camera's: when a pane is on screen its headline's words rise into place one
-// after another, out of a small blur, and when it leaves they reset so the
-// next arrival plays again.
+// after another, and when it leaves they reset so the next arrival plays
+// again. Without the blur the review asked for: the words fade and rise sharp,
+// because type that swims into focus is the one thing a printed page never
+// does (globals.css, Word reveals).
 //
 // DONE OVER THE MARKUP, NOT IN IT. The page is a server component and is what
 // crawlers, screen readers and no-JavaScript visitors get, so the words stay
 // plain text there. This splits the text nodes of each headline into word spans
-// once, on the client, keeping every inline element (the italic emphasis, the
+// once, on the client, keeping every inline element (the gilt emphasis, the
 // line breaks) where it was; the text content is unchanged, and the spaces
 // between words stay real spaces.
 //

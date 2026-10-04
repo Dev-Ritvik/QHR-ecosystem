@@ -30,7 +30,7 @@ export default function PrivacyPage() {
       >
         <PendingNotice what="The technical descriptions here match the software as built." />
 
-        <h2 className="font-serif text-xl text-[#F2EDE4]">Who is responsible</h2>
+        <h2 className="font-serif text-step-1 text-[#F2EDE4]">Who is responsible</h2>
         <p>
           Quality Homes Reality, head office at D.No. 50-92-36, 2nd Floor, Opp.
           Canara Bank, Shantipuram, Shankara Matam Road, Visakhapatnam 530 016,
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
           your data has been handled go here first.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           What we collect, and when
         </h2>
         <p>
@@ -73,7 +73,7 @@ export default function PrivacyPage() {
           somebody can call you back.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
           What we deliberately do not do
         </h2>
         <p>
@@ -84,7 +84,7 @@ export default function PrivacyPage() {
           profile on another device. Each of these was considered and rejected.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">How long we keep it</h2>
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">How long we keep it</h2>
         <ul className="list-disc space-y-2 pl-5 marker:text-[#F2EDE4]/60">
           <li>Detailed visit records: 13 months, then aggregated and deleted.</li>
           <li>
@@ -96,7 +96,7 @@ export default function PrivacyPage() {
           </li>
         </ul>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Your rights</h2>
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">Your rights</h2>
         <p>
           Under the Digital Personal Data Protection Act 2023 you may ask for a
           copy of what we hold, ask us to correct it, ask us to erase it, and
@@ -113,14 +113,14 @@ export default function PrivacyPage() {
           <Pending>RESPONSE PERIOD</Pending>.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Children</h2>
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">Children</h2>
         <p>
           This site is intended for adults buying property. We do not knowingly
           collect data from anyone under 18, and no behavioural tracking or
           targeted advertising is directed at children.
         </p>
 
-        <h2 className="mt-12 font-serif text-xl text-[#F2EDE4]">Who else sees it</h2>
+        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">Who else sees it</h2>
         <p>
           Enquiries are handled by the Quality Homes Reality branch that holds
           the layout you asked about. Analytics and advertising data go to the
@@ -132,7 +132,7 @@ export default function PrivacyPage() {
           <Pending>HOSTING, CRM AND STORAGE PROVIDERS</Pending>.
         </p>
 
-        <p className="mt-12 text-sm text-[#F2EDE4]/50">
+        <p className="mt-12 text-step--1 text-[#F2EDE4]/[0.62]">
           Last updated: <Pending>DATE ON PUBLICATION</Pending>.
         </p>
       </Surface>

@@ -20,11 +20,24 @@ if [ -z "${SKIP_BUILD:-}" ]; then
   # AFTER the procedural textures, whose flat leaf clusters it replaces: the
   # foliage cards rendered from modelled leaves (albedo + normal per species).
   "$BLENDER" --background --python "$ROOT/tools/blender/render_foliage_v7.py" -- "$ROOT/assets/materials/_v7" "" 1024 96
+  # AFTER the procedural textures too: the stone, the flags and the gravel from
+  # Poly Haven's CC0 scans (C:/dev/Blender/_polyhaven/textures, not in the
+  # repo). Without them the synthesised stone stands and the build lays paving
+  # where the gravel and the flags would be.
+  if [ -f "${PH_DIR:-C:/dev/Blender/_polyhaven}/textures/floor_pebbles_01_diff_2k.jpg" ]; then
+    python "$ROOT/tools/gltf/ph_surfaces_v7.py" "${PH_DIR:-C:/dev/Blender/_polyhaven}/textures" "$ROOT/assets/materials/_v7"
+  fi
   # The shade trees from Poly Haven's CC0 scans (downloaded to C:/dev/Blender/
   # _polyhaven; ~360 MB, not in the repo). Without them the build falls back to
   # the procedural trees.
   if [ -d "${PH_DIR:-C:/dev/Blender/_polyhaven}/jacaranda_tree" ]; then
     "$BLENDER" --background --python "$ROOT/tools/blender/ph_trees_v7.py" -- "${PH_DIR:-C:/dev/Blender/_polyhaven}" "$ROOT/assets/materials/_v7" "${PH_DIR:-C:/dev/Blender/_polyhaven}/ph_trees_web.blend" 96
+  fi
+  # The client's generated models (Tripo, saved to <repo>/tripo; not in the
+  # repo): each one that is there is sized, lightened and filed in a library
+  # the build places from. Without them the scripted cars stand.
+  if ls "${TRIPO_DIR:-$ROOT/tripo}"/*.glb >/dev/null 2>&1; then
+    "$BLENDER" --background --factory-startup --python "$ROOT/tools/blender/tripo_assets_v7.py" -- "${TRIPO_DIR:-$ROOT/tripo}" "C:/dev/Blender/_tripo/tripo_web.blend"
   fi
   "$BLENDER" --background --python "$ROOT/tools/blender/build_estate_v7.py" -- "$BLEND" arch land lux
 fi
