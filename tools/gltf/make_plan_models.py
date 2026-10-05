@@ -66,8 +66,16 @@ BOARD_GAIN = 0.86
 # How far a block shades the board round it: the blur's radius as a share of
 # the face's long side, and the depth of the shade at a block's foot.
 SHADE = (0.008, 0.42)
-SAGE = np.array([98, 112, 88], np.float32)
-WATER = np.array([86, 110, 124], np.float32)
+# (98, 112, 88 until the paid audit of 2026-10-04, pass 8: "architectural
+# artifact, not 3D infographic ... material integration, visual restraint".
+# Under the room's warm key that sage printed as a bright leaf green, the one
+# saturated colour on the table, with the sheet's own trees and paths drawn
+# on it at a quarter of their contrast: a printed map let into a wooden
+# model. A model-maker's landscape is a dull flock, greyer and deeper than
+# life, and nothing is drawn on it.)
+SAGE = np.array([84, 92, 76], np.float32)
+SAGE_DETAIL = 0.08
+WATER = np.array([84, 98, 106], np.float32)
 STONE = np.array([172, 166, 152], np.float32)
 INK = np.array([56, 46, 38], np.float32)
 # How much of a plot's own printed hue its plaster keeps.
@@ -179,7 +187,7 @@ def build(name, wood):
         elif cat == 'green':
             s = src[m]
             l = lum[m][:, None]
-            detail = np.clip(0.90 + 0.24 * (l - float(np.mean(l))) / 110.0, 0.74, 1.12)
+            detail = np.clip(0.94 + SAGE_DETAIL * (l - float(np.mean(l))) / 110.0, 0.86, 1.04)
             px = SAGE * detail
             wet = ((s[:, 2] > s[:, 0] + 28) & (s[:, 2] > s[:, 1] + 6))[:, None]
             px = np.where(wet, WATER * np.clip(0.9 + 0.2 * (l - 150.0) / 100.0, 0.8, 1.1), px)

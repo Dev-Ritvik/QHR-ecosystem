@@ -32,14 +32,14 @@ describe('which way the copy is laid out', () => {
   });
 
   it('is the same question the page asks: the `wide` screen is the same words', () => {
-    const config = readFileSync(join(__dirname, '../../../tailwind.config.ts'), 'utf8');
+    const config = readFileSync(join(__dirname, '../../../tailwind.config.ts'), 'utf8').replace(/\r\n/g, '\n');
     const flat = config.replace(/\s+/g, ' ');
     expect(flat).toContain(`addVariant( 'wide', '@media ${WIDE_QUERY}', );`);
     expect(flat).toContain(`addVariant('short', '@media ${SHORT_QUERY}');`);
     // a variant, not a screen: a raw screen takes max-md: away from the header
     expect(config).not.toMatch(/screens:\s*\{/);
     // and the one class the stylesheet sets by hand on the same frames
-    const css = readFileSync(join(__dirname, '../../app/globals.css'), 'utf8');
+    const css = readFileSync(join(__dirname, '../../app/globals.css'), 'utf8').replace(/\r\n/g, '\n');
     expect(css).toContain(`@media ${WIDE_QUERY} {\n  .t-station {`);
     expect(WIDE_QUERY).toBe(`(min-width: 768px) and (orientation: landscape), ${SHORT_QUERY}`);
     expect(SHORT_QUERY).toBe('(max-height: 520px) and (orientation: landscape)');
@@ -51,7 +51,7 @@ describe('which way the copy is laid out', () => {
   });
 
   it("lays the film's chapters out by it, and not by width alone", () => {
-    const page = readFileSync(join(__dirname, '../../app/(site)/(experience)/site-home/page.tsx'), 'utf8');
+    const page = readFileSync(join(__dirname, '../../app/(site)/(experience)/site-home/page.tsx'), 'utf8').replace(/\r\n/g, '\n');
     // every sticky pane's placement, and every chapter's column
     const panes = page.match(/className=\{`sticky [^`]*`\}/g) ?? [];
     expect(panes.length).toBeGreaterThanOrEqual(7);
@@ -77,12 +77,12 @@ describe('a pane held in place', () => {
   it('leaves by the rule every pane leaves by: it is not dissolved before it is let go', () => {
     // The map's pane is let go at the film's last frame, which is the frame
     // its list is for.
-    const src = readFileSync(join(__dirname, 'ChapterFade.tsx'), 'utf8');
+    const src = readFileSync(join(__dirname, 'ChapterFade.tsx'), 'utf8').replace(/\r\n/g, '\n');
     expect(src).toContain('o = Math.min(heldOpacity(since, NARROW_TRAVEL * vh), 1 - gone);');
     expect(src).toContain('const gone = clamp01((stuckTop - el.getBoundingClientRect().top) / (out * vh));');
     // ...and only the last table leaves any faster than it came (OUT_ATTR)
     expect(src).toContain('o = 1 - clamp01(past > 0 ? past / (out * vh) : -past / travel);');
-    const page = readFileSync(join(__dirname, '../../app/(site)/(experience)/site-home/page.tsx'), 'utf8');
+    const page = readFileSync(join(__dirname, '../../app/(site)/(experience)/site-home/page.tsx'), 'utf8').replace(/\r\n/g, '\n');
     expect(page.match(/data-fade-out=/g)?.length).toBe(1);
     expect(page).toContain("data-fade-out={last ? '0.12' : undefined}");
   });
@@ -95,7 +95,7 @@ describe('a pane held in place', () => {
 
 describe('a pane that waits for its picture', () => {
   it("is the approach's alone, and waits until the camera has left the flank's lit windows", () => {
-    const page = readFileSync(join(__dirname, '../../app/(site)/(experience)/site-home/page.tsx'), 'utf8');
+    const page = readFileSync(join(__dirname, '../../app/(site)/(experience)/site-home/page.tsx'), 'utf8').replace(/\r\n/g, '\n');
     expect(page.match(/data-fade-after=/g)?.length).toBe(1);
     const after = Number(/id="approach"[\s\S]*?data-fade-after="([\d.]+)"/.exec(page)?.[1]);
     // One viewport is 100 / EXTERIOR_VH of the exterior leg; the approach's
@@ -114,7 +114,7 @@ describe('a pane that waits for its picture', () => {
   });
 
   it('develops in place, on every shape of frame, and leaves as every pane does', () => {
-    const src = readFileSync(join(__dirname, 'ChapterFade.tsx'), 'utf8');
+    const src = readFileSync(join(__dirname, 'ChapterFade.tsx'), 'utf8').replace(/\r\n/g, '\n');
     expect(src).toContain('} else if (sticky && after > 0 && el.parentElement) {');
     expect(src).toContain('o = Math.min(heldOpacity(since, AFTER_TRAVEL * vh), 1 - gone);');
     // nothing while it waits, half-way through its development, whole after it

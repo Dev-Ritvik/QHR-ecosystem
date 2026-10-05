@@ -35,7 +35,7 @@ import * as THREE from 'three';
 /** Mowing band width, metres (a ride-on mower's cut). */
 export const BAND_M = 1.6;
 /** How far the bands move value either side of the turf, at most. */
-export const BAND_AMP = 0.085;
+export const BAND_AMP = 0.05;
 /** The lawn texture's tile, metres (tools/blender/build_estate_v7.py TILE). */
 export const LAWN_TILE_M = 6.0;
 
@@ -71,12 +71,24 @@ export const LAWN_MAP_FRAGMENT = /* glsl */ `
     float mixw = smoothstep(0.3, 0.7, lawnNoise(m / 9.0 + vec2(4.1, 1.3)) * 0.5 + 0.5);
     sampledDiffuseColor = mix(sampledDiffuseColor, second, mixw);
     sampledDiffuseColor.rgb *= 1.0 + 0.05 * lawnNoise(m / 4.0 + vec2(8.7, 2.2));
-    // Macro: richer and drier patches, 25 m and 90 m across.
+    // Macro: richer and drier patches, 25 m and 90 m across, and a 9 m field
+    // between them. STRONGER, AND LESS GREEN (the paid audit of 2026-10-04,
+    // pass 3: "stop allowing the grass to become a large uninterrupted CG
+    // surface ... tonal variation, subtle scale variation, believable
+    // relationship with sunlight, less obvious repetition"). At 11% and 7%
+    // the lawn was one green from the terrace to the wall, and the most
+    // saturated thing in the cover. A lawn at the end of a dry day is olive
+    // where it is thick and straw where it is thin, and no two beds of it are
+    // the same value.
     float p1 = lawnNoise(m / 25.0 + vec2(3.1, 7.7));
     float p2 = lawnNoise(m / 90.0 + vec2(11.3, 2.9));
-    float dry = smoothstep(0.25, 0.85, p2 * 0.7 + p1 * 0.3);
-    sampledDiffuseColor.rgb *= 1.0 + 0.11 * p1 + 0.07 * p2;
-    sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb, sampledDiffuseColor.rgb * vec3(1.22, 1.08, 0.7), 0.35 * dry);
+    float p3 = lawnNoise(m / 9.0 + vec2(5.9, 14.2));
+    float dry = smoothstep(0.1, 0.8, p2 * 0.6 + p1 * 0.3 + p3 * 0.1);
+    sampledDiffuseColor.rgb *= 1.0 + 0.2 * p1 + 0.13 * p2 + 0.07 * p3;
+    sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb, sampledDiffuseColor.rgb * vec3(1.3, 1.1, 0.62), 0.5 * dry);
+    // The whole sward a step toward olive: less of the texture's emerald.
+    sampledDiffuseColor.rgb = mix(vec3(dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), sampledDiffuseColor.rgb, 0.8)
+                            * vec3(1.06, 1.0, 0.86);
     // Bands along the entrance axis: which way this band's blades lean
     // (world -z is the build's +y), and how much of that the camera sees.
     float t = m.x / ${BAND_M.toFixed(2)};
@@ -88,6 +100,14 @@ export const LAWN_MAP_FRAGMENT = /* glsl */ `
     float fine = fwidth(t);
     float amp = ${BAND_AMP.toFixed(3)} * (1.0 - smoothstep(0.25, 0.6, fine));
     sampledDiffuseColor.rgb *= 1.0 + amp * lean;
+    // AT A GLANCING ANGLE grass is its blades' tips, which catch the sky: a
+    // lawn seen along its length is paler and greyer than one looked down
+    // on, and that fall-off with distance is most of what stops it reading
+    // as a painted plane.
+    float graze = pow(1.0 - clamp(normalize(toEye).y, 0.0, 1.0), 3.0);
+    sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb,
+      vec3(dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.04, 1.02, 0.9), 0.3 * graze);
+    sampledDiffuseColor.rgb *= 1.0 + 0.22 * graze;
   }
   diffuseColor *= sampledDiffuseColor;
 #endif

@@ -23,7 +23,7 @@ import {
   widenFov,
 } from './phoneFraming';
 
-const canvas = readFileSync(join(__dirname, 'WorldCanvas.tsx'), 'utf8');
+const canvas = readFileSync(join(__dirname, 'WorldCanvas.tsx'), 'utf8').replace(/\r\n/g, '\n');
 
 const map = buildInteriorBeats(3).find((b) => b.id === 'map')!;
 const UP = new THREE.Vector3(0, 1, 0);

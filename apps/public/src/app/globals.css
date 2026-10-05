@@ -188,6 +188,12 @@
     --grid-max: calc(1152 * var(--u));
     --bar: max(2.75rem, calc(62 * var(--u)));
   }
+  /* The cover's phrase is ivory over a wide frame's sky (site-home, the
+     cover): gilt at this size wants a ground under a luma of 107, and the
+     sky under a light grad is brighter than that. */
+  .film-stage #hero .t-display-em {
+    color: inherit;
+  }
 }
 /* A PHONE ON ITS SIDE (copyZone.ts, SHORT_QUERY). A frame 390 pixels tall is
    two-fifths of the design's, and at the floors above its headings would be
@@ -205,7 +211,9 @@
     --step-2: max(0.9375rem, calc(25 * var(--u)));
     --step-3: max(1rem, calc(31.25 * var(--u)));
     --step-4: max(1.125rem, calc(39.06 * var(--u)));
-    --step-5: max(1.3125rem, calc(48.83 * var(--u)));
+    /* (21px until the paid audit, 2026-10-04: the cover's title stands in the
+       sky now, and at 24px it is large text, which a sky can carry.) */
+    --step-5: max(1.5rem, calc(48.83 * var(--u)));
     --step-6: max(1.5rem, calc(61.04 * var(--u)));
   }
   /* And no gilt in a headline there: at 18 to 21px it is small text, and
@@ -372,6 +380,27 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
    old-style numerals Playfair draws — figures that rise and fall like
    lower-case letters, the way a book sets a date. Roman: hierarchy by scale
    and weight, not by a second style. */
+/* A FACT, in the holdings' short table (site-home): the figure in the text's
+   own old-style numerals, a step over the words beside it, ranged right in a
+   column three figures wide. */
+.t-fact {
+  font-family: var(--font-text);
+  font-size: var(--step-3);
+  line-height: 1.28;
+  line-height: round(nearest, calc(var(--step-3) * 1.28), var(--bl));
+  font-weight: 400;
+  font-variant-numeric: oldstyle-nums tabular-nums;
+  font-feature-settings: 'onum' 1, 'tnum' 1;
+  min-width: 3ch;
+  text-align: right;
+}
+.t-fact-term {
+  font-family: var(--font-text);
+  font-size: var(--step-1);
+  line-height: 1.6;
+  line-height: round(nearest, calc(var(--step-1) * 1.6), var(--bl));
+  font-weight: 400;
+}
 .t-figure {
   font-family: var(--font-text);
   font-size: var(--step-6);
@@ -711,13 +740,23 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   background: rgba(232, 185, 138, 0.75);
   transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.cta-primary:hover,
+/* The gilt is a pointer's hover and a keyboard's focus. A touch screen has
+   neither: there `:hover` is whatever the last tap left it on, and the action
+   at the door stood in gilt on the dusk's gravel at 3.5:1 (measured on a
+   390x844 frame, 2026-10-04) after a tap that was nowhere near it. */
 .cta-primary:focus-visible {
   color: #e8b98a;
 }
-.cta-primary:hover::before,
 .cta-primary:focus-visible::before {
   width: calc(var(--bl) * 14.4);
+}
+@media (hover: hover) {
+  .cta-primary:hover {
+    color: #e8b98a;
+  }
+  .cta-primary:hover::before {
+    width: calc(var(--bl) * 14.4);
+  }
 }
 /* A text link with a hairline that is always there, faintly, and draws to
    full strength on hover. */
@@ -987,3 +1026,21 @@ html[data-menu-open] [data-film] {
 }
 .sound-toggle { transition: color 0.3s ease, opacity 0.4s ease; }
 .sound-toggle.is-tucked { opacity: 0; pointer-events: none; }
+/* THE WORD, ONLY WHEN IT IS ASKED FOR (the paid audit of 2026-10-04: the
+   navigation "almost invisible unless needed"). The bars are the control; the
+   word beside them opens when the control is pointed at or focused, and is
+   always there for a screen reader (the button's own label). */
+.sound-label {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  margin-left: calc(var(--bl) * -2.4);
+  transition: max-width 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease, margin-left 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sound-toggle:hover .sound-label,
+.sound-toggle:focus-visible .sound-label {
+  max-width: 9em;
+  opacity: 1;
+  margin-left: 0;
+}

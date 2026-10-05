@@ -43,6 +43,7 @@ import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { doorwayState } from './doorway';
 import { filmState } from './FilmGrade';
 import { markFocusDepth } from './LensFocus';
+import { ld } from './lookdev';
 
 /**
  * Where it hangs, and how it is made; metres, three's axes (y up, the front of
@@ -57,7 +58,7 @@ export const LANTERN = {
   chain: 0.5,
   body: { width: 0.36, height: 0.56 },
   /** The lamp's strength at night, candela, and how far it is carried. */
-  power: 11,
+  power: 8,
   reach: 34,
   colour: '#FFB56B',
   /** The glass's own glow at night (scene-linear, over the bloom's threshold
@@ -142,10 +143,10 @@ export function PorticoLantern({ tier }: { tier: DeviceTier }) {
       if (cage.current) cage.current.visible = !body.current;
     }
     looked.current += 1;
-    if (body.current) body.current.material.emissiveIntensity = LANTERN.glow * on;
+    if (body.current) body.current.material.emissiveIntensity = ld('lanternGlow', LANTERN.glow) * on;
     const l = light.current;
     if (!l) return;
-    l.intensity = LANTERN.power * on;
+    l.intensity = ld('lantern', LANTERN.power) * on;
     if (!shadows) return;
     l.shadow.autoUpdate = false;
     // Drawn when the lamp comes on (a few frames, for a model still arriving),

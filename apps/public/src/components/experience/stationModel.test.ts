@@ -22,7 +22,7 @@ import { DEFAULT_STATION_STYLE, styleFromSearch } from './stationStyle';
 
 const here = __dirname;
 const publicDir = join(here, '..', '..', '..', 'public');
-const source = (file: string) => readFileSync(join(here, file), 'utf8');
+const source = (file: string) => readFileSync(join(here, file), 'utf8').replace(/\r\n/g, '\n');
 
 describe('how a station shows its layout', () => {
   it('is a site model, and the projection is one word away', () => {

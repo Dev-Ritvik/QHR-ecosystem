@@ -42,6 +42,7 @@ import {
   exteriorPoseAt,
   atmosphereAt,
   lensAt,
+  uprightLensAt,
   FILM_SHARE,
 } from './cameraPath';
 import {
@@ -114,6 +115,9 @@ import { lenisInstance } from './SmoothScroll';
 import { InteriorStage } from './InteriorStage';
 import { MapTable } from './MapTable';
 import { veiledPush } from '@/components/site/RouteVeil';
+import { ld, ldColour } from './lookdev';
+import { followRoomLook } from './exteriorWindows';
+import { readSkyHaze, skyHazeReady, skyHazeToward } from './skyHaze';
 
 /**
  * Scrub, in seconds per unit of a pose's `ease` — the lag between where scroll
@@ -433,8 +437,12 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
         const s = journeyState.legProgress;
         // (An upright screen keeps the aim it had before the roof was made
         // flat: cameraPath, FILM_TARGET_CURVE_UPRIGHT.)
-        exteriorPoseAt(s, desired.current, look.current, phoneWeight(size.width / Math.max(1, size.height)));
+        const upright = phoneWeight(size.width / Math.max(1, size.height));
+        exteriorPoseAt(s, desired.current, look.current, upright);
         offset = lensAt(s).frameOffset;
+        // An upright screen's lens outside (cameraPath, UPRIGHT_LENS): the aim's
+        // offset comes in here, the field opens where the lens is set (below).
+        if (upright > 0) offset *= 1 + (uprightLensAt(s).offset - 1) * upright;
       }
     } else {
       desired.current.lerpVectors(fromPos.current, toPos.current, t);
@@ -682,6 +690,11 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
       }
     }
     applyShift(cam, aspect, rise, shift);
+    // And outside, an upright screen's wider field (cameraPath, UPRIGHT_LENS).
+    if (lens && p.path && journeyState.leg === 'exterior' && doorFov === null) {
+      const k = phoneWeight(aspect);
+      if (k > 0) widen = 1 + (uprightLensAt(journeyState.legProgress).widen - 1) * k;
+    }
 
     if (lens) {
       // FOV WARP. 50 at the top, 68 through the dive, 44 crossing the fountain.
@@ -1308,7 +1321,22 @@ const GRADE_LOOK: Record<Grade, Partial<(typeof LOOK)['exterior']>> = {
   // env 0.7 -> 0.25, ambient 0.2 -> 0.02. See GRADE_RIG: these two plus the
   // hemisphere are the FILL, and the fill was the whole reason the frame read
   // as game-engine lighting.
-  daylight: { exposure: 0.75, env: 0.25, ambient: 0.02 },
+  //
+  // THE SKY IS THE FILL (the paid audit of 2026-10-04, pass 1: the light does
+  // not yet "make the architecture, vegetation, ground, atmosphere and sky
+  // feel as though they exist in one photographic environment ... less
+  // separation between illuminated and unilluminated surfaces"). MEASURED on
+  // the hero's clean plate: lawn in the sun 67 against 25 in shadow (5.5 to 1
+  // in linear light), gravel 75 against 17 (12 to 1), the sunlit front 126
+  // against 39 on the shaded flank. A 14-degree sun puts a quarter of its
+  // light on level ground; under it the sky is most of what lights a lawn,
+  // and a shadow there is two or three times darker than the sun beside it,
+  // not six or twelve. So the environment — the photographed sky itself,
+  // brightest toward its horizon and its sun — carries 2.2 times what it
+  // did: lawn 79 and 45, gravel 79 and 23, the flank 66. The occlusion baked
+  // into the stone still closes every recess, which is the difference
+  // between open shade and flat light.
+  daylight: { exposure: 0.75, env: 0.55, ambient: 0.02 },
 };
 
 /**
@@ -1353,7 +1381,8 @@ const GRADE_RIG: Record<Grade, { key: number; hemi: number }> = {
   // frame, and the fill climbs because the shadow side is now lit by a sky that
   // is genuinely in the scene (SkyBackground binds it as the environment) and
   // should read as sky rather than as black.
-  daylight: { key: 4.3, hemi: 0.44 },
+  // (4.3 and 0.44 until the paid audit, 2026-10-04: see GRADE_LOOK.)
+  daylight: { key: 3.9, hemi: 0.57 },
 };
 
 function useLook(set: SceneSet) {
@@ -1433,7 +1462,7 @@ function useLook(set: SceneSet) {
 const DAY_FOG: readonly [number, number] = [80, 270];
 const EVENING_FOG_FAR = 210;
 /** Emissive strength of the curtained windows at full evening (see ExteriorLighting). */
-const WINDOW_EVENING_GLOW = 0.7;
+const WINDOW_EVENING_GLOW = 0.5;
 /**
  * NIGHT FALLS OVER THE APPROACH. The evening above keeps the sun on the house
  * (the magic-hour shot the holdings chapter holds); then, as the camera comes
@@ -1447,8 +1476,12 @@ const WINDOW_EVENING_GLOW = 0.7;
  */
 const NIGHT_FROM = FILM_SHARE + (1 - FILM_SHARE) * 0.35;
 const NIGHT_TO = FILM_SHARE + (1 - FILM_SHARE) * 0.9;
-const NIGHT_KEY_LOSS = 0.82;
-const WINDOW_NIGHT_GLOW = 0.6;
+const NIGHT_KEY_LOSS = 0.95;
+const WINDOW_NIGHT_GLOW = 0.22;
+/** What the lit rooms throw on the ground outside, against the rooms' own
+ *  drive: the rooms came down to a glow (the paid audit, 2026-10-04) and their
+ *  light on the terrace is what says they are lit. */
+const POOL_GAIN = 1.6;
 /** Aerial-perspective colour, sampled from the approved render's own horizon band. */
 // V7: the painted sky's horizon haze, so the tree belt fades into the sky it
 // stands against rather than into the olive of the old meadow hills.
@@ -1502,7 +1535,16 @@ const HAZE_DAY = new THREE.Color(DAYLIGHT_HAZE);
  * near enough to the sky's own value that the land's distance and the sky's
  * foot are one air. Near-neutral here: the print warms it.
  */
-const HAZE_NIGHT = new THREE.Color('#37302E');
+const HAZE_NIGHT = new THREE.Color('#42424A');
+/** The haze against the sky it is read from (skyHaze.ts): a breath under the
+ *  sky's own foot, so the far belt stays a tone darker than the air behind it;
+ *  and how wide a slice of that foot is averaged, radians either side of the
+ *  camera's bearing. */
+const HAZE_GAIN = 0.92;
+const HAZE_SPREAD = 0.42;
+const HAZE_DIR = new THREE.Vector3();
+/** The land's air at full evening: the sunset's own mauve-umber, lit. */
+const HAZE_EVENING = new THREE.Color('#6B5A52');
 /**
  * THE SKY'S FILL, AT DUSK. By day the hemisphere is a blue sky over a warm
  * ground; as the evening fell it kept that blue and lost four-fifths of its
@@ -1530,10 +1572,46 @@ const FILL_EVENING = new THREE.Color('#CDB7A6');
  * stone goes back to its own cream and the lamps are the warm things in the
  * picture. Taken across the same night that takes the key.
  */
-const FILL_NIGHT = new THREE.Color('#C9C3BE');
-const EVENING_FILL = 1.3;
-/** How much of the fill the night takes, across the approach. */
-const NIGHT_FILL_LOSS = 0.3;
+const FILL_NIGHT = new THREE.Color('#BEBFC4');
+// (1.3 until the paid audit: see SKY_HOURS.)
+const EVENING_FILL = 0.9;
+/** How much of the sun the evening takes (the night takes most of the rest). */
+const EVENING_KEY_LOSS = 0.6;
+/** The hemisphere's lower half: what the land throws back up, by the hour. */
+const BOUNCE_DAY = new THREE.Color('#6B563C');
+const BOUNCE_EVENING = new THREE.Color('#6B563C');
+const BOUNCE_NIGHT = new THREE.Color('#3A3530');
+/** The sky as a light (the prefiltered environment), as a share of its
+ *  daylight gain, at full evening and once the sun has gone. */
+const ENV_HOURS = { evening: 0.8, night: 0.6 } as const;
+/**
+ * And the sky as a picture (scene.backgroundIntensity), at the same hours.
+ *
+ * THE SKY STAYS LIT (the paid audit of 2026-10-04: "Your sunset can remain.
+ * But make it feel like light in an atmosphere, not a cinematic sunset
+ * preset"; and of the dusk, "the building should glow gently from within").
+ * The evening used to take the sky to a tenth and open the print by half a
+ * stop, with the sun still at two-thirds on the land: a lit estate under a
+ * near-black sky, which is the preset. At sunset the sky is the brightest
+ * thing there is and the land is what dims. So the sky keeps six-tenths of
+ * itself at full evening, the sun goes to four-tenths, the print opens a
+ * fifth of a stop instead of a half, and the land's haze is the sunset's own
+ * colour (HAZE_EVENING) rather than an umber dark.
+ *
+ * And after sundown it is dusk, not night: a third of the day's sky, slate
+ * over the roofline, with the stone under it lit by that sky (FILL_NIGHT) and
+ * the lamps the only warm things in the picture.
+ */
+const SKY_HOURS = { evening: 0.6, night: 0.32 } as const;
+/**
+ * What the night does to the fill, across the approach. It used to take three
+ * tenths of it; it ADDS to it now (a loss of minus one is the fill doubled),
+ * because after sundown the sky is all the light there is and the print is
+ * exposed for it: the stone at the door stands where it stood (a luma of 84
+ * before the paid audit, about 90 after) but it is lit by a dusk sky, cool
+ * and even, instead of by the day's environment and a last fifth of the sun.
+ */
+const NIGHT_FILL_LOSS = -1.0;
 // Warmer than it was (#FFF0DB): the key is a 14-degree sun, and the raking
 // front it now lights should read as the hour, against the cool sky fill on
 // the west flank. Warm against cool is what makes the two faces two faces.
@@ -1547,6 +1625,7 @@ function ExteriorLighting({
   grade,
   keyIntensity,
   hemiIntensity,
+  envIntensity,
   tier,
   estate,
 }: {
@@ -1560,6 +1639,8 @@ function ExteriorLighting({
   grade: Grade;
   keyIntensity: number;
   hemiIntensity: number;
+  /** The set's environment gain (LOOK): the evening rides it. */
+  envIntensity: number;
   tier: DeviceTier;
   /** The estate's root, once it has loaded: everything in it casts into the
    *  sun's shadow map (see the cadence below). */
@@ -1572,6 +1653,7 @@ function ExteriorLighting({
   const shadowPx = tier === 'low' ? 1024 : tier === 'mid' ? 2048 : 4096;
   const shadowMap = useMemo<[number, number]>(() => [shadowPx, shadowPx], [shadowPx]);
   const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
   const key = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
   // The curtained windows, found once the estate has loaded (see the evening
@@ -1671,6 +1753,7 @@ function ExteriorLighting({
       // band was gone for exactly one frame — MEASURED through the open door
       // (2026-10-03), the top sixth of the picture three to five times
       // brighter for a frame, a flash at the one cut that must not show.
+      lensFilter.second.stops = 0;
       if (doorwayState.sceneLeg === 'interior') return;
       lensFilter.stops = 0;
       lensFilter.top = 0;
@@ -1704,7 +1787,9 @@ function ExteriorLighting({
     filmState.evening = day ? a.evening : 0;
     // The header's band across the top of the lens: by day, and lightly again
     // while the lit house passes behind it on the approach (lensFilter.ts).
-    lensFilter.top = film && day ? Math.max(headerBandOutside(a.evening), headerBandApproach(legS)) : 0;
+    // (The night is read here as well as below: the band rides both.)
+    const nightBand = legS <= NIGHT_FROM ? 0 : smooth01((legS - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM));
+    lensFilter.top = film && day ? Math.max(headerBandOutside(a.evening, nightBand), headerBandApproach(legS)) : 0;
     // Through the open door (doorway.ts, 'through') the header's band goes to
     // the hall's own with the print, so it is already there when the sets
     // change behind the doorway.
@@ -1724,15 +1809,27 @@ function ExteriorLighting({
       doorwayState.mode === 'running' && doorwayState.dir === 'exit' && doorwayState.style === 'through';
     if (!hallsFilter) {
       const out = journeyState.leg === 'exterior';
-      if (out) headerBandReach();
+      if (out) headerBandReach(true, delta);
+      // Through the open door the reach goes to the hall's with the print,
+      // as the band's density does (above).
+      if (out && film && passageLight.grade > 0) {
+        lensFilter.topZero += (HEADER_BAND.zero - lensFilter.topZero) * passageLight.grade;
+      }
       if (filmIsWide(window.innerWidth, window.innerHeight)) {
-        const cover = out ? copyZone.panes.find((p) => p.id === 'hero') : undefined;
+        // (Off the exterior leg, and on a page that only holds the film's
+        // frame, the end of the leg: no filter of this leg's at all.)
+        const cover = out && film ? copyZone.panes.find((p) => p.id === 'hero') : undefined;
+        // (A short frame: a phone on its side. copyZone, SHORT_QUERY.)
+        const rev =
+          out && film && window.innerHeight <= 520 ? copyZone.panes.find((p) => p.id === 'revolution') : undefined;
         holdingsFilter(
-          out ? legS : 0,
+          out && film ? legS : 1,
           window.innerWidth / Math.max(1, window.innerHeight),
           cover ? copyPresence(cover.weight) : 0,
+          rev ? copyPresence(rev.weight) : 0,
         );
       } else {
+        lensFilter.second.stops = 0;
         phoneSkyFilter(out ? copyZone.panes : [], legS, delta);
       }
       // And the foot of the frame while the lit portico passes behind the
@@ -1777,9 +1874,25 @@ function ExteriorLighting({
       // authored terrain STOPS at +/-120m and its edge is 149m from that eye —
       // a dead-straight line across the frame at 22% haze. 150 takes the same
       // edge to 89%.
-      fog.near = DAY_FOG[0];
-      fog.far = DAY_FOG[1] + (EVENING_FOG_FAR - DAY_FOG[1]) * e;
-      fog.color.copy(HAZE_DAY).lerp(HAZE_NIGHT, e);
+      const dayFar = ld('fogFar', DAY_FOG[1]);
+      const eveFar = ld('fogFarEvening', EVENING_FOG_FAR);
+      fog.near = ld('fogNear', DAY_FOG[0]);
+      fog.far = dayFar + (eveFar - dayFar) * e;
+      fog.far += (ld('fogFarNight', eveFar) - fog.far) * n;
+      fog.color
+        .copy(ldColour('hazeDay', HAZE_DAY))
+        .lerp(ldColour('hazeEvening', HAZE_EVENING), e)
+        .lerp(ldColour('hazeNight', HAZE_NIGHT), n);
+      // THE AIR TAKES THE SKY'S OWN COLOUR, where the plate has been read
+      // (skyHaze.ts): the foot of the sky the camera is looking at, at the
+      // sky's strength for the hour. The authored colours above are what a
+      // browser that cannot read the plate keeps.
+      if (skyHazeReady() && ld('hazeAuthored', 0) < 0.5) {
+        camera.getWorldDirection(HAZE_DIR);
+        const skyNow = 1 + (ld('skyEvening', SKY_HOURS.evening) - 1) * e;
+        const sky = skyNow + (ld('skyNight', SKY_HOURS.night) - skyNow) * n;
+        skyHazeToward(HAZE_DIR.x, HAZE_DIR.z, HAZE_SPREAD, fog.color).multiplyScalar(sky * ld('hazeGain', HAZE_GAIN));
+      }
     }
 
     // The KEY SURVIVES. This is the difference between evening falling and the
@@ -1789,17 +1902,33 @@ function ExteriorLighting({
     // horizon is reddened by the air it is coming through, so this is the same
     // physics the fog is.
     if (key.current) {
-      key.current.intensity = keyIntensity * (1 - 0.35 * e) * (1 - NIGHT_KEY_LOSS * n);
-      key.current.color.copy(KEY_DAY).lerp(KEY_EVENING, e);
+      key.current.intensity =
+        keyIntensity * ld('key', 1) * (1 - ld('evKeyLoss', EVENING_KEY_LOSS) * e) * (1 - ld('nightKeyLoss', NIGHT_KEY_LOSS) * n);
+      key.current.color.copy(ldColour('keyDay', KEY_DAY)).lerp(ldColour('keyEvening', KEY_EVENING), e);
     }
     // The FILL RISES, and warms (FILL_EVENING, above): to EVENING_FILL of
     // itself — it used to fall to 0.22, for a sphere of additive light that
     // has since left the film — and from the day's blue to the dusk's own
     // colour.
     if (hemi.current) {
-      hemi.current.intensity = hemiIntensity * (1 + (EVENING_FILL - 1) * e) * (1 - NIGHT_FILL_LOSS * n);
-      hemi.current.color.copy(FILL_DAY).lerp(FILL_EVENING, e).lerp(FILL_NIGHT, n);
+      hemi.current.intensity =
+        hemiIntensity * ld('fill', 1) * (1 + (ld('evFill', EVENING_FILL) - 1) * e) * (1 - ld('nightFillLoss', NIGHT_FILL_LOSS) * n);
+      hemi.current.color
+        .copy(ldColour('fillDay', FILL_DAY))
+        .lerp(ldColour('fillEvening', FILL_EVENING), e)
+        .lerp(ldColour('fillNight', FILL_NIGHT), n);
+      // What the land throws back up under the soffits and the shaded walls.
+      hemi.current.groundColor
+        .copy(ldColour('bounceDay', BOUNCE_DAY))
+        .lerp(ldColour('bounceEvening', BOUNCE_EVENING), e)
+        .lerp(ldColour('bounceNight', BOUNCE_NIGHT), n);
     }
+    // The sky as a light: its own gain through the film's hours (ENV_HOURS).
+    scene.environmentIntensity =
+      envIntensity *
+      ld('env', 1) *
+      (1 + (ld('envEvening', ENV_HOURS.evening) - 1) * e) *
+      (1 + (ld('envNight', ENV_HOURS.night) - 1) * n);
 
     // (The portico's lantern comes on with the same evening: PorticoLantern
     // reads filmState.)
@@ -1808,7 +1937,9 @@ function ExteriorLighting({
     // its cloud structure and its hill silhouettes at a tenth of the luminance,
     // which is what dusk looks like — and it means the frame still has real
     // landscape in it rather than a flat colour where a landscape was.
-    scene.backgroundIntensity = 1 - 0.9 * e;
+    const skyEvening = ld('skyEvening', SKY_HOURS.evening);
+    scene.backgroundIntensity = 1 + (skyEvening - 1) * e;
+    scene.backgroundIntensity += (ld('skyNight', SKY_HOURS.night) - scene.backgroundIntensity) * n;
 
     // THE ROOMS LIGHT UP AS EVENING FALLS. Every window of the v7 house is glass
     // over a drawn curtain (MAT_Window_Interior); by day the curtain is cream in
@@ -1826,10 +1957,12 @@ function ExteriorLighting({
       });
       glow.mats = [...found];
     }
-    for (const m of glow.mats) m.emissiveIntensity = WINDOW_EVENING_GLOW * e + WINDOW_NIGHT_GLOW * n;
+    followRoomLook();
+    const rooms = ld('winEvening', WINDOW_EVENING_GLOW) * e + ld('winNight', WINDOW_NIGHT_GLOW) * n;
+    for (const m of glow.mats) m.emissiveIntensity = rooms;
     // And the pools those rooms throw on the ground outside (nightPools.ts),
     // on the same drive.
-    poolLight.gain = WINDOW_EVENING_GLOW * e + WINDOW_NIGHT_GLOW * n;
+    poolLight.gain = rooms * ld('pools', POOL_GAIN);
     applyPoolGain();
   });
 
@@ -2358,7 +2491,10 @@ function RoomCubeAtStart() {
 // photograph graded deeper toward the zenith and cleaner in its blue, the sun's
 // glow kept (tools/gltf/grade_sky_v8.py). The plate only: the lighting
 // environment below is the v7 one, untouched.
-const SKY_EQUIRECT_URL = '/textures/sky_estate_v8_4k.jpg';
+// v9 (the paid audit, 2026-10-04): the evening's haze graded into the plate's
+// foot on every bearing, so the land's far edge and the sky's foot are one air
+// (tools/gltf/grade_sky_v9.py; skyHaze.ts reads the fog from it).
+const SKY_EQUIRECT_URL = '/textures/sky_estate_v9_4k.jpg';
 /**
  * What the estate is LIT by, as opposed to what it is seen against: the same
  * sky, with the lawn's bounce below the horizon where the backdrop carries
@@ -2367,7 +2503,7 @@ const SKY_EQUIRECT_URL = '/textures/sky_estate_v8_4k.jpg';
  * the sky; lit by the lawn, they fall into the shade a photograph shows.
  * 1024 x 512: PMREM reduces it to a 256 cube, so more would be spent on nothing.
  */
-const SKY_LIGHTING_URL = '/textures/sky_estate_v7_env.jpg';
+const SKY_LIGHTING_URL = '/textures/sky_estate_v9_env.jpg';
 
 // Contact-hardening sun shadows, installed before the first frame compiles a
 // shadow-receiving material (softSunShadows.ts).
@@ -2534,7 +2670,17 @@ function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
     if (wants) setArmed(true);
   }, [wants]);
 
-  useEffect(() => (armed ? loadSky(SKY_EQUIRECT_URL, setEnv) : undefined), [armed]);
+  useEffect(
+    () =>
+      armed
+        ? loadSky(SKY_EQUIRECT_URL, (tex) => {
+            // The land's air is read from this plate's foot (skyHaze.ts).
+            readSkyHaze(tex.image as CanvasImageSource);
+            setEnv(tex);
+          })
+        : undefined,
+    [armed],
+  );
   useEffect(() => (armed ? loadSky(SKY_LIGHTING_URL, setLighting) : undefined), [armed]);
 
   useEffect(() => {
@@ -2894,6 +3040,7 @@ export function WorldCanvas() {
                 grade={look.grade}
                 keyIntensity={look.key}
                 hemiIntensity={look.hemi}
+                envIntensity={look.env}
                 tier={tier}
                 estate={exteriorRoot}
               />

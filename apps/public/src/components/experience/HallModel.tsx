@@ -791,10 +791,19 @@ export const PICTURE_LAMP = 0.3;
  * what a window is in a lit room at that hour — the darkest pale thing in it.
  * The room's light is mixed to match (LIGHTMAP_INTENSITY has the account: the
  * windows' wash on the walls is halved, the lamps raised).
+ *
+ * AND THE SAME DUSK AS THE ONE OUTSIDE THE DOOR (the paid audit of 2026-10-04,
+ * pass 1: "interior/exterior color relationship"; pass 5: the windows as "the
+ * strongest remaining CG giveaways"). The panes were a saturated ultramarine
+ * (#1E3A5F under the hall's print: about 70, 90, 160), the one pure colour in
+ * an ivory room and nothing like the sky the visitor had just walked in under,
+ * which since the audit's first pass is a slate dusk, a third of the day's
+ * sky. Glass seen from a lit room at that hour is a dim grey-blue: the room's
+ * own lamps are brighter than what is left outside, and the eye goes to them.
  */
 export const DUSK_GLASS: Readonly<Record<string, { colour: string; strength: number }>> = {
-  MAT_Clerestory: { colour: '#1E3A5F', strength: 0.75 },
-  MAT_OculusSky: { colour: '#1A3152', strength: 0.7 },
+  MAT_Clerestory: { colour: '#3F4955', strength: 0.62 },
+  MAT_OculusSky: { colour: '#39424D', strength: 0.58 },
 };
 
 function dressInterior(root: THREE.Object3D): string[] {

@@ -1521,17 +1521,28 @@ test.describe('a frame that is not wide', () => {
       await ready(page);
       const y = await page.evaluate(() => {
         const h = document.querySelector('#hero h1');
-        if (!h) throw new Error('no hero headline');
-        return h.getBoundingClientRect().top / window.innerHeight;
+        const lede = document.querySelector('#hero p.t-hero-lede');
+        if (!h || !lede) throw new Error('no hero headline');
+        return {
+          title: h.getBoundingClientRect().top / window.innerHeight,
+          lede: lede.getBoundingClientRect().top / window.innerHeight,
+        };
       });
       await ctx.close();
       return y;
     };
-    // Across the top of the frame, over the sky — not at the foot of a column
-    // the frame does not have.
-    expect(await top({ width: 820, height: 1180 }), 'an upright tablet').toBeLessThan(0.3);
-    expect(await top({ width: 390, height: 844 }), 'a phone').toBeLessThan(0.3);
-    expect(await top(VIEWPORT), 'a wide frame').toBeGreaterThan(0.45);
+    // One block across the top of the frame, over the sky: the title and its
+    // supporting line together.
+    for (const [name, v] of [['an upright tablet', { width: 820, height: 1180 }], ['a phone', { width: 390, height: 844 }]] as const) {
+      const c = await top(v);
+      expect(c.title, name).toBeLessThan(0.3);
+      expect(c.lede, `${name}: the supporting line under the title`).toBeLessThan(0.5);
+    }
+    // A wide frame parts them (the paid audit, 2026-10-04): the title in the
+    // sky, the supporting line on the land.
+    const wide = await top(VIEWPORT);
+    expect(wide.title, 'a wide frame: the title in the sky').toBeLessThan(0.2);
+    expect(wide.lede, 'a wide frame: the supporting line on the land').toBeGreaterThan(0.55);
   });
 });
 
@@ -1558,7 +1569,11 @@ test.describe("the film's stage", () => {
       const hero = document.getElementById('hero');
       const h1 = hero?.querySelector('h1');
       const lede = hero?.querySelector('p.t-hero-lede');
-      const cta = hero?.querySelector('a.cta-primary');
+      // The action that is drawn: a wide frame's stands at the frame's foot,
+      // and the one in the block is the phone's.
+      const cta = Array.from(hero?.querySelectorAll('a.cta-primary') ?? []).find(
+        (a) => a.getBoundingClientRect().height > 0,
+      );
       const mark = document.querySelector('header img');
       if (!hero || !h1 || !lede || !cta || !mark) throw new Error('the cover is missing a part');
       const b = h1.getBoundingClientRect();
@@ -1575,6 +1590,7 @@ test.describe("the film's stage", () => {
         bottom: cta.getBoundingClientRect().bottom / window.innerHeight,
         mark: mark.getBoundingClientRect().left,
         lede: lede.getBoundingClientRect().height,
+        ledeTop: lede.getBoundingClientRect().top / window.innerHeight,
         overflow: document.documentElement.scrollWidth - window.innerWidth,
       };
     });
@@ -1596,11 +1612,13 @@ test.describe("the film's stage", () => {
       // the headline at the design's size in the frame's unit, on its two lines
       expect(c.size / u, `${name}: the headline's size`).toBeCloseTo(48.83, 0);
       expect(c.lines, `${name}: the headline's lines`).toBe(2);
-      // on the land: its headline where it was drawn (54.6% of the way down, the
-      // place it had under its label), and its foot inside the frame
-      expect(c.top, `${name}: the block's top`).toBeCloseTo(0.5455, 2);
-      expect(c.bottom, `${name}: the block's foot`).toBeGreaterThan(0.85);
-      expect(c.bottom, `${name}: the block's foot`).toBeLessThan(0.91);
+      // IN THE SKY (the paid audit, 2026-10-04): the title 13% of the way down
+      // on every wide frame, its supporting line on the shaded lawn at 64%, and
+      // the one action at the frame's foot
+      expect(c.top, `${name}: the title's top`).toBeCloseTo(0.1307, 2);
+      expect(c.ledeTop, `${name}: the supporting line's top`).toBeCloseTo(0.64, 2);
+      expect(c.bottom, `${name}: the action at the foot`).toBeGreaterThan(0.88);
+      expect(c.bottom, `${name}: the action at the foot`).toBeLessThan(0.95);
       expect(c.overflow, `${name}: no sideways scroll`).toBeLessThanOrEqual(0);
     }
   });
@@ -1611,12 +1629,14 @@ test.describe("the film's stage", () => {
     for (const v of [{ width: 844, height: 390 }, { width: 667, height: 375 }]) {
       const c = await cover(browser, v, true);
       const name = `${v.width}x${v.height}`;
-      expect(c.top, `${name}: half-way down a column, not across the top`).toBeGreaterThan(0.53);
-      expect(c.top, `${name}: half-way down a column, not across the top`).toBeLessThan(0.57);
-      expect(c.bottom, `${name}: inside the frame`).toBeLessThan(0.92);
+      // the title in the sky, under the header, as on every wide frame
+      expect(c.top, `${name}: in the sky, under the header`).toBeGreaterThan(0.11);
+      expect(c.top, `${name}: in the sky, under the header`).toBeLessThan(0.2);
+      expect(c.bottom, `${name}: inside the frame`).toBeLessThan(0.96);
       expect(c.lines, `${name}: two lines`).toBe(2);
       expect(c.size, `${name}: a headline that can be read`).toBeGreaterThanOrEqual(20);
-      expect(c.textRight, `${name}: ending short of the house`).toBeLessThan(v.width / 2);
+      // (in the sky the house is not beside it: short of the frame's right third)
+      expect(c.textRight, `${name}: a title, not a banner`).toBeLessThan(v.width * 0.62);
       // still in the page for a screen reader, but not on the picture
       expect(c.lede, `${name}: the gloss off the frame`).toBeLessThanOrEqual(2);
       expect(c.overflow, `${name}: no sideways scroll`).toBeLessThanOrEqual(0);
@@ -1749,16 +1769,19 @@ test.describe("the film's last frame", () => {
   }) => {
     const { ctx, page } = await open(browser, { width: 390, height: 844 }, true);
 
-    // Seven-eighths of a frame before the end: the camera at rest, the table
-    // in the upper part of the frame, the sign-off whole beneath it.
-    const poster = await frameAt(page, 0.87);
+    // Three-quarters of a frame before the end: the camera at rest, the table
+    // in the upper part of the frame, the sign-off whole beneath it. (It was
+    // seven-eighths while the colophon carried a label over the sign-off and
+    // its links in capitals: the paid audit, 2026-10-04, took both away and
+    // the colophon is a tenth of a frame shorter.)
+    const poster = await frameAt(page, 0.74);
     expect(poster.coda, 'the coda has run').toBe(1);
     expect(poster.table, 'the table is in the frame').not.toBeNull();
     const table = poster.table!;
     expect(table.t, "under the header's band").toBeGreaterThan(0.18);
     expect(table.b, 'over the middle').toBeLessThan(0.47);
     expect(table.r - table.l, 'at the width of the screen').toBeGreaterThan(0.6);
-    expect(poster.lines.length, 'the sign-off is up').toBeGreaterThanOrEqual(4);
+    expect(poster.lines.length, 'the sign-off is up').toBeGreaterThanOrEqual(2);
     for (const b of poster.lines) expect(b.t, 'every line under the table').toBeGreaterThan(table.b);
     expect(poster.all, 'the lens is open').toBeLessThan(0.05);
 

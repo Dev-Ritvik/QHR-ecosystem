@@ -90,14 +90,28 @@ const LEGAL = [
  * rather than ride up through the mark and the controls (ChapterFade,
  * LINES_MODE) — which is what they did on every frame shorter than the
  * colophon is: a phone, a small laptop.
+ *
+ * A CONCLUSION, NOT A FOOTER (the paid audit of 2026-10-04, pass 10: "the
+ * final frame of the film, not the bottom of the website ... fewer competing
+ * text sizes, stronger alignment, more empty space, stronger final object,
+ * one clear final action, less footer furniture"). It spoke in seven voices:
+ * a gilt label, the sign-off, its gloss, an action in capitals, a telephone
+ * number dressed as a second action, twelve links in tracked capitals, three
+ * offices each a capital name with a gilt role over a small address, and a
+ * legal line with its own capitals. Now it is the sign-off and ONE action,
+ * with the telephone number beside it as a number; then, a long way under
+ * them, the small matter in a single quiet voice — the offices, the links
+ * and the legal line all in the text's own small size, in sentences' case,
+ * with no capitals and no gilt. The label is read, not drawn. Every link a
+ * crawler or a reader could reach before is still there.
  */
 function FilmColophon({ year }: { year: number }) {
   const links = COLUMNS.flatMap((c) => c.links);
   return (
     <footer className="film-stage relative z-10">
-      <div data-chapter-fade="lines" className="mx-auto max-w-[var(--grid-max)] px-6 pb-16 pt-[22vh]">
-        <p data-line className="t-eyebrow text-[#E8B98A]">Visit</p>
-        <p data-line data-reveal className="t-h1 mt-6 max-w-[16ch] text-[#F2EDE4]">
+      <div data-chapter-fade="lines" className="mx-auto max-w-[var(--grid-max)] px-6 pb-14 pt-[26vh]">
+        <h2 className="sr-only">Visit</h2>
+        <p data-line data-reveal className="t-h1 max-w-[16ch] text-[#F2EDE4]">
           The land is best seen <span className="t-display-em">from the land.</span>
         </p>
         <p data-line className="t-hero-lede mt-6 max-w-[40ch] text-[#F2EDE4]/90">
@@ -108,38 +122,25 @@ function FilmColophon({ year }: { year: number }) {
           <Link href="/contact" className="cta-primary">
             Arrange a site visit
           </Link>
-          <a href="tel:+919553513366" className="cta-quiet">
-            <span className="cta-quiet-label">+91 95535 13366</span>
+          <a
+            href="tel:+919553513366"
+            className="t-small tap-target text-[#F2EDE4]/90 transition-colors hover:text-[#F2EDE4]"
+          >
+            +91 95535 13366
           </a>
         </div>
 
-        <nav aria-label="Footer" className="mt-[16vh]">
-          <ul className="flex flex-wrap gap-x-7 gap-y-1">
-            {links.map((l) => (
-              <li data-line key={l.href + l.label}>
-                <Link
-                  href={l.href}
-                  className="t-micro flex min-h-[44px] items-center text-[#F2EDE4]/85 transition-colors hover:text-[#E8B98A]"
-                >
-                  {l.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <div className="mt-8 grid gap-6 sm:grid-cols-3">
+        {/* THE SMALL MATTER, IN ONE VOICE, a long way under the sign-off. */}
+        <div className="mt-[24vh] grid gap-x-10 gap-y-5 sm:grid-cols-3">
           {(['visakhapatnam', 'vizianagaram', 'srikakulam'] as const).map((id) => {
             const b = BRANCHES[id];
             return (
-              <div data-line key={b.id}>
-                <p className="t-micro text-[#F2EDE4]/90">
+              <div data-line key={b.id} className="t-small text-[#F2EDE4]/90">
+                <p>
                   {b.name}
-                  <span className="ml-3 text-[#E8B98A]">
-                    {b.role === 'head_office' ? 'Head office' : 'Branch'}
-                  </span>
+                  {b.role === 'head_office' ? ', head office' : ''}
                 </p>
-                <address className="mt-2 not-italic text-step--2 text-[#F2EDE4]/85">
+                <address className="not-italic text-[#F2EDE4]/85">
                   {b.address} &ndash; {b.pincode}
                 </address>
               </div>
@@ -147,7 +148,27 @@ function FilmColophon({ year }: { year: number }) {
           })}
         </div>
 
-        <div data-line className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 text-step--2 text-[#F2EDE4]/85">
+        {/* TWO ROWS OF SIX, set that way: as one wrapped row the twelfth link
+            stood alone on a second line on every frame narrower than 1700 px
+            (seen at 1536x730). */}
+        <nav aria-label="Footer" className="mt-6">
+          {[links.slice(0, 6), links.slice(6)].map((row, i) => (
+            <ul key={i} className="flex flex-wrap gap-x-6">
+              {row.map((l) => (
+                <li data-line key={l.href + l.label}>
+                  <Link
+                    href={l.href}
+                    className="t-small flex min-h-[44px] items-center text-[#F2EDE4]/85 transition-colors hover:text-[#F2EDE4]"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ))}
+        </nav>
+
+        <div data-line className="t-small mt-2 flex flex-wrap items-center gap-x-6 gap-y-3 text-[#F2EDE4]/85">
           <span>&copy; {year} Quality Homes Reality</span>
           <a className="tap-target transition-colors hover:text-[#F2EDE4]" href="mailto:qualityhomesreality@gmail.com">
             qualityhomesreality@gmail.com
@@ -161,7 +182,7 @@ function FilmColophon({ year }: { year: number }) {
               line of the colophon under AA where the stone is at its lightest
               (measured at 390x844: 3.98:1 on a p90 luma of 72). */}
           <span className="ml-auto">
-            <PrivacyControl className="tap-target text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/85 underline-offset-4 transition hover:text-[#F2EDE4] hover:underline" />
+            <PrivacyControl className="tap-target t-small text-[#F2EDE4]/85 underline-offset-4 transition hover:text-[#F2EDE4] hover:underline" />
           </span>
         </div>
       </div>

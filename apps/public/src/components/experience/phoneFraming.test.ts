@@ -43,7 +43,7 @@ describe('the phone lens', () => {
     const portrait = atBeat((x) => x.id === 'portrait');
     expect(phoneFrameAt(beats, portrait, 820)).toEqual(phoneFrameAt(beats, portrait, 390));
     // The projection keeps the frame it always had (`?stations=hologram`).
-    const src = readFileSync(join(__dirname, 'phoneFraming.ts'), 'utf8');
+    const src = readFileSync(join(__dirname, 'phoneFraming.ts'), 'utf8').replace(/\r\n/g, '\n');
     expect(src).toContain("if (stationStyle() === 'hologram') return NONE;");
   });
 

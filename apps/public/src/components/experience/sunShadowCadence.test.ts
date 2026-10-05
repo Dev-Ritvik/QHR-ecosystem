@@ -47,7 +47,7 @@ describe("the sun's shadow map", () => {
   });
 
   it('is held by the light itself, in a loop that runs on a still page too', () => {
-    const src = readFileSync(join(__dirname, 'WorldCanvas.tsx'), 'utf8');
+    const src = readFileSync(join(__dirname, 'WorldCanvas.tsx'), 'utf8').replace(/\r\n/g, '\n');
     expect(src).toContain('light.shadow.autoUpdate = false;');
     expect(src).toContain(
       "if (sunShadowDue(sunShadow.current, doorwayState.mode === 'running', light.shadow.map === null)) {",
@@ -57,7 +57,7 @@ describe("the sun's shadow map", () => {
     // and no depth pass runs the wind: a swaying tree would need its shadow redrawn
     const dir = __dirname;
     for (const f of ['exteriorFoliage.ts', 'ExteriorModel.tsx', 'softSunShadows.ts']) {
-      expect(readFileSync(join(dir, f), 'utf8')).not.toMatch(/customDepthMaterial\s*=/);
+      expect(readFileSync(join(dir, f), 'utf8').replace(/\r\n/g, '\n')).not.toMatch(/customDepthMaterial\s*=/);
     }
   });
 });

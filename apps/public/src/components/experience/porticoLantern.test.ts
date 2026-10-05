@@ -66,9 +66,9 @@ describe('the portico lantern', () => {
 // tripo_assets_v7.py and build_estate_v7.py). The site hangs it, lamps it and
 // lights its glass; these hold the two files to the one place and the one name.
 describe("the lantern's body, where the estate carries the generated one", () => {
-  const src = readFileSync(join(__dirname, 'PorticoLantern.tsx'), 'utf8');
-  const build = readFileSync(join(__dirname, '../../../../../tools/blender/build_estate_v7.py'), 'utf8');
-  const assets = readFileSync(join(__dirname, '../../../../../tools/blender/tripo_assets_v7.py'), 'utf8');
+  const src = readFileSync(join(__dirname, 'PorticoLantern.tsx'), 'utf8').replace(/\r\n/g, '\n');
+  const build = readFileSync(join(__dirname, '../../../../../tools/blender/build_estate_v7.py'), 'utf8').replace(/\r\n/g, '\n');
+  const assets = readFileSync(join(__dirname, '../../../../../tools/blender/tripo_assets_v7.py'), 'utf8').replace(/\r\n/g, '\n');
 
   it('is found by the name the build gives it, and hangs where the chain ends', () => {
     expect(build).toContain(`tripo_object("lantern", "${LANTERN_BODY}", col,`);
@@ -89,7 +89,7 @@ describe("the lantern's body, where the estate carries the generated one", () =>
     expect(src).toContain("m.defines = { ...(m.defines ?? {}), ESTATE_EMITTER: '' };");
     expect(src).toContain('o.castShadow = false;');
     expect(src).toContain('if (cage.current) cage.current.visible = !body.current;');
-    expect(src).toContain('if (body.current) body.current.material.emissiveIntensity = LANTERN.glow * on;');
+    expect(src).toContain("if (body.current) body.current.material.emissiveIntensity = ld('lanternGlow', LANTERN.glow) * on;");
     // The glass is a mask of the model's own pale panes, made with the model.
     expect(assets).toContain('nt.links.new(node.outputs["Color"], bsdf.inputs["Emission Color"])');
   });

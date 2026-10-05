@@ -9,7 +9,10 @@ import {
   CODA_FADE,
   ESTABLISH_ND,
   HEADER_BAND,
-  HERO_ND,
+  COVER_LAND_ND,
+  REVOLUTION_SHORT_ND,
+  COVER_SKY,
+  coverSkyStops,
   HOLDINGS_ND,
   HOLDINGS_SHAPE,
   HOLDINGS_WIDE_OPEN,
@@ -211,7 +214,9 @@ describe('the holdings', () => {
   });
 
   it('is off outside its chapter', () => {
-    holdingsFilter(0.2);
+    // (before it, the lens wears the cover's sky grad until the camera has
+    // turned: off by COVER_SKY.off[1])
+    holdingsFilter(0.32);
     expect(lensFilter.stops).toBe(0);
     holdingsFilter(0.9);
     expect(lensFilter.stops).toBe(0);
@@ -231,32 +236,72 @@ describe('the holdings', () => {
   });
 });
 
-describe("the cover's half stop", () => {
-  it("is there while the cover's copy is, and is not while it is not", () => {
-    holdingsFilter(0, 1.6, 1);
-    expect(lensFilter.stops).toBe(HERO_ND.stops);
-    expect(lensFilter.inner).toBe(HERO_ND.inner);
-    holdingsFilter(0.05, 1.6, 0.5);
-    expect(lensFilter.stops).toBeCloseTo(HERO_ND.stops * 0.5, 9);
-    holdingsFilter(0.1, 1.6, 0);
-    expect(lensFilter.stops).toBe(0);
+describe("the cover's sky", () => {
+  it('is a grad across the whole sky from the first frame, ridden off as the camera turns to the sun', () => {
+    expect(coverSkyStops(0)).toBe(COVER_SKY.stops);
+    expect(coverSkyStops(COVER_SKY.off[0])).toBe(COVER_SKY.stops);
+    expect(coverSkyStops(COVER_SKY.off[1])).toBe(0);
+    // off before the holdings' own grad begins: the two never trade places
+    expect(COVER_SKY.off[1]).toBeLessThanOrEqual(HOLDINGS_ND.from[0]);
+    // without a step
+    let last = coverSkyStops(0.19);
+    for (let s = 0.192; s <= 0.32; s += 0.002) {
+      const v = coverSkyStops(s);
+      expect(v).toBeLessThanOrEqual(last + 1e-9);
+      expect(last - v).toBeLessThan(COVER_SKY.stops * 0.06);
+      last = v;
+    }
   });
 
-  it('is under the gilt phrase and all but off the house', () => {
-    holdingsFilter(0, 1.6, 1);
-    // "we come from": 23 to 42% of the width, 58 to 62% of the way down
-    expect(stopsAt(0.3, 0.4)).toBeCloseTo(HERO_ND.stops, 2);
-    expect(stopsAt(0.42, 0.4)).toBeGreaterThan(HERO_ND.stops * 0.6);
-    expect(stopsAt(0.5, 0.4)).toBeLessThan(HERO_ND.stops * 0.2);
-    expect(stopsAt(0.56, 0.4)).toBe(0);
-    // and never a filter a visitor could name: half a stop
-    expect(HERO_ND.stops).toBeLessThanOrEqual(0.6);
+  it('holds its density over the words and is gone before the roofline', () => {
+    holdingsFilter(0, 1.6);
+    // across the whole width, not a shape behind the text
+    for (const x of [0.05, 0.3, 0.5, 0.7, 0.95]) {
+      expect(stopsAt(x, 1 - 0.12)).toBeCloseTo(COVER_SKY.stops, 1);
+    }
+    // full to the foot of the title
+    expect(stopsAt(0.3, 1 - (COVER_SKY.full - 0.02))).toBeCloseTo(COVER_SKY.stops, 1);
+    // and gone at the horizon, well above the house's parapet
+    expect(stopsAt(0.6, 1 - 0.4)).toBe(0);
+    // a grad a photographer would use on a sky, not a blackout
+    expect(COVER_SKY.stops).toBeLessThanOrEqual(1.4);
   });
 
-  it("gives way to the holdings' grad, which is the denser", () => {
-    holdingsFilter(0.5, 1.6, 1);
+  it("gives way to the holdings' grad", () => {
+    holdingsFilter(0.5, 1.6);
     expect(lensFilter.inner).toBe(0.35);
-    expect(lensFilter.stops).toBeGreaterThan(HERO_ND.stops);
+    expect(lensFilter.stops).toBeGreaterThan(COVER_SKY.stops);
+  });
+
+  it("wears half a stop under the cover's small type, on a second ellipse, while that copy is up", () => {
+    holdingsFilter(0, 1.6, 1);
+    expect(lensFilter.second.stops).toBe(COVER_LAND_ND.stops);
+    // the sky grad is still the first ellipse's
+    expect(lensFilter.stops).toBe(COVER_SKY.stops);
+    holdingsFilter(0.05, 1.6, 0.5);
+    expect(lensFilter.second.stops).toBeCloseTo(COVER_LAND_ND.stops * 0.5, 9);
+    holdingsFilter(0.1, 1.6, 0);
+    expect(lensFilter.second.stops).toBe(0);
+    // never a filter a visitor could name
+    expect(COVER_LAND_ND.stops).toBeLessThanOrEqual(0.6);
+  });
+
+  it("and a stop under the revolution's copy on a short frame only", () => {
+    // a wide frame that is not short asks for none
+    holdingsFilter(0.22, 1.6, 0, 0);
+    expect(lensFilter.second.stops).toBe(0);
+    // a phone on its side, its copy up
+    holdingsFilter(0.22, 844 / 390, 0, 1);
+    expect(lensFilter.second.stops).toBe(REVOLUTION_SHORT_ND.stops);
+    expect(lensFilter.second.inner).toBe(REVOLUTION_SHORT_ND.inner);
+    // under the block (22 to 49% of that frame's width, 62 to 80% of the way
+    // down), and off the house on the right
+    expect(lensFilter.second.shape.x).toBeGreaterThan(0.3);
+    expect(lensFilter.second.shape.x).toBeLessThan(0.42);
+    expect(lensFilter.second.shape.x + lensFilter.second.shape.z).toBeLessThan(0.62);
+    // leaving with the copy
+    holdingsFilter(0.3, 844 / 390, 0, 0.25);
+    expect(lensFilter.second.stops).toBeCloseTo(REVOLUTION_SHORT_ND.stops * 0.25, 9);
   });
 });
 
@@ -336,18 +381,26 @@ describe('the phone, in the hall', () => {
 });
 
 describe("the header's band", () => {
-  it('is whole by day and through the first of the evening, and gone when the evening has fallen', () => {
+  it('is the day\'s by day, the evening\'s under the lit sunset, and the night\'s at dusk', () => {
     expect(headerBandOutside(0)).toBe(HEADER_BAND.day);
-    expect(headerBandOutside(0.58)).toBe(HEADER_BAND.day);
-    expect(headerBandOutside(1)).toBe(0);
+    expect(headerBandOutside(1)).toBeCloseTo(HEADER_BAND.evening, 6);
+    expect(headerBandOutside(1, 1)).toBeCloseTo(HEADER_BAND.night, 6);
+    // never less than a stop: under that the band's ceiling is not fully down
+    for (const [e, n] of [[0, 0], [0.5, 0], [1, 0], [1, 0.5], [1, 1]] as const) {
+      expect(headerBandOutside(e, n)).toBeGreaterThanOrEqual(1);
+    }
   });
 
-  it('lets go without a step', () => {
-    let last = headerBandOutside(0.6);
-    for (let e = 0.62; e <= 1.0001; e += 0.02) {
+  it('rides between them without a step', () => {
+    let last = headerBandOutside(0);
+    for (let e = 0.02; e <= 1.0001; e += 0.02) {
       const v = headerBandOutside(e);
-      expect(v).toBeLessThanOrEqual(last);
-      expect(last - v).toBeLessThan(HEADER_BAND.day * 0.12);
+      expect(Math.abs(v - last)).toBeLessThan(0.06);
+      last = v;
+    }
+    for (let n = 0.02; n <= 1.0001; n += 0.02) {
+      const v = headerBandOutside(1, n);
+      expect(Math.abs(v - last)).toBeLessThan(0.06);
       last = v;
     }
   });
@@ -359,8 +412,9 @@ describe("the header's band", () => {
     for (const s of [0.84, 0.85, 0.88, 0.9, 0.91]) expect(headerBandApproach(s)).toBeCloseTo(HEADER_APPROACH.stops, 6);
     // and gone before the door
     for (const s of [0.95, 0.97, 1]) expect(headerBandApproach(s)).toBe(0);
-    // a light band: well under the day's, which stands on a bright sky
-    expect(HEADER_APPROACH.stops).toBeLessThan(HEADER_BAND.day / 3);
+    // a light band: under the dusk's own, which now holds through these
+    // frames (HEADER_BAND.night) — this one is the floor it once was
+    expect(HEADER_APPROACH.stops).toBeLessThan(HEADER_BAND.night);
     // without a step
     let last = headerBandApproach(0.78);
     for (let s = 0.782; s <= 0.97; s += 0.002) {

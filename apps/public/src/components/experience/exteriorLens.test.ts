@@ -53,13 +53,14 @@ describe('the sun (PCSS)', () => {
   });
 
   it('derives its penumbra from the light it is written for', () => {
-    // The sun's half-degree disc across the key's own shadow camera, softened
-    // by half again. If the frustum changes, the penumbra follows by
-    // construction; this pins the number the comments quote.
+    // The sun's half-degree disc across the key's own shadow camera, three and
+    // a half times as wide: the sun through the evening's haze (the paid
+    // audit, 2026-10-04; it was half as wide again). If the frustum changes,
+    // the penumbra follows by construction; this pins the number.
     const { left, right, near, far } = SUN_SHADOW_CAMERA;
     expect(right - left).toBe(156);
     expect(far - near).toBe(339);
-    expect(PCSS_SPREAD).toBeCloseTo(0.01508, 4);
+    expect(PCSS_SPREAD).toBeCloseTo(0.03518, 4);
   });
 });
 

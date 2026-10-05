@@ -289,8 +289,12 @@ export function AmbientSound() {
         <i />
         <i />
       </span>
-      {/* The word on a frame with room for it; the bars alone on a phone,
-          whose header already carries the mark, Enquire and Menu. */}
+      {/* The bars alone, and the word when the control is pointed at or
+          focused (globals.css, .sound-label): the header over the film is the
+          mark and two words, and a third in capitals beside them was one more
+          voice than the picture needs (the paid audit, 2026-10-04: "navigation
+          almost invisible unless needed"). Never on a phone, whose header has
+          no room for it. */}
       <span className="sound-label max-md:hidden">
         {on ? 'Sound on' : 'Sound'}
       </span>

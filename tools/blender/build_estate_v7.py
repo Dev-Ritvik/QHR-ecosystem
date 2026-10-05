@@ -32,6 +32,7 @@ import bmesh
 import math
 import os
 import random
+import zlib
 import sys
 from mathutils import Matrix, Vector
 
@@ -180,6 +181,20 @@ def build_materials():
         M["gravel"] = M["flags"] = M["paving"]
     M["roof"] = principled("MAT_Roof_Slate", tex={"base": f"{SLATE}/p4c_basecolor.png", "rough": f"{SLATE}/p4c_roughness.png",
                                                   "normal": f"{SLATE}/normal.png"}, normal_strength=0.7)
+    # THE FLAT IS LEAD (the paid audit of 2026-10-04, pass 4: "does this
+    # material have a believable physical response to light?"). Laid in slate
+    # flags it printed as one black rectangle in every frame taken from above
+    # the parapet - the cover, the crane, the holdings - with nothing on it
+    # for the light to find. The flat behind a house like this is sheet lead,
+    # dressed over wooden rolls every two feet: a weathered grey that takes
+    # the sky's colour, ruled with the rolls' fine shadows (build_roof).
+    M["lead"] = principled("MAT_Roof_Lead", base=(0.26, 0.28, 0.3), rough=0.62, spec=0.5)
+    # THE COMPOUND WALL IS NOT THE HOUSE'S STONE. It shared MAT_Stone_Wall, and
+    # from the cover a quarter-kilometre of it ran behind the house as bright
+    # as the front itself: a white line through the park. A boundary wall is
+    # rendered masonry that has stood in the weather; it sits two stops under
+    # the ashlar and the eye stays on the house.
+    M["boundary"] = principled("MAT_Stone_Boundary", tex=t("v7_limestone"), tint=(0.5, 0.47, 0.42), normal_strength=0.8)
     M["spire"] = principled("MAT_Roof", tex={"base": f"{SLATE}/p4c_basecolor.png", "rough": f"{SLATE}/p4c_roughness.png",
                                              "normal": f"{SLATE}/normal.png"}, tint=(0.82, 0.84, 0.86), normal_strength=0.7)
     M["gold"] = principled("MAT_Gold", base=(1.0, 0.77, 0.36), rough=0.3, metal=1.0)
@@ -1032,6 +1047,7 @@ def build_roof(M, col):
     """
     bm = new_bm()       # the flat
     kerb = new_bm()     # its stone kerb
+    rolls = new_bm()    # the lead's rolls
     z = ROOF_EAVE_Z
     # The wall heads' inner faces stand at the old eave line; the sheet laps
     # them by 6 cm so no seam shows from above.
@@ -1044,13 +1060,34 @@ def build_roof(M, col):
         add_box(bm, -fx, fx, y0, y1, z - 0.08, z + 0.01)
     # The raised middle: one step of 8 cm, clear of the pediments' backs.
     rx, ry = X - 2.4, Y - 2.4
+    k_in = 0.3          # the rolls stop at the kerb
     add_box(bm, -rx, rx, -ry, ry, z + 0.01, z + 0.09)
+    # THE ROLLS. Sheet lead is laid in bays about two feet wide, each dressed
+    # over a wooden roll at its edge: from above, a flat ruled with fine
+    # parallel ridges running with the fall. On the raised middle they run
+    # front to back; on the lower walk round it, out to the gutter.
+    bay = 0.68
+    n = int((2 * rx) / bay)
+    for k in range(n + 1):
+        x = -rx + (2 * rx) * k / n
+        add_box(rolls, x - 0.028, x + 0.028, -ry, ry, z + 0.09, z + 0.132)
+    n_out = int((2 * X) / bay)
+    for k in range(1, n_out):
+        x = -X + (2 * X) * k / n_out
+        for y0, y1 in ((-Y + k_in, -ry), (ry, Y - k_in)):
+            add_box(rolls, x - 0.028, x + 0.028, y0, y1, z + 0.01, z + 0.052)
+    n_side = int((2 * ry) / bay)
+    for k in range(n_side + 1):
+        y = -ry + (2 * ry) * k / n_side
+        for x0, x1 in ((-X + k_in, -rx), (rx, X - k_in)):
+            add_box(rolls, x0, x1, y - 0.028, y + 0.028, z + 0.01, z + 0.052)
     # The kerb, 28 cm of stone standing 15 cm over the sheet.
     k = 0.28
     for x0, x1, y0, y1 in ((-X, X, -Y, -Y + k), (-X, X, Y - k, Y),
                            (-X, -X + k, -Y + k, Y - k), (X - k, X, -Y + k, Y - k)):
         add_box(kerb, x0, x1, y0, y1, z + 0.005, z + 0.16)
-    finish("mansion_roof", bm, [M["roof"]], col, smooth_angle=10)
+    finish("mansion_roof", bm, [M["lead"]], col, smooth_angle=10)
+    finish("mansion_roof_rolls", rolls, [M["lead"]], col, smooth_angle=10)
     finish("mansion_roof_kerb", kerb, [M["trim"]], col, smooth_angle=10)
     return z + 0.09
 
@@ -1313,7 +1350,7 @@ def build_compound_wall(M, col):
     for s in (-1, 1):
         add_box(bm, s * 6.5 - 0.7, s * 6.5 + 0.7, WALL_FRONT - 0.7, WALL_FRONT + 0.7, 0.0, 3.6)
         add_box(bm, s * 6.5 - 0.82, s * 6.5 + 0.82, WALL_FRONT - 0.82, WALL_FRONT + 0.82, 3.6, 3.78)
-    finish("estate_wall", bm, [M["wall"]], col)
+    finish("estate_wall", bm, [M["boundary"]], col)
 
 
 # ---- vegetation -------------------------------------------------------------
@@ -1541,15 +1578,25 @@ def card_tree_mesh(M, name, leaf_key, height, canopy_r, canopy_h, cards, seed, t
     return me
 
 
-def scatter(col, me, name, points):
+def scatter(col, me, name, points, shape=0.0):
+    """One object per point, all sharing `me`. `shape` is how far each tree's
+    proportions may leave the mesh's own (0.12: a crown up to 12% wider or
+    narrower one way than the other, a trunk up to 12% taller or shorter):
+    the paid audit of 2026-10-04, pass 3, "vegetation repetition" - a belt of
+    three meshes, turned and sized but never re-proportioned, is three trees."""
     parent = bpy.data.objects.new(name, None)
     col.objects.link(parent)
+    jr = random.Random(zlib.crc32(name.encode()))
     for i, (x, y, rot, s) in enumerate(points):
         ob = bpy.data.objects.new(f"{name}_{i:03d}", me)
         col.objects.link(ob)
         ob.location = (x, y, ground_height(x, y) - 0.05)
         ob.rotation_euler = (0, 0, rot)
-        ob.scale = (s, s, s)
+        if shape:
+            ob.scale = (s * (1 + jr.uniform(-shape, shape)), s * (1 + jr.uniform(-shape, shape)),
+                        s * (1 + jr.uniform(-shape, shape * 1.4)))
+        else:
+            ob.scale = (s, s, s)
         ob.parent = parent
     return parent
 
@@ -1693,7 +1740,21 @@ def build_vegetation(M, col):
         scatter(col, coco[1], "veg_palm_coconut_b", groves[1::2])
     fr = [(sx * 12.5, 20 + 7.5 * k, rng.uniform(0, 6.28), rng.uniform(0.9, 1.1)) for k in range(6) for sx in (-1, 1)]
     fr += [(sx * 20.5, -40.0 - 7 * k, rng.uniform(0, 6.28), 1.0) for k in range(3) for sx in (-1, 1)]
-    scatter(col, frangi, "veg_frangipani", fr)
+    # THE GARDEN'S SMALL TREES ARE SCANNED TOO (the paid audit, pass 3: "the
+    # trees closest to camera are particularly important. Those are the ones
+    # that must withstand scrutiny"). The frangipani was the last procedural
+    # tree in the garden - ninety cards on five lobes, a cream blossom painted
+    # on each - and the revolution passes twenty metres over the canal's row of
+    # them: a row of spotted pom-poms. A young mango from the same scan as the
+    # belt's, two-fifths grown, is a real tree's branching and leaf at the
+    # size of an ornamental one. The frangipani stands in where the scans
+    # have not been made.
+    small = ph_tree(M, "mango")
+    if small is not None:
+        srng = random.Random(23)
+        scatter(col, small, "veg_tree_garden", [(x, y, r, srng.uniform(0.36, 0.5)) for x, y, r, _ in fr], shape=0.1)
+    else:
+        scatter(col, frangi, "veg_frangipani", fr)
     # Bougainvillea in the parterre beds.
     sh = []
     for sx in (-1, 1):
@@ -1730,7 +1791,9 @@ def build_vegetation(M, col):
             continue
         if any((x - bx) ** 2 + (y - by) ** 2 < 90 for bx, by, _, _ in belt):
             continue
-        belt.append((x, y, rng.uniform(0, 6.28), rng.uniform(0.85, 1.3)))
+        # (0.85 to 1.3 until the paid audit: a wider spread of ages, a few
+        # young trees among the old.)
+        belt.append((x, y, rng.uniform(0, 6.28), rng.choice((rng.uniform(0.62, 0.85), rng.uniform(0.85, 1.3), rng.uniform(0.85, 1.3), rng.uniform(1.0, 1.42)))))
     # Planted thick along the inside of the wall, so from the hero and the
     # revolution the compound reads as a belt of trees rather than a long white
     # boundary wall.
@@ -1745,9 +1808,9 @@ def build_vegetation(M, col):
         inner.append((x, rng.uniform(WALL_BACK - 9, WALL_BACK - 4), rng.uniform(0, 6.28), rng.uniform(0.85, 1.15)))
     allt = belt + inner
     rng.shuffle(allt)
-    scatter(col, rain, "veg_tree_rain", allt[0::3])
-    scatter(col, mango, "veg_tree_mango", allt[1::3])
-    scatter(col, neem, "veg_tree_neem", allt[2::3])
+    scatter(col, rain, "veg_tree_rain", allt[0::3], shape=0.13)
+    scatter(col, mango, "veg_tree_mango", allt[1::3], shape=0.13)
+    scatter(col, neem, "veg_tree_neem", allt[2::3], shape=0.13)
     scatter(col, coco[0], "veg_palm_belt", [(p[0] + 4.5, p[1] + 3.5, p[2], 1.0) for p in belt[::4]])
 
 
@@ -1898,13 +1961,11 @@ def pool_terrace(M, col):
         x = -17.9
         add_box(steel, x - 0.045, x + 0.045, y - 0.045, y + 0.045, top, top + 2.4)
         add_lathe(fabric, [(0.0, 0.0), (1.55, -0.42), (1.62, -0.5)], 12, x, y, top + 2.36)
-    # The cabana at the north end: six posts, a flat roof, a fabric ceiling.
-    cx0, cx1, cy0, cy1, ch = -31.0, -22.6, 8.4, 12.1, 3.15
-    for x in (cx0 + 0.25, (cx0 + cx1) / 2, cx1 - 0.25):
-        for y in (cy0 + 0.25, cy1 - 0.25):
-            add_box(stone, x - 0.16, x + 0.16, y - 0.16, y + 0.16, top, top + ch)
-    add_box(stone, cx0, cx1, cy0, cy1, top + ch, top + ch + 0.26)
-    add_box(fabric, cx0 + 0.3, cx1 - 0.3, cy0 + 0.3, cy1 - 0.3, top + ch - 0.06, top + ch)
+    # The day bed at the north end. (It stood under a cabana: six square
+    # posts and a slab, the one thing on the terrace nobody would have built.
+    # The paid audit of 2026-10-04, pass 2: "what can be removed from frame?"
+    # It is gone; the bed is what a terrace like this has.)
+    cx0, cx1, cy0, cy1 = -31.0, -22.6, 8.4, 12.1
     add_box(teak, cx0 + 1.2, cx1 - 1.2, cy1 - 1.9, cy1 - 0.7, top, top + 0.42)
     add_box(fabric, cx0 + 1.2, cx1 - 1.2, cy1 - 1.9, cy1 - 0.7, top + 0.42, top + 0.58)
     add_box(fabric, cx0 + 1.2, cx1 - 1.2, cy1 - 0.82, cy1 - 0.7, top + 0.58, top + 1.02)

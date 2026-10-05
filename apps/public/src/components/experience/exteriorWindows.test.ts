@@ -99,11 +99,14 @@ describe('the rooms behind the windows', () => {
     // By day the lamps are a fraction of the daylight the window lets in.
     expect(LAMP_DAY).toBeLessThan(DAY_INTERIOR / 2);
     // At full night the brightest wall of the brightest room (0.7 ivory under
-    // 1.5 of lamp) stays within a stop and a half of the print's white: the
-    // old drive put it at five times white and every lit pane clipped alike.
+    // 1.5 of lamp) stays under the print's white: the first drive put it at
+    // five times white and every lit pane clipped alike, the second at two and
+    // a half, and the paid audit (2026-10-04) still read the lit windows as
+    // "bright yellow/orange rectangles". A room glows; a light box clips.
     const night = LAMP_DAY + EVENING_INTERIOR * EVENING_DRIVE_MAX;
-    expect(0.7 * 1.5 * night).toBeLessThan(2.8);
-    expect(night).toBeGreaterThan(1.5);
+    expect(0.7 * 1.5 * night).toBeLessThan(1.0);
+    // ...and is still a lit room: several times the daylight it had at noon.
+    expect(night).toBeGreaterThan(DAY_INTERIOR * 1.5);
     // The daylight dies into the room, and goes with the evening.
     expect(INTERIOR_FRAGMENT).toContain('exp(-depth / ');
     expect(INTERIOR_FRAGMENT).toContain('uInteriorDay * (1.0 - 0.92 * dusk)');

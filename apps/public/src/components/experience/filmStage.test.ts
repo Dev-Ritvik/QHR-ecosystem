@@ -22,7 +22,7 @@ import {
 } from './lensFilter';
 import { READING_CEILING } from './readingLight';
 
-const read = (p: string) => readFileSync(join(__dirname, p), 'utf8');
+const read = (p: string) => readFileSync(join(__dirname, p), 'utf8').replace(/\r\n/g, '\n');
 const css = read('../../app/globals.css');
 const config = read('../../../tailwind.config.ts');
 const page = read('../../app/(site)/(experience)/site-home/page.tsx');
@@ -139,8 +139,11 @@ describe('a phone on its side', () => {
       const m = /^max\(([\d.]+)rem, calc\(([\d.]+) \* var\(--u\)\)\)$/.exec(decl(short, `--step-${n}`))!;
       return { px: Math.max(Number(m[1]) * 16, Number(m[2]) * u), design: Number(m[2]) };
     };
-    // the cover's headline within a tenth of its drawn proportion (it was 1.5 times it at the stage's floor)
-    expect(size(5).px / (size(5).design * u)).toBeLessThan(1.1);
+    // the cover's headline within a seventh of its drawn proportion (it was 1.5
+    // times it at the stage's floor) — and never under 24px: it stands in the
+    // sky since the paid audit of 2026-10-04, where only large text can
+    expect(size(5).px / (size(5).design * u)).toBeLessThan(1.15);
+    expect(size(5).px).toBeGreaterThanOrEqual(24);
     // and nothing in the frame under 14px but the capitals
     for (const n of [1, 2, 3, 4, 5, 6]) expect(size(n).px).toBeGreaterThanOrEqual(14);
     for (const n of [2, 3, 4, 5, 6]) expect(size(n).px).toBeGreaterThan(size(n - 1).px);
@@ -307,13 +310,18 @@ describe('every line of the film at a strength its ground allows', () => {
     }
   });
 
-  it("puts the gilt figure where the land stays dark, and a table's count in ivory", () => {
-    // Open, Plots, Layouts: the gilt one first, at the row's left end
-    const row = page.slice(page.indexOf('<dl className="mt-10 flex items-end'), page.indexOf('</dl>'));
-    const order = [...row.matchAll(/<dt className="t-micro mt-3 text-\[#F2EDE4\]">(\w+)<\/dt>/g)].map((m) => m[1]);
-    expect(order).toEqual(['Open', 'Plots', 'Layouts']);
-    const figures = [...row.matchAll(/<dd className="t-figure (text-\[#[0-9A-F]{6}\])">/g)].map((m) => m[1]);
-    expect(figures).toEqual(['text-[#E8B98A]', 'text-[#F2EDE4]', 'text-[#F2EDE4]']);
+  it("sets the holdings' figures as a short table of facts, what is open first, and a table's count in ivory", () => {
+    // The paid audit (2026-10-04): "editorial facts", not "dashboard
+    // statistics". One fact to a line, the figure before its words, no
+    // capitals and no gilt; what is open comes first.
+    const table = page.slice(page.indexOf('<dl className="mt-8 flex flex-col'), page.indexOf('</dl>'));
+    const terms = [...table.matchAll(/<dt className="t-fact-term text-\[#F2EDE4\]">([^<]+)<\/dt>/g)].map((m) => m[1]);
+    expect(terms.slice(0, 2)).toEqual(['plots open', 'plots in all']);
+    expect(terms).toHaveLength(3);
+    expect([...table.matchAll(/<dd className="t-fact text-\[#F2EDE4\]">/g)]).toHaveLength(3);
+    expect(table).not.toContain('t-figure');
+    expect(table).not.toContain('t-micro');
+    expect(table).not.toContain('#E8B98A');
     expect(sources.StationText).toContain('t-small mt-2 flex items-baseline gap-8 text-[#F2EDE4] ');
   });
 
@@ -326,8 +334,9 @@ describe('every line of the film at a strength its ground allows', () => {
     expect(page.match(/<p className="sr-only">/g)?.length).toBe(7);
     const film = page.slice(0, page.indexOf('Sold-out layouts sit AFTER the journey'));
     expect(film).not.toMatch(/className="t-eyebrow/);
-    // the only small capitals left in a frame are a figure's label and an action
-    expect(film.match(/className="t-micro /g)?.length).toBe(3);
+    // the only small capitals left in a frame are an action's: the figures'
+    // labels are words in the text's own voice since the paid audit
+    expect(film.match(/className="t-micro /g)).toBeNull();
     // no hairline but the one an action leads with (the .cta-primary rule, in CSS)
     expect(film).not.toMatch(/<span aria-hidden className="[^"]*\bh-px\b/);
     expect(film).not.toContain('roman(');
@@ -335,8 +344,9 @@ describe('every line of the film at a strength its ground allows', () => {
     expect(sources.StationText).not.toMatch(/className="t-eyebrow/);
     expect(read('../site/CityLink.tsx')).not.toMatch(/className="t-eyebrow/);
     // and each top-held block keeps its first drawn line where it stood: its
-    // top is lower by the label's own line, sixteen units
-    for (const top of ['50.11vh_-_var(--bar)_+_16_*_var(--u)', '60.44vh_+_16_*_var(--u)', '47.89vh_+_16_*_var(--u)']) {
+    // top is lower by the label's own line, sixteen units. (The cover's is in
+    // the sky since the paid audit of 2026-10-04: held by its top there.)
+    for (const top of ['10.4vh_-_var(--bar)', '60.44vh_+_16_*_var(--u)', '47.89vh_+_16_*_var(--u)']) {
       expect(page).toContain(top);
     }
   });
@@ -348,8 +358,11 @@ describe('every line of the film at a strength its ground allows', () => {
     // block itself is never dissolved and is no chapter to the lens.
     const colophon = footer.slice(footer.indexOf('function FilmColophon'), footer.indexOf('export function SiteFooter'));
     expect(colophon).toContain('<div data-chapter-fade="lines" className="mx-auto max-w-[var(--grid-max)]');
-    // the eyebrow, the headline, the gloss, the actions, each link, each office, the legal line
-    expect(colophon.match(/data-line/g)?.length).toBeGreaterThanOrEqual(7);
+    // the headline, the gloss, the action, each office, each link, the legal line
+    // (its label is read, not drawn, since the paid audit of 2026-10-04)
+    expect(colophon.match(/data-line/g)?.length).toBeGreaterThanOrEqual(6);
+    expect(colophon).not.toMatch(/className="t-eyebrow/);
+    expect(colophon).not.toMatch(/className="t-micro/);
     const fade = read('./ChapterFade.tsx');
     expect(fade).toContain("export const LINES_MODE = 'lines';");
     expect(fade).toContain('content: Array.from(el.querySelectorAll<HTMLElement>(lines ? `[${LINE_ATTR}]` : CONTENT)),');
@@ -360,15 +373,15 @@ describe('every line of the film at a strength its ground allows', () => {
     expect(fade).toContain('copyZone.lines = colophon ?? [];');
     expect(fade).toContain('colophon.push({ l: b.left / vw, t: b.top / vh, r: b.right / vw, b: b.bottom / vh });');
     expect(fade).toContain('if (clamp01((t - headerLine) / (HEADER_BAND * headerLine)) < 0.05) continue;');
-    const stage = readFileSync(join(__dirname, 'InteriorStage.tsx'), 'utf8');
+    const stage = readFileSync(join(__dirname, 'InteriorStage.tsx'), 'utf8').replace(/\r\n/g, '\n');
     expect(stage).toContain('codaFilter(copyZone.lines, mapStage.screen, delta);');
-    const table = readFileSync(join(__dirname, 'MapTable.tsx'), 'utf8');
+    const table = readFileSync(join(__dirname, 'MapTable.tsx'), 'utf8').replace(/\r\n/g, '\n');
     expect(table).toContain('mapStage.screen = onScreen;');
   });
 
   it("stands the colophon on the film's stage, and the sound control on the header's ground", () => {
     expect(footer).toContain('<footer className="film-stage relative z-10">');
-    expect(footer).toContain('mx-auto max-w-[var(--grid-max)] px-6 pb-16 pt-[22vh]');
+    expect(footer).toContain('mx-auto max-w-[var(--grid-max)] px-6 pb-14 pt-[26vh]');
     // the control is drawn in the header's slot, not fixed in a corner of the picture
     expect(header).toContain('{overFilm ? <span id="film-sound" className="flex items-center" /> : null}');
     const sound = read('./AmbientSound.tsx');

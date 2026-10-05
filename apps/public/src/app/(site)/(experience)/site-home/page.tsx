@@ -384,7 +384,33 @@ export default async function SiteHomePage() {
                 for a screen reader, which reads the page and not the frame.
                 The headline stands where it stood: the block's top is lower by
                 the label's own line (sixteen units), on a wide frame. */}
-            <div className="pointer-events-auto col-span-12 w-full max-w-[calc(452*var(--u))] self-start wide:mt-[calc(50.11vh_-_var(--bar)_+_16_*_var(--u))] lg:col-span-5">
+            {/* IN THE SKY, ON A WIDE FRAME (the paid audit of 2026-10-04, passes
+                2 and 6: "the image is the art direction and the typography is
+                information placed onto it. Reverse that relationship"). The
+                cover is taken on a long lens now (cameraPath, the hero): the
+                house is half the frame and the land round it is the picture's
+                own business — the block's old place on the lawn is the pool
+                terrace and the house's west wall. The top third is sky and
+                nothing else, so the sentence is set there, a title in the air
+                over the roofline as a magazine sets one, and the lens wears a
+                light graduated filter for that sky (lensFilter, COVER_SKY).
+                The third critique refused a headline "floating over" a bright
+                cloud bank; this stands above the horizon's haze, on the sky's
+                quiet upper air. The first line's top is 13% of the way down
+                the frame.
+
+                AND THE SMALL TYPE STAYS ON THE LAND. A day's sky is a stop and
+                a half brighter than small ivory type can stand on, and the
+                density that would hold it there is the dark lid the audit's
+                first pass took off. MEASURED on this frame's clean plate (a
+                grid of the brightest tenth of each cell): the sky 130 to 175;
+                the hazed park behind the house 170 to 212; and the west lawn,
+                in the house's own long shadow, 60 to 100 from 19 to 38% of
+                the width between 61 and 75% of the way down — the quiet
+                ground of this picture, with nothing done to make it so. The
+                supporting line and the action stand there, on the same left
+                edge as the title: a title and its caption. */}
+            <div className="pointer-events-auto col-span-12 w-full max-w-[calc(452*var(--u))] self-start wide:max-w-none wide:pt-[calc(10.4vh_-_var(--bar))] lg:col-span-8">
               <p className="sr-only">Vizianagaram &middot; Srikakulam</p>
 
               {/* ONE SENTENCE, ONE SIZE, ONE LEADING, ONE STYLE. The turn of
@@ -392,7 +418,11 @@ export default async function SiteHomePage() {
                   critique (2026-09-30) read the site's italics against its
                   roman as a second voice ("stop mixing ... heavily italicized
                   serifs") and asked for hierarchy by scale and weight. The
-                  phrase keeps the house's gilt, in the same roman. */}
+                  phrase keeps the house's gilt, in the same roman — on a
+                  phone, where the sky grad that rides with the copy is dense
+                  enough to carry it; over a wide frame's lighter sky it is
+                  ivory like the rest (globals.css: gilt needs a ground under
+                  a luma of 107 at this size, ivory 137). */}
               <h1 className="t-display mt-4 text-[#F2EDE4] wide:whitespace-nowrap md:mt-6">
                 Land, in the
                 <br />
@@ -401,7 +431,10 @@ export default async function SiteHomePage() {
 
               {/* Editorial, not default: the lede size with its own leading and
                   a touch of tracking, set to a short measure and balanced. */}
-              <p className="t-hero-lede mt-5 text-[#F2EDE4]/95 short:sr-only md:mt-8 md:max-w-[36ch]">
+              {/* (On a wide frame the two below are lifted out of the block's
+                  flow and held by their own top, on the lawn: see above.) */}
+              <div className="wide:absolute wide:left-[calc(var(--bl)*6)] wide:top-[calc(64vh_-_var(--bar))] wide:max-w-[calc(452*var(--u))]">
+              <p className="t-hero-lede mt-5 text-[#F2EDE4]/95 short:sr-only md:mt-8 md:max-w-[36ch] wide:!mt-0">
                 Approved layouts in Vizianagaram and Srikakulam, sold direct by
                 the developer. Every sanctioned plan published in full.
               </p>
@@ -413,17 +446,31 @@ export default async function SiteHomePage() {
                   arrow after the words as "standard web UI, not luxury
                   editorial": the action is the gilt rule leading into the
                   words, as a magazine sets a pointer, and nothing after them. */}
-              <div className="mt-6 md:mt-8">
+              {/* On a wide frame the action stands at the frame's foot, on
+                  the pool's dark water, beside the scroll cue (below): under
+                  the supporting line the ground is the terrace's pale stone. */}
+              <div className="mt-6 md:mt-8 wide:hidden">
                 <Link href="/start-here" className="cta-primary">
                   Start here
                 </Link>
               </div>
+              </div>
             </div>
 
-            {/* The scroll cue, at the foot of the pane under the block — and
+            {/* THE FOOT OF THE COVER: the one action (a wide frame's; a phone's
+                is in the block above), and the scroll cue beside it — the cue
                 only for a visitor who has not found the scroll on their own
-                (ScrollCue). */}
-            <ScrollCue className="col-span-12 self-end pb-[4vh] pt-6" />
+                (ScrollCue). Both on the pool's water: measured on the clean
+                plate, the brightest tenth of it 67 to 76 from 13 to 31% of the
+                width, 88 to 93.5% of the way down. */}
+            <div className="col-span-12 flex items-center gap-x-[calc(var(--bl)*12)] self-end pb-[4vh] pt-6 wide:pb-[7.4vh]">
+              <div className="pointer-events-auto hidden wide:block">
+                <Link href="/start-here" className="cta-primary">
+                  Start here
+                </Link>
+              </div>
+              <ScrollCue />
+            </div>
           </div>
         </div>
       </header>
@@ -527,10 +574,22 @@ export default async function SiteHomePage() {
                 blossom and then the terrace pass behind). It used to close
                 the row, and at leg 0.60 the gilt stood on 112: 2.7:1. Ivory
                 holds the right end at 3:1 through the same frames. */}
-            <dl className="mt-10 flex items-end gap-x-[clamp(2rem,4vw,3.75rem)] wide:gap-x-[calc(57.6*var(--u))]">
-              <div className="flex flex-col-reverse">
-                <dt className="t-micro mt-3 text-[#F2EDE4]">Open</dt>
-                <dd className="t-figure text-[#E8B98A]">
+            {/* AND NOW AS FACTS, SET AS A BOOK SETS THEM (the paid audit of
+                2026-10-04, pass 6: "those numbers should not feel like
+                ordinary dashboard statistics. They should feel like editorial
+                facts"). Three numerals at the top of the scale over tracked
+                capitals is how a dashboard draws a metric, whatever the face.
+                A printed page sets a short table: the figure in the text's own
+                old-style numerals, a step up, its words beside it in the
+                text's own voice, one fact to a line and the figures ranged
+                right so their units stand under one another. No capitals, no
+                gilt: what is open comes first, and that is its emphasis.
+                (`flex-row-reverse` puts each figure before its words while
+                the markup keeps the term first, as a <dl> must.) */}
+            <dl className="mt-8 flex flex-col gap-y-[calc(var(--bl)*1.5)]">
+              <div className="flex flex-row-reverse items-baseline justify-end gap-x-[calc(var(--bl)*4)]">
+                <dt className="t-fact-term text-[#F2EDE4]">plots open</dt>
+                <dd className="t-fact text-[#F2EDE4]">
                   {list.reduce(
                     (n: number, p: any) =>
                       n + (typeof p.availableUnits === 'number' ? p.availableUnits : 0),
@@ -538,9 +597,9 @@ export default async function SiteHomePage() {
                   )}
                 </dd>
               </div>
-              <div className="flex flex-col-reverse">
-                <dt className="t-micro mt-3 text-[#F2EDE4]">Plots</dt>
-                <dd className="t-figure text-[#F2EDE4]">
+              <div className="flex flex-row-reverse items-baseline justify-end gap-x-[calc(var(--bl)*4)]">
+                <dt className="t-fact-term text-[#F2EDE4]">plots in all</dt>
+                <dd className="t-fact text-[#F2EDE4]">
                   {list.reduce(
                     (n: number, p: any) =>
                       n + (typeof p.totalUnits === 'number' ? p.totalUnits : 0),
@@ -548,9 +607,9 @@ export default async function SiteHomePage() {
                   )}
                 </dd>
               </div>
-              <div className="flex flex-col-reverse">
-                <dt className="t-micro mt-3 text-[#F2EDE4]">Layouts</dt>
-                <dd className="t-figure text-[#F2EDE4]">{list.length}</dd>
+              <div className="flex flex-row-reverse items-baseline justify-end gap-x-[calc(var(--bl)*4)]">
+                <dt className="t-fact-term text-[#F2EDE4]">{list.length === 1 ? 'layout' : 'layouts'}</dt>
+                <dd className="t-fact text-[#F2EDE4]">{list.length}</dd>
               </div>
             </dl>
             {/* One line under the figures (it ran three: the second sentence

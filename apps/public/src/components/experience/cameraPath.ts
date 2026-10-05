@@ -261,8 +261,25 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     // the fountain enters the bottom of frame as a foreground, and the pool
     // terrace still holds the left third. The azimuth, the lens and the frame
     // offset are untouched, so the type keeps its gutter.
-    position: grow([-20.0, 12.2, 31.0]),
-    target: grow([0.0, 5.0, 0.0]),
+    //
+    // A LONGER LENS, FROM FURTHER BACK (the paid audit of 2026-10-04, pass 2:
+    // "make every shot feel like an architectural photograph, not a camera
+    // travelling through a model ... reveal one architectural idea
+    // beautifully ... is the building too small?"). At [-32, 19.5, 49.6] on 41
+    // degrees the frame was an inventory: the whole pool terrace, its cabana
+    // and loungers, the car, the fountain, the helipad's windsock and sixty
+    // metres of lawn, with the house at two-fifths of the width. The subject
+    // is the ENTRANCE FRONT. So the same three-quarter bird's eye, from the
+    // same side and a hair lower in angle, is taken from further back on a long
+    // lens (26 degrees, 82 m): the house is half the frame, its front and its portico the lit
+    // thing in it; the park's trees stand up behind the parapet in layers of
+    // evening haze, as a long lens stacks them; the pool is a corner of water
+    // at the frame's foot and the rest of the terrace is left out; and the
+    // top third is sky, where the cover's words now stand (site-home).
+    // Was: position grow([-20.0, 12.2, 31.0]), target grow([0.0, 5.0, 0.0]),
+    // fov 41, frameOffset 6.2 * ESTATE_SCALE.
+    position: [-46.0, 20.0, 66.0],
+    target: [0.0, 12.6, 0.0],
     // ATMOSPHERIC PERSPECTIVE, tightened from [40, 150].
     //
     // The key is a directional light, so it lights all 240m of lawn at the same
@@ -281,13 +298,11 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     // 44 -> 41. A longer lens compresses the facade, which is what
     // architectural photography does and what a wide angle undoes: at 44 the
     // near corner ran away from the far one and the building read as a model.
-    fov: 41,
+    fov: 26,
     roll: 0.0,
-    // 7.4 -> 6.0 -> 6.2. The offset is what holds the architecture in the right
-    // 60% for the hero column; the last 0.2 compensates the swing to a more
-    // frontal azimuth so the left edge stays where the type was composed
-    // against it.
-    frameOffset: 6.2 * ESTATE_SCALE,
+    // 7.4 -> 6.0 -> 6.2 (x 1.6), and 8.5 for the long lens: the house stands
+    // right of the middle, its west corner at two-fifths of the frame's width.
+    frameOffset: 8.5,
   },
   {
     id: 'quarter',
@@ -303,7 +318,11 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     target: grow([0.0, 4.6, 0.0]),
     fog: growFog([30, 136]),
     keyIntensity: 2.5,
-    fov: 56,
+    // 56 until the paid audit (pass 2): the widest lens on the fastest leg was
+    // there to exaggerate parallax, "what the eye reads as speed" — and speed
+    // through a model is exactly what the audit read. 48 holds the flank as
+    // an elevation rather than a fly-by.
+    fov: 48,
     roll: -0.048,
     frameOffset: 8.2 * ESTATE_SCALE,
   },
@@ -317,7 +336,8 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     target: grow([0.0, 4.8, 0.0]),
     fog: growFog([24, 120]),
     keyIntensity: 2.7,
-    fov: 52,
+    // (52 until the paid audit: see the quarter.)
+    fov: 46,
     roll: -0.036,
     frameOffset: 6.4 * ESTATE_SCALE,
   },
@@ -755,6 +775,48 @@ export function lensAt(scroll: number): {
   }
   const last = BEATS[BEATS.length - 1];
   return { fov: last.fov, roll: last.roll, frameOffset: last.frameOffset };
+}
+
+/**
+ * AN UPRIGHT SCREEN'S LENS, OUTSIDE.
+ *
+ * A perspective camera keeps its vertical field whatever the screen, so a
+ * phone held upright sees the middle two-fifths of a landscape frame's width.
+ * The paid audit's lenses (2026-10-04) are a landscape frame's: the cover on
+ * 26 degrees is a slice of the west corner on a phone, twelve degrees across,
+ * with the entrance it is a picture of out of the frame; and the revolution's
+ * two beats, taken in from 56 and 52 to 48 and 46, are tighter there than the
+ * frames a phone's copy was set against.
+ *
+ * So on an upright screen the lens opens (`widen` multiplies the tangent of
+ * the half-angle, as phoneFraming's does indoors) and the aim's offset comes
+ * in (`offset` multiplies the beat's frameOffset): at the cover, wide enough
+ * to hold the whole front with the house nearly centred under the sky the
+ * copy stands in; at the revolution's beats, back to exactly the lens they
+ * had (tan 28 / tan 24, tan 26 / tan 23). Linear between beats, as the lens
+ * is; a beat not listed is as it stands.
+ */
+export const UPRIGHT_LENS: Readonly<Record<string, { widen: number; offset: number }>> = {
+  hero: { widen: 1.75, offset: 0.2 },
+  quarter: { widen: 1.194, offset: 1 },
+  'three-quarter': { widen: 1.149, offset: 1 },
+};
+
+const UPRIGHT_NONE = { widen: 1, offset: 1 } as const;
+
+export function uprightLensAt(scroll: number): { widen: number; offset: number } {
+  const s = Math.min(1, Math.max(0, scroll));
+  for (let i = 0; i < BEATS.length - 1; i += 1) {
+    const a = BEATS[i];
+    const b = BEATS[i + 1];
+    if (s <= b.at) {
+      const k = b.at === a.at ? 0 : (s - a.at) / (b.at - a.at);
+      const ua = UPRIGHT_LENS[a.id] ?? UPRIGHT_NONE;
+      const ub = UPRIGHT_LENS[b.id] ?? UPRIGHT_NONE;
+      return { widen: ua.widen + (ub.widen - ua.widen) * k, offset: ua.offset + (ub.offset - ua.offset) * k };
+    }
+  }
+  return { widen: 1, offset: 1 };
 }
 
 export function atmosphereAt(scroll: number): {

@@ -87,7 +87,9 @@ const CHANDELIER = new THREE.Vector3(0, 10.9, 0);
 export const TRAY = {
   margin: 0.03,
   rail: 0.088,
-  thick: 0.026,
+  // (26 mm until the paid audit, 2026-10-04: a board that carries a model has
+  // a board's weight.)
+  thick: 0.036,
   bezel: 0.008,
   bezelProud: 0.006,
   fillet: 0.003,
@@ -405,7 +407,9 @@ export function StationModel({
         };
         const mats = {
           tops: surface('MAT_PlanModel_Plaster', { map: face, roughness: 0.86, metalness: 0 }, L.plaster, key),
-          sides: surface('MAT_PlanModel_Edge', { vertexColors: true, roughness: 0.9, metalness: 0 }, L.plaster, key),
+          // (A cool tint on the blocks' sawn sides: they face the walnut and
+          // the room's lamps, and at their own ivory they printed salmon.)
+          sides: surface('MAT_PlanModel_Edge', { vertexColors: true, color: '#dfe6e6', roughness: 0.9, metalness: 0 }, L.plaster * 0.8, key),
           board: surface('MAT_PlanModel_Board', { map: face, roughness: 0.4, metalness: 0 }, L.board, key),
           walnut: surface('MAT_PlanModel_Walnut', { map: panel?.map ?? null, color: panel?.map ? '#ffffff' : '#5e4632', roughness: 0.4, metalness: 0 }, L.walnut, key),
           brass: surface('MAT_PlanModel_Brass', { color: MODEL_BRASS.colour, roughness: MODEL_BRASS.roughness, metalness: 1 }, L.brass, brassKey),

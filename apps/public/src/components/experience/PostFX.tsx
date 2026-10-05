@@ -97,6 +97,7 @@ import { LensFocus } from './LensFocus';
 import { passageLight } from './passageLight';
 import type { SceneSet } from './poses';
 import type { Grade } from './WorldCanvas';
+import { ld, lookdevOn } from './lookdev';
 
 /**
  * THE GRADE, AND WHY A RENDER NEEDS ONE.
@@ -156,6 +157,10 @@ const HALL_BLOOM = { intensity: 0.55, threshold: 1.25, smoothing: 0.35 } as cons
 /** A touch heavier than outside since the second client review: the room
  *  is lamp-lit, and its edges fall away toward the corners (FilmGrade HALL_GRADE). */
 const HALL_VIGNETTE = { offset: 0.3, darkness: 0.62 } as const;
+/** The estate's, under the print. */
+// (0.55 until the paid audit, 2026-10-04: the corners fell a stop and more
+// into black, on top of a print whose toe already darkens them.)
+const FILM_VIGNETTE = { offset: 0.3, darkness: 0.35 } as const;
 
 /**
  * MULTISAMPLING OFF.
@@ -273,8 +278,8 @@ export function PostFX({
       ...look,
       // Lighter under the print, whose toe already darkens the corners the
       // vignette used to be responsible for. Low tier keeps its own pair.
-      offset: tier === 'low' ? 0.32 : hall ? HALL_VIGNETTE.offset : film ? 0.3 : 0.28,
-      darkness: tier === 'low' ? 0.62 : hall ? HALL_VIGNETTE.darkness : film ? 0.55 : 0.7,
+      offset: tier === 'low' ? 0.32 : hall ? HALL_VIGNETTE.offset : film ? FILM_VIGNETTE.offset : 0.28,
+      darkness: tier === 'low' ? 0.62 : hall ? HALL_VIGNETTE.darkness : film ? FILM_VIGNETTE.darkness : 0.7,
     };
     applyLook(bloom.current, vignette.current, rest.current, 0, tier);
   }, [film, hall, printed, tier, contrast, saturation, print, vignette, bloom]);
@@ -287,6 +292,17 @@ export function PostFX({
   const carried = useRef(0);
   useFrame(() => {
     const g = hall ? 0 : passageLight.grade;
+    // Look-dev: the film's vignette and bloom, live.
+    if (lookdevOn() && film) {
+      rest.current = {
+        intensity: ld('bloom', BLOOM.intensity),
+        threshold: ld('bloomThreshold', BLOOM.threshold),
+        smoothing: BLOOM.smoothing,
+        offset: ld('vigOffset', FILM_VIGNETTE.offset),
+        darkness: ld('vigDark', FILM_VIGNETTE.darkness),
+      };
+      carried.current = -1;
+    }
     if (g === carried.current) return;
     carried.current = g;
     applyLook(bloom.current, vignette.current, rest.current, g, tier);

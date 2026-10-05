@@ -1169,7 +1169,12 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   // review's "flat black voids". Thin, so the rooms behind show
   // (exteriorWindows.ts) and the sky rides on it by Fresnel.
   MAT_Glass_Window: { env: 2.8, opacity: 0.26 },
-  MAT_Glass_Rail: { env: 2.4 },
+  // THE TERRACE'S GLASS RAIL, CLEAR (the paid audit of 2026-10-04, pass 4:
+  // "Glass: does it behave differently from a glowing plane?"). At 2.4 of the
+  // sky on a quarter-opaque sheet each panel printed as a pale card standing
+  // on the terrace's edge. A rail's glass is all but invisible from across a
+  // lawn: a faint sheen, the steel that holds it, and the view through.
+  MAT_Glass_Rail: { env: 1.0, opacity: 0.1 },
   MAT_Car_Glass: { env: 2.4 },
   MAT_Car_Paint: { env: 2.2 },
   MAT_Car_Paint_Pale: { env: 2.0 },
@@ -1183,7 +1188,24 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   MAT_Chrome: { env: 2.2 },
   MAT_Steel: { env: 1.9 },
   MAT_Gold: { env: 1.9 },
-  MAT_Stone_Terrace: { env: 1.5 },
+  // THE TERRACE IS A DIFFERENT STONE FROM THE HOUSE, AND SITS BELOW IT (the
+  // paid audit, pass 4: "material hierarchy ... restrained materials with
+  // believable relationships"). Polished and as pale as the ashlar, the pool
+  // terrace was the second-brightest thing in the cover and a mirror for the
+  // sky: a white slab beside the house. Honed sandstone, a stop under the
+  // house's limestone: it takes the light as a floor does, and the house is
+  // the pale thing in the picture.
+  MAT_Stone_Terrace: { colour: 0.66, rough: 2.4, env: 0.7 },
+  // THE FLAT'S LEAD (build_estate_v7.py, build_roof): dull, and a little of
+  // the sky on it.
+  MAT_Roof_Lead: { rough: 1.2, env: 0.55 },
+  // THE GENERATED PALMS. Their own maps make leaf and trunk a little metallic
+  // and smooth, and with the sky bound as the environment every frond carried
+  // a pale skin of it: the paid audit's "3D asset feeling", seen from the
+  // cover and the forecourt. A leaf is not metal and a frond's sheen is
+  // narrow: matte, and almost none of the sky.
+  MAT_Palm_Royal: { metal: 0, rough: 1.25, env: 0.3, colour: 0.9 },
+  MAT_Palm_Coconut: { metal: 0, rough: 1.25, env: 0.3, colour: 0.9 },
   // THE COLUMNS AND THE TRIM, HONED. The second art-direction audit
   // (2026-09-30): "the marble columns show subtle reflections and texture" in
   // the version it asked for; as delivered the portico's shafts, the cornices
@@ -1205,7 +1227,9 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   // revolve at leg 0.25: flat white discs in the foreground of the house).
   // The brief: "fewer competing elements, stronger focal hierarchy". An
   // unbleached canvas, which is what stands out in the sun for a season.
-  MAT_Fabric: { colour: 0.62 },
+  // (0.62 until the paid audit, 2026-10-04: still the two whitest things in
+  // the sunset frames.)
+  MAT_Fabric: { colour: 0.5 },
   MAT_Stone_Paving: { env: 0.9 },
   // The podium's flags take the sky as the paving did; raked gravel takes
   // almost none of it (a bed of small stones has no face to mirror with).
@@ -1305,7 +1329,7 @@ ${WATER_COLOUR}`)
           .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 ${WATER_NORMAL}`);
       };
-      mat.customProgramCacheKey = () => `water-ripple-v2${pool ? '-pool' : ''}`;
+      mat.customProgramCacheKey = () => `water-ripple-v3${pool ? '-pool' : ''}`;
       mat.needsUpdate = true;
       count += 1;
     }
@@ -1336,10 +1360,17 @@ const WATER_NORMAL = /* glsl */ `
 {
   vec2 p = vRipplePos.xz;
   float fw = length(fwidth(p));
-  vec2 g = waterTrain(p, 2.3, 0.3, 0.035, 1.3, fw)
-         + waterTrain(p, 1.1, 2.1, 0.03, 1.9, fw)
-         + waterTrain(p, 0.55, 4.0, 0.026, 2.6, fw)
-         + waterTrain(p, 0.27, 5.3, 0.02, 3.7, fw);
+  // A STILL EVENING (the paid audit of 2026-10-04, pass 4: "Water: does it
+  // reflect the environment rather than simply being blue?"). Four trains of
+  // near-equal slope crossed into a lattice of diamonds that the cover showed
+  // as a printed pattern on the pool. Water in a walled garden at dusk is a
+  // mirror that breathes: one long swell, a shorter one across it at a third
+  // of its slope, and a trace of ripple. The sky and the house hold together
+  // in the reflection, and only their edges move.
+  vec2 g = waterTrain(p, 3.1, 0.3, 0.018, 0.9, fw)
+         + waterTrain(p, 1.3, 2.1, 0.008, 1.4, fw)
+         + waterTrain(p, 0.55, 4.0, 0.004, 2.2, fw)
+         + waterTrain(p, 0.27, 5.3, 0.002, 3.1, fw);
   vec3 nW = normalize(vec3(-g.x, 1.0, -g.y));
   normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
 }
@@ -1358,7 +1389,7 @@ const WATER_COLOUR = /* glsl */ `
   diffuseColor.rgb = mix(shallow, body * 0.5, deep);
   float fw = length(fwidth(vRipplePos.xz));
   float c = waterCaustic(vRipplePos.xz, uTime) * (1.0 - smoothstep(0.08, 0.25, fw));
-  diffuseColor.rgb += c * (1.0 - 0.75 * deep) * vec3(0.05, 0.075, 0.07);
+  diffuseColor.rgb += c * (1.0 - 0.75 * deep) * vec3(0.02, 0.03, 0.028);
 }
 #endif
 `;

@@ -106,7 +106,7 @@ function glslBlocks(source: string): string[] {
 }
 
 function read(file: string): string {
-  return readFileSync(join(__dirname, file), 'utf8');
+  return readFileSync(join(__dirname, file), 'utf8').replace(/\r\n/g, '\n');
 }
 
 describe('custom GLSL sources', () => {

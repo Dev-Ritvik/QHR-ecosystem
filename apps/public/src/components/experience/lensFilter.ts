@@ -29,6 +29,7 @@
 
 import { Vector4 } from 'three';
 import { copyPresence, type CopyPane, type ScreenBox } from './copyZone';
+import { ld } from './lookdev';
 
 export const lensFilter = {
   /** Stops of density at the ellipse's heart; 0 is no filter. */
@@ -49,6 +50,9 @@ export const lensFilter = {
   /** Stops over the WHOLE frame: the lens closed down (codaFilter). Like the
    *  band, it never adds to the others: at each point the densest holds. */
   all: 0,
+  /** A second ellipse, for a frame whose copy stands in two places (the
+   *  cover: its title in the sky, its small type on the land). Same rule. */
+  second: { stops: 0, shape: new Vector4(0.2, 0.3, 0.3, 0.2), inner: 0.45 },
 };
 
 /**
@@ -81,13 +85,38 @@ export const lensFilter = {
  * print's own gamma: 0.4 is a luma of 102, where ivory capitals stand at
  * 4.7:1) is rolled off under it on a soft shoulder, and everything below the
  * shoulder is left exactly as the density made it.
+ *
+ * LIGHTER AND SHORTER OUTSIDE, AND HELD THROUGH THE EVENING (the paid audit of
+ * 2026-10-04, pass 1: "more believable relationship between sky and ground").
+ * At 2.6 stops over a quarter of the frame the top third of the hero was the
+ * darkest thing in the picture — a storm over a sunlit lawn. The band is the
+ * header's, so it is the header's height: full to 7% as before, gone by 16%
+ * (it was 24%), at 1.6 stops by day (the wordmark on a luma of 82, the
+ * controls on 74 to 77, measured). And it no longer lets go with the evening,
+ * because the evening's sky no longer goes dark (WorldCanvas, SKY_HOURS): at
+ * leg 0.6 the header stood on the sunset at 156 to 184 with no band at all.
+ * `evening` and `night` are its stops at those hours. The hall keeps the
+ * reach it was measured at (`zero`).
  */
-export const HEADER_BAND = { day: 2.6, hall: 2.2, full: 0.07, zero: 0.24, ceiling: 0.4 } as const;
+export const HEADER_BAND = {
+  day: 1.6,
+  evening: 2.0,
+  night: 1.2,
+  hall: 2.2,
+  full: 0.07,
+  zero: 0.24,
+  zeroOutside: 0.16,
+  ceiling: 0.4,
+} as const;
 
-/** The band outside, for this much of the film's evening (0 day .. 1 fallen). */
-export function headerBandOutside(evening: number): number {
-  const t = Math.min(1, Math.max(0, (evening - 0.6) / 0.4));
-  return HEADER_BAND.day * (1 - t * t * (3 - 2 * t));
+/** The band outside, for this much of the film's evening (0 day .. 1 fallen)
+ *  and of the night that follows it (0 .. 1). */
+export function headerBandOutside(evening: number, night = 0): number {
+  const e = Math.min(1, Math.max(0, evening));
+  const n = Math.min(1, Math.max(0, night));
+  const day = ld('bandDay', HEADER_BAND.day);
+  const at = day + (ld('bandEvening', HEADER_BAND.evening) - day) * (e * e * (3 - 2 * e));
+  return at + (ld('bandNight', HEADER_BAND.night) - at) * (n * n * (3 - 2 * n));
 }
 
 /** The holdings' opening frames, in exterior-leg progress. The density is
@@ -304,11 +333,22 @@ export function tableBandFilter(panes: readonly CopyPane[], dt: number): void {
   lensFilter.topZero = HEADER_BAND.zero + (zero - HEADER_BAND.zero) * e;
 }
 
-/** The band at the header's own reach: wherever no table's copy is under it. */
-export function headerBandReach(): void {
+/**
+ * The band at the header's own reach: wherever no table's copy is under it.
+ * `outside`: over the estate's sky, where it is shorter (HEADER_BAND) — and
+ * EASED there (`dt`, seconds), because the estate takes the frame back from
+ * the hall at the end of the way out by the door, and a reach that stepped
+ * from the hall's to its own would lift a strip of the picture in one frame.
+ */
+export function headerBandReach(outside = false, dt = Infinity): void {
   tableBand.on = 0;
-  lensFilter.topFull = HEADER_BAND.full;
-  lensFilter.topZero = HEADER_BAND.zero;
+  lensFilter.topFull = ld('bandFull', HEADER_BAND.full);
+  if (!outside) {
+    lensFilter.topZero = HEADER_BAND.zero;
+    return;
+  }
+  const want = ld('bandZero', HEADER_BAND.zeroOutside);
+  lensFilter.topZero += (want - lensFilter.topZero) * (1 - Math.exp(-Math.max(0, dt) / 0.35));
 }
 
 /**
@@ -331,31 +371,102 @@ export const HOLDINGS_SHAPE = [0.22, 0.4, 0.33, 0.36] as const;
 export const HOLDINGS_WIDE_OPEN = 0.7;
 
 /**
- * AND UNDER THE COVER, HALF A STOP. The cover's copy stands on the lawn by
- * composition and needs no filter to be read — but its phrase in gilt is
- * large text on a p90 luma of 92 to 100, 3.2 to 3.65:1 where 3 is the floor,
- * and a margin of a fifteenth is one cloud's worth. Half a stop over the
- * lower left ("a highly nuanced, barely perceptible radial gradient ... a
- * photographic ND filter effect", the fourth critique's own second means),
- * there for as long as the cover's copy is (copyZone), gives it a quarter.
+ * THE COVER'S SKY (the paid audit of 2026-10-04, passes 2 and 6: "typography
+ * as composition, not information sitting over an image").
+ *
+ * The cover's words stood on the land, over the pool terrace, in a cloud's
+ * shade made for them. On the long-lens cover (cameraPath, the hero) the top
+ * third of the frame is sky and nothing else, and the words are set there: a
+ * title in the air over the house, as a magazine sets one. A sky photographed
+ * at this hour is a stop and a half brighter than ivory type can stand on, so
+ * the lens wears what a landscape photographer puts on for any sky at this
+ * hour: a soft-edged graduated filter, its density from the top of the frame
+ * to the foot of the title and gone at the horizon. Not a shape behind the
+ * text: a grad across the whole width, which is what a grad is. A light one
+ * (the first, at 1.4 stops down to the tree line, was the dark lid over a
+ * sunlit lawn that the audit's first pass had just taken off): it holds a
+ * LARGE line of ivory at 3:1 and no more, so only the title stands in the
+ * sky. The small type is on the land (site-home).
+ *
+ * It does not come and go with the words (a sky that brightens as a line
+ * fades is an exposure hunting). It is on from the film's first frame and is
+ * ridden off as the camera turns from this sky toward the sun's (`off`, in
+ * leg progress), before the holdings' own grad comes on.
  */
-export const HERO_ND = { stops: 0.5, shape: [0.24, 0.31, 0.3, 0.36] as const, inner: 0.45 } as const;
+export const COVER_SKY = { stops: 1.3, full: 0.27, zero: 0.37, off: [0.2, 0.31] as const } as const;
 
 /**
- * The filter for this frame of the exterior leg, on a wide frame, where the
- * copy stands in the lower left. (Any other frame wears the sky grad that
- * rides with the copy: phoneSkyFilter.) `aspect` is the frame's (STAGE);
- * `cover` is how much of the cover's copy is up, 0..1 (copyPresence).
+ * AND HALF A STOP UNDER THE COVER'S SMALL TYPE, on the land (as there was
+ * under the whole block before it was parted: "a highly nuanced, barely
+ * perceptible radial gradient ... a photographic ND filter effect", the fourth
+ * critique's own second means). The supporting line stands on the west lawn,
+ * whose brightest tenth reads 103 to 108 under its three lines (measured on
+ * the clean plate, 2026-10-04): at the limit for small ivory, with a mown
+ * stripe's worth of margin. Half a stop gives it a fifth. There for as long
+ * as the cover's copy is (`cover`, copyZone), in the design's frame (STAGE).
  */
-export function holdingsFilter(legS: number, aspect: number = STAGE.aspect, cover = 0): void {
+export const COVER_LAND_ND = { stops: 0.5, shape: [0.24, 0.3, 0.27, 0.2] as const, inner: 0.45 } as const;
+
+/**
+ * AND A STOP UNDER THE REVOLUTION'S COPY ON A SHORT FRAME (a phone on its
+ * side). On every other wide frame that copy stands on the lawn by
+ * composition and needs nothing. On a frame 390 px tall its type cannot
+ * shrink with the picture: three lines at 15 px reach half-way across the
+ * frame, out over the pool terrace's pale stone, and with the sky as the fill
+ * (the paid audit, 2026-10-04) two of its words stood on a p90 luma of 139 to
+ * 142, 2.8:1. A soft ellipse under the block, for as long as it is up
+ * (`revolution`, copyZone), on the lens's second ellipse — which the cover's
+ * small type has given up by then.
+ */
+export const REVOLUTION_SHORT_ND = { stops: 1.0, shape: [0.31, 0.29, 0.3, 0.2] as const, inner: 0.45 } as const;
+
+/** The cover's sky grad at this point of the exterior leg, in stops. */
+export function coverSkyStops(legS: number): number {
+  return ld('coverSky', COVER_SKY.stops) * (1 - smooth(COVER_SKY.off[0], COVER_SKY.off[1], legS));
+}
+
+/**
+ * The filter for this frame of the exterior leg, on a wide frame: the cover's
+ * sky grad through the film's first chapters, then the holdings' grad where
+ * that copy stands in the lower left. (Any other frame wears the sky grad
+ * that rides with the copy: phoneSkyFilter.) `aspect` is the frame's (STAGE);
+ * `cover` is how much of the cover's copy is up, 0..1 (copyPresence), and
+ * `revolutionShort` the same for the revolution's on a short frame.
+ */
+export function holdingsFilter(
+  legS: number,
+  aspect: number = STAGE.aspect,
+  cover = 0,
+  /** How much of the revolution's copy is up, on a SHORT frame; 0 on any other. */
+  revolutionShort = 0,
+): void {
+  // The second ellipse: half a stop under the cover's small type, or (on a
+  // short frame) a stop under the revolution's copy. Whichever is the denser.
+  const land = ld('coverLand', COVER_LAND_ND.stops) * Math.min(1, Math.max(0, cover));
+  const rev = REVOLUTION_SHORT_ND.stops * Math.min(1, Math.max(0, revolutionShort));
+  const second = rev > land ? REVOLUTION_SHORT_ND : COVER_LAND_ND;
+  const stops = Math.max(land, rev);
+  lensFilter.second.stops = stops < 0.004 ? 0 : stops;
+  if (stops > 0) {
+    const [cx, cy, rx, ry] = second.shape;
+    const k = STAGE.aspect / Math.max(aspect, STAGE.safe);
+    lensFilter.second.shape.set(cx * k + 0.5 * (1 - k), cy, rx * k, ry);
+    lensFilter.second.inner = second.inner;
+  }
   const on = smooth(HOLDINGS_ND.from[0], HOLDINGS_ND.from[1], legS) * (1 - smooth(HOLDINGS_ND.to[0], HOLDINGS_ND.to[1], legS));
   const opening = 1 - smooth(HOLDINGS_ND.settle[0], HOLDINGS_ND.settle[1], legS);
   const holdings = (holdingsDensity(legS) + HOLDINGS_WIDE_OPEN * opening) * on;
-  const hero = HERO_ND.stops * Math.min(1, Math.max(0, cover));
-  if (hero > holdings) {
-    lensFilter.stops = hero;
-    lensFilter.inner = HERO_ND.inner;
-    onStage(HERO_ND.shape[0], HERO_ND.shape[1], HERO_ND.shape[2], HERO_ND.shape[3], aspect);
+  const sky = coverSkyStops(legS);
+  if (sky > holdings) {
+    // A grad anchored at the top edge: an ellipse centred above the frame,
+    // wide enough that across the frame its edge is a line.
+    const vFull = 1 - ld('coverSkyFull', COVER_SKY.full);
+    const vZero = 1 - ld('coverSkyZero', COVER_SKY.zero);
+    const cy = 1.2;
+    const ry = cy - vZero;
+    lensFilter.stops = sky;
+    lensFilter.shape.set(0.5, cy, 3, ry);
+    lensFilter.inner = (cy - vFull) / ry;
     return;
   }
   lensFilter.stops = holdings;
@@ -428,7 +539,10 @@ function holdingsDensity(legS: number): number {
  * set shorter for a phone's real frame, the block's gloss runs the column's
  * full measure, out over the bright end of the cloud bank: 106 at 2.2.)
  */
-export const PHONE_SKY_ND: Readonly<Record<string, number>> = { hero: 2.5, revolution: 1.8, holdings: 2.0 };
+// (The revolution's was 1.8 until the paid audit of 2026-10-04: with the sky
+// as the fill, the shaded parapet its second line crosses on a phone came up
+// to a p90 luma of 121, and one word stood at 3.7:1. At 2.3 it is under 105.)
+export const PHONE_SKY_ND: Readonly<Record<string, number>> = { hero: 2.5, revolution: 2.3, holdings: 2.0 };
 /** How far down the frame the grad may reach; its margin below the copy and
  *  the height of its fall, as fractions of the frame's height. */
 export const PHONE_SKY = { reach: 0.74, rise: 0.12, margin: 0.03, fall: 0.09 } as const;

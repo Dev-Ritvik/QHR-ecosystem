@@ -472,7 +472,7 @@ describe('the way out by the same door', () => {
   });
 
   it("is wired as the way in is: the camera in the hall's space until the scene shows the estate", () => {
-    const read = (name: string) => readFileSync(join(__dirname, name), 'utf8');
+    const read = (name: string) => readFileSync(join(__dirname, name), 'utf8').replace(/\r\n/g, '\n');
     const canvas = read('WorldCanvas.tsx');
     expect(canvas).toContain('if (!entering) {');
     expect(canvas).toContain('desired.current.set(...door.fromPos).lerp(TMP.set(...DOORWAY.exteriorPass).sub(HALL_OFFSET), c.leave);');
@@ -488,7 +488,7 @@ describe('the way out by the same door', () => {
     expect(read('DoorwayRig.tsx')).toContain('const through = portalWanted();');
     // the sky is loaded once and kept while the visitor is inside: loaded
     // again on the frame the sets change, it was 47 ms of texture upload
-    expect(canvas).toContain('useEffect(() => (armed ? loadSky(SKY_EQUIRECT_URL, setEnv) : undefined), [armed]);');
+    expect(canvas).toMatch(/armed\s*\? loadSky\(SKY_EQUIRECT_URL, \(tex\) => \{[\s\S]*?setEnv\(tex\);[\s\S]*?\}\)\s*: undefined,\s*\[armed\],/);
     expect(canvas).toContain('useEffect(() => (armed ? loadSky(SKY_LIGHTING_URL, setLighting) : undefined), [armed]);');
     expect(canvas).toContain('if (made.current?.source !== source || made.current.gl !== gl) {');
     // and the lens's filter stays the hall's stage's to ease away until the
@@ -500,7 +500,7 @@ describe('the way out by the same door', () => {
     expect(canvas).toContain('if (!hallsFilter) {');
     expect(read('doorPortal.ts')).toContain('hallPortal.draw !== null &&');
     // the door's caption waits for the page to be let go
-    const css = readFileSync(join(__dirname, '..', '..', 'app', 'globals.css'), 'utf8');
+    const css = readFileSync(join(__dirname, '..', '..', 'app', 'globals.css'), 'utf8').replace(/\r\n/g, '\n');
     expect(css).toContain("html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {\n  opacity: 0 !important;");
   });
 });
@@ -512,7 +512,7 @@ describe('the way out by the same door', () => {
 // unit test cannot run — so the source is held to them, as filmStage.test.ts
 // holds the page's.
 describe('the frame the sets change on', () => {
-  const read = (name: string) => readFileSync(join(__dirname, name), 'utf8');
+  const read = (name: string) => readFileSync(join(__dirname, name), 'utf8').replace(/\r\n/g, '\n');
   const canvas = read('WorldCanvas.tsx');
   const portal = read('HallPortal.tsx');
 
@@ -574,7 +574,7 @@ describe('the frame the sets change on', () => {
   });
 
   it('takes the door\'s caption off with the first steps, and brings the room\'s up as the page is let go', () => {
-    const css = readFileSync(join(__dirname, '../../app/globals.css'), 'utf8');
+    const css = readFileSync(join(__dirname, '../../app/globals.css'), 'utf8').replace(/\r\n/g, '\n');
     expect(css).toContain("html[data-doorway='enter'][data-doorway-held='1'] [data-chapter-fade] {\n  opacity: 0 !important;");
     expect(css).toContain("html[data-doorway='enter'] [data-chapter-fade] {\n  transition: opacity 520ms ease-out;");
     // The establishing copy's filter comes on with it, not at the cut.

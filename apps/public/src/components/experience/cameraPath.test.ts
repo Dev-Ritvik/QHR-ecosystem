@@ -474,9 +474,11 @@ describe('exterior camera path', () => {
     for (let i = 0; i <= 100; i += 1) {
       const l = lensAt(i / 100);
       // Past ~70 the perspective distortion at the frame edge stops reading as
-      // a wide lens and starts reading as a fisheye; under 30 outdoors the
-      // parallax that sells the orbit disappears.
-      expect(l.fov).toBeGreaterThanOrEqual(30);
+      // a wide lens and starts reading as a fisheye. Under 30 outdoors the
+      // parallax that sells the orbit disappears — so only the cover is held
+      // on less (26: a still, an architectural photograph's long lens), and
+      // the lens has opened past 30 by the time the orbit is under way.
+      expect(l.fov).toBeGreaterThanOrEqual(i / 100 < 0.05 ? 26 : 30);
       expect(l.fov).toBeLessThanOrEqual(70);
       // Past ~0.09 rad the horizon tilt reads as a broken camera.
       expect(Math.abs(l.roll)).toBeLessThan(0.09);

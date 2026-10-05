@@ -82,7 +82,15 @@ export const HALL_FINISHES: Readonly<Record<string, Finish>> = {
   // reflects, and the small side-facing pieces (sconce plates, picture-light
   // arms) reflect the darker half of the room and went black. A little diffuse
   // keeps them gold from every side.
-  MAT_Gold: { clear: ALL, color: '#e2bd72', roughness: 0.4, metalness: 0.6 },
+  //
+  // AGED, NOT YELLOW (the paid audit of 2026-10-04: "More luxury gold:
+  // absolutely not"; of the portrait, "the frame, wall, light and surrounding
+  // architecture all participate in the same composition"). At #e2bd72 and
+  // six-tenths metal the portrait's frame under its picture lamp was a band
+  // of flat mustard round the canvas, the loudest colour in the room. Old
+  // water-gilding is darker and browner than new gold and shows its metal in
+  // its highlights: a deeper tone, a little more of it metal.
+  MAT_Gold: { clear: ALL, color: '#c2a066', roughness: 0.44, metalness: 0.72 },
   MAT_Table_Brass: { color: '#e9c77e', roughness: 0.3, metalness: 0.9 },
 };
 

@@ -36,6 +36,7 @@
 // Low tier renders with shadows off, so it never compiles this code at all.
 
 import * as THREE from 'three';
+import { ldQuery } from './lookdev';
 
 const MARK = '/* estate: pcss sun */';
 
@@ -102,7 +103,16 @@ export function sunShadowDue(st: SunShadowState, moving: boolean, noMap: boolean
 
 /** The sun's angular diameter, and how much softer than it the lens renders. */
 const SUN_DIAMETER_RAD = (0.53 * Math.PI) / 180;
-const SOFTEN = 1.5;
+/**
+ * 1.5 until the paid audit of 2026-10-04 (pass 1: "softer shadow transitions
+ * ... less abrupt blackness"). The sky this sun shines through is a
+ * photographed evening of haze and broken cloud: its disc reaches the ground
+ * through a veil, as a source several times its own width, and the far end of
+ * a palm's shadow is a soft metre and a half across, not forty centimetres.
+ * Contact stays sharp (the radius still grows from one texel at the foot of
+ * whatever casts).
+ */
+const SOFTEN = ldQuery('soften', 3.5);
 
 /** Penumbra radius per unit of shadow depth, per texel of map width:
  *  0.5 * (far - near) * tan(sun) / (right - left) * SOFTEN. ~0.0151. */
@@ -110,8 +120,8 @@ export const PCSS_SPREAD =
   (0.5 * (SUN_SHADOW_CAMERA.far - SUN_SHADOW_CAMERA.near) * Math.tan(SUN_DIAMETER_RAD) * SOFTEN) /
   (SUN_SHADOW_CAMERA.right - SUN_SHADOW_CAMERA.left);
 /** Blocker search radius in texels; also the cap on the filter radius. */
-export const PCSS_SEARCH = 12;
-export const PCSS_SAMPLES = 12;
+export const PCSS_SEARCH = ldQuery('search', 28);
+export const PCSS_SAMPLES = Math.round(ldQuery('samples', 16));
 
 const PCSS = /* glsl */ `${MARK}
 #define PCSS_SAMPLES ${PCSS_SAMPLES}
@@ -265,6 +275,13 @@ const HOUSE_RAYS = (() => {
 })();
 
 const f3 = (v: number) => v.toFixed(3);
+/** How much of the sun a full cloud takes, and how much of the sky's diffuse
+ *  light and of its reflection goes with it. */
+// (0.8, 0.69 and 0.5 until the paid audit: under those the terrace and the
+// lawn west of the house printed near black beside sunlit ground, "abrupt
+// blackness". A cloud at this hour takes about half the sun and a third of
+// the sky: its shade is a soft step down, not a hole.)
+export const CLOUD_SHADE = { sun: ldQuery('cloud', 0.5), sky: ldQuery('cloudsky', 0.35), skySpec: ldQuery('cloudspec', 0.3) };
 const CLOUD = /* glsl */ `
 float estateCloudHash( vec2 p ) {
   vec3 q = fract( vec3( p.xyx ) * vec3( 0.1031, 0.1030, 0.0973 ) );
@@ -298,7 +315,7 @@ float estateCloud( vec2 uv ) {
                 * smoothstep( ${f3(HOUSE_RAYS.y0 - 3)}, ${f3(HOUSE_RAYS.y0)}, m.y )
                 * ( 1.0 - smoothstep( ${f3(HOUSE_RAYS.y1)}, ${f3(HOUSE_RAYS.y1 + 3)}, m.y ) );
   cover = max( cover, lawn * ( 1.0 - onHouse ) );
-  return 1.0 - 0.8 * cover;
+  return 1.0 - ${f3(CLOUD_SHADE.sun)} * cover;
 }
 `;
 
@@ -342,8 +359,8 @@ export function installCloudShadows(): boolean {
 #if defined( USE_SHADOWMAP ) && ( NUM_DIR_LIGHT_SHADOWS > 0 )
 \t{
 \t\tfloat estateShade = 1.0 - estateCloud( vDirectionalShadowCoord[ 0 ].xy );
-\t\treflectedLight.indirectDiffuse *= 1.0 - 0.69 * estateShade;
-\t\treflectedLight.indirectSpecular *= 1.0 - 0.5 * estateShade;
+\t\treflectedLight.indirectDiffuse *= 1.0 - ${f3(CLOUD_SHADE.sky)} * estateShade;
+\t\treflectedLight.indirectSpecular *= 1.0 - ${f3(CLOUD_SHADE.skySpec)} * estateShade;
 \t}
 #endif
 `;

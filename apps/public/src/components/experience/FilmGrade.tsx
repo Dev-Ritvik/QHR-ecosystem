@@ -48,6 +48,7 @@ import { Uniform, Vector2, Vector3, Vector4 } from 'three';
 import { passageLight } from './passageLight';
 import { HEADER_BAND, lensFilter } from './lensFilter';
 import { READING_CEILING, READING_STOPS, readingLight } from './readingLight';
+import { ld } from './lookdev';
 
 /**
  * How far into evening the film is, 0..1, written each frame by
@@ -59,7 +60,10 @@ import { READING_CEILING, READING_STOPS, readingLight } from './readingLight';
  */
 export const filmState = { evening: 0, night: 0 };
 /** Exposure multiplier at full evening. */
-export const EVENING_LIFT = 0.55;
+export const EVENING_LIFT = 0.2;
+/** And what the night does to that exposure, once the sun has gone (a
+ *  multiplier on the evening's: 1 holds it). */
+export const NIGHT_LIFT = 1.35;
 /**
  * The print's shadows at full evening. By day they lean a breath toward teal
  * (FILM_GRADE.shadowTint): the planes the sky lights, against the planes the
@@ -74,7 +78,15 @@ export const EVENING_LIFT = 0.55;
  * — printed at a luma of 9, which no fill light brings out of the curve's
  * toe. A print lifts them: this much at black, nothing by the middle grey.
  */
-export const EVENING_SHADOW_TINT: [number, number, number] = [0.036, 0.028, 0.019];
+export const EVENING_SHADOW_TINT: [number, number, number] = [0.03, 0.03, 0.03];
+/**
+ * The greens after sundown. By day the print already takes a quarter of their
+ * chroma (FILM_GRADE.greenSat); at dusk the eye, and a long exposure, see a
+ * lawn as a dark olive-grey, and under the dusk's even sky (WorldCanvas,
+ * FILL_NIGHT) the turf otherwise printed as the most saturated thing in the
+ * frame at the door.
+ */
+export const NIGHT_GREENS = { sat: 0.5, value: 0.78 } as const;
 
 const FRAGMENT = /* glsl */ `
 uniform float exposure;
@@ -90,6 +102,9 @@ uniform float amount;
 uniform vec4 ndShape;
 uniform float ndStops;
 uniform float ndInner;
+uniform vec4 ndShape2;
+uniform float ndStops2;
+uniform float ndInner2;
 uniform vec4 ndTop;
 uniform float ndAll;
 uniform vec2 readCap;
@@ -147,6 +162,12 @@ float ndFilter(vec2 uv) {
   if (ndStops > 0.0) {
     vec2 q = (uv - ndShape.xy) / ndShape.zw;
     d = max(d, ndStops * (1.0 - smoothstep(ndInner, 1.0, length(q))));
+  }
+  // A second ellipse (lensFilter.second): the cover wears a grad on its sky
+  // AND a half stop under its small copy, on the land, at once.
+  if (ndStops2 > 0.0) {
+    vec2 q2 = (uv - ndShape2.xy) / ndShape2.zw;
+    d = max(d, ndStops2 * (1.0 - smoothstep(ndInner2, 1.0, length(q2))));
   }
   if (ndTop.x > 0.0) d = max(d, ndTop.x * (1.0 - smoothstep(ndTop.y, ndTop.z, 1.0 - uv.y)));
   return exp2(-d);
@@ -313,6 +334,9 @@ export class FilmGradeEffect extends Effect {
         ['ndShape', new Uniform(new Vector4(0.2, 0.5, 0.3, 0.2))],
         ['ndStops', new Uniform(0)],
         ['ndInner', new Uniform(0.35)],
+        ['ndShape2', new Uniform(new Vector4(0.2, 0.3, 0.3, 0.2))],
+        ['ndStops2', new Uniform(0)],
+        ['ndInner2', new Uniform(0.45)],
         ['ndTop', new Uniform(new Vector4(0, 0.07, 0.24, 0.4))],
         ['ndAll', new Uniform(0)],
         ['readCap', new Uniform(new Vector2(READING_CEILING, 0))],
@@ -355,7 +379,9 @@ export const FilmGrade = forwardRef<FilmGradeEffect, { settings?: FilmGradeSetti
       // (?debug=1 publishes the grades on window.__estateGrades) can move any
       // of them live, and the exposure can ride the evening.
       effect.settings = settings;
-      const lift = settings.ridesEvening ? 1 + EVENING_LIFT * filmState.evening : 1;
+      const lift = settings.ridesEvening
+        ? (1 + ld('evLift', EVENING_LIFT) * filmState.evening) * (1 + (ld('nightLift', NIGHT_LIFT) - 1) * filmState.night)
+        : 1;
       // A reading page's light (readingLight.ts), eased so a route change
       // dims rather than cuts.
       readingLight.stops += (readingLight.want - readingLight.stops) * (1 - Math.exp(-Math.max(0, delta) / 0.35));
@@ -367,10 +393,17 @@ export const FilmGrade = forwardRef<FilmGradeEffect, { settings?: FilmGradeSetti
         const e = filmState.evening;
         const [r, g, b] = settings.shadowTint;
         (effect.uniforms.get('shadowTint')!.value as Vector3).set(
-          r + (EVENING_SHADOW_TINT[0] - r) * e,
-          g + (EVENING_SHADOW_TINT[1] - g) * e,
-          b + (EVENING_SHADOW_TINT[2] - b) * e,
+          r + (ld('shadeR', EVENING_SHADOW_TINT[0]) - r) * e,
+          g + (ld('shadeG', EVENING_SHADOW_TINT[1]) - g) * e,
+          b + (ld('shadeB', EVENING_SHADOW_TINT[2]) - b) * e,
         );
+      }
+      if (settings.ridesEvening && filmState.night > 0) {
+        const n = filmState.night;
+        effect.uniforms.get('greenSat')!.value =
+          settings.greenSat + (ld('greenSatNight', NIGHT_GREENS.sat) - settings.greenSat) * n;
+        effect.uniforms.get('greenValue')!.value =
+          settings.greenValue + (ld('greenValueNight', NIGHT_GREENS.value) - settings.greenValue) * n;
       }
       // THROUGH THE DOOR (passageLight.grade): the exterior's print goes to the
       // hall's as the camera closes on the open doorway, so the sets can change
@@ -407,6 +440,9 @@ export const FilmGrade = forwardRef<FilmGradeEffect, { settings?: FilmGradeSetti
         HEADER_BAND.ceiling,
       );
       (effect.uniforms.get('ndShape')!.value as Vector4).copy(lensFilter.shape);
+      effect.uniforms.get('ndStops2')!.value = lensFilter.second.stops;
+      effect.uniforms.get('ndInner2')!.value = lensFilter.second.inner;
+      (effect.uniforms.get('ndShape2')!.value as Vector4).copy(lensFilter.second.shape);
     });
     // No dispose={null} on the primitive: r3f applies that as a PROPERTY and
     // nulls the method, which then threw here the first time the composer

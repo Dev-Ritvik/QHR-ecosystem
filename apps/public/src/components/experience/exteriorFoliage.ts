@@ -93,6 +93,8 @@ export const SWAY_FROND = 0.16;
 const FOLIAGE_RE = /^MAT_(Leaves_|Palm_Frond)/;
 const FROND_RE = /^MAT_Palm_Frond/;
 const PETAL_RE = /^MAT_Leaves_Frangipani/;
+/** The bougainvillea's cards: a bract's magenta, taken down (FOLIAGE_TINT). */
+const BLOOM_RE = /^MAT_Leaves_Bougainvillea/;
 
 export const FOLIAGE_VERTEX = /* glsl */ `
 #include <begin_vertex>
@@ -128,6 +130,15 @@ export const FOLIAGE_TINT = /* glsl */ `
     float lift = ${FOLIAGE_GAIN.toFixed(2)};
   #endif
   diffuseColor.rgb *= hue * (0.9 + 0.2 * fract(vFoliageSeed * 7.31)) * lift;
+  // THE BOUGAINVILLEA, AS A PLANT (the paid audit of 2026-10-04, passes 3 and
+  // 11: "uncontrolled local color ... collectively they can become visually
+  // loud"). Lifted like a leaf, its bracts printed as pure signal red: the
+  // loudest colour in every frame of the garden. A bract in the shade of its
+  // own bush is a deep crimson, and most of the bush is leaf.
+  #ifdef FOLIAGE_BLOOM
+    float bl = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+    diffuseColor.rgb = mix(vec3(bl), diffuseColor.rgb, 0.62) * vec3(0.62, 0.6, 0.66);
+  #endif
 }
 `;
 
@@ -179,11 +190,13 @@ export function dressFoliage(root: THREE.Object3D): number {
       done.add(mat);
       const frond = FROND_RE.test(mat.name);
       const petals = PETAL_RE.test(mat.name);
+      const bloom = BLOOM_RE.test(mat.name);
       mat.defines = {
         ...(mat.defines ?? {}),
         ESTATE_FOLIAGE: '',
         ...(frond ? { FOLIAGE_FROND: '' } : {}),
         ...(petals ? { FOLIAGE_PETALS: '' } : {}),
+        ...(bloom ? { FOLIAGE_BLOOM: '' } : {}),
       };
       const prev = mat.onBeforeCompile;
       mat.onBeforeCompile = (shader, renderer) => {
@@ -205,7 +218,7 @@ export function dressFoliage(root: THREE.Object3D): number {
           .replace('#include <alphatest_fragment>', FOLIAGE_COVERAGE)
           .replace('#include <lights_fragment_end>', FOLIAGE_TRANSLUCENCY);
       };
-      mat.customProgramCacheKey = () => `estate-foliage${frond ? '-frond' : ''}${petals ? '-petals' : ''}`;
+      mat.customProgramCacheKey = () => `estate-foliage${frond ? '-frond' : ''}${petals ? '-petals' : ''}${bloom ? '-bloom' : ''}`;
       mat.needsUpdate = true;
     }
   });

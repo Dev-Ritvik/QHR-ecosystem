@@ -36,8 +36,12 @@ import * as THREE from 'three';
 import { hallLight } from './hallLight';
 
 /** The shafts' strength in the room at full house light, and their colour:
- *  the sky after sunset. (0.2 and a warm #FFE2B8 while they were the sun's.) */
-export const SHAFT = { power: 0.04, colour: '#C4D2EA' } as const;
+ *  the sky after sunset. (0.2 and a warm #FFE2B8 while they were the sun's;
+ *  0.04 until the paid audit of 2026-10-04, when the panes went from a lit
+ *  ultramarine to the slate dusk that is outside the door: a window that dim
+ *  throws no beam a visitor could point at, only a trace of paler air under
+ *  the clerestory.) */
+export const SHAFT = { power: 0.016, colour: '#C9CED6' } as const;
 
 /** The windows on the lit wall (+x), three-space centres along z, from the GLB. */
 const WINDOW_Z = [-6.0, -3.6, -1.2, 1.2, 3.6, 6.0];

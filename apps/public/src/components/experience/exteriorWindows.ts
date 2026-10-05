@@ -35,6 +35,7 @@
 
 import * as THREE from 'three';
 import type { RoomLight } from './nightPools';
+import { ld, lookdevOn } from './lookdev';
 
 /** Room depth behind the facade; the room's margin beyond the window's sides,
  *  below its sill and above its head; metres. */
@@ -64,9 +65,29 @@ export const DAY_INTERIOR = 0.5;
 export const DAYLIGHT_REACH = 2.2;
 /** The lamps by day, and what the evening's drive (0..1.3) adds to them. */
 export const LAMP_DAY = 0.16;
-export const EVENING_INTERIOR = 1.7;
+export const EVENING_INTERIOR = 1.0;
 /** The drive's own ceiling (WorldCanvas: WINDOW_EVENING_GLOW + WINDOW_NIGHT_GLOW). */
-export const EVENING_DRIVE_MAX = 1.3;
+export const EVENING_DRIVE_MAX = 0.72;
+
+/** How much of its room's lamplight a drawn drape passes. */
+export const DRAPE_LAMP = 0.25;
+
+/** One set of uniforms for every window's room (the look can move them live). */
+export const roomUniforms = {
+  uInteriorDay: { value: DAY_INTERIOR },
+  uInteriorEvening: { value: EVENING_INTERIOR },
+  uLampDay: { value: LAMP_DAY },
+  uRoomSilk: { value: DRAPE_LAMP },
+};
+
+/** Look-dev: the rooms' light, live (lookdev.ts). Call once a frame. */
+export function followRoomLook(): void {
+  if (!lookdevOn()) return;
+  roomUniforms.uInteriorDay.value = ld('roomDay', DAY_INTERIOR);
+  roomUniforms.uInteriorEvening.value = ld('roomEvening', EVENING_INTERIOR);
+  roomUniforms.uLampDay.value = ld('roomLampDay', LAMP_DAY);
+  roomUniforms.uRoomSilk.value = ld('roomSilk', DRAPE_LAMP);
+}
 
 const INTERIOR_RE = /^MAT_Window_Interior/;
 
@@ -74,6 +95,7 @@ export const INTERIOR_FRAGMENT = /* glsl */ `
 uniform float uInteriorDay;
 uniform float uInteriorEvening;
 uniform float uLampDay;
+uniform float uRoomSilk;
 varying vec3 vInteriorWorld;
 varying vec3 vRoomC;
 varying vec3 vRoomH;
@@ -126,7 +148,12 @@ vec3 interiorRoom(vec3 pos, vec3 rd, vec3 nW, float evening) {
   // A lamp at the room's centre, near the ceiling; falloff with distance and
   // a darkening into the room's corners.
   vec3 lampRel = vec3(hAl - halfW, hUp - (roomH - 0.9), depth - ${(ROOM_DEPTH * 0.55).toFixed(2)});
-  float lamp = 0.18 + 1.5 * exp(-dot(lampRel, lampRel) / 5.0);
+  // (0.18 + 1.5 over a width of 5 until the paid audit of 2026-10-04, pass 5:
+  // "even if you don't see the room clearly, the viewer should believe there
+  // is space behind the glass". At that spread a lit room's four walls were
+  // within a third of one another: a pane of one warm value. A lamp lights
+  // the wall beside it and lets the far corners go.)
+  float lamp = 0.09 + 1.7 * exp(-dot(lampRel, lampRel) / 3.2);
   float corner = smoothstep(0.0, 0.7, hAl) * smoothstep(0.0, 0.7, 2.0 * halfW - hAl);
   corner *= smoothstep(0.0, 0.5, hUp) * smoothstep(0.0, 0.6, roomH - hUp);
   corner *= smoothstep(0.0, 0.8, ${ROOM_DEPTH.toFixed(2)} - depth) * 0.5 + 0.5;
@@ -153,6 +180,21 @@ vec3 interiorRoom(vec3 pos, vec3 rd, vec3 nW, float evening) {
   float sky = uInteriorDay * (1.0 - 0.92 * dusk);
   float lamps = (uLampDay + uInteriorEvening * evening) * on;
   vec3 room = col * (vec3(0.9, 0.95, 1.0) * sky * exp(-depth / ${DAYLIGHT_REACH.toFixed(2)}) + tint * lamps * lamp);
+  // THE LAMP ITSELF, SEEN THROUGH THE GLASS ("opening + glass + reflection +
+  // interior depth + light source", the audit's list). A lit room has a light
+  // in it: a shade hanging under the ceiling, half-way back. Where the ray
+  // from the eye passes it the pane shows it — a small bright thing INSIDE
+  // the room, which slides against the window's bars as the camera moves and
+  // is hidden by a drawn drape. Only rooms whose own lamps are on have one.
+  {
+    vec3 toLamp = vec3(-a0, (roomH - 0.9) + floorY - u0, ${(ROOM_DEPTH * 0.55).toFixed(2)});
+    vec3 ray = vec3(rAl, rUp, rIn);
+    float tl = clamp(dot(toLamp, ray), 0.0, t);
+    vec3 miss = toLamp - ray * tl;
+    float d2 = dot(miss, miss);
+    float shade = exp(-d2 / 0.02) * 2.6 + exp(-d2 / 0.4) * 0.2;
+    room += tint * lamps * shade * step(0.6, on);
+  }
   // DRAPES, just inside the glass: ivory silk in soft folds, seen by the
   // daylight on their face and by the room behind them. How far they are drawn
   // is the room's own: most stand open at the window's edges, some half across,
@@ -166,7 +208,7 @@ vec3 interiorRoom(vec3 pos, vec3 rd, vec3 nW, float evening) {
     // hero's distance they printed as a moire over every pane.
     float keep = clamp(1.0 - fwidth(a0) * 41.0 * 0.6, 0.0, 1.0);
     float fold = 0.72 + 0.28 * keep * sin(a0 * 41.0 + sin(u0 * 3.0) * 0.6);
-    vec3 silk = vec3(0.8, 0.72, 0.6) * fold * (vec3(0.9, 0.95, 1.0) * sky * 0.8 + tint * lamps * 0.5);
+    vec3 silk = vec3(0.8, 0.72, 0.6) * fold * (vec3(0.9, 0.95, 1.0) * sky * 0.8 + tint * lamps * uRoomSilk);
     room = mix(room, silk, drape);
   }
   return room;
@@ -356,9 +398,10 @@ export function dressWindows(root: THREE.Object3D): number {
       const prev = mat.onBeforeCompile;
       mat.onBeforeCompile = (shader, renderer) => {
         prev.call(mat, shader, renderer);
-        shader.uniforms.uInteriorDay = { value: DAY_INTERIOR };
-        shader.uniforms.uInteriorEvening = { value: EVENING_INTERIOR };
-        shader.uniforms.uLampDay = { value: LAMP_DAY };
+        shader.uniforms.uInteriorDay = roomUniforms.uInteriorDay;
+        shader.uniforms.uInteriorEvening = roomUniforms.uInteriorEvening;
+        shader.uniforms.uLampDay = roomUniforms.uLampDay;
+        shader.uniforms.uRoomSilk = roomUniforms.uRoomSilk;
         shader.vertexShader = shader.vertexShader
           .replace(
             'void main() {',

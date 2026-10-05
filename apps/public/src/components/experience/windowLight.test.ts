@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const src = readFileSync(join(__dirname, 'WindowLight.tsx'), 'utf8');
+const src = readFileSync(join(__dirname, 'WindowLight.tsx'), 'utf8').replace(/\r\n/g, '\n');
 const num = (name: string) => {
   const m = new RegExp('const ' + name + ' = ([0-9.]+);').exec(src);
   if (!m) throw new Error(`${name} not found`);
