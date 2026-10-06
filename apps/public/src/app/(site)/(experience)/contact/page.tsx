@@ -14,6 +14,7 @@ import { Surface } from '@/components/experience/Surface';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 import { EnquiryForm } from '../../enquiry-form';
 import { BRANCHES } from '@estate/domain/leads/branches';
+import { CONTACT_EMAIL, CONTACT_MAILTO } from '@/lib/contact';
 
 export const metadata: Metadata = {
   title: 'Contact — Quality Homes Reality',
@@ -62,9 +63,9 @@ export default function ContactPage() {
           , or write to{' '}
           <a
             className="underline underline-offset-4"
-            href="mailto:qualityhomesreality@gmail.com"
+            href={CONTACT_MAILTO}
           >
-            qualityhomesreality@gmail.com
+            {CONTACT_EMAIL}
           </a>
           .
         </p>

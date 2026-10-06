@@ -35,6 +35,7 @@
 // solid geometry BETWEEN two perfectly good keyframes.
 
 import * as THREE from 'three';
+import { FILM_SHARE } from './filmShares';
 
 /**
  * THE ESTATE GREW, AND THE FILM GREW WITH IT.
@@ -166,7 +167,7 @@ export interface CameraBeat {
  * viewport of scroll against the film's 53 — a finale a little quicker than the
  * orbit it follows, not a whip-pan.
  */
-export const FILM_SHARE = 0.625;
+export { FILM_SHARE };
 
 /**
  * The beats, in order. Three chapters: the hero, the revolution, and the

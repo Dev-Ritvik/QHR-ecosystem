@@ -283,13 +283,28 @@ export function AmbientSound() {
       className={'sound-toggle tap-target group' + (away ? ' is-tucked' : '')}
       tabIndex={away ? -1 : 0}
     >
-      <span aria-hidden className={'sound-bars' + (on ? ' is-on' : '')}>
-        <i />
-        <i />
-        <i />
-        <i />
-      </span>
-      {/* The bars alone, and the word when the control is pointed at or
+      {/* A LOUDSPEAKER (the audit of 2026-10-05, P1: "the tiny four-bar icon
+          left of ENQUIRE is unlabeled and reads as a glitch. If it is a sound
+          toggle, make it clearly recognisable"). Four hairlines a pixel wide
+          were an equaliser only to someone who already knew; this is the sign
+          every player uses — the cone, with its waves when the sound is on
+          and struck through when it is off — drawn in the header's hairline. */}
+      <svg
+        aria-hidden
+        className={'sound-glyph' + (on ? ' is-on' : '')}
+        viewBox="0 0 22 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M1.6 5.9h2.9l4.1-3.5v11.2L4.5 10.1H1.6z" />
+        <path className="sound-wave" d="M11.6 5.3a3.9 3.9 0 0 1 0 5.4" />
+        <path className="sound-wave" d="M14.2 2.9a7.3 7.3 0 0 1 0 10.2" />
+        <path className="sound-mute" d="M12.4 5.6l4.8 4.8M17.2 5.6l-4.8 4.8" />
+      </svg>
+      {/* The glyph alone, and the word when the control is pointed at or
           focused (globals.css, .sound-label): the header over the film is the
           mark and two words, and a third in capitals beside them was one more
           voice than the picture needs (the paid audit, 2026-10-04: "navigation

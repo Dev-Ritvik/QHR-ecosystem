@@ -138,9 +138,7 @@ export const PRELOAD_LEAD = 0.25;
  */
 export const JOURNEY_END = 0.9;
 
-import { CHAPTER_WEIGHTS } from './interiorPath';
-import { FILM_SHARE } from './cameraPath';
-import { CHAPTER_FADE_TRAVEL } from './copyZone';
+import { CHAPTER_WEIGHTS, FILM_SHARE } from './filmShares';
 
 export type Leg = 'exterior' | 'interior';
 
@@ -244,6 +242,84 @@ export interface Chapter {
   id: string;
   from: number;
   to: number;
+  /** The stretch of scroll this chapter's copy is up for (ChapterFade, which
+   *  develops it in place): nothing before in[0], whole from in[1]; whole
+   *  until out[0], gone from out[1]. Document scroll, like `from` and `to`. */
+  copy: { in: [number, number]; out: [number, number] };
+}
+
+/** One notch of a mouse's wheel, as a fraction of the track: a third of a
+ *  viewport. What the copy's windows below are given in. */
+const NOTCH = 100 / 3 / TRACK_VH;
+
+/**
+ * WHEN EACH CHAPTER'S COPY IS UP, on the camera that never stops.
+ *
+ * THE CAMERA IS THE ONE THE CLIENT APPROVED (2026-10-06: "change the cam path
+ * keep it like the one before this one is slow and laggy also why this cam
+ * stop for a brief moment? the client didn't like it"). For two days the film
+ * was scored in rests and moves, for an audit that asked every chapter to
+ * "arrive, then speak": the camera stood still while each chapter's copy was
+ * read. On a wheel that is a page that scrolls and a picture that does not
+ * answer, and then lags into a move from a standing start. It is one
+ * continuous move per leg again (cameraPath.ts, interiorPath.ts), on the
+ * track it was approved on.
+ *
+ * What is kept from that audit is how the copy comes and goes: it does not
+ * ride up the frame and away any more. Each chapter's pane is pinned for its
+ * whole chapter (site-home) and its words develop in place and dissolve in
+ * place, over half a notch each way, while the camera goes on behind them.
+ *
+ * So a chapter's copy is up for the stretch of its chapter in which the
+ * picture behind it is the one it was set on, given here per chapter in
+ * notches: how long after the chapter begins its copy starts to come up, and
+ * how long before the chapter ends it has gone. The default is a pinned
+ * pane's old life — up as the chapter begins, gone a viewport before it ends,
+ * which is when the camera has left for the next.
+ */
+const COPY_RISE = 0.5;
+const COPY_FALL = 0.5;
+const COPY_SPAN: Readonly<Record<string, { after: number; before: number; rise?: number }>> = {
+  default: { after: 0.1, before: 3 },
+  // The orbit's line stands in the sky, and the sky it stands in is the
+  // morning's: by leg 0.29 the camera has come round far enough for the
+  // sunset to stand behind it (measured at 1920x945 on the restored path:
+  // its gilt word on a ground of 127 at 0.29, 147 at 0.305, under a grad the
+  // lens is already riding up: lensFilter.ts, COVER_SKY.ride). Gone before.
+  revolution: { after: 0.1, before: 3.9 },
+  // The figures stand on the evening's land from the crane's first slowing to
+  // the frame it all but rests on, and go as the descent gathers way.
+  holdings: { after: 0.5, before: 0.6 },
+  // "The door is open." comes up as the camera turns onto the door's axis
+  // (leg 0.86), not while it is still coming down the west side; the passage
+  // takes it (the window's end is set in `chapters`).
+  approach: { after: 6.7, before: 0 },
+  // The hall's line: up once the door has landed the page, gone before the
+  // turn to the first table (leg 0.10).
+  establish: { after: 0.3, before: 2.5 },
+  // A table's name, for as long as the camera dwells on it.
+  station: { after: 0.1, before: 1.5 },
+  // The last table has no dwell: the camera withdraws from it at once, and
+  // its name leaves with the camera, as it always did.
+  // (Up in a quarter of a notch: the camera is on this table for one.)
+  'station-last': { after: 0, before: 2.5, rise: 0.25 },
+  // The portrait's line stands through the climb and for the beat the camera
+  // holds on the picture, which outlasts the chapter (its pane lingers:
+  // site-home, `track`).
+  portrait: { after: 0.3, before: -0.5 },
+  // The index: up once the camera is over the table, and for a notch after
+  // the film's last frame has landed, before the house lights go down.
+  city: { after: 1.5, before: -1.2 },
+};
+
+/** The copy's window for a chapter laid out `from`..`to`. */
+function copyWindow(id: string, from: number, to: number, last = false): Chapter['copy'] {
+  const kind = /^station-/.test(id) ? (last ? 'station-last' : 'station') : id;
+  const span = COPY_SPAN[kind] ?? COPY_SPAN.default;
+  const start = from + span.after * NOTCH;
+  const whole = start + (span.rise ?? COPY_RISE) * NOTCH;
+  const gone = Math.max(whole + COPY_FALL * NOTCH, to - span.before * NOTCH);
+  return { in: [start, whole], out: [gone - COPY_FALL * NOTCH, gone] };
 }
 
 export function chapters(stationCount: number): Chapter[] {
@@ -269,10 +345,20 @@ export function chapters(stationCount: number): Chapter[] {
   // viewport longer than its camera move, which is what keeps its pane pinned
   // until the doors open (see DOOR_BAND).
   const out: Chapter[] = [
-    { id: 'hero', from: 0, to: film * 0.3 },
-    { id: 'revolution', from: film * 0.3, to: film * 0.62 },
-    { id: 'holdings', from: film * 0.62, to: holdEnd },
-    { id: 'approach', from: holdEnd, to: DOOR_IN },
+    // (The cover's copy is up when the page opens: nothing to come in.)
+    { id: 'hero', from: 0, to: film * 0.3, copy: { in: [-2 * NOTCH, -NOTCH], out: copyWindow('hero', 0, film * 0.3).out } },
+    { id: 'revolution', from: film * 0.3, to: film * 0.62, copy: copyWindow('revolution', film * 0.3, film * 0.62) },
+    { id: 'holdings', from: film * 0.62, to: holdEnd, copy: copyWindow('holdings', film * 0.62, holdEnd) },
+    {
+      id: 'approach',
+      from: holdEnd,
+      to: DOOR_IN,
+      // The door's copy is not let go by the scroll at all: the passage takes
+      // it (globals.css, THROUGH THE FRONT DOOR). Its window closes inside the
+      // doorway's own viewport, which only a visitor with reduced motion
+      // scrolls.
+      copy: { in: copyWindow('approach', holdEnd, DOOR_IN).in, out: [DOOR_OUT + 0.2 * NOTCH, DOOR_OUT + 0.9 * NOTCH] },
+    },
   ];
 
   // Interior: establish, one per station, the portrait, then the threshold.
@@ -282,13 +368,13 @@ export function chapters(stationCount: number): Chapter[] {
   // CHAPTER_WEIGHTS.
   const span = W.establish + n * W.station + W.portrait + W.city;
   let cursor = DOOR_IN;
-  const push = (id: string, frac: number) => {
+  const push = (id: string, frac: number, last = false) => {
     const width = (frac / span) * int;
-    out.push({ id, from: cursor, to: cursor + width });
+    out.push({ id, from: cursor, to: cursor + width, copy: copyWindow(id, cursor, cursor + width, last) });
     cursor += width;
   };
   push('establish', W.establish);
-  for (let i = 0; i < n; i += 1) push(`station-${i + 1}`, W.station);
+  for (let i = 0; i < n; i += 1) push(`station-${i + 1}`, W.station, i === n - 1);
   push('portrait', W.portrait);
   // THE DISTRICT FIELD, seen through the entry doors. The last chapter of the
   // film and the one Phase 6 recorded as missing entirely.
@@ -297,38 +383,36 @@ export function chapters(stationCount: number): Chapter[] {
   // Floating-point drift over eight additions lands a few thousandths short;
   // the last chapter owns the remainder so the track always closes exactly on
   // JOURNEY_END.
-  if (out.length > 0) out[out.length - 1].to = JOURNEY_END;
+  if (out.length > 0) {
+    const end = out[out.length - 1];
+    end.to = JOURNEY_END;
+    end.copy = copyWindow(end.id, end.from, JOURNEY_END);
+  }
   return out;
 }
 
 
 /**
  * HOW LONG A TABLE'S COPY OUTLASTS ITS BEAT, as a fraction of the interior
- * leg. A station's chapter begins on its beat; its pane is pinned for the
- * chapter less one viewport (a pinned pane leaves over the last viewport of
- * its section), and its copy is gone after CHAPTER_FADE_TRAVEL of that
- * viewport's travel (ChapterFade). The house lights and the lens's edge hold
- * for exactly that long (hallLight.ts).
+ * leg. A station's chapter begins on its beat, and its copy is up for the
+ * window `chapters` gives it (COPY_SPAN: as long as the camera dwells on the
+ * table). The house lights and the lens's edge hold for exactly that long
+ * (hallLight.ts).
  */
 export function tableCopyHold(stations: number): number {
-  const n = Math.max(0, stations);
-  const W = CHAPTER_WEIGHTS;
-  const span = W.establish + n * W.station + W.portrait + W.city;
-  const viewport = 100 / TRACK_VH / (JOURNEY_END - DOOR_IN);
-  return Math.max(0, W.station / span - viewport) + CHAPTER_FADE_TRAVEL * viewport;
+  const list = chapters(Math.max(1, stations));
+  const table = list.find((c) => c.id === 'station-1');
+  if (!table) return 0;
+  return Math.max(0, table.copy.out[1] - table.from) / (JOURNEY_END - DOOR_IN);
 }
 
 /**
- * WHERE THE ESTABLISHING COPY HAS GONE, as a fraction of the interior leg: its
- * chapter opens the leg, its pane is pinned for the chapter less one viewport
- * and its copy is gone CHAPTER_FADE_TRAVEL of a viewport later. The house
- * lights come up from here (hallLight.ts): the turn to the first table is
- * made in a lit room.
+ * WHERE THE ESTABLISHING COPY HAS GONE, as a fraction of the interior leg (its
+ * window's end: COPY_SPAN). The house lights come up from here (hallLight.ts):
+ * the turn to the first table is made in a lit room.
  */
 export function establishCopyGone(stations: number): number {
-  const n = Math.max(0, stations);
-  const W = CHAPTER_WEIGHTS;
-  const span = W.establish + n * W.station + W.portrait + W.city;
-  const viewport = 100 / TRACK_VH / (JOURNEY_END - DOOR_IN);
-  return Math.max(0, W.establish / span - viewport) + CHAPTER_FADE_TRAVEL * viewport;
+  const hall = chapters(stations).find((c) => c.id === 'establish');
+  if (!hall) return 0;
+  return Math.max(0, hall.copy.out[1] - DOOR_IN) / (JOURNEY_END - DOOR_IN);
 }

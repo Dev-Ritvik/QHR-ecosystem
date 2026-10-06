@@ -9,12 +9,15 @@ import {
   CODA_FADE,
   ESTABLISH_ND,
   HEADER_BAND,
-  COVER_LAND_ND,
-  REVOLUTION_SHORT_ND,
+  COVER_SKY_SHORT,
+  EDGE,
+  HOLDINGS_BOX,
+  HOLDINGS_WIDE,
+  LAND_BOX,
+  LAND_ND,
   COVER_SKY,
   coverSkyStops,
   HOLDINGS_ND,
-  HOLDINGS_SHAPE,
   HOLDINGS_WIDE_OPEN,
   PHONE_HOLDINGS_BOOST,
   PHONE_ROOM,
@@ -23,6 +26,7 @@ import {
   ROOM_ND,
   STATION_ND,
   TABLE_BAND,
+  TABLE_BAND_MODEL,
   approachFilter,
   codaFilter,
   codaFilterClear,
@@ -35,6 +39,7 @@ import {
   lensFilter,
   phoneRoomFilter,
   phoneSkyFilter,
+  skyRide,
   stationFilter,
   tableBandFilter,
 } from './lensFilter';
@@ -174,6 +179,37 @@ describe("the tables, on a frame that is not wide: the header's band comes down 
     expect(band(172 / 640)).toBeGreaterThan(0.6);
   });
 
+  it('follows a taller block further down over a site model, which stands lower than a projected plan did', () => {
+    // 390x664, the third table: the name, a place that takes two lines and
+    // the count, from 80px to 212px under the header. The model's board
+    // begins 42% of the way down that frame.
+    const panes = [{ id: 'station-3', weight: 1, top: 80 / 664, bottom: 212 / 664 }];
+    const model = () => {
+      for (let i = 0; i < 180; i += 1) tableBandFilter(panes, 1 / 60, true);
+    };
+    headerBandReach();
+    model();
+    // the count's line, 189 to 207px, is under the whole of it
+    expect(band(207 / 664)).toBe(1);
+    expect(lensFilter.topFull).toBeLessThanOrEqual(TABLE_BAND_MODEL.fullMax + 1e-9);
+    // and it is gone before the board
+    expect(band(0.42)).toBe(0);
+    expect(TABLE_BAND_MODEL.zeroMax).toBeLessThan(0.42);
+    // a projected plan keeps the caps it was measured for
+    headerBandReach();
+    settle(panes);
+    expect(lensFilter.topFull).toBeCloseTo(TABLE_BAND.fullMax, 6);
+    expect(lensFilter.topZero).toBeCloseTo(TABLE_BAND.zeroMax, 6);
+    // and on a tall phone, where the block ends a quarter of the way down,
+    // the model's cap changes nothing to speak of: the band rides the foot
+    headerBandReach();
+    for (let i = 0; i < 180; i += 1) {
+      tableBandFilter([{ id: 'station-1', weight: 1, top: 80 / 844, bottom: 180 / 844 }], 1 / 60, true);
+    }
+    expect(lensFilter.topFull).toBeCloseTo(180 / 844 + TABLE_BAND.margin, 3);
+    headerBandReach();
+  });
+
   it('is whole while a quarter of the copy is still there, and eases rather than steps', () => {
     headerBandReach();
     settle([{ id: 'station-3', weight: 0.25, top: 80 / 844, bottom: 172 / 844 }]);
@@ -195,60 +231,85 @@ describe("the tables, on a frame that is not wide: the header's band comes down 
 });
 
 describe('the holdings', () => {
+  /** The figures' ground once the evening has settled, on a wide frame. */
+  const SETTLED = HOLDINGS_ND.stops * HOLDINGS_WIDE;
+
   it('keeps its soft ellipse after the tables have set a hard one', () => {
     stationFilter({ S1: 1 }, WIDE);
     holdingsFilter(0.6);
-    expect(lensFilter.inner).toBe(0.35);
-    expect(lensFilter.stops).toBeCloseTo(HOLDINGS_ND.stops, 5);
+    expect(lensFilter.inner).toBe(0.5);
+    expect(lensFilter.stops).toBeCloseTo(SETTLED, 5);
   });
 
   it('opens denser while the sunset is in the frame, and eases off after', () => {
     holdingsFilter(0.44);
-    expect(lensFilter.stops).toBeCloseTo(HOLDINGS_ND.open + HOLDINGS_WIDE_OPEN, 5);
+    expect(lensFilter.stops).toBeCloseTo((HOLDINGS_ND.open + HOLDINGS_WIDE_OPEN) * HOLDINGS_WIDE, 5);
     holdingsFilter(0.51);
-    expect(lensFilter.stops).toBeLessThan(HOLDINGS_ND.open + HOLDINGS_WIDE_OPEN);
-    expect(lensFilter.stops).toBeGreaterThan(HOLDINGS_ND.stops);
+    expect(lensFilter.stops).toBeLessThan((HOLDINGS_ND.open + HOLDINGS_WIDE_OPEN) * HOLDINGS_WIDE);
+    expect(lensFilter.stops).toBeGreaterThan(SETTLED);
     // ...and has given all of it back once the evening has settled
     holdingsFilter(0.56);
-    expect(lensFilter.stops).toBeCloseTo(HOLDINGS_ND.stops, 5);
+    expect(lensFilter.stops).toBeCloseTo(SETTLED, 5);
+    // a wide frame takes under half of what the heading in the glare took:
+    // the figures stand on the land (never the smudge the audit saw)
+    expect(HOLDINGS_WIDE).toBeLessThan(0.5);
+    expect((HOLDINGS_ND.open + HOLDINGS_WIDE_OPEN) * HOLDINGS_WIDE).toBeLessThan(1.25);
   });
 
   it('is off outside its chapter', () => {
-    // (before it, the lens wears the cover's sky grad until the camera has
-    // turned: off by COVER_SKY.off[1])
-    holdingsFilter(0.32);
+    // (before it, the lens wears the cover's sky grad until the orbit's line
+    // has gone: off by COVER_SKY.off[1])
+    holdingsFilter(COVER_SKY.off[1]);
     expect(lensFilter.stops).toBe(0);
     holdingsFilter(0.9);
     expect(lensFilter.stops).toBe(0);
   });
 
-  it('reaches down over the figures and their labels, and no further across than it did', () => {
-    holdingsFilter(0.6);
-    expect(lensFilter.shape.toArray()).toEqual([...HOLDINGS_SHAPE]);
-    // the figures' row (67 to 73% of the way down) and the labels under it, to the row's far end
-    expect(stopsAt(0.33, 0.3)).toBeGreaterThan(HOLDINGS_ND.stops * 0.9);
-    expect(stopsAt(0.355, 0.245)).toBeGreaterThan(HOLDINGS_ND.stops * 0.6);
-    // the eyebrow, at the top of the block, as before
-    expect(stopsAt(0.15, 0.52)).toBeGreaterThan(HOLDINGS_ND.stops * 0.9);
-    // and the house, from 42% of the width, all but clear
-    expect(stopsAt(0.5, 0.4)).toBeLessThan(HOLDINGS_ND.stops * 0.15);
-    expect(stopsAt(0.56, 0.4)).toBe(0);
+  it("stands round the figures' block: off the frame's left edge, from the figures to the gloss", () => {
+    // The block is the figures, their labels, the statement and its gloss,
+    // from 58.5% of the way down a wide frame to its foot (site-home), and it
+    // is measured in the frame's unit: the same picture under it on every
+    // shape of frame.
+    const aspect = 1920 / 945;
+    holdingsFilter(0.6, aspect);
+    const x = (units: number) => EDGE + units / 900 / aspect;
+    // whole under the figures' row and under the gloss's far end
+    expect(stopsAt(x(60), 1 - 0.64)).toBeGreaterThan(SETTLED * 0.95);
+    expect(stopsAt(x(420), 1 - 0.64)).toBeGreaterThan(SETTLED * 0.9);
+    expect(stopsAt(x(600), 1 - 0.93)).toBeGreaterThan(SETTLED * 0.6);
+    // and the house, right of the frame's middle, clear
+    expect(stopsAt(0.62, 1 - 0.6)).toBe(0);
+    expect(stopsAt(0.75, 1 - 0.8)).toBe(0);
+    // the sky above the land is not the figures' to darken
+    expect(stopsAt(x(300), 1 - 0.3)).toBe(0);
+    // the same block on the design's frame: the same distance from its edge, in units
+    const at2 = lensFilter.shape.clone();
+    holdingsFilter(0.6, 1440 / 900);
+    expect((lensFilter.shape.x - EDGE) * (1440 / 900)).toBeCloseTo((at2.x - EDGE) * aspect, 9);
+    expect(lensFilter.shape.y).toBeCloseTo(1 - (HOLDINGS_BOX.top + HOLDINGS_BOX.foot) / 2, 9);
   });
 });
 
 describe("the cover's sky", () => {
-  it('is a grad across the whole sky from the first frame, ridden off as the camera turns to the sun', () => {
+  it("is a grad across the whole sky from the first frame, held through the orbit's line and ridden off before the figures", () => {
     expect(coverSkyStops(0)).toBe(COVER_SKY.stops);
-    expect(coverSkyStops(COVER_SKY.off[0])).toBe(COVER_SKY.stops);
+    // the day's density through the cover and the first of the orbit
+    expect(coverSkyStops(COVER_SKY.ride.from)).toBe(COVER_SKY.stops);
+    // ridden up seven-tenths of a stop as the camera comes round to the evening, while
+    // the orbit's line still stands in it
+    const evening = COVER_SKY.stops + COVER_SKY.ride.stops;
+    expect(coverSkyStops(COVER_SKY.ride.to)).toBeCloseTo(evening, 9);
+    expect(coverSkyStops(COVER_SKY.off[0])).toBeCloseTo(evening, 9);
+    expect(COVER_SKY.ride.to).toBeLessThan(COVER_SKY.off[0]);
+    expect(evening).toBeLessThanOrEqual(2.2);
     expect(coverSkyStops(COVER_SKY.off[1])).toBe(0);
     // off before the holdings' own grad begins: the two never trade places
     expect(COVER_SKY.off[1]).toBeLessThanOrEqual(HOLDINGS_ND.from[0]);
-    // without a step
-    let last = coverSkyStops(0.19);
-    for (let s = 0.192; s <= 0.32; s += 0.002) {
-      const v = coverSkyStops(s);
-      expect(v).toBeLessThanOrEqual(last + 1e-9);
-      expect(last - v).toBeLessThan(COVER_SKY.stops * 0.06);
+    // without a step, up or down
+    let last = coverSkyStops(COVER_SKY.ride.from - 0.01);
+    for (let q = COVER_SKY.ride.from; q <= COVER_SKY.off[1] + 0.01; q += 0.001) {
+      const v = coverSkyStops(q);
+      expect(Math.abs(last - v)).toBeLessThan(evening * 0.06);
       last = v;
     }
   });
@@ -261,47 +322,60 @@ describe("the cover's sky", () => {
     }
     // full to the foot of the title
     expect(stopsAt(0.3, 1 - (COVER_SKY.full - 0.02))).toBeCloseTo(COVER_SKY.stops, 1);
-    // and gone at the horizon, well above the house's parapet
-    expect(stopsAt(0.6, 1 - 0.4)).toBe(0);
+    // and gone under the horizon, above the house's parapet
+    expect(stopsAt(0.6, 1 - (COVER_SKY.zero + 0.02))).toBe(0);
     // a grad a photographer would use on a sky, not a blackout
-    expect(COVER_SKY.stops).toBeLessThanOrEqual(1.4);
+    expect(COVER_SKY.stops).toBeLessThanOrEqual(1.5);
+    // a phone on its side: whole to its own title's foot
+    holdingsFilter(0, 844 / 390, 0, 0, true);
+    expect(stopsAt(0.3, 1 - (COVER_SKY_SHORT.full - 0.02))).toBeCloseTo(COVER_SKY.stops, 1);
   });
 
   it("gives way to the holdings' grad", () => {
     holdingsFilter(0.5, 1.6);
-    expect(lensFilter.inner).toBe(0.35);
-    expect(lensFilter.stops).toBeGreaterThan(COVER_SKY.stops);
+    expect(lensFilter.inner).toBe(0.5);
+    // (round the figures' block now, not across the sky)
+    expect(lensFilter.shape.z).toBeLessThan(1);
+    expect(lensFilter.stops).toBeGreaterThan(HOLDINGS_ND.stops * HOLDINGS_WIDE);
   });
 
-  it("wears half a stop under the cover's small type, on a second ellipse, while that copy is up", () => {
-    holdingsFilter(0, 1.6, 1);
-    expect(lensFilter.second.stops).toBe(COVER_LAND_ND.stops);
+  it("wears a soft density under the small type on the land, on a second ellipse, while that copy is up", () => {
+    const aspect = 1920 / 945;
+    const x = (units: number) => EDGE + units / 900 / aspect;
+    /** The second ellipse's own density at a point (uv, origin bottom-left). */
+    const secondAt = (u: number, v: number) => {
+      const sh = lensFilter.second.shape;
+      const d = Math.hypot((u - sh.x) / sh.z, (v - sh.y) / sh.w);
+      const t = Math.min(1, Math.max(0, (d - lensFilter.second.inner) / (1 - lensFilter.second.inner)));
+      return lensFilter.second.stops * (1 - t * t * (3 - 2 * t));
+    };
+    holdingsFilter(0, aspect, 1);
+    expect(lensFilter.second.stops).toBe(LAND_ND.stops);
     // the sky grad is still the first ellipse's
     expect(lensFilter.stops).toBe(COVER_SKY.stops);
-    holdingsFilter(0.05, 1.6, 0.5);
-    expect(lensFilter.second.stops).toBeCloseTo(COVER_LAND_ND.stops * 0.5, 9);
-    holdingsFilter(0.1, 1.6, 0);
+    // whole under the cover's line (71% of the way down, 430 units wide)
+    expect(secondAt(x(10), 1 - 0.74)).toBeGreaterThan(LAND_ND.stops * 0.95);
+    expect(secondAt(x(420), 1 - 0.8)).toBeGreaterThan(LAND_ND.stops * 0.8);
+    // and gone before the house
+    expect(secondAt(0.55, 1 - 0.76)).toBe(0);
+    holdingsFilter(0.05, aspect, 0.5);
+    expect(lensFilter.second.stops).toBeCloseTo(LAND_ND.stops * 0.5, 9);
+    // then under the orbit's line, which stands a little higher and is narrower
+    holdingsFilter(0.22, aspect, 0, 1);
+    expect(lensFilter.second.stops).toBe(LAND_ND.stops);
+    expect(1 - lensFilter.second.shape.y).toBeCloseTo((LAND_BOX.revolution.top + LAND_BOX.revolution.foot) / 2, 9);
+    expect(secondAt(x(10), 1 - 0.7)).toBeGreaterThan(LAND_ND.stops * 0.95);
+    // wider on a phone on its side, where that line runs further across
+    const desk = lensFilter.second.shape.z * aspect;
+    holdingsFilter(0.22, 844 / 390, 0, 1, true);
+    expect(lensFilter.second.shape.z * (844 / 390)).toBeGreaterThan(desk);
+    // leaving with the copy
+    holdingsFilter(0.3, aspect, 0, 0.25);
+    expect(lensFilter.second.stops).toBeCloseTo(LAND_ND.stops * 0.25, 9);
+    holdingsFilter(0.3, aspect, 0, 0);
     expect(lensFilter.second.stops).toBe(0);
     // never a filter a visitor could name
-    expect(COVER_LAND_ND.stops).toBeLessThanOrEqual(0.6);
-  });
-
-  it("and a stop under the revolution's copy on a short frame only", () => {
-    // a wide frame that is not short asks for none
-    holdingsFilter(0.22, 1.6, 0, 0);
-    expect(lensFilter.second.stops).toBe(0);
-    // a phone on its side, its copy up
-    holdingsFilter(0.22, 844 / 390, 0, 1);
-    expect(lensFilter.second.stops).toBe(REVOLUTION_SHORT_ND.stops);
-    expect(lensFilter.second.inner).toBe(REVOLUTION_SHORT_ND.inner);
-    // under the block (22 to 49% of that frame's width, 62 to 80% of the way
-    // down), and off the house on the right
-    expect(lensFilter.second.shape.x).toBeGreaterThan(0.3);
-    expect(lensFilter.second.shape.x).toBeLessThan(0.42);
-    expect(lensFilter.second.shape.x + lensFilter.second.shape.z).toBeLessThan(0.62);
-    // leaving with the copy
-    holdingsFilter(0.3, 844 / 390, 0, 0.25);
-    expect(lensFilter.second.stops).toBeCloseTo(REVOLUTION_SHORT_ND.stops * 0.25, 9);
+    expect(LAND_ND.stops).toBeLessThanOrEqual(1);
   });
 });
 
@@ -333,6 +407,22 @@ describe('the phone', () => {
     expect(lensFilter.stops).toBe(0);
     settle([{ id: 'approach', weight: 1, top: 0.74, bottom: 0.89 }]);
     expect(lensFilter.stops).toBe(0);
+  });
+
+  it("rides the orbit's grad up into the evening, as a wide frame's is ridden", () => {
+    const orbit = [{ id: 'revolution', weight: 1, top: 0.1, bottom: 0.3 }];
+    // the day's density where its line comes up
+    settle(orbit, 0.19);
+    expect(lensFilter.stops).toBeCloseTo(PHONE_SKY_ND.revolution, 2);
+    // and the whole of the ride where it leaves, into the sunset
+    settle(orbit, COVER_SKY.ride.to);
+    expect(lensFilter.stops).toBeCloseTo(PHONE_SKY_ND.revolution + COVER_SKY.ride.stops, 2);
+    expect(skyRide(COVER_SKY.ride.to)).toBe(COVER_SKY.ride.stops);
+    expect(skyRide(COVER_SKY.ride.from)).toBe(0);
+    // the cover's own grad is not ridden: its sky is the morning's
+    settle([{ id: 'hero', weight: 1, top: 0.1, bottom: 0.46 }], COVER_SKY.ride.to);
+    expect(lensFilter.stops).toBeCloseTo(PHONE_SKY_ND.hero, 2);
+    settle([]);
   });
 
   it('eases rather than steps when a chapter arrives', () => {

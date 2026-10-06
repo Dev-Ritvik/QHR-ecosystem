@@ -125,7 +125,7 @@ export function ConsentPanel() {
       aria-hidden={false}
     >
       <div
-        className="absolute inset-0 bg-neutral-950/60 backdrop-blur-[2px]"
+        className="consent-scrim absolute inset-0 backdrop-blur-[2px]"
         onClick={dismissible ? closePanel : undefined}
         aria-hidden="true"
       />
@@ -137,7 +137,7 @@ export function ConsentPanel() {
         aria-labelledby="consent-title"
         aria-describedby="consent-body"
         onKeyDown={onKeyDown}
-        className="relative w-full max-w-2xl overflow-hidden rounded-[2px] border border-[#F2EDE4]/10 bg-[#0A1120]/95 text-[#F2EDE4] shadow-2xl"
+        className="consent-card relative w-full max-w-2xl overflow-hidden rounded-[2px] border border-[#F2EDE4]/10 text-[#F2EDE4] shadow-2xl"
       >
         <div className="h-px w-full bg-gradient-to-r from-transparent via-[#E8B98A]/60 to-transparent" />
 

@@ -86,14 +86,19 @@ const CHANDELIER = new THREE.Vector3(0, 10.9, 0);
  */
 export const TRAY = {
   margin: 0.03,
-  rail: 0.088,
+  // (0.088 with a plaque 0.44 x 0.04 until the audit of 2026-10-05, P3: "the
+  // engraved nameplates on the station boards are too small to read at the
+  // distance shown. Make them readable". At the table's rest the plaque was
+  // 270 px across on a 1920 frame and its capitals 7 px tall. Half as tall
+  // again, and a third longer: the capitals stand 11 px, which reads.)
+  rail: 0.108,
   // (26 mm until the paid audit, 2026-10-04: a board that carries a model has
   // a board's weight.)
   thick: 0.036,
   bezel: 0.008,
   bezelProud: 0.006,
   fillet: 0.003,
-  plaque: { width: 0.44, height: 0.04 },
+  plaque: { width: 0.6, height: 0.06 },
 } as const;
 
 /** The stand: the ball at the column's head and the hub the tray turns on. */
@@ -213,8 +218,8 @@ export function parsePlanModel(buf: ArrayBuffer): Record<string, THREE.BufferGeo
  *  gilt hairline round it — the founder's nameplate, at a model's size. */
 async function plaqueTexture(name: string): Promise<THREE.CanvasTexture> {
   const serif = cssFamily('--font-serif', 'Georgia, serif');
-  const W = 1408;
-  const H = 128;
+  const W = 1400;
+  const H = 140;
   const text = name.toUpperCase();
   await document.fonts?.load(`500 60px ${serif}`, text).catch(() => undefined);
   const canvas = document.createElement('canvas');
@@ -226,9 +231,9 @@ async function plaqueTexture(name: string): Promise<THREE.CanvasTexture> {
   ctx.strokeStyle = 'rgba(196, 160, 96, 0.85)';
   ctx.lineWidth = 2;
   ctx.strokeRect(9, 9, W - 18, H - 18);
-  ctx.fillStyle = '#d6b678';
+  ctx.fillStyle = '#e2c488';
   ctx.textBaseline = 'middle';
-  let size = 60;
+  let size = 72;
   const tracking = () => size * 0.16;
   const width = () => [...text].reduce((w, c) => w + ctx.measureText(c).width, 0) + tracking() * (text.length - 1);
   ctx.font = `500 ${size}px ${serif}`;
@@ -468,7 +473,7 @@ export function StationModel({
           box(f, 0.002, d, w / 2 + f / 2, fy, 0, mats.brass, 'model_fillet_e'),
         );
         // The plaque, on the rail at the foot of the plan.
-        const pw = Math.min(T.plaque.width, w * 0.6);
+        const pw = Math.min(T.plaque.width, w * 0.74);
         const plaqueGeo = new THREE.PlaneGeometry(pw, T.plaque.height).rotateX(-Math.PI / 2);
         geos.push(plaqueGeo);
         const plaqueMesh = mesh(plaqueGeo, mats.plaque, 'model_plaque');

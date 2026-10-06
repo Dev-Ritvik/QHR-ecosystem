@@ -44,7 +44,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useProgress } from '@react-three/drei';
-import { coverState } from './coverState';
+import { usePathname } from 'next/navigation';
+import { coverGround, coverState } from './coverState';
 
 /**
  * drei's progress store, read at most once per animation frame.
@@ -202,6 +203,9 @@ export function Preloader({ onMount }: { onMount?: () => void }) {
     return () => clearTimeout(t);
   }, [done]);
 
+  // The curtain's ground: the film's own dark on the film (coverState.ts).
+  const ground = coverGround(usePathname());
+
   // Release the scroll lock as soon as the fade begins, not when it ends.
   useEffect(() => {
     // Never on a warm return: there is no cover to wait for.
@@ -217,8 +221,8 @@ export function Preloader({ onMount }: { onMount?: () => void }) {
     <div
       // aria-hidden with a live region below: a screen reader should hear
       // "loading" once, not a progress bar.
-      className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-[#0A1120] transition-opacity duration-[1400ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
-      style={{ opacity: done ? 0 : 1 }}
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center transition-opacity duration-[1400ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+      style={{ opacity: done ? 0 : 1, background: ground }}
     >
       <span className="sr-only" role="status">
         Loading the scene

@@ -84,6 +84,7 @@ import {
   HALL_IN_EXTERIOR,
   THROUGH,
   cancelDoorway,
+  doorAjar,
   doorwayState,
   noteDoorwayInput,
   setDoorwayHost,
@@ -108,7 +109,7 @@ import {
 import { PHONE_FRAMING, applyShift, phoneFrameAt, phoneFrameInCoda, phoneWeight, widenFov } from './phoneFraming';
 import { HALL_AIM_OFFSET, codaEase, codaPose, codaProgress } from './codaFrame';
 import { mapStage } from './mapTablePlan';
-import { copyPresence, copyZone, filmIsWide } from './copyZone';
+import { copyPresence, copyZone, filmIsShort, filmIsWide } from './copyZone';
 import { READING_STOPS, READING_TIME, isFilmRoute, readingLight } from './readingLight';
 import { ExteriorDoorway } from './DoorwayRig';
 import { lenisInstance } from './SmoothScroll';
@@ -118,6 +119,7 @@ import { veiledPush } from '@/components/site/RouteVeil';
 import { ld, ldColour } from './lookdev';
 import { followRoomLook } from './exteriorWindows';
 import { readSkyHaze, skyHazeReady, skyHazeToward } from './skyHaze';
+import { hazeFromPlate, hazeUniforms } from './exteriorHaze';
 
 /**
  * Scrub, in seconds per unit of a pose's `ease` — the lag between where scroll
@@ -917,6 +919,7 @@ function JourneyDriver({
     // leave the interior leg armed behind them.
     journeyState.leg = 'exterior';
     journeyState.legProgress = 0;
+    doorwayState.ajar = 0;
     journeyState.veil = 0;
     journeyState.armed = false;
     journeyState.coda = 0;
@@ -934,6 +937,9 @@ function JourneyDriver({
     stepDoorway(now);
     paintDoorway();
     readJourney(scroll.current, journeyState);
+    // The leaves over the last of the approach, by the scroll (doorway.ts,
+    // DOOR_AJAR): the door stands open by the time the camera is square on it.
+    if (journeyState.leg === 'exterior') doorwayState.ajar = doorAjar(journeyState.legProgress);
 
     if (journeyState.armed && !armedOnce.current) {
       armedOnce.current = true;
@@ -1819,14 +1825,13 @@ function ExteriorLighting({
         // (Off the exterior leg, and on a page that only holds the film's
         // frame, the end of the leg: no filter of this leg's at all.)
         const cover = out && film ? copyZone.panes.find((p) => p.id === 'hero') : undefined;
-        // (A short frame: a phone on its side. copyZone, SHORT_QUERY.)
-        const rev =
-          out && film && window.innerHeight <= 520 ? copyZone.panes.find((p) => p.id === 'revolution') : undefined;
+        const rev = out && film ? copyZone.panes.find((p) => p.id === 'revolution') : undefined;
         holdingsFilter(
           out && film ? legS : 1,
           window.innerWidth / Math.max(1, window.innerHeight),
           cover ? copyPresence(cover.weight) : 0,
           rev ? copyPresence(rev.weight) : 0,
+          filmIsShort(window.innerWidth, window.innerHeight),
         );
       } else {
         lensFilter.second.stops = 0;
@@ -1892,6 +1897,15 @@ function ExteriorLighting({
         const skyNow = 1 + (ld('skyEvening', SKY_HOURS.evening) - 1) * e;
         const sky = skyNow + (ld('skyNight', SKY_HOURS.night) - skyNow) * n;
         skyHazeToward(HAZE_DIR.x, HAZE_DIR.z, HAZE_SPREAD, fog.color).multiplyScalar(sky * ld('hazeGain', HAZE_GAIN));
+        // And per fragment, for everything of the estate's that can say where
+        // it is (exteriorHaze.ts): the same band, on the fragment's own
+        // bearing. The colour above is what the rest keeps.
+        // (At the sky's whole strength: the frame's one colour is held a
+        // little under it, a mean being wrong at both ends; this is not.)
+        hazeUniforms.uHazeGain.value = sky * ld('hazeSky', 1);
+        hazeUniforms.uHazeOn.value = ld('hazeFlat', 0) > 0.5 ? 0 : 1;
+      } else {
+        hazeUniforms.uHazeOn.value = 0;
       }
     }
 
@@ -2676,6 +2690,8 @@ function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
         ? loadSky(SKY_EQUIRECT_URL, (tex) => {
             // The land's air is read from this plate's foot (skyHaze.ts).
             readSkyHaze(tex.image as CanvasImageSource);
+            // ...and per fragment from its small copy (exteriorHaze.ts).
+            hazeFromPlate();
             setEnv(tex);
           })
         : undefined,

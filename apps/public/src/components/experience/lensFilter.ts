@@ -131,7 +131,7 @@ export const HOLDINGS_ND = {
   // On before the copy has developed (ChapterFade brings it up over the last
   // of its arrival): begun at 0.37 it was three-quarters on at 0.40, with the
   // eyebrow already standing on a p90 of 116.
-  from: [0.33, 0.38] as const,
+  from: [0.345, 0.39] as const,
   to: [0.68, 0.74] as const,
 } as const;
 
@@ -314,9 +314,25 @@ export function stationFilter(
  * short of the plan rather than follow it there.
  */
 export const TABLE_BAND = { margin: 0.015, fall: 0.05, fullMax: 0.25, zeroMax: 0.3 } as const;
+/**
+ * THE CAP OVER A SITE MODEL. Those caps keep the band off a projected plan,
+ * whose pane begins three-tenths of the way down a phone. A site model
+ * (stationStyle.ts) stands lower: the phone's frame is recomposed for it
+ * (phoneFraming.ts), and its board begins 42 to 44% of the way down a
+ * 390x664 screen. And the block over it is taller than the one those caps
+ * were measured for, the name a display step up and the place a step up
+ * since the audit of 2026-10-05, so on a short phone its last line stood
+ * under the cap, on the wall as the room lights it: measured at 390x664 in
+ * the bright room, the count at 3.66:1 at the first table and, at the third,
+ * whose place takes two lines, on the pilaster at 1.45:1. Over a model the
+ * band may follow the copy a third of the way down, and is gone by 38%.
+ */
+export const TABLE_BAND_MODEL = { fullMax: 0.33, zeroMax: 0.38 } as const;
 const tableBand = { on: 0, foot: 0 };
 
-export function tableBandFilter(panes: readonly CopyPane[], dt: number): void {
+/** `model`: the tables carry site models, not projected plans (the cap). */
+export function tableBandFilter(panes: readonly CopyPane[], dt: number, model = false): void {
+  const cap = model ? TABLE_BAND_MODEL : TABLE_BAND;
   let on = 0;
   for (const p of panes) {
     if (!/^station-\d+$/.test(p.id)) continue;
@@ -327,8 +343,8 @@ export function tableBandFilter(panes: readonly CopyPane[], dt: number): void {
   }
   tableBand.on += (on - tableBand.on) * (1 - Math.exp(-Math.max(0, dt) / 0.2));
   const e = tableBand.on < 0.004 ? 0 : tableBand.on;
-  const full = Math.max(HEADER_BAND.full, Math.min(TABLE_BAND.fullMax, tableBand.foot + TABLE_BAND.margin));
-  const zero = Math.max(HEADER_BAND.zero, Math.min(TABLE_BAND.zeroMax, full + TABLE_BAND.fall));
+  const full = Math.max(HEADER_BAND.full, Math.min(cap.fullMax, tableBand.foot + TABLE_BAND.margin));
+  const zero = Math.max(HEADER_BAND.zero, Math.min(cap.zeroMax, full + TABLE_BAND.fall));
   lensFilter.topFull = HEADER_BAND.full + (full - HEADER_BAND.full) * e;
   lensFilter.topZero = HEADER_BAND.zero + (zero - HEADER_BAND.zero) * e;
 }
@@ -352,23 +368,62 @@ export function headerBandReach(outside = false, dt = Infinity): void {
 }
 
 /**
- * THE HOLDINGS' GRAD ON A WIDE FRAME: its shape, and how much denser it opens.
- *
- * The ellipse was drawn for the heading in the horizon's glare — centred on
- * it, a quarter of the frame tall — and the rest of the block was left to the
- * land's own dark. Line by line, at each line's own colour, that was thin:
- * the heading's words at 3.0 to 3.3:1 at the opening (on a p90 luma of 104 to
- * 132, where large text needs 3), and at leg 0.60 the garden's blossom passes
- * behind the foot of the block — a figure's label on 114, 4.15:1. So the
- * ellipse reaches down over the figures and their labels (the same centre
- * line across, the same reach up, half as tall again), and opens seven-tenths
- * of a stop denser, given back as the evening settles. (Seven, not four: on a
- * 13-inch laptop's 1280x593 the eyebrow's capitals cannot shrink with the
- * frame, reach half as far again across the picture, and at leg 0.40 stood on
- * the haze between two trees — a p90 luma of 125 at the plain opening.)
+ * HOW MUCH DENSER THE HOLDINGS' GRAD OPENS ON A WIDE FRAME: seven-tenths of a
+ * stop over HOLDINGS_ND.open, given back as the evening settles. (Seven, not
+ * four: on a 13-inch laptop's 1280x593 the small capitals cannot shrink with
+ * the frame, reach half as far again across the picture, and at leg 0.40
+ * stood on the haze between two trees — a p90 luma of 125 at the plain
+ * opening.)
  */
-export const HOLDINGS_SHAPE = [0.22, 0.4, 0.33, 0.36] as const;
 export const HOLDINGS_WIDE_OPEN = 0.7;
+
+/**
+ * WHERE THE FILM'S COPY STANDS ON A WIDE FRAME SINCE THE AUDIT OF 2026-10-05:
+ * off the frame's own left edge (globals.css, --edge: 5.2% of its width), in
+ * blocks whose width is given in the frame's unit (a nine-hundredth of its
+ * height). So a block's right edge is at a different fraction of a wider or a
+ * squarer frame's width, and a density made for it is placed the same way:
+ * `left`..`right` in units from the margin, `top`..`foot` in fractions of the
+ * frame's height from its top. The ellipse is drawn round that box with
+ * `pad` of its half-size to spare, and its density is whole across the box.
+ */
+export const EDGE = 0.052;
+
+function onEdge(
+  target: Vector4,
+  box: { left: number; right: number; top: number; foot: number },
+  aspect: number,
+  pad: number,
+): void {
+  const x0 = EDGE + box.left / 900 / aspect;
+  const x1 = EDGE + box.right / 900 / aspect;
+  const cx = (x0 + x1) / 2;
+  const cy = 1 - (box.top + box.foot) / 2;
+  target.set(cx, cy, ((x1 - x0) / 2) * pad, ((box.foot - box.top) / 2) * pad);
+}
+
+/**
+ * THE FIGURES' GROUND. The holdings' block is the figures now, at the display's
+ * largest size, their labels, the statement and its gloss, from 58.5% of the
+ * way down a wide frame to its foot — on the evening's land, which is dark
+ * where the camera all but rests (leg 0.6) and is not yet where the block
+ * comes up: the crane is still rising over the west lawn in the last of the
+ * sun (measured on the restored path: see FIXLOG, 2026-10-06). The lens's
+ * ellipse is drawn round that block, and ridden as it always was
+ * (HOLDINGS_ND): denser while the land under it is lit, eased as the evening
+ * takes it.
+ */
+export const HOLDINGS_BOX = { left: -60, right: 700, top: 0.5, foot: 1 } as const;
+export const HOLDINGS_PAD = 1.5;
+/**
+ * AND HOW MUCH OF THE HOLDINGS' DENSITY A WIDE FRAME TAKES. HOLDINGS_ND was
+ * set for a heading in the horizon's glare, 40% of the way down the frame;
+ * the figures stand on the land under it. With none, measured at 1920x945
+ * along the chapter: the figures on a ground of 139 to 165 as the block
+ * comes up (2.1 to 2.9:1) and their labels on 112 to 134; with a fifth of
+ * it, one label at 4.35:1; with 0.35 every line at AA by a tenth and more.
+ */
+export const HOLDINGS_WIDE = 0.42;
 
 /**
  * THE COVER'S SKY (the paid audit of 2026-10-04, passes 2 and 6: "typography
@@ -393,75 +448,109 @@ export const HOLDINGS_WIDE_OPEN = 0.7;
  * ridden off as the camera turns from this sky toward the sun's (`off`, in
  * leg progress), before the holdings' own grad comes on.
  */
-export const COVER_SKY = { stops: 1.3, full: 0.27, zero: 0.37, off: [0.2, 0.31] as const } as const;
+export const COVER_SKY = {
+  stops: 1.45,
+  full: 0.32,
+  zero: 0.46,
+  off: [0.31, 0.345] as const,
+  // RIDDEN UP AS THE CAMERA COMES ROUND TO THE EVENING. The orbit's line
+  // stands in this sky, and over the second half of its stretch the sunset
+  // comes up behind it: measured at 1920x945 and 1440x900 on the restored
+  // path, its gilt word on a ground of 123 to 134 at leg 0.26 and 147 at
+  // 0.305 with the day's 1.45 stops. Seven-tenths of a stop more by 0.275,
+  // as an operator rides a grad into a brightening sky.
+  ride: { from: 0.225, to: 0.275, stops: 0.7 },
+} as const;
+/**
+ * (1.45 stops, full to 32% of the height and gone by 46%, since the audit of
+ * 2026-10-05 set the cover's title at the display's largest size: it begins a
+ * tenth of the way down a wide frame and ends at 31.8%, and at 1.3 its gilt
+ * line's last word stood on the cloud bank's bright end at 2.97:1 — measured
+ * at 1920x945; 3.33 at this. And it is held through the orbit's chapter,
+ * whose line stands in the same sky at the same size: ridden off between leg
+ * 0.31, when that line has gone, and 0.345, where the figures' ground comes
+ * on.)
+ *
+ * ON A PHONE ON ITS SIDE THE SKY IS DEEPER IN THE FRAME'S OWN TERMS. The title
+ * cannot stand as high there (the header's bar has a floor: globals.css,
+ * --clear) and its type has one too, so its second line ends 35% of the way
+ * down where a desk's ends at 29: measured at 844x390, the gilt line stood in
+ * the grad's fall, on a ground of 125 (2.8:1). The same filter, with its
+ * full density carried to the title's foot on that frame.
+ */
+export const COVER_SKY_SHORT = { full: 0.37, zero: 0.5 } as const;
 
 /**
- * AND HALF A STOP UNDER THE COVER'S SMALL TYPE, on the land (as there was
- * under the whole block before it was parted: "a highly nuanced, barely
- * perceptible radial gradient ... a photographic ND filter effect", the fourth
- * critique's own second means). The supporting line stands on the west lawn,
- * whose brightest tenth reads 103 to 108 under its three lines (measured on
- * the clean plate, 2026-10-04): at the limit for small ivory, with a mown
- * stripe's worth of margin. Half a stop gives it a fifth. There for as long
- * as the cover's copy is (`cover`, copyZone), in the design's frame (STAGE).
+ * AND A SOFT DENSITY UNDER THE SMALL TYPE ON THE LAND ("a highly nuanced,
+ * barely perceptible radial gradient ... a photographic ND filter effect", the
+ * fourth critique's own second means). The cover's supporting line stands on
+ * the west lawn, 71% of the way down a wide frame, and the orbit's on the lawn
+ * at 66%: each on the land its own frame is quiet on when the chapter opens,
+ * and the camera does not wait there. As it travels, the terrace's pale stone
+ * and the pool's edge come through behind them. So the lens's second ellipse
+ * stands under whichever of the two is up (`cover`, `revolution`: copyZone),
+ * for as long as it is up.
  */
-export const COVER_LAND_ND = { stops: 0.5, shape: [0.24, 0.3, 0.27, 0.2] as const, inner: 0.45 } as const;
+export const LAND_ND = { stops: 0.9, inner: 0.5, pad: 1.7 } as const;
+/** The two lines' boxes (site-home: the cover's at 71vh, 430 units wide; the
+ *  orbit's at 66.4vh, 330 wide — 520 on a short frame). */
+export const LAND_BOX = {
+  cover: { left: -30, right: 450, top: 0.7, foot: 0.84 },
+  revolution: { left: -30, right: 350, top: 0.655, foot: 0.79 },
+  revolutionShort: { left: -30, right: 540, top: 0.655, foot: 0.82 },
+} as const;
 
-/**
- * AND A STOP UNDER THE REVOLUTION'S COPY ON A SHORT FRAME (a phone on its
- * side). On every other wide frame that copy stands on the lawn by
- * composition and needs nothing. On a frame 390 px tall its type cannot
- * shrink with the picture: three lines at 15 px reach half-way across the
- * frame, out over the pool terrace's pale stone, and with the sky as the fill
- * (the paid audit, 2026-10-04) two of its words stood on a p90 luma of 139 to
- * 142, 2.8:1. A soft ellipse under the block, for as long as it is up
- * (`revolution`, copyZone), on the lens's second ellipse — which the cover's
- * small type has given up by then.
- */
-export const REVOLUTION_SHORT_ND = { stops: 1.0, shape: [0.31, 0.29, 0.3, 0.2] as const, inner: 0.45 } as const;
+
+/** How far the sky's grad has been ridden up for the evening at this point of
+ *  the exterior leg, in stops (COVER_SKY.ride). */
+export function skyRide(legS: number): number {
+  return ld('coverSkyRide', COVER_SKY.ride.stops) * smooth(COVER_SKY.ride.from, COVER_SKY.ride.to, legS);
+}
 
 /** The cover's sky grad at this point of the exterior leg, in stops. */
 export function coverSkyStops(legS: number): number {
-  return ld('coverSky', COVER_SKY.stops) * (1 - smooth(COVER_SKY.off[0], COVER_SKY.off[1], legS));
+  return (ld('coverSky', COVER_SKY.stops) + skyRide(legS)) * (1 - smooth(COVER_SKY.off[0], COVER_SKY.off[1], legS));
 }
 
 /**
  * The filter for this frame of the exterior leg, on a wide frame: the cover's
- * sky grad through the film's first chapters, then the holdings' grad where
- * that copy stands in the lower left. (Any other frame wears the sky grad
- * that rides with the copy: phoneSkyFilter.) `aspect` is the frame's (STAGE);
- * `cover` is how much of the cover's copy is up, 0..1 (copyPresence), and
- * `revolutionShort` the same for the revolution's on a short frame.
+ * sky grad through the film's first two chapters, then the figures' ground in
+ * the lower left; and under the small type on the land, the second ellipse.
+ * (Any other frame wears the sky grad that rides with the copy:
+ * phoneSkyFilter.) `aspect` is the frame's; `cover` and `revolution` are how
+ * much of each chapter's copy is up, 0..1 (copyPresence); `short` is a phone
+ * on its side (copyZone.filmIsShort).
  */
 export function holdingsFilter(
   legS: number,
   aspect: number = STAGE.aspect,
   cover = 0,
-  /** How much of the revolution's copy is up, on a SHORT frame; 0 on any other. */
-  revolutionShort = 0,
+  revolution = 0,
+  short = false,
 ): void {
-  // The second ellipse: half a stop under the cover's small type, or (on a
-  // short frame) a stop under the revolution's copy. Whichever is the denser.
-  const land = ld('coverLand', COVER_LAND_ND.stops) * Math.min(1, Math.max(0, cover));
-  const rev = REVOLUTION_SHORT_ND.stops * Math.min(1, Math.max(0, revolutionShort));
-  const second = rev > land ? REVOLUTION_SHORT_ND : COVER_LAND_ND;
-  const stops = Math.max(land, rev);
-  lensFilter.second.stops = stops < 0.004 ? 0 : stops;
-  if (stops > 0) {
-    const [cx, cy, rx, ry] = second.shape;
-    const k = STAGE.aspect / Math.max(aspect, STAGE.safe);
-    lensFilter.second.shape.set(cx * k + 0.5 * (1 - k), cy, rx * k, ry);
-    lensFilter.second.inner = second.inner;
+  const c = Math.min(1, Math.max(0, cover));
+  const r = Math.min(1, Math.max(0, revolution));
+  const land = ld('landStops', LAND_ND.stops) * Math.max(c, r);
+  lensFilter.second.stops = land < 0.004 ? 0 : land;
+  if (land > 0) {
+    onEdge(
+      lensFilter.second.shape,
+      r > c ? (short ? LAND_BOX.revolutionShort : LAND_BOX.revolution) : LAND_BOX.cover,
+      aspect,
+      ld('landPad', LAND_ND.pad),
+    );
+    lensFilter.second.inner = ld('landInner', LAND_ND.inner);
   }
   const on = smooth(HOLDINGS_ND.from[0], HOLDINGS_ND.from[1], legS) * (1 - smooth(HOLDINGS_ND.to[0], HOLDINGS_ND.to[1], legS));
   const opening = 1 - smooth(HOLDINGS_ND.settle[0], HOLDINGS_ND.settle[1], legS);
-  const holdings = (holdingsDensity(legS) + HOLDINGS_WIDE_OPEN * opening) * on;
+  const holdings = (holdingsDensity(legS) + ld('holdOpen', HOLDINGS_WIDE_OPEN) * opening) * on * ld('holdGain', HOLDINGS_WIDE);
   const sky = coverSkyStops(legS);
   if (sky > holdings) {
     // A grad anchored at the top edge: an ellipse centred above the frame,
     // wide enough that across the frame its edge is a line.
-    const vFull = 1 - ld('coverSkyFull', COVER_SKY.full);
-    const vZero = 1 - ld('coverSkyZero', COVER_SKY.zero);
+    const reach = short ? COVER_SKY_SHORT : COVER_SKY;
+    const vFull = 1 - ld('coverSkyFull', reach.full);
+    const vZero = 1 - ld('coverSkyZero', reach.zero);
     const cy = 1.2;
     const ry = cy - vZero;
     lensFilter.stops = sky;
@@ -470,8 +559,8 @@ export function holdingsFilter(
     return;
   }
   lensFilter.stops = holdings;
-  lensFilter.inner = 0.35;
-  onStage(HOLDINGS_SHAPE[0], HOLDINGS_SHAPE[1], HOLDINGS_SHAPE[2], HOLDINGS_SHAPE[3], aspect);
+  lensFilter.inner = ld('holdInner', 0.5);
+  onEdge(lensFilter.shape, HOLDINGS_BOX, aspect, ld('holdPad', HOLDINGS_PAD));
 }
 
 /**
@@ -635,8 +724,16 @@ const sky: GradState = { stops: 0, extent: 0 };
  */
 export function phoneSkyFilter(panes: readonly CopyPane[], legS: number, dt: number): void {
   const opening = 1 - smooth(HOLDINGS_ND.settle[0], HOLDINGS_ND.settle[1], legS);
+  // (The orbit's line is up into the turn toward the sunset, as on a wide
+  // frame, and its grad is ridden up with it there: measured at 390x844 at
+  // the end of its stretch with the day's 2.3 stops, the gilt word on a
+  // ground of 130 at 2.6:1 and the line under it at 3.96:1.)
   const density = (id: string) =>
-    id === 'holdings' ? holdingsDensity(legS) + PHONE_HOLDINGS_BOOST * opening : PHONE_SKY_ND[id] ?? 0;
+    id === 'holdings'
+      ? holdingsDensity(legS) + PHONE_HOLDINGS_BOOST * opening
+      : id === 'revolution'
+        ? PHONE_SKY_ND.revolution + skyRide(legS)
+        : PHONE_SKY_ND[id] ?? 0;
   rideGrad(sky, panes, density, 'top', PHONE_SKY, dt);
   writeGrad(sky, 'top', PHONE_SKY);
 }
@@ -725,12 +822,20 @@ export const CODA_FADE = { stops: 3.2, reach: 0.04, beside: 0.02, ease: 0.2 } as
  * in the gaps between its lines (the sixth of a viewport between the sign-off
  * and the links would otherwise bring the light up and take it down again).
  */
-export function colophonCover(lines: readonly ScreenBox[], table: ScreenBox | null): number {
+export function colophonCover(lines: readonly ScreenBox[], table: ScreenBox | null, remaining = Infinity): number {
   if (!table) return 0;
   let top = Infinity;
   let bottom = -Infinity;
   for (const b of lines) {
     if (b.r < table.l - CODA_FADE.beside || b.l > table.r + CODA_FADE.beside) continue;
+    // A LINE THAT STOPS SHORT OF THE TABLE IS NOT COMING TO IT. The page can
+    // scroll `remaining` frames further and a line rises by no more than
+    // that: one that would still be under the table's foot at the page's end
+    // never stands on the table, and the lens does not close for it. (It did:
+    // at 1280x593 the third office's label comes to rest a hair under the
+    // foot, inside the reach, and the film's LAST FRAME was the lens closed
+    // over a table nothing was on — measured on the build of 2026-10-06.)
+    if (b.t - remaining >= table.b) continue;
     if (b.t < top) top = b.t;
     if (b.b > bottom) bottom = b.b;
   }
@@ -747,8 +852,13 @@ const codaFade = { on: 0 };
  * jump to the page's end closes the lens over a fifth of a second rather than
  * in one frame). Writes lensFilter.all and nothing else.
  */
-export function codaFilter(lines: readonly ScreenBox[], table: ScreenBox | null, dt: number): void {
-  const want = colophonCover(lines, table);
+export function codaFilter(
+  lines: readonly ScreenBox[],
+  table: ScreenBox | null,
+  dt: number,
+  remaining = Infinity,
+): void {
+  const want = colophonCover(lines, table, remaining);
   codaFade.on += (want - codaFade.on) * (1 - Math.exp(-Math.max(0, dt) / CODA_FADE.ease));
   lensFilter.all = codaFade.on < 0.004 ? 0 : CODA_FADE.stops * codaFade.on;
 }

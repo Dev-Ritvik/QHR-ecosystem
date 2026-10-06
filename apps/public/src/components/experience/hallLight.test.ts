@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildInteriorBeats } from './interiorPath';
 import {
+  HALL_CODA,
   HALL_DIM,
   HALL_DOWN,
   HALL_LEVEL_S2,
@@ -17,7 +18,7 @@ import {
   houseKeys,
   houseLevelAt,
 } from './hallLight';
-import { establishCopyGone, tableCopyHold } from './journey';
+import { DOOR_IN, JOURNEY_END, chapters, establishCopyGone, tableCopyHold } from './journey';
 
 const beats = buildInteriorBeats(3);
 const hold = tableCopyHold(3);
@@ -81,11 +82,18 @@ describe('the house lights along the path', () => {
   });
 
   it("holds each table's light for as long as its copy is up", () => {
+    // (the name is up for as long as the camera dwells on the table: about
+    // two notches of the wheel at the first two — journey.ts, COPY_SPAN)
     expect(hold).toBeGreaterThan(0.04);
-    expect(hold).toBeLessThan(0.09);
+    expect(hold).toBeLessThan(0.095);
     expect(level(at('station-S1') + hold)).toBeCloseTo(1, 6);
     expect(level(at('station-S2') + hold)).toBeCloseTo(HALL_LEVEL_S2, 6);
-    expect(level(at('station-S3') + hold)).toBeCloseTo(1, 6);
+    // the last table has no dwell and its name leaves with the camera: its
+    // light holds for that name's own stretch
+    const last = chapters(3).find((c) => c.id === 'station-3')!;
+    const lastHold = (last.copy.out[1] - last.from) / (JOURNEY_END - DOOR_IN);
+    expect(lastHold).toBeLessThan(hold);
+    expect(level(at('station-S3') + lastHold)).toBeCloseTo(1, 6);
   });
 
   it("is down before the portrait's copy develops, and stays down to the end", () => {
@@ -128,5 +136,18 @@ describe('the house lights on a reading page', () => {
     // establishing shot of the same room, whose copy is larger.
     expect(HALL_READING_ROOM).toBeGreaterThan(HALL_READING);
     expect(HALL_READING_ROOM).toBeLessThanOrEqual(HALL_DOWN.establish);
+  });
+});
+
+describe("the house lights under the film's last frame", () => {
+  it('go down round the map table until the floor is only just there, and not to nothing', () => {
+    // The client, 2026-10-06: "make this dark like this" — the lit court of
+    // the first restored build beside the ending he wanted, where the room is
+    // gone and the table is lit. Measured against that picture, the share of
+    // the map's level that matches it lies between 0.15 and 0.20.
+    expect(HALL_CODA).toBeGreaterThanOrEqual(0.15);
+    expect(HALL_CODA).toBeLessThanOrEqual(0.2);
+    // (a tenth is the table afloat on black, which is what was there before)
+    expect(HALL_CODA).toBeGreaterThan(0.1);
   });
 });

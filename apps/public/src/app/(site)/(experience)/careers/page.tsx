@@ -12,6 +12,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Surface } from '@/components/experience/Surface';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
+import { CONTACT_EMAIL } from '@/lib/contact';
 
 export const metadata: Metadata = {
   title: 'Careers — Quality Homes Reality',
@@ -34,7 +35,7 @@ const ROLES = [
   },
 ];
 
-const APPLY_EMAIL = 'qualityhomesreality@gmail.com';
+const APPLY_EMAIL = CONTACT_EMAIL;
 
 export default function CareersPage() {
   return (

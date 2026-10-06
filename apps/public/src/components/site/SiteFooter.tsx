@@ -27,6 +27,7 @@ import { usePathname } from 'next/navigation';
 import { PrivacyControl } from '@/components/consent/ConsentPanel';
 import { Logo } from './Logo';
 import { BRANCHES } from '@estate/domain/leads/branches';
+import { CONTACT_EMAIL, CONTACT_MAILTO } from '@/lib/contact';
 
 const COLUMNS = [
   { title: 'The land', links: [
@@ -104,16 +105,61 @@ const LEGAL = [
  * and the legal line all in the text's own small size, in sentences' case,
  * with no capitals and no gilt. The label is read, not drawn. Every link a
  * crawler or a reader could reach before is still there.
+ *
+ * AND A HIERARCHY IN THE SMALL MATTER (the audit of 2026-10-05, P1: "the
+ * footer is one size and weight throughout. Done when ... the footer uses the
+ * same hierarchy, gold accent and spacing as the rest (office names clearly
+ * above addresses; links clearly secondary)"). One voice had become one
+ * level: a town, its street and a link to the gallery all weighed the same.
+ * The film's own three levels now, and nothing new: each office is a NAME at
+ * the supporting line's size under its role as a gilt label in the tracked
+ * capitals of the figures' labels, with the address small beneath it; the
+ * links are the small size at a lower strength, a clear step under the
+ * offices; the legal line is the least. The sign-off is still the largest
+ * type on the site (--end), and the spaces are the film's baselines.
  */
 function FilmColophon({ year }: { year: number }) {
   const links = COLUMNS.flatMap((c) => c.links);
   return (
     <footer className="film-stage relative z-10">
-      <div data-chapter-fade="lines" className="mx-auto max-w-[var(--grid-max)] px-6 pb-14 pt-[26vh]">
+      <div data-chapter-fade="lines" className="px-[var(--edge)] pb-14 pt-[26vh] low:pb-6">
         <h2 className="sr-only">Visit</h2>
-        <p data-line data-reveal className="t-h1 max-w-[16ch] text-[#F2EDE4]">
-          The land is best seen <span className="t-display-em">from the land.</span>
-        </p>
+        {/* THE SIGN-OFF IS HELD ON A WIDE FRAME (the audit of 2026-10-05, P0:
+            "arrive, then speak"; P1: "the table stays grounded on its floor
+            as the lights go down ... 'The land is best seen from the land.'
+            is the largest type on the site"). Made the largest, its first
+            line reaches three-fifths of the way across a 1920x945 frame and
+            three-quarters of a 16:10 one, and the map table stands from 54
+            to 83% (codaFrame.ts): it rode up through the table, and the lens
+            closed over the whole picture for as long as that took (measured:
+            from the line's top at 57% of the height to the header, a notch
+            and a half of black with the table a ghost in it).
+
+            So it comes to rest UNDER the table instead — pinned with its top
+            three-fifths of the way down the frame, clear of the table's foot
+            (at 52%) by more than the lens's reach — and holds there for
+            seven-tenths of a frame of scroll, the last frame of the film as
+            it was composed: the table lit on its floor above, the line
+            below. It dissolves in place over the hold's last half notch
+            (ChapterFade, HOLD_ATTR), as every chapter's copy does, and the
+            small matter comes up after it. The lens never closes on a wide
+            frame now.
+
+            AND ON A TABLET HELD UPRIGHT (`held:` is both: tailwind.config).
+            It is laid out as a phone is, but the table stands beside the
+            sign-off there, and at the larger size the sign-off's first line
+            reaches two-thirds of the way across: the page ENDED with the
+            line on the table and the lens closed (the suite's last-frame
+            test caught it). A phone is as it was: the table above, the lines
+            riding through, the lens their credits. */}
+        <div>
+          <p data-line data-hold data-reveal className="t-end text-[#F2EDE4] held:sticky held:top-[60vh]">
+            The land is best seen
+            <br />
+            <span className="t-gilt">from the land.</span>
+          </p>
+          <div aria-hidden className="hidden held:block held:h-[70vh]" />
+        </div>
         <p data-line className="t-hero-lede mt-6 max-w-[40ch] text-[#F2EDE4]/90">
           Every open layout can be walked. The branch that holds it will take
           you there.
@@ -131,16 +177,14 @@ function FilmColophon({ year }: { year: number }) {
         </div>
 
         {/* THE SMALL MATTER, IN ONE VOICE, a long way under the sign-off. */}
-        <div className="mt-[24vh] grid gap-x-10 gap-y-5 sm:grid-cols-3">
+        <div className="mt-[24vh] grid gap-x-[calc(var(--bl)*14)] gap-y-8 sm:grid-cols-3">
           {(['visakhapatnam', 'vizianagaram', 'srikakulam'] as const).map((id) => {
             const b = BRANCHES[id];
             return (
-              <div data-line key={b.id} className="t-small text-[#F2EDE4]/90">
-                <p>
-                  {b.name}
-                  {b.role === 'head_office' ? ', head office' : ''}
-                </p>
-                <address className="not-italic text-[#F2EDE4]/85">
+              <div data-line key={b.id}>
+                <p className="t-eyebrow t-gilt">{b.role === 'head_office' ? 'Head office' : 'Branch'}</p>
+                <p className="t-support mt-2 text-[#F2EDE4]">{b.name}</p>
+                <address className="t-small mt-2 max-w-[34ch] not-italic text-[#F2EDE4]/85">
                   {b.address} &ndash; {b.pincode}
                 </address>
               </div>
@@ -151,14 +195,17 @@ function FilmColophon({ year }: { year: number }) {
         {/* TWO ROWS OF SIX, set that way: as one wrapped row the twelfth link
             stood alone on a second line on every frame narrower than 1700 px
             (seen at 1536x730). */}
-        <nav aria-label="Footer" className="mt-6">
+        {/* (On a low frame — tailwind's `low:`, a 13-inch laptop's window —
+            the spaces under the offices close up, so the offices stand under
+            the map table's foot and not at it.) */}
+        <nav aria-label="Footer" className="mt-[calc(var(--bl)*12)] low:mt-[calc(var(--bl)*7)]">
           {[links.slice(0, 6), links.slice(6)].map((row, i) => (
             <ul key={i} className="flex flex-wrap gap-x-6">
               {row.map((l) => (
                 <li data-line key={l.href + l.label}>
                   <Link
                     href={l.href}
-                    className="t-small flex min-h-[44px] items-center text-[#F2EDE4]/85 transition-colors hover:text-[#F2EDE4]"
+                    className="t-small flex min-h-[44px] items-center text-[#F2EDE4]/[0.72] transition-colors hover:text-[#F2EDE4]"
                   >
                     {l.label}
                   </Link>
@@ -168,10 +215,10 @@ function FilmColophon({ year }: { year: number }) {
           ))}
         </nav>
 
-        <div data-line className="t-small mt-2 flex flex-wrap items-center gap-x-6 gap-y-3 text-[#F2EDE4]/85">
+        <div data-line className="t-small mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 text-[#F2EDE4]/[0.72]">
           <span>&copy; {year} Quality Homes Reality</span>
-          <a className="tap-target transition-colors hover:text-[#F2EDE4]" href="mailto:qualityhomesreality@gmail.com">
-            qualityhomesreality@gmail.com
+          <a className="tap-target transition-colors hover:text-[#F2EDE4]" href={CONTACT_MAILTO}>
+            {CONTACT_EMAIL}
           </a>
           {LEGAL.map((l) => (
             <Link key={l.href} href={l.href} className="tap-target transition-colors hover:text-[#F2EDE4]">
@@ -182,7 +229,7 @@ function FilmColophon({ year }: { year: number }) {
               line of the colophon under AA where the stone is at its lightest
               (measured at 390x844: 3.98:1 on a p90 luma of 72). */}
           <span className="ml-auto">
-            <PrivacyControl className="tap-target t-small text-[#F2EDE4]/85 underline-offset-4 transition hover:text-[#F2EDE4] hover:underline" />
+            <PrivacyControl className="tap-target t-small text-[#F2EDE4]/[0.72] underline-offset-4 transition hover:text-[#F2EDE4] hover:underline" />
           </span>
         </div>
       </div>
@@ -214,9 +261,9 @@ export function SiteFooter() {
               <span className="mx-2 text-[#F2EDE4]/[0.62]">·</span>
               <a
                 className="tap-target transition-colors hover:text-[#F2EDE4]"
-                href="mailto:qualityhomesreality@gmail.com"
+                href={CONTACT_MAILTO}
               >
-                qualityhomesreality@gmail.com
+                {CONTACT_EMAIL}
               </a>
             </p>
           </div>

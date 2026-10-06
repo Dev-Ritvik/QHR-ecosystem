@@ -79,7 +79,11 @@ export function WordReveal() {
       // words rise as the pane settles rather than as its edge crosses.
       { threshold: 0.6, rootMargin: '-6% 0px -6% 0px' },
     );
-    for (const el of els) io.observe(el);
+    // A chapter's pane is in the frame for the whole of its chapter now, so
+    // being on screen says nothing about whether it is speaking: ChapterFade
+    // tells a chapter's headlines when to rise. Everything else (the
+    // colophon's sign-off) still rises as it comes into view.
+    for (const el of els) if (!el.closest('[data-copy]')) io.observe(el);
     return () => io.disconnect();
   }, []);
   return null;

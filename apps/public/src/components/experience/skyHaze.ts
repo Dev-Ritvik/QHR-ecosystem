@@ -25,6 +25,85 @@ const BINS = 72;
 const table = new Float32Array(BINS * 3);
 let ready = false;
 
+/**
+ * THE SAME BAND AS A TEXTURE, one texel a bin, for the haze to be read PER
+ * PIXEL (exteriorHaze.ts). The fog's one colour a frame is the band's mean
+ * across the camera's view, and a view is sixty degrees wide: at sunset the
+ * sky's foot runs from orange at one edge of the frame to slate at the other,
+ * and a tree line fogged to their mean is a grey band against both — darker
+ * than the sky behind it on the sun's side, lighter on the other (the audit of
+ * 2026-10-05, P2: "a hard fog band ... done when the horizon dissolves into
+ * air"). Each far thing takes the foot of the sky on ITS OWN bearing.
+ *
+ * sRGB bytes: every device filters them, and the card decodes them to the
+ * linear values the table holds. Wraps round the compass.
+ */
+const ringData = new Uint8Array(BINS * 4);
+let ring: THREE.DataTexture | null = null;
+
+const toSRGB = (v: number) => {
+  const c = Math.min(1, Math.max(0, v));
+  return Math.round((c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255);
+};
+
+function writeRing(): void {
+  for (let b = 0; b < BINS; b += 1) {
+    ringData[b * 4] = toSRGB(table[b * 3]);
+    ringData[b * 4 + 1] = toSRGB(table[b * 3 + 1]);
+    ringData[b * 4 + 2] = toSRGB(table[b * 3 + 2]);
+    ringData[b * 4 + 3] = 255;
+  }
+  if (ring) ring.needsUpdate = true;
+}
+
+/**
+ * AND THE WHOLE SKY, SMALL (exteriorHaze.ts): the plate at two and a half
+ * degrees a texel, for the air to be read along a line of sight that ends
+ * ABOVE the horizon — the top of a far tree stands against sky five degrees
+ * up. A copy of its own rather than the plate's mips: three binds the plate
+ * for its background with a plain linear sampler, so a lookup down its mip
+ * chain reads the full-size image (seen: the horizon as a curtain of
+ * hair-fine vertical streaks, one row of a 4,096-pixel photograph stretched
+ * up the frame).
+ */
+const DOME_W = 144;
+const DOME_H = 72;
+const domeData = new Uint8Array(DOME_W * DOME_H * 4);
+let dome: THREE.DataTexture | null = null;
+let domeReady = false;
+
+/** The small sky, or null until the plate has been read. Rows run up from the
+ *  nadir, as three reads an equirectangular image (v = asin(y) / pi + 0.5). */
+export function skyHazeDome(): THREE.DataTexture | null {
+  if (!domeReady) return null;
+  if (!dome) {
+    dome = new THREE.DataTexture(domeData, DOME_W, DOME_H, THREE.RGBAFormat, THREE.UnsignedByteType);
+    dome.colorSpace = THREE.SRGBColorSpace;
+    dome.wrapS = THREE.RepeatWrapping;
+    dome.wrapT = THREE.ClampToEdgeWrapping;
+    dome.magFilter = THREE.LinearFilter;
+    dome.minFilter = THREE.LinearFilter;
+    dome.generateMipmaps = false;
+  }
+  dome.needsUpdate = true;
+  return dome;
+}
+
+/** The sky's foot by bearing, u = atan2(z, x) / 2pi + 0.5 as the plate is read. */
+export function skyHazeRing(): THREE.DataTexture {
+  if (!ring) {
+    ring = new THREE.DataTexture(ringData, BINS, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    ring.colorSpace = THREE.SRGBColorSpace;
+    ring.wrapS = THREE.RepeatWrapping;
+    ring.wrapT = THREE.ClampToEdgeWrapping;
+    ring.magFilter = THREE.LinearFilter;
+    ring.minFilter = THREE.LinearFilter;
+    ring.generateMipmaps = false;
+    ring.needsUpdate = true;
+  }
+  return ring;
+}
+
 const toLinear = (v: number) => {
   const c = v / 255;
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
@@ -48,8 +127,34 @@ export function readSkyHaze(image: CanvasImageSource): boolean {
   const g = canvas.getContext('2d', { willReadFrequently: true });
   if (!g) return false;
   try {
+    // (a fourteenth of the plate's size: averaged, not point-sampled)
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
     g.drawImage(image, 0, 0, W, H);
     const px = g.getImageData(0, 0, W, H).data;
+    // The small sky: each texel the mean of a 2 x 2 block, in linear light;
+    // the canvas's rows run down from the zenith, the texture's up.
+    for (let y = 0; y < DOME_H; y += 1) {
+      for (let x = 0; x < DOME_W; x += 1) {
+        let r = 0;
+        let gr = 0;
+        let bl = 0;
+        for (let dy = 0; dy < 2; dy += 1) {
+          for (let dx = 0; dx < 2; dx += 1) {
+            const i = ((y * 2 + dy) * W + x * 2 + dx) * 4;
+            r += toLinear(px[i]);
+            gr += toLinear(px[i + 1]);
+            bl += toLinear(px[i + 2]);
+          }
+        }
+        const o = ((DOME_H - 1 - y) * DOME_W + x) * 4;
+        domeData[o] = toSRGB(r / 4);
+        domeData[o + 1] = toSRGB(gr / 4);
+        domeData[o + 2] = toSRGB(bl / 4);
+        domeData[o + 3] = 255;
+      }
+    }
+    domeReady = true;
     // v = 0.5 is the horizon; an image row counts down from the zenith.
     const y0 = Math.floor(H * (0.5 - HAZE_BAND_DEG[1] / 180));
     const y1 = Math.max(y0 + 1, Math.floor(H * (0.5 - HAZE_BAND_DEG[0] / 180)));
@@ -72,6 +177,7 @@ export function readSkyHaze(image: CanvasImageSource): boolean {
       table[b * 3 + 1] = gr / n;
       table[b * 3 + 2] = bl / n;
     }
+    writeRing();
     ready = true;
   } catch {
     ready = false;
@@ -86,6 +192,7 @@ export function setSkyHaze(colours: ArrayLike<number> | null): void {
     return;
   }
   for (let i = 0; i < BINS * 3; i += 1) table[i] = colours[i % colours.length];
+  writeRing();
   ready = true;
 }
 

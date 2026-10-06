@@ -48,6 +48,7 @@
 // the flights, never over a tread.
 
 import * as THREE from 'three';
+import { CHAPTER_WEIGHTS } from './filmShares';
 
 /**
  * The imperial stair, as built by tools/blender/imperial_hall_v7.py, in three
@@ -308,21 +309,7 @@ const LENS = { establish: 56, traverse: 44, station: 27, portrait: 40 } as const
  * station is a READING beat — the visitor has stopped to look at a plan — and
  * the camera should still be holding that composition when they look up.
  */
-export const CHAPTER_WEIGHTS = {
-  /** Threshold, establishing shot and the turn onto the first station. */
-  establish: 0.26,
-  /** Each published station. */
-  station: 0.19,
-  /** Withdrawal, the foot of the stairs, and the portrait. */
-  portrait: 0.18,
-  /**
-   * THE MAP TABLE. The film's last chapter: down from the portrait into the
-   * court of the stair, onto the land the house is here to sell, carved into
-   * a table (MapTable.tsx). Its id stays `city` — the chapter's address and
-   * the resume link are unchanged — though the land is no longer out of doors.
-   */
-  city: 0.2,
-} as const;
+export { CHAPTER_WEIGHTS };
 
 /** Camera pose for a station, derived from its anchor so the two cannot drift. */
 export function stationViewpoint(a: StationAnchor): {

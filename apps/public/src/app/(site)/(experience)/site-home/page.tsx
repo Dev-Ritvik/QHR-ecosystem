@@ -41,7 +41,7 @@ import { ChapterFade } from '@/components/experience/ChapterFade';
 import { EnterLink } from '@/components/experience/EnterLink';
 import { WordReveal } from '@/components/experience/WordReveal';
 import { AmbientSound } from '@/components/experience/AmbientSound';
-import { ScrollCue } from '@/components/experience/ScrollCue';
+import { StartCue } from '@/components/experience/StartCue';
 
 // ISR: Background revalidation every hour, unless manually cleared by the webhook (T37)
 export const revalidate = 3600;
@@ -54,147 +54,97 @@ export const metadata: Metadata = {
 
 /**
  * TRACK_VH — total scrollable height of the film, in viewport heights — is
- * imported from journey.ts, where its derivation lives.
+ * imported from journey.ts, where its derivation lives. Everything below is a
+ * FRACTION of it, never an absolute, so retiming a chapter cannot
+ * desynchronise the copy from the camera.
  *
- * The camera's whole journey is mapped onto it, so it sets the pacing of every
- * chapter at once. Everything below is a FRACTION of it, never an absolute — so
- * retuning the pacing is one number, and it cannot desynchronise the copy from
- * the camera.
- *
- * It lives beside the chapter table rather than here because the doorway's
- * band is exactly one viewport OF THE TRACK, and a constant the scene reads
- * cannot be declared in a page the scene does not import.
- *
- * WHERE THE TRACK ENDS is marked in the markup (`data-film-end`), and the camera
- * measures its fractions against that point rather than against the whole
- * document — see filmTrack.ts for the desync the document measure produced.
+ * WHERE THE TRACK ENDS is marked in the markup (`data-film-end`), and the
+ * camera measures its fractions against that point rather than against the
+ * whole document — see filmTrack.ts for the desync the document measure
+ * produced.
  */
 
 /**
- * WHY EVERY CHAPTER'S COPY IS A FULL-VIEWPORT STICKY PANE.
+ * HOW A CHAPTER'S COPY IS HELD.
  *
- * The first version pinned each block at a comfortable reading offset —
- * `sticky top-[30vh]` and friends — with the block's own natural height. In a
- * browser that put TWO chapters on screen at once for a long stretch of every
- * transition, which is exactly what it sounds like: the constellation's figures
- * with the hall's opening line growing underneath them.
+ * Every chapter's copy is a full-viewport pane pinned for the whole of its
+ * chapter. It used to be pinned for its section less a viewport and to ride up
+ * the frame to its place and away from it, dissolving on the way (the audit
+ * of 2026-10-05, P0: "Text fades in while the frame is still travelling ...
+ * and often fades out before it can be read").
  *
- * The arithmetic, for a 650px viewport, a 350px block and a 195px offset: the
- * block unsticks when its BOTTOM reaches its section's bottom, so it comes to
- * rest 350px from the section end and then rides up. Meanwhile the next
- * section's block enters normal flow 195px below the boundary. Between those two
- * positions there are several hundred pixels where both are inside the viewport.
+ * The copy does not ride any more: each pane carries the stretch of scroll its
+ * words are up for (`data-copy`, from journey.ts, where the camera's own
+ * places are), develops in place and dissolves in place. Nothing slides. So
+ * that a pane is in the frame for the whole of its chapter, each section is a
+ * viewport TALLER than its chapter and takes that viewport back with a
+ * negative margin: the next section begins where the chapter ends, and the
+ * pane inside is pinned from the chapter's first pixel to its last — and for
+ * as long after it as its words are still up (the portrait's line, while the
+ * camera holds on the picture; the map's index, after the film's last frame).
  *
- * A pane that is exactly one viewport tall, pinned at top 0, with its content
- * vertically centred, cannot do that.
+ * THE CAMERA DOES NOT WAIT FOR THE WORDS (the client, 2026-10-06, of the cut
+ * that made it wait: "this one is slow and laggy also why this cam stop for a
+ * brief moment? the client didn't like it"). It is the continuous path the
+ * client approved, and each chapter's copy is up for the stretch of it on
+ * which the picture behind is the one the copy was set on.
  *
- * flex-COL, not flex. The first attempt used `flex items-center`, which is a
- * row: it laid the eyebrow, the heading, the rule, the figures and the
- * paragraph out side by side across the pane, on top of each other. The pane
- * has one job — centre a stack vertically — and that is `flex-col
- * justify-center`. The outgoing pane's content passes out
- * through the top of the frame at the same moment the incoming pane's content is
- * still a full viewport below the fold. Only one chapter is ever legible, which
- * is the whole point of a chapter.
+ * COMPOSED INTO THE FRAME, NOT A COLUMN (the audit, P1: "all text and nav sit
+ * inside a narrow centered column ... always at the same left position
+ * regardless of what the camera shows"). On a wide frame each chapter's block
+ * is placed on its own stretch of the film — the frame's edge for a margin
+ * (`--edge`, globals.css), its top given in the frame's height — where that
+ * stretch is quietest: the cover's and the orbit's in the sky, the figures on
+ * the evening land, the door's centred under the door, the hall's on the wall
+ * beside each subject. The camera goes on behind it, so where the picture
+ * passing under a block is not quiet enough for it the lens carries a soft
+ * density there for as long as the block is up, as it did before that audit
+ * (lensFilter.ts: the sky's grad, the land's ellipse, the tables' edge).
+ * A phone and an upright tablet stack each block across the top or the foot
+ * of the frame, as they did.
+ *
+ * ONE DOMINANT LINE A CHAPTER (the audit, P1: "headlines are about 44 px on a
+ * ~1,900 px screen in a serif built for body text"). The display lines are
+ * set in the face's display cut at twice the size they were (globals.css,
+ * THE FILM'S DISPLAY TYPE): `t-d1` the cover's title and the orbit's line,
+ * `t-d2` the door's, a table's name and the hall's, `t-d3` a statement of
+ * more than a line. The figures are the event of their chapter (`t-fig`).
  */
 
 /**
- * THE DEPARTURE FADE.
- *
- * Each chapter's content block is tagged for <ChapterFade>, which dissolves it
- * as it rides out of frame rather than letting it slide under the header. The
- * full account of the defect, and of the CSS mask that was tried here first and
- * does not work, is in ChapterFade.tsx — the short version is that a mask is
- * anchored to the element box, so its fade band leaves the screen with the pane
- * exactly when it is needed.
+ * THE TRACK MUST NOT SWALLOW POINTER EVENTS MEANT FOR THE WORLD. The track is
+ * transparent to the pointer, and only the things a visitor actually reads or
+ * clicks take it back: a table is dragged and a plan is clicked THROUGH the
+ * page. (Measured when it was not so: `elementFromPoint` at the first table
+ * returned the chapter's section, and the turntable had never been reachable.)
+ * `!` on <main>: the (experience) layout re-enables pointer events on its
+ * direct child, and that rule outranks a plain utility class.
  */
-
-/**
- * THE TRACK MUST NOT SWALLOW POINTER EVENTS MEANT FOR THE WORLD.
- *
- * MEASURED, and it was a real defect rather than a test artefact. At scroll
- * 0.62 the first station's table projects to screen (1008, 750) — comfortably
- * in frame — and `document.elementFromPoint(1008, 750)` returned the chapter
- * SECTION, not the canvas. The section is `mx-auto max-w-6xl`, so its box spans
- * x 144..1296 of a 1440px viewport regardless of how narrow the visible copy
- * column is, and it sits at z-10 over a canvas at z-0. Every pointer event in
- * that band went to an empty grid cell.
- *
- * So dragging a table did nothing, and the same band covers the holograms. The
- * E2E case for it failed with the turntable's rotation unchanged at exactly 0 —
- * the interaction had never been reachable, on any pointer device, since the
- * track was written.
- *
- * The fix is the idiom /hall already uses: the track is transparent to the
- * pointer, and only the things a visitor actually reads or clicks take it back.
- * `[&>*]:pointer-events-auto` restores it to the pane's own children rather
- * than to the pane, so the empty space above and below a centred block stays
- * transparent too — that space is most of a `h-screen` pane.
- *
- * Text selection is unaffected: the copy itself is a direct child and keeps
- * pointer events.
- */
-// Applied to <main> as well as to every chapter section. Sections alone were
-// not enough: <main> is full-width and as tall as the whole film, so after the
-// sections were fixed `elementFromPoint` at the first table still returned MAIN.
-// Everything that is not a chapter — the empty state, the sold-out list — takes
-// its pointer events back explicitly.
-// `!` (important) on <main> specifically: the (experience) layout re-enables
-// pointer events on its direct child, and that descendant rule outranks a plain
-// utility class. The film is the one page that needs the world reachable
-// through it, so it says so louder.
-const TRACK_TRANSPARENT = 'pointer-events-none';
-
-/*
- * NO SCRIMS, NO SHADOWED TYPE. Every chapter's copy used to carry a soft shade
- * behind it (the hero's, the panes', the hall's) and a text-shadow on every
- * line. The second art-direction audit (2026-09-30) called that the first of
- * the five things making the film look cheap — "artificial darkness ...
- * brute-forced onto the screen to make the text legible". The type now sits
- * where the picture is quiet: in the house's shade, in the evening land, in
- * the dim of a gallery hall, on the shaded stone round the map table.
- *
- * AND EVERY LINE IS SET AT THE STRENGTH THAT GROUND ALLOWS. The quiet ground
- * was measured for ivory at full strength; the small lines were then set at
- * 55 to 75% of it, to step them back from the headings — and at their own
- * strength they stood under AA (measured per text node at 1440x900: the
- * cover's place line at 4.1:1, the figures' labels at 3.2 to 3.9, a table's
- * place line at 3.8, its count in gilt at 3.5). Hierarchy here is scale and
- * weight, as the fourth critique asked ("pure white, elegant typography";
- * "using weight, scale, and grid placement to create hierarchy"): the small
- * capitals are ivory at full strength, a gloss at 88 to 95%, and gilt is kept
- * for what is large enough to carry it or stands on ground dark enough.
- */
-
 const TRACK_ROOT_TRANSPARENT = '!pointer-events-none';
-const PANE_CONTENT_INTERACTIVE = 'pointer-events-none [&>*]:pointer-events-auto';
 
-/** A chapter's height in vh, from its share of the scroll track. */
-function vh(from: number, to: number): string {
-  return `${((to - from) * TRACK_VH).toFixed(2)}vh`;
+/** A chapter's pane: pinned for its whole chapter, transparent to the pointer
+ *  but for what is read or pressed in it. A column on a phone, a frame to
+ *  place blocks in on a wide one. */
+const PANE = 'sticky top-0 flex h-screen w-full flex-col px-6 pointer-events-none wide:block wide:px-0';
+/** A block of copy in a pane. */
+const BLOCK = 'pointer-events-auto wide:absolute wide:left-[var(--edge)]';
+
+/** A chapter's section: a viewport taller than the chapter, with that
+ *  viewport given back, so its pane is pinned from the chapter's first pixel
+ *  to its last — and on past it for as long as its copy is still up
+ *  (`linger`, taken back too: the next section still begins where the
+ *  chapter ends). */
+function track(c: Chapter): React.CSSProperties {
+  const linger = Math.max(0, c.copy.out[1] - c.to) * TRACK_VH;
+  return {
+    minHeight: `calc(${((c.to - c.from) * TRACK_VH + linger).toFixed(2)}vh + 100vh)`,
+    marginBottom: `calc(-100vh - ${linger.toFixed(2)}vh)`,
+  };
 }
 
-/**
- * A chapter's section height with its pane's viewport of exit moved in or out.
- *
- * WHY SOME SECTIONS ARE A VIEWPORT LONGER THAN THEIR CHAPTER, AND THE NEXT ONE A
- * VIEWPORT SHORTER. A pinned pane leaves over the LAST viewport of its section.
- * Where a chapter's camera beat sits at the chapter's START (every station,
- * where the camera arrives and dwells), that is right. Where the beat sits at
- * the END — the portrait, which the camera climbs to across its whole chapter,
- * and the constellation, which it settles on at the end of the revolution — the
- * pane was already riding out when the camera arrived, and the next chapter's
- * copy was on screen beside the wrong picture. Measured on the production build:
- * at the portrait beat, "Out the front door" was pinned and "At the top of the
- * stairs" had gone.
- *
- * So those two sections carry their exit viewport past the end of the chapter,
- * and the section after each gives the same viewport back — the film-end
- * markers stay exactly where the camera measures them, and so does every
- * chapter boundary the address bar and the camera read.
- */
-function held(from: number, to: number, viewports: 1 | -1): string {
-  return `calc(${vh(from, to)} ${viewports > 0 ? '+' : '-'} 100vh)`;
+/** The stretch of scroll a chapter's copy is up for, for ChapterFade. */
+function copyOf(c: Chapter): string {
+  return [...c.copy.in, ...c.copy.out].map((v) => v.toFixed(5)).join(',');
 }
 
 export default async function SiteHomePage() {
@@ -239,7 +189,8 @@ export default async function SiteHomePage() {
   // The fallback carries the id it was asked for, not just zeroes: a chapter
   // that is missing from the registry should still have a stable anchor rather
   // than an unnamed section the URL cannot address.
-  const at = (id: string): Chapter => beat.find((c) => c.id === id) ?? { id, from: 0, to: 0 };
+  const at = (id: string): Chapter =>
+    beat.find((c) => c.id === id) ?? { id, from: 0, to: 0, copy: { in: [0, 0], out: [0, 0] } };
 
   const hero = at('hero');
   const revolution = at('revolution');
@@ -250,7 +201,7 @@ export default async function SiteHomePage() {
   const city = at('city');
 
   return (
-    <main className={`film-stage mt-[calc(var(--bar)_-_62px)] pb-40 ${TRACK_ROOT_TRANSPARENT}`}>
+    <main className={`film-stage pb-40 ${TRACK_ROOT_TRANSPARENT}`}>
       <RouteTelemetry routeId="site-home" />
 
       {/* Scroll <-> URL. Fed the SAME chapter list the camera and the
@@ -260,18 +211,19 @@ export default async function SiteHomePage() {
           Renders nothing. */}
       <ChapterUrl chapters={beat} />
 
-      {/* Dissolves a chapter as it leaves the frame. Renders nothing;
+      {/* Brings each chapter's copy up in place over its stretch of the film,
+          and takes it away in place (journey.ts, COPY_SPAN). Renders nothing;
           reads the panes tagged data-chapter-fade below. */}
       <ChapterFade />
-      {/* Headlines rise in a word at a time as their chapter arrives. */}
+      {/* Headlines rise in a word at a time as their chapter speaks. */}
       <WordReveal />
       {/* A sound layer, muted until asked for (its control is set in the
           header). */}
       <AmbientSound />
 
       {/* Hands the published projects to the WebGL tree, which binds them to
-          the hologram tables in the hall. Renders nothing itself — the canvas
-          is mounted by the layout above this page, so a store is the only path
+          the tables in the hall. Renders nothing itself — the canvas is
+          mounted by the layout above this page, so a store is the only path
           between them. */}
       <PublishSceneCards
         cards={stationProjects.map((p: any) => ({
@@ -285,311 +237,129 @@ export default async function SiteHomePage() {
         }))}
       />
 
-      {/* ── CHAPTER 1 · HERO ──────────────────────────────────────────────
+      {/* ── CHAPTER 1 · THE COVER ─────────────────────────────────────────
+          The long-lens three-quarter of the entrance front, the top third of
+          the frame sky. On a wide frame the copy stands in three places, each
+          on its own quiet ground: the TITLE in that sky, under the graduated
+          filter the lens wears for a day's sky (lensFilter.ts, COVER_SKY); the
+          supporting line on the west lawn, in the house's own long shadow;
+          and at the frame's foot the one cue. A phone frames the house lower
+          and larger: its quiet ground is the sky at the top, where the block
+          stands whole.
 
-          An editorial cover, composed against the render rather than laid out
-          beside it. Three numbers from the hero frame at 1440x900 decide
-          everything below, and all three were measured off the framebuffer:
+          ONE CUE (the audit of 2026-10-05, P2: "The hero shows both 'START
+          HERE' and 'SCROLL' plus a stray vertical tick. Done when there is
+          one designed cue"). The cover carried an action that left the film
+          for another page and, beside it, a cue to stay and scroll. They are
+          one thing now: "Start here" starts the film (StartCue).
 
-            * the left column is BLACK from y 0 to y ~260 (mean luma 11..16,
-              max 17) and LIT from y ~300 down (mean 76..85)
-            * the highlights that actually break type — the lit west wing, the
-              window glow, the terrace edge — all begin at x 600. Left of 600
-              the ground is flat: max luma 93 against 136 at its worst. Right
-              of it, 227..255.
-            * the spire tip lands at y 216, inside the black band
-
-          So: the measure is capped short of x 600, which is what the
-          `max-w-[min(31vw,452px)]` is — not a taste call about line length but
-          the distance from the page gutter to the first blown highlight. The
-          previous paragraph ran to x 692 and put six lines of body copy across
-          ground reading a mean of 80 with peaks to 233, which is the single
-          reason the hero read as a brochure: the type was fighting the
-          brightest thing in the picture and losing.
-
-          THE BLOCK STANDS ON THE LAND, UNDER AN EMPTY SKY. It used to be
-          placed so the horizon ran through it — "Land, in the districts" in a
-          black sky, "we come from" on the land. The sky has since become a
-          photographed golden hour, and the third art-direction critique
-          (2026-09-30) found the headline floating over its bright cloud bank
-          ("It looks like a sticker placed on a television screen"). Measured on
-          the clean plate at 1440x900, the headline's old place reads a mean
-          luma of 139 (p90 188; the italic's band peaking at 197), its place at
-          the foot of the frame 70 (p90 109) over the lawn, and the gloss and
-          the action below it 48. So the block is set at the foot of the frame,
-          the whole sentence on the land, and the sky above it is left to the
-          spire. That is on a wide frame. A phone frames the
-          house lower and larger, its foot is the facade, and its quiet ground
-          is the sky at the top, where the block stays — and stays SHORT. A
-          phone's glass is 390x844, but its browser's bars leave about 390x664
-          of it when the page opens, and the facade begins at half the frame's
-          height: set as it is on a wide frame, the block ran to 60% of that
-          frame and its last lines stood on the facade, under a sky grad that
-          had followed them down over the house (seen at 375x667). So on a
-          phone the headline is a step down (globals.css), the gaps are a
-          step tighter and the gloss takes the column's full measure: the
-          block ends at 46% of the short frame, on the roof's slate.
-
-          Sticky, like every other chapter, and pinned at the header's height
-          rather than 0 so the block never slides under the fixed bar and
-          never drifts during the first of the scroll.
-
-          ALL OF IT IN THE FRAME'S OWN UNIT ON A WIDE FRAME (globals.css, THE
-          FILM'S STAGE; `film-stage` on <main>). The numbers above were taken
-          at 1440x900, and the picture they were taken from scales with the
-          frame's height while rems do not: on a laptop's 1536x730 the same
-          block began 40% of the way down the frame rather than 50%, its
-          place line on the horizon's haze (p90 luma 110), and the holdings'
-          eyebrow stood in the sunset (157 to 181). So the type, the gaps,
-          the grid's width and this measure are counts of `--u`, a
-          nine-hundredth of the frame's height, and the block is the same
-          size against the picture, over the same part of it, on every wide
-          frame. */}
-      <header
-        id="hero"
-        className={`relative scroll-mt-[62px] ${TRACK_TRANSPARENT}`}
-        style={{ minHeight: vh(hero.from, hero.to) }}
-      >
-        <div
-          className={`sticky top-[var(--bar)] h-[calc(100vh_-_var(--bar))] ${PANE_CONTENT_INTERACTIVE}`}
-          data-chapter-fade
-        >
-          {/* The hero nests one level deeper than the other chapters, so the
-              pane's `[&>*]` rule would hand pointer events straight back to a
-              full-width, full-height wrapper. The transparency is carried down
-              to the copy column, which is the only thing here worth clicking. */}
-
-          {/* THE GRID. The same twelve columns and gutter as the header
-              (SiteHeader), so the copy's left edge, the logo and the nav all
-              stand on column lines: the copy spans columns 1-5, the nav starts
-              on column 7. */}
-          {/* HELD BY ITS TOP ON A WIDE FRAME, at the design's own height in the
-              picture (the place line 50.1% of the way down). The block used
-              to be held by its foot, and a block grows where its small type
-              stops shrinking: on a 1280x593 frame it stood 4% of the frame
-              higher than it was drawn, its place line up off the lawn's
-              shade onto brighter ground (p90 luma 113 to 122). The line nearest the
-              horizon is the one that cannot move; the foot has a tenth of
-              the frame under it to grow into. */}
-          <div className="site-grid pointer-events-none relative h-full grid-rows-[1fr_auto] pt-[2vh] wide:pt-0">
-            {/* ONE STATEMENT, ONE SUPPORTING LINE, ONE ACTION (the refinement
-                brief, 2026-10-03: "reduce the number of simultaneous luxury
-                signals: tiny uppercase labels, excessive tracking, repeated
-                rules, micro-metadata"; "one dominant statement, one supporting
-                statement, one action"). The cover carried six marks: a label in
-                tracked capitals, the headline, a hairline, the gloss, the
-                action and its rule. The label and the hairline are gone from
-                the picture. The districts the label named are the claim the
-                page rests on, so the gloss says them; the label itself is kept
-                for a screen reader, which reads the page and not the frame.
-                The headline stands where it stood: the block's top is lower by
-                the label's own line (sixteen units), on a wide frame. */}
-            {/* IN THE SKY, ON A WIDE FRAME (the paid audit of 2026-10-04, passes
-                2 and 6: "the image is the art direction and the typography is
-                information placed onto it. Reverse that relationship"). The
-                cover is taken on a long lens now (cameraPath, the hero): the
-                house is half the frame and the land round it is the picture's
-                own business — the block's old place on the lawn is the pool
-                terrace and the house's west wall. The top third is sky and
-                nothing else, so the sentence is set there, a title in the air
-                over the roofline as a magazine sets one, and the lens wears a
-                light graduated filter for that sky (lensFilter, COVER_SKY).
-                The third critique refused a headline "floating over" a bright
-                cloud bank; this stands above the horizon's haze, on the sky's
-                quiet upper air. The first line's top is 13% of the way down
-                the frame.
-
-                AND THE SMALL TYPE STAYS ON THE LAND. A day's sky is a stop and
-                a half brighter than small ivory type can stand on, and the
-                density that would hold it there is the dark lid the audit's
-                first pass took off. MEASURED on this frame's clean plate (a
-                grid of the brightest tenth of each cell): the sky 130 to 175;
-                the hazed park behind the house 170 to 212; and the west lawn,
-                in the house's own long shadow, 60 to 100 from 19 to 38% of
-                the width between 61 and 75% of the way down — the quiet
-                ground of this picture, with nothing done to make it so. The
-                supporting line and the action stand there, on the same left
-                edge as the title: a title and its caption. */}
-            <div className="pointer-events-auto col-span-12 w-full max-w-[calc(452*var(--u))] self-start wide:max-w-none wide:pt-[calc(10.4vh_-_var(--bar))] lg:col-span-8">
-              <p className="sr-only">Vizianagaram &middot; Srikakulam</p>
-
-              {/* ONE SENTENCE, ONE SIZE, ONE LEADING, ONE STYLE. The turn of
-                  phrase was an italic in bronze; the fourth art-direction
-                  critique (2026-09-30) read the site's italics against its
-                  roman as a second voice ("stop mixing ... heavily italicized
-                  serifs") and asked for hierarchy by scale and weight. The
-                  phrase keeps the house's gilt, in the same roman — on a
-                  phone, where the sky grad that rides with the copy is dense
-                  enough to carry it; over a wide frame's lighter sky it is
-                  ivory like the rest (globals.css: gilt needs a ground under
-                  a luma of 107 at this size, ivory 137). */}
-              <h1 className="t-display mt-4 text-[#F2EDE4] wide:whitespace-nowrap md:mt-6">
-                Land, in the
-                <br />
-                districts <span className="t-display-em">we&nbsp;come&nbsp;from</span>
-              </h1>
-
-              {/* Editorial, not default: the lede size with its own leading and
-                  a touch of tracking, set to a short measure and balanced. */}
-              {/* (On a wide frame the two below are lifted out of the block's
-                  flow and held by their own top, on the lawn: see above.) */}
-              <div className="wide:absolute wide:left-[calc(var(--bl)*6)] wide:top-[calc(64vh_-_var(--bar))] wide:max-w-[calc(452*var(--u))]">
-              <p className="t-hero-lede mt-5 text-[#F2EDE4]/95 short:sr-only md:mt-8 md:max-w-[36ch] wide:!mt-0">
-                Approved layouts in Vizianagaram and Srikakulam, sold direct by
-                the developer. Every sanctioned plan published in full.
-              </p>
-
-              {/* ONE ACTION, AND NO ARROW. The hero carried two ("Start here"
-                  and a quiet "See the layouts raised"); the third art-direction
-                  critique (2026-09-30) counted every mark on the opening frame
-                  and asked for "extreme restraint". The fourth read the drawn
-                  arrow after the words as "standard web UI, not luxury
-                  editorial": the action is the gilt rule leading into the
-                  words, as a magazine sets a pointer, and nothing after them. */}
-              {/* On a wide frame the action stands at the frame's foot, on
-                  the pool's dark water, beside the scroll cue (below): under
-                  the supporting line the ground is the terrace's pale stone. */}
-              <div className="mt-6 md:mt-8 wide:hidden">
-                <Link href="/start-here" className="cta-primary">
-                  Start here
-                </Link>
-              </div>
-              </div>
-            </div>
-
-            {/* THE FOOT OF THE COVER: the one action (a wide frame's; a phone's
-                is in the block above), and the scroll cue beside it — the cue
-                only for a visitor who has not found the scroll on their own
-                (ScrollCue). Both on the pool's water: measured on the clean
-                plate, the brightest tenth of it 67 to 76 from 13 to 31% of the
-                width, 88 to 93.5% of the way down. */}
-            <div className="col-span-12 flex items-center gap-x-[calc(var(--bl)*12)] self-end pb-[4vh] pt-6 wide:pb-[7.4vh]">
-              <div className="pointer-events-auto hidden wide:block">
-                <Link href="/start-here" className="cta-primary">
-                  Start here
-                </Link>
-              </div>
-              <ScrollCue />
-            </div>
+          THE COVER IS COMPOSED FROM THE PAGE'S FIRST PIXEL. Every page
+          begins 62px down, under the header's bar, and over the film the
+          header is air: the cover's pane began 62px down the frame and rode
+          up to its place over the first fifth of a notch — the title, its
+          line and the cue all 62px lower in the one frame a visitor is sure
+          to see than in the frame they were composed and measured on (the
+          cue 37px from the frame's foot, the gilt line's feet out of the
+          sky's grad). On a wide frame the pane takes that 62px back, so the
+          first frame is the composed one and nothing rides. The title stands
+          where the orbit's line will, a tenth of the way down. */}
+      <header id="hero" className="relative scroll-mt-[62px]" style={track(hero)}>
+        <div className={`${PANE} justify-start pt-[calc(var(--bar)_+_2vh)] wide:-mt-[62px] wide:pt-0`} data-chapter-fade data-copy={copyOf(hero)}>
+          <div className={`${BLOCK} wide:top-[max(10.5vh,var(--clear))]`}>
+            <p className="sr-only">Vizianagaram &middot; Srikakulam</p>
+            <h1 className="t-d1 mt-4 text-[#F2EDE4] wide:mt-0 wide:whitespace-nowrap">
+              Land, in the districts
+              <br />
+              <span className="t-gilt">we&nbsp;come&nbsp;from.</span>
+            </h1>
+          </div>
+          <div className={`${BLOCK} wide:top-[71vh] wide:max-w-[calc(430*var(--u))]`}>
+            <p className="t-support mt-5 max-w-[36ch] text-[#F2EDE4] short:sr-only wide:mt-0">
+              Approved layouts in Vizianagaram and Srikakulam, sold direct by
+              the developer. Every sanctioned plan published in full.
+            </p>
+          </div>
+          <div className={`${BLOCK} mt-7 wide:bottom-[7vh] wide:mt-0`}>
+            <StartCue href="#revolution" />
           </div>
         </div>
       </header>
 
-      {/* ── CHAPTER 2 · THE REVOLUTION ────────────────────────────────────
-          The camera swings two hundred degrees around the left flank. Almost no
-          copy on purpose: this is the chapter where the architecture is the
-          only argument, and a paragraph over it would be a second thing to
-          look at. Two lines, held still by `sticky` while the building turns
-          behind them — set a little below the middle of the frame from md up:
-          measured on the clean plate at this beat, the lines' old place reads
-          a mean luma of 64 (p90 142, the horizon's haze) and this one 41 (p90
-          80), on the lawn. */}
-      <section
-        id="revolution"
-        className={`mx-auto grid max-w-[var(--grid-max)] scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
-        style={{ minHeight: vh(revolution.from, revolution.to) }}
-      >
-        <div className="col-span-12 wide:col-span-5 wide:max-w-[calc(518.4*var(--u))]">
-          <div
-            // Held by its top on a wide frame, like the cover and the holdings:
-            // its first line 60.4% of the way down. (It was 50.4%. With the
-            // refinement brief the exterior's lens went to deep focus, the
-            // horizon's haze behind that place came up sharp and bright, and
-            // the label stood on a p90 luma of 178 at leg 0.22: 1.8:1. Ten
-            // per cent lower the whole block is on the lawn for every frame
-            // it is up — measured each fiftieth of the leg, never under 1.45
-            // times what its line needs, with no filter on the lens.)
-            className={`sticky top-0 flex h-screen flex-col justify-center wide:justify-start wide:pt-[calc(60.44vh_+_16_*_var(--u))] ${PANE_CONTENT_INTERACTIVE}`}
-            data-chapter-fade
-          >
-            {/* (The chapter's label: read, not drawn. See the cover.) */}
+      {/* ── CHAPTER 2 · THE ORBIT ─────────────────────────────────────────
+          The camera travels down the west side of the house, the lawn and
+          its hedges under it and the morning's sky over it. The chapter is
+          one statement, and it used to be set at paragraph size over the
+          hedges. Its first sentence is the frame's title now, at the display
+          size in the sky to the left of the house, and its second the caption
+          to it, on the lawn — as the cover's title and its line stand. It is
+          up for the stretch of the orbit on which that sky is still the
+          morning's (journey.ts, COPY_SPAN): by leg 0.28 the sunset has come
+          up behind where the title stands. */}
+      <section id="revolution" className="relative scroll-mt-[62px]" style={track(revolution)}>
+        <div className={`${PANE} justify-start pt-[calc(var(--bar)_+_3vh)] wide:pt-0`} data-chapter-fade data-copy={copyOf(revolution)}>
+          <div className={`${BLOCK} wide:top-[max(10.5vh,var(--clear))]`}>
             <p className="sr-only">Twenty years, one district</p>
-            <p className="t-h3 mt-6 text-[#F2EDE4]">
-              We do not broker land.
+            <p className="t-d1 text-[#F2EDE4] wide:whitespace-nowrap">
+              We do not
               <br />
-              {/* Balanced, not broken by hand: a forced break after "still
-                  here" left "here" alone on a line at 1440. */}
-              <span className="block [text-wrap:balance]">
-                We develop it, and we are still here when the last plot sells.
-              </span>
+              broker <span className="t-gilt">land.</span>
+            </p>
+          </div>
+          <div className={`${BLOCK} wide:top-[66.4vh] wide:max-w-[calc(330*var(--u))] short:max-w-[calc(520*var(--u))]`}>
+            <p className="t-support mt-5 max-w-[30ch] text-[#F2EDE4] wide:mt-0">
+              We develop it, and we are still here when the last plot sells.
             </p>
           </div>
         </div>
       </section>
 
       {/* ── CHAPTER 3 · THE HOLDINGS ─────────────────────────────────────
-          The crane settles behind the house as evening falls: the estate low
-          in the right of frame, its spire against the sky, and the land to its
-          left gone dark. The figures sit in that dark. (Until the second
-          art-direction audit this chapter carried a constellation over the
-          spire; the audit asked for it to go, and it has.)
+          The crane comes round behind the house at sunset and all but rests
+          there: the estate low in the right of the frame, the land to its
+          left going dark. The figures stand on that land, and they are the
+          event of the chapter (the
+          audit, P1: "the stats numbers are barely larger than their labels
+          ... each read as the main event of their chapter"): three numerals
+          at the display's largest size in the face's old-style figures, each
+          over a line of tracked capitals. Every one comes from the published
+          projection — nothing here is composed. `flex-col-reverse` puts each
+          figure over its label while the markup keeps the term first, as a
+          <dl> must. */}
+      <section id="holdings" className="relative scroll-mt-[62px]" style={track(holdings)}>
+        <div className={`${PANE} justify-center`} data-chapter-fade data-copy={copyOf(holdings)}>
+          {/* THE FIGURES FIRST ON A WIDE FRAME, the statement under them and its
+              gloss on one line under that (`order`: the markup keeps the
+              heading first). Where the crane all but rests (leg 0.6) the
+              lawn the evening sun still reaches is a bright strip across the
+              left of the frame from 52 to 64% of the way down, and from 65%
+              down the land is the trees' long shadows and the canal garden:
+              the figures stand across the strip's foot and everything smaller
+              is below it. The block comes up earlier than that, while the
+              crane is still rising over the lit lawn, so the lens carries a
+              soft ellipse round it for as long as it is up (lensFilter.ts,
+              HOLDINGS_BOX).
 
-          IN THE LOWER HALF OF THE FRAME, ON THE LAND (on a wide frame; a phone
-          keeps the centred block its own framing was set for). The copy arrives while the sky
-          behind the house is still the golden hour's brightest (clean plate,
-          left column, at the chapter's first frames: mean luma 139..204 above
-          y 0.5, 71..93 below it), and evening only darkens it later. Centred,
-          the heading stood in that glare for the first half of the chapter.
-
-          Editorial, not a hero: a small label, a short statement, a rule, and
-          three figures. Figures because this is the one place in the sequence
-          where a claim can be made in numbers rather than adjectives, and
-          numbers are the thing a buyer of land actually wants. Every one comes
-          from the published projection — nothing here is composed. */}
-      <section
-        id="holdings"
-        className={`mx-auto grid max-w-[var(--grid-max)] scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
-        style={{ minHeight: held(holdings.from, holdings.to, 1) }}
-      >
-        <div className="col-span-12 wide:col-span-5 wide:max-w-[calc(518.4*var(--u))]">
-          <div
-            // Held by its top on a wide frame, like the cover's (the eyebrow
-            // 47.9% of the way down, as drawn): at 1280x593 the block held by
-            // its foot stood 4.5% of the frame higher, toward the sunset.
-            className={`sticky top-0 flex h-screen flex-col justify-center wide:justify-start wide:pt-[calc(47.89vh_+_16_*_var(--u))] ${PANE_CONTENT_INTERACTIVE}`}
-            data-chapter-fade
-          >
+              ON A FRAME MORE THAN TWICE AS WIDE AS IT IS TALL (`panoramic:`)
+              the camera sees further left, and the frame's first seventh is
+              that lawn in the open, past the palms' shadows: at 1280x593 the
+              first figure's label began on a ground of 126 (3.5:1). The
+              block stands further in as the frame widens past two to one —
+              four-tenths of the width it has over that, so nothing at
+              exactly two to one, 12px at 1920x945 and 38 at 1280x593 —
+              where the shadows are. */}
+          <div className={`${BLOCK} flex flex-col wide:top-[58.5vh] short:top-[calc(58.5vh+var(--bl)*8)] panoramic:left-[calc(var(--edge)_+_(100vw_-_200vh)_*_0.4)]`}>
             <p className="sr-only">The holdings</p>
-            <h2 className="t-h2 mt-6 text-[#F2EDE4]">
+            <h2 className="t-d3 text-[#F2EDE4] wide:order-2 wide:mt-[calc(var(--bl)*9)] short:mt-[calc(var(--bl)*5)]">
               Every plot we hold,
               <br />
-              <span className="text-[#E8B98A] short:text-[#F2EDE4]">counted in full</span>
+              <span className="t-gilt short:text-[#F2EDE4]">counted in full.</span>
             </h2>
-            {/* THE FIGURES, AS ORNAMENT. The first audit read the old row as a
-                SaaS dashboard; the second read its successor — serif figures
-                in ruled columns under capitals — as "a generic admin
-                dashboard" still. The rules were the dashboard. So there are
-                none: three figures at the top of the scale in its lightest
-                weight, with the old-style numerals Playfair draws (the ones
-                that rise and fall like lower-case letters, the way a book sets
-                its dates), each over a microscopic tracked label, and air
-                between them instead of a line. `flex-col-reverse` puts each figure over its label
-                while the markup keeps the label first, as a <dl> must.
-
-                WHAT IS OPEN COMES FIRST, the figure a buyer is here for, and
-                it is the one in gilt — at the left end of the row, where the
-                land stays dark for the whole chapter (measured under each
-                figure's place from leg 0.40 to 0.70: a p90 luma of 28 to 70
-                at the left, 27 to 175 at the right, where the garden's
-                blossom and then the terrace pass behind). It used to close
-                the row, and at leg 0.60 the gilt stood on 112: 2.7:1. Ivory
-                holds the right end at 3:1 through the same frames. */}
-            {/* AND NOW AS FACTS, SET AS A BOOK SETS THEM (the paid audit of
-                2026-10-04, pass 6: "those numbers should not feel like
-                ordinary dashboard statistics. They should feel like editorial
-                facts"). Three numerals at the top of the scale over tracked
-                capitals is how a dashboard draws a metric, whatever the face.
-                A printed page sets a short table: the figure in the text's own
-                old-style numerals, a step up, its words beside it in the
-                text's own voice, one fact to a line and the figures ranged
-                right so their units stand under one another. No capitals, no
-                gilt: what is open comes first, and that is its emphasis.
-                (`flex-row-reverse` puts each figure before its words while
-                the markup keeps the term first, as a <dl> must.) */}
-            <dl className="mt-8 flex flex-col gap-y-[calc(var(--bl)*1.5)]">
-              <div className="flex flex-row-reverse items-baseline justify-end gap-x-[calc(var(--bl)*4)]">
-                <dt className="t-fact-term text-[#F2EDE4]">plots open</dt>
-                <dd className="t-fact text-[#F2EDE4]">
+            {/* (Ranged by their heads: on a phone a label takes two lines and
+                the figures must still stand on one line with each other.) */}
+            <dl className="mt-8 flex items-start gap-x-[calc(var(--bl)*9)] wide:order-1 wide:mt-0 wide:gap-x-[calc(var(--bl)*14)]">
+              <div className="flex flex-col-reverse">
+                <dt className="t-eyebrow mt-3 text-[#F2EDE4]">Plots open</dt>
+                <dd className="t-fig text-[#F2EDE4]">
                   {list.reduce(
                     (n: number, p: any) =>
                       n + (typeof p.availableUnits === 'number' ? p.availableUnits : 0),
@@ -597,9 +367,9 @@ export default async function SiteHomePage() {
                   )}
                 </dd>
               </div>
-              <div className="flex flex-row-reverse items-baseline justify-end gap-x-[calc(var(--bl)*4)]">
-                <dt className="t-fact-term text-[#F2EDE4]">plots in all</dt>
-                <dd className="t-fact text-[#F2EDE4]">
+              <div className="flex flex-col-reverse">
+                <dt className="t-eyebrow mt-3 text-[#F2EDE4]">Plots in all</dt>
+                <dd className="t-fig text-[#F2EDE4]">
                   {list.reduce(
                     (n: number, p: any) =>
                       n + (typeof p.totalUnits === 'number' ? p.totalUnits : 0),
@@ -607,66 +377,53 @@ export default async function SiteHomePage() {
                   )}
                 </dd>
               </div>
-              <div className="flex flex-row-reverse items-baseline justify-end gap-x-[calc(var(--bl)*4)]">
-                <dt className="t-fact-term text-[#F2EDE4]">{list.length === 1 ? 'layout' : 'layouts'}</dt>
-                <dd className="t-fact text-[#F2EDE4]">{list.length}</dd>
+              <div className="flex flex-col-reverse">
+                <dt className="t-eyebrow mt-3 text-[#F2EDE4]">{list.length === 1 ? 'Layout' : 'Layouts'}</dt>
+                <dd className="t-fig text-[#F2EDE4]">{list.length}</dd>
               </div>
             </dl>
-            {/* One line under the figures (it ran three: the second sentence
-                told the visitor what the next chapter shows them). */}
-            <p className="t-body mt-10 max-w-[34ch] text-[#F2EDE4]/[0.88] short:sr-only">
+            <p className="t-support mt-8 max-w-[34ch] text-[#F2EDE4] short:sr-only wide:order-3 wide:mt-[calc(var(--bl)*5)] wide:max-w-none wide:whitespace-nowrap">
               Counted from the sanctioned layout plans, not from a brochure.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ── CHAPTER 4 · THE APPROACH ──────────────────────────────────────
-          Night falls as the camera comes down the flank and onto the entry
-          axis, and the chapter ends square on the front door. Scrolling on
-          opens it: the doors part, the camera goes through them into light, and
-          the hall resolves out of it (doorway.ts).
+      {/* ── CHAPTER 4 · THE DOOR ──────────────────────────────────────────
+          Dusk falls as the camera comes down the west side and round onto the
+          entry axis, and ends square on the front door.
 
-          The copy is CENTRED and LOW, unlike every other chapter's left column,
-          because this is the one frame in the film that is symmetrical — a door
-          on the axis — and a column of type down the left would sit on top of
-          the composition it is inviting the visitor into. Two lines, and a
-          control that does what scrolling does, for anyone who would rather
-          click than wheel. */}
-      <section
-        id="approach"
-        className={`relative scroll-mt-[62px] ${TRACK_TRANSPARENT}`}
-        style={{ minHeight: held(approach.from, approach.to, -1) }}
-      >
+          The copy is CENTRED and LOW, unlike every other chapter's, because
+          this is the one frame in the film that is symmetrical — a door on
+          the axis — and a column of type down the left would stand on the
+          composition it is inviting the visitor into.
+
+          AND THE DOOR OPENS WHILE THE LINE IS UP (the audit, P1: "'The door
+          is open.' appears while the door is visibly shut; it opens only
+          after the text has faded"). The line comes up as the camera turns
+          onto the door's axis, and the leaves swing with the scroll over the
+          last of the approach, onto the lit hall behind them (DoorwayRig,
+          doorway.ts: doorAjar); scrolling on walks through them. */}
+      <section id="approach" className="relative scroll-mt-[62px]" style={track(approach)}>
         {/* Where the exterior's track ends, for a page with nothing inside. The
-            camera measures its fractions from the furthest marker on the page.
-            A viewport short of the chapter's height because this section starts
-            a viewport late — the constellation holds its pane past its beat
-            (see held()). */}
+            camera measures its fractions from the furthest marker on the page. */}
         <div
           aria-hidden
           data-film-end={approach.to}
           className="pointer-events-none absolute left-0 h-px w-px"
-          style={{ top: held(approach.from, approach.to, -1) }}
+          style={{ top: `${((approach.to - approach.from) * TRACK_VH).toFixed(2)}vh` }}
         />
-        {/* IT WAITS FOR THE DOOR (ChapterFade, AFTER_ATTR). The pane is held
-            while the camera is still coming down the flank, where the lit
-            windows pass behind the foot of the frame; the copy develops a
-            viewport later, as the camera comes round onto the front and the
-            door it speaks of is in the picture. */}
-        <div
-          className={`sticky top-0 flex h-screen flex-col items-center justify-end px-6 pb-[9vh] text-center ${PANE_CONTENT_INTERACTIVE}`}
-          data-chapter-fade
-          data-fade-after="1.05"
-        >
-          <p className="sr-only">The residence</p>
-          <p className="t-h3 mt-6 text-[#F2EDE4]">The door is open.</p>
-          <EnterLink className="cta-primary mt-8">Step inside</EnterLink>
+        <div className={`${PANE} items-center justify-end pb-[9vh] text-center`} data-chapter-fade data-copy={copyOf(approach)}>
+          <div className="pointer-events-auto flex flex-col items-center wide:absolute wide:inset-x-0 wide:bottom-[8.5vh]">
+            <p className="sr-only">The residence</p>
+            <p className="t-d2 text-[#F2EDE4]">The door is open.</p>
+            <EnterLink className="cta-primary mt-6 wide:mt-7">Step inside</EnterLink>
+          </div>
         </div>
       </section>
 
       {list.length === 0 ? (
-        <div className="pointer-events-auto mx-auto max-w-[var(--grid-max)] px-6 pt-[20vh]">
+        <div className="pointer-events-auto mx-auto max-w-[var(--grid-max)] px-6 pt-[120vh]">
           <p className="t-h3 text-[#F2EDE4]">No layouts are open right now.</p>
           <p className="t-body mt-3 text-[#F2EDE4]/90">
             Ask the head office what is coming — new layouts are released before
@@ -676,105 +433,53 @@ export default async function SiteHomePage() {
       ) : (
         <>
           {/* ── CHAPTER 5 · THE HALL ────────────────────────────────────────
-              The camera has come through the front door and out of the light
-              onto the threshold. This section is the establishing shot: the
-              camera holds the whole room with the staircase on axis, so the
-              copy is one line and gets out of the way. It is also where the
-              doorway lands the page, and where "Step inside" points.
-
-              At the foot of the frame, from md up: the hall's clerestory stands in the
-              upper left of this shot, and measured on its clean plate the
-              left column reads mean luma 105..190 (p90 243, the windows'
-              light) from y 0.25 to 0.5, and 51..67 below y 0.8, on the dim
-              wall under the sconces. */}
-          <section
-            id="establish"
-            className={`mx-auto grid max-w-[var(--grid-max)] scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
-            style={{ minHeight: vh(establish.from, establish.to) }}
-          >
-            <div className="col-span-12 wide:col-span-5 wide:max-w-[calc(518.4*var(--u))]">
-              {/* On a phone the copy stands at the foot of the frame, on the stair's shade; the phone's lens lifts the room above it (phoneFraming.ts). */}
-              <div
-            className={`sticky top-0 flex h-screen flex-col justify-end pb-[9vh] wide:pb-[8vh] ${PANE_CONTENT_INTERACTIVE}`}
-            data-chapter-fade
-          >
+              The camera has come through the front door onto the threshold,
+              and with the first scroll it moves off the axis to the
+              establishing shot: the whole room, the stair its axis, the
+              portrait small at the end of it. The hall's one statement is
+              read there, in the upper left of a wide frame, across the west
+              wall's dusk windows: this frame's sky, as the cover's title and
+              the orbit's line stand in theirs. It has gone before the camera
+              turns to the first table. It is also where "Step inside"
+              points. */}
+          <section id="establish" className="relative scroll-mt-[62px]" style={track(establish)}>
+            <div className={`${PANE} justify-end pb-[9vh]`} data-chapter-fade data-copy={copyOf(establish)}>
+              <div className={`${BLOCK} wide:top-[max(15vh,var(--clear))] wide:max-w-[calc(640*var(--u))]`}>
                 <p className="sr-only">Inside</p>
-                {/* Its first sentence alone on a phone on its side: all three,
-                    in that frame's narrow column, stood five lines high —
-                    from 59% of the frame, on the lit wall (p90 luma 107). And
-                    on a short measure there: on the column's full one its
-                    first line ran out onto the stair's pale stone ("its own"
-                    on 101 to 114). */}
-                <p className="t-h3 mt-6 text-[#F2EDE4] short:max-w-[14ch]">
-                  Each layout stands on its own table.
-                  <span className="short:sr-only">
-                    <br className="hidden sm:block" /> Turn one to read it from
-                    another side; open it to see every plot.
-                  </span>
+                <p className="t-d2 text-[#F2EDE4] short:max-w-[14ch]">
+                  Each layout stands
+                  <br className="hidden wide:block" /> on its <span className="t-gilt">own table.</span>
+                </p>
+                <p className="t-support mt-5 max-w-[34ch] text-[#F2EDE4] short:sr-only wide:mt-6">
+                  Turn one to read it from another side; open it to see every plot.
                 </p>
               </div>
             </div>
           </section>
 
           {/*
-            ── CHAPTERS 5..n · THE STATIONS ──────────────────────────────────
-
-            One section per lit table, in the order the camera visits them, each
-            sized to its chapter. The copy is STICKY, so it holds still in the
-            left half while the camera crosses the room behind it.
+            ── THE TABLES ────────────────────────────────────────────────────
+            One section per lit table, in the order the camera visits them,
+            each the same length. A table's name, where it is and what is
+            open come up beside it as the camera reaches it and stay for as
+            long as the camera dwells there; the last table has no dwell (the
+            camera withdraws from it toward the stair at once), and its name
+            leaves with the camera, as it always did.
 
             ON A FRAME THAT IS NOT WIDE (a phone, a tablet held upright) there
-            is no left half to hold it in: the frame shows the middle of the
-            landscape one, and the plan's pane begins at its centre line. Set
-            across the middle, as it was, the copy was set across the plan. So
-            there it stands in four short lines under the header, on the wall
-            above the plan, under the header's own band (lensFilter.ts,
-            tableBandFilter); it develops in place when the camera lands on the
-            table (ChapterFade, held), and it is held there for thirty
-            hundredths of a viewport longer than the section itself runs,
-            which is what the negative margin on its column is: room the next
-            table's copy has not yet come to. Not at the last table: the camera
-            does not dwell there, it withdraws to the stair, and copy held on
-            would caption a frame its plan had already left (seen at leg 0.57).
+            is no beside: the copy stands in short lines under the header, on
+            the wall above the model.
 
-            TEXT ONLY, BY CLIENT REVIEW. These were image cards - a boxed plan
-            with badges laid over the hall beside the hologram that already
-            shows that plan - and every overlay inside the mansion was asked to
-            go. The link stays: the canvas above is aria-hidden, so this name is
-            the only way a keyboard or screen-reader visitor reaches the project
-            from the hall.
+            TEXT ONLY, BY CLIENT REVIEW, and the link stays: the canvas above
+            is aria-hidden, so this name is the only way a keyboard or
+            screen-reader visitor reaches the project from the hall.
           */}
           {stationProjects.map((project: any, i: number) => {
             const c = at(`station-${i + 1}`);
-            // Held on past the section's end on a frame that is not wide (see
-            // above) — at every table the camera dwells at.
-            const last = i === stationProjects.length - 1;
-            const dwell = last ? '' : '-mb-[30vh]';
             return (
-              <section
-                key={project.projectId}
-                id={c.id}
-                className={`mx-auto grid max-w-[var(--grid-max)] scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
-                style={{ minHeight: vh(c.from, c.to) }}
-              >
-                {/* (A narrower measure on a phone on its side: its small type
-                    does not shrink with the frame, and at 932x430 a place
-                    line ran the whole measure, to the edge of the plan.) */}
-                <div className={`col-span-12 wide:col-span-6 wide:mb-0 wide:max-w-[calc(576*var(--u))] short:max-w-[calc(500*var(--u))] ${dwell}`}>
-                  <div
-            className={`sticky top-0 flex h-screen flex-col justify-start pt-20 wide:justify-center wide:pt-0 ${PANE_CONTENT_INTERACTIVE}`}
-            data-chapter-fade
-            data-fade-narrow="held"
-            // The last table's copy leaves with the camera (ChapterFade, OUT_ATTR).
-            data-fade-out={last ? '0.12' : undefined}
-          >
-                    {/* THE NAME, WHERE IT IS, WHAT IS OPEN — and nothing over
-                        them. Each table used to be numbered like a collection:
-                        Roman numerals in tracked capitals over a hairline of
-                        gilt, then the name. The refinement brief counted those
-                        among the frame's "decorative typographic gestures";
-                        the holdings chapter has already said how many tables
-                        there are. */}
+              <section key={project.projectId} id={c.id} className="relative scroll-mt-[62px]" style={track(c)}>
+                <div className={`${PANE} justify-start pt-20`} data-chapter-fade data-copy={copyOf(c)}>
+                  <div className={`${BLOCK} wide:top-[36vh] wide:max-w-[calc(560*var(--u))] short:max-w-[calc(500*var(--u))]`}>
                     <StationText project={project} />
                   </div>
                 </div>
@@ -782,35 +487,27 @@ export default async function SiteHomePage() {
             );
           })}
 
-          {/* ── FINAL CHAPTER · THE PORTRAIT ───────────────────────────────
+          {/* ── THE PORTRAIT ───────────────────────────────────────────────
               The camera leaves the last table, crosses to the central axis and
-              climbs the staircase to the portrait above the landing. Clicking
-              it in the scene opens About; this is the same destination, as a
-              link, for everyone who cannot click a painting. */}
-          <section
-            id="portrait"
-            className={`mx-auto grid max-w-[var(--grid-max)] scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
-            style={{ minHeight: held(portrait.from, portrait.to, 1) }}
-          >
-            <div className="col-span-12 wide:col-span-5 wide:max-w-[calc(518.4*var(--u))]">
-              {/* On a phone, below the portrait and its plate — never across the sitter — with the lens's front raised to make the room (phoneFraming.ts).
-                  IN PLACE there (ChapterFade, held): riding in from under the frame's foot it was readable before the grad that follows it had its ground (its eyebrow on a p90 luma of 104.9 at leg 0.67, a tenth short of the limit). */}
-              <div
-            className={`sticky top-0 flex h-screen flex-col justify-end pb-[8vh] wide:justify-center wide:pb-0 ${PANE_CONTENT_INTERACTIVE}`}
-            data-chapter-fade
-            data-fade-narrow="held"
-          >
+              climbs the court to the portrait in its niche above the landing.
+              Clicking it in the scene opens About; this is the same
+              destination, as a link, for everyone who cannot click a painting.
+
+              The copy stands on the upper wall beside the niche, a fifth of
+              the way down a wide frame, from the foot of the stair to the
+              landing; the lens's left edge is burnt in behind it for the
+              climb, when the attic's windows pass there (lensFilter.ts,
+              stationFilter). It outlasts its chapter by half a notch, while
+              the camera holds on the picture (`track`). */}
+          <section id="portrait" className="relative scroll-mt-[62px]" style={track(portrait)}>
+            <div className={`${PANE} justify-end pb-[8vh]`} data-chapter-fade data-copy={copyOf(portrait)}>
+              <div className={`${BLOCK} wide:top-[20vh] wide:max-w-[calc(430*var(--u))]`}>
                 <p className="sr-only">At the top of the stairs</p>
-                {/* A NARROW MEASURE from md up (the fourth critique's check:
-                    set on two lines, the second ran to the picture's frame
-                    and its last words stood in the picture light's spill on
-                    the wall, p90 122 to 169). Seventeen characters wraps it
-                    in four, on the dark panelling, with air before the
-                    frame. A phone keeps the full width of its own band. */}
-                <p className="t-h3 mt-6 text-[#F2EDE4] wide:max-w-[17ch] wide:[text-wrap:balance]">
-                  The name on the sanction letters has been the same for twenty years.
+                <p className="t-d3 text-[#F2EDE4]">
+                  The name on the sanction letters has been the same{' '}
+                  <span className="t-gilt">for&nbsp;twenty&nbsp;years.</span>
                 </p>
-                <p className="mt-8">
+                <p className="mt-7">
                   <Link href="/about" className="cta-quiet">
                     <span className="cta-quiet-label">Who we are</span>
                   </Link>
@@ -819,60 +516,33 @@ export default async function SiteHomePage() {
             </div>
           </section>
 
-          {/* ── CHAPTER 6 · THE MAP TABLE ─────────────────────────────────
+          {/* ── THE MAP TABLE ──────────────────────────────────────────────
               The camera comes off the portrait and down into the court of the
               stair, onto a walnut table with the two districts carved into
-              its top in plaster relief — the coast, the rivers in gilt, the
-              ghats inland — and a brass pin standing in the district of every
-              published layout, as long as its plots are many (MapTable.tsx).
-              The land the company sells, kept inside the house: the fourth
-              art-direction critique (2026-09-30) asked for exactly that, in
-              place of the abstract field out of doors this chapter used to
-              open onto ("keep the camera inside the architectural world").
+              its top (MapTable.tsx). The land the company sells, kept inside
+              the house.
 
               THIS LIST IS THE AUTHORITY, not the pins. The canvas is
               decorative and aria-hidden; a visitor with no WebGL, no pointer or
               no sight reaches every project from here, in the same order, with
-              the same numbers. The 3D enhances these links — it does not
-              replace them, and it never becomes the only way to a project. */}
-          {/* EXACTLY ITS CHAPTER'S HEIGHT, starting a viewport late, with the
-              film's end marked a viewport before its foot. The portrait section
-              above holds its pane a viewport past its beat (see held()), so this
-              one begins that much later; the marker is pulled up by the same
-              amount so it stays where the camera's journey ends (JOURNEY_END).
-              What is left after the marker is the viewport this pane needs to
-              leave — without it the project list would go at the very frame the
-              camera settles on the table, the one frame the list is for. */}
-          <section
-            id="city"
-            className={`relative mx-auto grid max-w-[var(--grid-max)] scroll-mt-[62px] grid-cols-12 px-6 ${TRACK_TRANSPARENT}`}
-            style={{ minHeight: vh(city.from, city.to) }}
-          >
+              the same numbers. */}
+          <section id="city" className="relative scroll-mt-[62px]" style={track(city)}>
             <div
               aria-hidden
               data-film-end={city.to}
               className="pointer-events-none absolute left-0 h-px w-px"
-              style={{ top: held(city.from, city.to, -1) }}
+              style={{ top: `${((city.to - city.from) * TRACK_VH).toFixed(2)}vh` }}
             />
-            {/* col-span-5 / 36vw, the same measure every other chapter uses,
-                so the list stands on the court's shaded stone and the table
-                holds the right of the frame, where its pins can be clicked. */}
-            <div className="col-span-12 wide:col-span-5 wide:max-w-[calc(518.4*var(--u))]">
-              {/* On a phone, above the table, on the landing's walnut; the lens's front falls to put the table under the list (phoneFraming.ts).
-                  IN PLACE (ChapterFade, held): the list used to ride up the frame to get there, across the table's lit relief (its note at 76% on a p90 luma of 211 at leg 0.96), and it is set a little tighter than on a wide frame, so its last line stands a tenth of the frame clear of the table (it stood one hundredth clear). */}
-              <div
-                className={`sticky top-0 flex h-screen flex-col justify-start pt-[max(5rem,10vh)] wide:justify-center wide:pt-0 ${PANE_CONTENT_INTERACTIVE}`}
-                data-chapter-fade
-                data-fade-narrow="held"
-              >
+            <div className={`${PANE} justify-start pt-[max(5rem,10vh)]`} data-chapter-fade data-copy={copyOf(city)}>
+              <div className={`${BLOCK} wide:top-[17vh] wide:max-w-[calc(500*var(--u))]`}>
                 <p className="sr-only">The land</p>
-                <p className="t-h3 mt-4 text-[#F2EDE4] wide:mt-6">
+                <p className="t-d3 text-[#F2EDE4]">
                   Two districts.
-                  <br className="hidden sm:block" /> Every layout we hold, and
-                  where it stands.
+                  <br className="hidden sm:block" /> Every layout we hold,{' '}
+                  <span className="t-gilt">and&nbsp;where&nbsp;it&nbsp;stands.</span>
                 </p>
 
-                <ul className="mt-6 space-y-4 max-md:space-y-3 wide:mt-8 wide:space-y-6">
+                <ul className="mt-6 space-y-4 max-md:space-y-3 wide:mt-9 wide:space-y-5">
                   {stationProjects.map((project: any) => (
                     <li key={project.projectId}>
                       {/* Focus or hover this and the project's pin lifts on the
@@ -891,12 +561,10 @@ export default async function SiteHomePage() {
                   ))}
                 </ul>
 
-                {/* One sentence (it ran four lines of small type). It keeps
-                    BOTH of its claims: that the table is a model, and that a
-                    pin is a district and not a site — no published project
-                    has a centroid, and the page has to say so in words (the
-                    E2E suite holds it to that; the type pass of 2026-10-03
-                    cut the second half and the suite caught it). */}
+                {/* One sentence. It keeps BOTH of its claims: that the table is
+                    a model, and that a pin is a district and not a site — no
+                    published project has a centroid, and the page has to say
+                    so in words (the E2E suite holds it to that). */}
                 <p className="t-small mt-6 text-[#F2EDE4] short:sr-only max-md:mt-4 wide:mt-8 wide:max-w-[36ch]">
                   A model of the two districts, not a survey: a pin marks a
                   district, not a place on the ground.
@@ -905,19 +573,19 @@ export default async function SiteHomePage() {
             </div>
           </section>
 
-          {/* The camera's last beat lands here and is allowed to hold. No copy
-              at all for a third of a viewport: the table is lit, the sequence
-              is over, and the frame is the only thing on screen before the
-              house lights go down and the footer arrives over it. */}
-          <div aria-hidden className="min-h-[34vh]" />
+          {/* The camera's last beat holds here. No copy at all for a third of a
+              viewport: the table is lit, the sequence is over, and the frame is
+              the only thing on screen before the house lights go down and the
+              colophon arrives over it. */}
+          <div aria-hidden className="min-h-[134vh]" />
 
           {/* Sold-out layouts sit AFTER the journey rather than inside it. They
               have no table in the hall — an unlit plinth is the honest 3D
               equivalent — but they are real projects and a buyer checking a
               developer's history should be able to see them. */}
           {soldOutProjects.length > 0 && (
-            <section className="pointer-events-auto mx-auto grid max-w-[var(--grid-max)] grid-cols-12 px-6 pt-[14vh]">
-              <div className="col-span-12 md:col-span-6 md:max-w-[40vw]">
+            <section className="pointer-events-auto relative px-[var(--edge)] pt-[14vh]">
+              <div className="max-w-[40rem]">
                 <div className="mb-10 flex items-baseline gap-6">
                   <h2 className="t-eyebrow text-[#F2EDE4]">Sold out</h2>
                   <hr className="rule-hair flex-1" />

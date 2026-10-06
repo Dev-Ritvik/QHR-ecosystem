@@ -33,13 +33,13 @@ export function StationText({ project, numeral }: { project: Project; numeral?: 
       href={`/projects/${project.slug}`}
       className="tap-target group block outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-[#E8B98A]"
     >
-      <h3 className="t-station text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A] group-focus-visible:text-[#E8B98A]">
+      <h3 className="t-d2 text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A] group-focus-visible:text-[#E8B98A]">
         {project.name}
       </h3>
       {/* Full ivory (it was 90%): at the second table, which stands against
           the ivory wall, the place measured 4.23:1 on a phone held sideways
           once the hall's lamps led its light (2026-10-04). */}
-      {place ? <p className="t-body mt-1 text-[#F2EDE4] wide:mt-4">{place}</p> : null}
+      {place ? <p className="t-support mt-2 text-[#F2EDE4] wide:mt-5">{place}</p> : null}
       {/* The numeral follows the count, a gap on: set out at the line's far
           end it stood directly over the first plan's own "Open" marker on a
           phone's short frame (seen at 390x664, ten pixels apart).
@@ -50,7 +50,7 @@ export function StationText({ project, numeral }: { project: Project; numeral?: 
           place: with the refinement brief (2026-10-03, "tiny uppercase labels
           ... micro-metadata") it is a line of the same small text as any
           other, read as a sentence. */}
-      <p className="t-small mt-2 flex items-baseline gap-8 text-[#F2EDE4] [font-variant-numeric:tabular-nums] wide:mt-3 wide:block">
+      <p className="t-body mt-1 flex items-baseline gap-8 text-[#F2EDE4] [font-variant-numeric:tabular-nums] wide:mt-2 wide:block">
         <span>
           {project.isSoldOut
             ? 'Fully sold'

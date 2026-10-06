@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { CODA_AIM, CODA_CAMERA, CODA_SCROLL, HALL_AIM_OFFSET, codaEase, codaPose, codaProgress } from './codaFrame';
 import { buildInteriorBeats } from './interiorPath';
-import { HEADER_BAND } from './lensFilter';
+import { CODA_FADE, HEADER_BAND } from './lensFilter';
 import { MAP_TABLE, MAP_TOP } from './mapTablePlan';
 import {
   PHONE_CODA,
@@ -186,6 +186,26 @@ describe('the last frame on a wide frame', () => {
       // clear by more than the lens's reach (CODA_FADE.reach): it stays lit
       expect(c.linksTop - rim.b, size).toBeGreaterThan(0.04);
     }
+  });
+
+  it("holds the sign-off under the table, clear of its foot by more than the lens's reach", () => {
+    // The sign-off is the largest type on the site since the audit of
+    // 2026-10-05, and its first line reaches under the table on every wide
+    // frame (three-fifths of the way across at 1920x945, three-quarters at
+    // 1440x900): beside the table is no longer a place it can stand.
+    const footer = readFileSync(join(__dirname, '../site/SiteFooter.tsx'), 'utf8').replace(/\r\n/g, '\n');
+    const pin = /data-hold data-reveal className="t-end text-\[#F2EDE4\] held:sticky held:top-\[(\d+)vh\]"/.exec(footer)!;
+    const top = Number(pin[1]) / 100;
+    // The words' own box begins above the line's (measured at 1920x945: 13px
+    // of a 134px line): a fiftieth of the frame.
+    const ascent = 0.02;
+    for (const size of Object.keys(COLOPHON_END)) {
+      const [w, h] = size.split('x').map(Number);
+      const rim = onScreen(cameraAt(1, w, h), MAP_TABLE.radius);
+      expect(top - ascent - rim.b, size).toBeGreaterThan(CODA_FADE.reach + 0.01);
+    }
+    // and its two lines end inside the frame: 128 units a line on a frame 900 tall
+    expect(top + (2 * 128) / 900 + ascent).toBeLessThan(0.95);
   });
 
   it("with its lit relief below the header's band", () => {

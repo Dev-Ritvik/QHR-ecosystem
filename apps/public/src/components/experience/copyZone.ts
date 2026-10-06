@@ -34,8 +34,17 @@ export interface ScreenBox {
  * the line's box, which for a link is a 44 px row for the thumb and for the
  * sign-off's call to action the width of the grid. The lens asks whether any
  * of them is coming to stand on the lit map table (lensFilter.codaFilter).
+ *
+ * `remaining` is how much further the page can still scroll, in frames: a
+ * line of the colophon rises by exactly that much and no more, so a line that
+ * is under the table with less than its distance left to go will never stand
+ * on it (lensFilter.colophonCover). Infinity until the page has said.
  */
-export const copyZone: { panes: CopyPane[]; lines: ScreenBox[] } = { panes: [], lines: [] };
+export const copyZone: { panes: CopyPane[]; lines: ScreenBox[]; remaining: number } = {
+  panes: [],
+  lines: [],
+  remaining: Infinity,
+};
 
 /**
  * WHICH WAY THE COPY IS LAID OUT.

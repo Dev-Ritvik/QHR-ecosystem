@@ -276,6 +276,34 @@ export const DOORWAY = {
   doorPlaneZ: 8.25,
 } as const;
 
+/**
+ * THE DOOR STANDS OPEN BEFORE ANYONE WALKS THROUGH IT (the audit of 2026-10-05,
+ * P1: "'The door is open.' appears while the door is visibly shut; it opens
+ * only after the text has faded. Done when the door opens while the line is on
+ * screen").
+ *
+ * The leaves used to part as the first act of the passage, and the passage
+ * takes the copy off the picture as it begins (globals.css): the line said
+ * the door was open over a shut door, and the door opened once the line had
+ * gone. Now the leaves answer to the scroll over the last of the approach:
+ * they begin to swing as the camera comes onto the door's axis — its line is
+ * already up (journey.ts, COPY_SPAN) — and stand open, onto the lit hall
+ * behind them (HallPortal), before the camera is square on the door, with the
+ * line still on the picture. Scrolling back closes them. The passage then
+ * starts from an open door and only has to walk through it.
+ *
+ * The camera does not stop for it (the client, 2026-10-06: the path is the
+ * continuous one): `from` and `to` are places on the exterior leg, where the
+ * camera turns onto the axis and where it has all but arrived.
+ */
+export const DOOR_AJAR = { from: 0.92, to: 0.985 } as const;
+
+/** How far the leaves stand open, 0..1, at this place on the exterior leg. */
+export function doorAjar(legProgress: number): number {
+  const t = clamp01((legProgress - DOOR_AJAR.from) / (DOOR_AJAR.to - DOOR_AJAR.from));
+  return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
 /** The layer that covers the swap. The vestibule's own near-black, a breath
  *  warm, so a frame that shows it and a frame of the render's dark doorway are
  *  the same frame. */
@@ -605,6 +633,13 @@ export interface DoorwayState {
   lastInput: number;
   /** A passage asked for by a control rather than by a crossing. */
   request: DoorwayDirection | null;
+  /** 0..1 how far the leaves stand open by the scroll at the door's rest
+   *  (doorAjar). Written by the journey's driver while the page is outside;
+   *  it keeps its last value while the page is inside. */
+  ajar: number;
+  /** The hall can be drawn through the doorway now: it has loaded, and this
+   *  machine can draw it twice (the host's canGoThrough). */
+  throughOk: boolean;
 }
 
 export const doorwayState: DoorwayState = {
@@ -631,6 +666,8 @@ export const doorwayState: DoorwayState = {
   lastProgress: -1,
   lastInput: -Infinity,
   request: null,
+  ajar: 0,
+  throughOk: false,
 };
 
 let host: DoorwayHost | null = null;
@@ -706,6 +743,8 @@ export function stepDoorway(now: number): void {
   const st = doorwayState;
   const h = host;
   if (!h) return;
+
+  st.throughOk = st.hallReady && h.canGoThrough?.() === true;
 
   if (st.mode === 'idle') {
     const s = h.progress();
@@ -831,6 +870,7 @@ export function cancelDoorway() {
   st.request = null;
   st.snap = false;
   st.lastProgress = -1;
+  st.ajar = 0;
 }
 
 /**

@@ -397,7 +397,10 @@ export function ExteriorDoorway({ root }: { root: THREE.Object3D | null }) {
     const r = rig.current;
     if (!r) return;
     const c = doorwayState.channels;
-    const swing = c.exteriorDoors * DOORWAY.leafSwing;
+    // As far as the passage has them, or as far as the scroll has left them
+    // standing at the door's rest (doorway.ts, DOOR_AJAR): the wider.
+    const open = Math.max(c.exteriorDoors, doorwayState.ajar);
+    const swing = open * DOORWAY.leafSwing;
     // Left leaf hinged at -x swings its free edge toward -z with a positive
     // turn about +y; the right leaf mirrors it.
     if (r.left.rotation.y !== swing) {
@@ -419,7 +422,7 @@ export function ExteriorDoorway({ root }: { root: THREE.Object3D | null }) {
     // passage), or the vestibule's dark.
     const through = portalWanted();
     r.portal.visible = through;
-    r.vestibule.visible = !through && (c.vestibule > 0.5 || c.exteriorDoors > 0.001);
+    r.vestibule.visible = !through && (c.vestibule > 0.5 || open > 0.001);
   });
 
   return null;

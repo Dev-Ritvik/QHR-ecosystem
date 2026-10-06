@@ -50,8 +50,21 @@
    second face. Capitals are the smallest step at weight 500, tracked open;
    reading text is 400; figures are the largest step at 300.
    --------------------------------------------------------------------------- */
+/* THE AMPERSAND, IN ITS STANDARD FORM (the audit of 2026-10-05, P3: "the '&'
+   in 'Privacy & data choices' is a decorative italic that matches nothing
+   else. Use the standard form"). Playfair draws its roman ampersand as the
+   italic one, a flourish; beside tracked capitals it reads as a second face.
+   This is a face of ONE character — the ampersand of the reader's own book
+   serif — set first in the stack, so every '&' the site prints takes the
+   plain form and nothing else changes. Where none of these is installed the
+   character falls through to Playfair, as before. */
+@font-face {
+  font-family: 'Estate Ampersand';
+  src: local('Georgia'), local('Times New Roman'), local('Noto Serif'), local('Liberation Serif'), local('DejaVu Serif');
+  unicode-range: U+0026;
+}
 :root {
-  --font-text: var(--font-serif), 'Playfair Display', Georgia, serif;
+  --font-text: 'Estate Ampersand', var(--font-serif), 'Playfair Display', Georgia, serif;
 
   --step--2: clamp(0.6400rem, 0.6547rem + -0.0164vw, 0.6510rem); /* 10.42 -> 10.24px */
   --step--1: clamp(0.7812rem, 0.7750rem + 0.0278vw, 0.8000rem);  /* 12.50 -> 12.80px */
@@ -73,6 +86,19 @@
   --u: 1px;
   --grid-max: 72rem;
   --bar: 62px;
+
+  /* THE FILM'S DISPLAY TYPE and the frame's edge, where the film is not on its
+     stage (a phone, a tablet held upright): see THE FILM'S DISPLAY TYPE. */
+  --d1: clamp(2.375rem, 10.4vw, 3.5rem);
+  --d2: clamp(2rem, 8.6vw, 2.875rem);
+  --d3: clamp(1.625rem, 6.9vw, 2.25rem);
+  /* (The figures a step under the sign-off, at every width: "'The land is
+     best seen from the land.' is the largest type on the site" — the audit
+     of 2026-10-05, P1.) */
+  --fig: clamp(2.5rem, 11.6vw, 4rem);
+  --end: clamp(2.75rem, 12.4vw, 4.25rem);
+  --support: var(--step-1);
+  --edge: 1.5rem;
 
   /* Tracking tightens as size grows; capitals open wide. */
   --track-display: -0.018em;
@@ -187,12 +213,38 @@
     --bl: max(0.15625rem, calc(4 * var(--u)));
     --grid-max: calc(1152 * var(--u));
     --bar: max(2.75rem, calc(62 * var(--u)));
+    /* THE HIGHEST A LINE OF COPY MAY STAND: clear of the header and of the
+       band under it that a line dissolves across (ChapterFade: 14/62 of the
+       bar). A title set in the sky is placed by the frame's height, and on a
+       phone on its side a tenth of that height is under the header, whose
+       bar has a floor: the cover's title and the orbit's line stood at
+       nothing there. Each takes the lower of its own place and this. */
+    --clear: calc(var(--bar) * 1.26);
+
+    /* THE FRAME'S EDGE (the audit of 2026-10-05, P1: "all text and nav sit
+       inside a narrow centered column (about 1,080 px wide on a ~1,900 px
+       screen)"). The film's copy and its header stood on a grid 1,152 units
+       wide, centred: on a 16:9 frame a fifth of the picture's width lay
+       outside it on either side, and the mark, the controls and every line
+       of copy were drawn in from the frame's edges toward the middle of the
+       picture, where the subject is. They stand off the frame's own edge
+       now, by this margin: the mark in the corner, the controls in the
+       other, and each chapter's block where its resting frame is quiet. */
+    --edge: max(calc(var(--bl) * 9), 5.2vw);
+
+    /* The display steps, in the frame's unit like everything on the stage. */
+    --d1: max(2.5rem, calc(86 * var(--u)));
+    --d2: max(2rem, calc(60 * var(--u)));
+    --d3: max(1.5rem, calc(42 * var(--u)));
+    --fig: max(3.25rem, calc(116 * var(--u)));
+    --end: max(3.5rem, calc(128 * var(--u)));
+    --support: max(1.0625rem, calc(22 * var(--u)));
   }
-  /* The cover's phrase is ivory over a wide frame's sky (site-home, the
-     cover): gilt at this size wants a ground under a luma of 107, and the
-     sky under a light grad is brighter than that. */
-  .film-stage #hero .t-display-em {
-    color: inherit;
+  /* On the stage the header's grid and the menu's are the frame's width, not
+     the old column's. */
+  .film-stage .site-grid {
+    max-width: none;
+    padding-inline: var(--edge);
   }
 }
 /* A PHONE ON ITS SIDE (copyZone.ts, SHORT_QUERY). A frame 390 pixels tall is
@@ -215,12 +267,102 @@
        sky now, and at 24px it is large text, which a sky can carry.) */
     --step-5: max(1.5rem, calc(48.83 * var(--u)));
     --step-6: max(1.5rem, calc(61.04 * var(--u)));
+
+    --d1: max(1.75rem, calc(86 * var(--u)));
+    --d2: max(1.5rem, calc(60 * var(--u)));
+    --d3: max(1.25rem, calc(42 * var(--u)));
+    --fig: max(2.25rem, calc(116 * var(--u)));
+    --end: max(2.5rem, calc(128 * var(--u)));
+    --support: max(0.9375rem, calc(22 * var(--u)));
   }
-  /* And no gilt in a headline there: at 18 to 21px it is small text, and
-     small gilt needs darker ground than a headline is given. */
-  .film-stage .t-display-em {
+  /* And no gilt in the smallest of the display lines there: at 20px it is
+     small text, and small gilt needs darker ground than a headline is given.
+     (The two larger steps are 24px and over: large text, as on every frame.) */
+  .film-stage .t-d3 .t-gilt {
     color: inherit;
   }
+}
+
+/* THE SCROLLBAR (the audit of 2026-10-05, P1: "the grey Windows scrollbar
+   with arrow buttons is visible over the scene at all times. Hide it or style
+   it as part of the brand").
+
+   ON THE FILM IT IS HIDDEN. The film is a picture from edge to edge, and the
+   system's bar was a grey column down its right side with two arrow buttons
+   on it; it also took its seventeen pixels back out of the frame the moment
+   the curtain lifted (the curtain locks the scroll, and a locked page has no
+   bar), so the picture's first act was to shrink. The wheel, the keys, a
+   finger and every link still scroll it.
+
+   ON A READING PAGE IT IS THE HOUSE'S: a slim track of the page's own ground
+   and a gilt hairline for the thumb, no arrows. A page of text is found by
+   its bar, so it keeps one.
+
+   `:has()` and the standard properties where the browser has them; the
+   prefixed pseudo-elements for Chromium and Safari, which (unlike the
+   standard `scrollbar-width: thin` on Windows) draw no arrow buttons. */
+html {
+  scrollbar-color: rgba(232, 185, 138, 0.42) #0a1120;
+}
+html::-webkit-scrollbar,
+body *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html::-webkit-scrollbar-track,
+body *::-webkit-scrollbar-track {
+  background: #0a1120;
+}
+html::-webkit-scrollbar-thumb,
+body *::-webkit-scrollbar-thumb {
+  /* a 2px hairline in a 10px track: the border is the track's own colour */
+  background: rgba(232, 185, 138, 0.5);
+  border: 4px solid #0a1120;
+  border-block-width: 0;
+}
+html::-webkit-scrollbar-thumb:hover,
+body *::-webkit-scrollbar-thumb:hover {
+  background: #e8b98a;
+}
+html::-webkit-scrollbar-button,
+body *::-webkit-scrollbar-button {
+  display: none;
+}
+html::-webkit-scrollbar-corner,
+body *::-webkit-scrollbar-corner {
+  background: #0a1120;
+}
+@supports selector(::-webkit-scrollbar) {
+  /* Chromium takes the standard property over the pseudo-elements when both
+     are set, and its standard bar on Windows has the arrows. */
+  html {
+    scrollbar-color: auto;
+  }
+}
+html:has(main.film-stage) {
+  scrollbar-width: none;
+}
+html:has(main.film-stage)::-webkit-scrollbar {
+  display: none;
+  width: 0;
+}
+
+/* THE CONSENT PANEL'S GROUND (components/consent/ConsentPanel.tsx). The
+   reading pages' navy, and on the film the curtain's own umber
+   (coverState.ts, COVER_GROUND): the panel is up while the film loads, and a
+   navy card on a navy-black scrim was most of what made the loading screen
+   read "cool navy" before a warm picture (the audit of 2026-10-05, P3). */
+.consent-scrim {
+  background: rgba(10, 10, 10, 0.6);
+}
+.consent-card {
+  background: rgba(10, 17, 32, 0.95);
+}
+html:has(main.film-stage) .consent-scrim {
+  background: rgba(21, 17, 12, 0.6);
+}
+html:has(main.film-stage) .consent-card {
+  background: rgba(29, 24, 18, 0.96);
 }
 
 /* The one family, everywhere the site draws text: set on <body> and inherited,
@@ -278,6 +420,177 @@ body {
   letter-spacing: var(--track-heading);
   font-weight: 400;
 }
+/* THE FILM'S DISPLAY TYPE.
+   ---------------------------------------------------------------------------
+
+   The audit of 2026-10-05 (P1): "headlines are about 44 px on a ~1,900 px
+   screen in a serif built for body text ... Done when: each chapter has one
+   clearly dominant line, set in a serif with display-quality refinement at
+   large sizes. Keep the white-and-gold two-line headline style and old-style
+   numerals."
+
+   It read the face correctly, and the face was not the fault. Playfair draws
+   itself for the size it is set at (its optical-size axis runs from 5 to
+   1,200 points), and at 44px that is still a text cut: sturdy hairlines, open
+   counters, the letters of a paragraph made large. The same face at twice the
+   size and well up its optical axis is another drawing: the hairlines go to a
+   thread, the contrast to a Didone's, and the old-style figures stand like
+   engraved numerals. So the film's dominant lines are set in THAT drawing —
+   the same family, the identity the audit asks to keep, in its display cut —
+   and at sizes that make each one the frame's title rather than a caption on
+   it:
+
+       d1    86u   the cover's title; the orbit's line
+       d2    60u   the door's line, the hall's, a table's name
+       d3    42u   a statement that runs to three lines
+       fig  116u   a figure
+       end  128u   the film's last line: the largest type on the site
+
+   (u is a nine-hundredth of the frame's height on the film's stage: on a
+   1,920 px monitor d1 is 90 px; on a phone the steps follow its width.)
+
+   `opsz` is given, not left to the browser: left alone it is the font size in
+   pixels, which on a laptop is 70 — the text end of the axis again. Weight
+   stays 400 but for the figures, which are the face's light cut as numerals
+   on a title page are. Two colours, one voice: ivory, and the house's gilt on
+   the phrase the line turns on (.t-gilt). */
+.t-d1,
+.t-d2,
+.t-d3,
+.t-end {
+  font-family: var(--font-text);
+  font-weight: 400;
+  font-variation-settings: 'opsz' 150;
+  letter-spacing: -0.022em;
+  text-rendering: optimizeLegibility;
+  text-wrap: balance;
+}
+.t-d1 {
+  font-size: var(--d1);
+  line-height: 1.04;
+  line-height: round(nearest, calc(var(--d1) * 1.04), var(--bl));
+}
+.t-d2 {
+  font-size: var(--d2);
+  line-height: 1.08;
+  line-height: round(nearest, calc(var(--d2) * 1.08), var(--bl));
+}
+.t-d3 {
+  font-size: var(--d3);
+  line-height: 1.16;
+  line-height: round(nearest, calc(var(--d3) * 1.16), var(--bl));
+  letter-spacing: -0.016em;
+  font-variation-settings: 'opsz' 110;
+}
+.t-end {
+  font-size: var(--end);
+  line-height: 1;
+  line-height: round(nearest, var(--end), var(--bl));
+  letter-spacing: -0.026em;
+  font-variation-settings: 'opsz' 190;
+}
+/* The gilt of a display line: the house's metal a shade paler than the small
+   gilt of the controls (#e8b98a). A line this size has to hold 3:1 on a sky
+   or a lawn, and at the controls' tone it does so only on a ground under a
+   luma of 108; at this one, under 121 — the upper sky under the lens's grad
+   and the land in shade both are. */
+.t-gilt {
+  color: #f1d0a6;
+}
+/* A figure: the display's largest step in the face's light cut, with the
+   old-style numerals Playfair draws — figures that rise and fall like
+   lower-case letters, the way a title page sets a date. */
+.t-fig {
+  font-family: var(--font-text);
+  font-size: var(--fig);
+  line-height: 0.92;
+  font-weight: 300;
+  font-variation-settings: 'opsz' 200;
+  letter-spacing: -0.012em;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  font-feature-settings: 'onum' 1, 'pnum' 1;
+}
+/* The line under a display line: its gloss, in the text's own voice a step
+   up, on a short measure. */
+.t-support {
+  font-family: var(--font-text);
+  font-size: var(--support);
+  line-height: 1.45;
+  line-height: round(nearest, calc(var(--support) * 1.45), var(--bl));
+  font-weight: 400;
+  text-wrap: pretty;
+}
+
+/* A layout's name in the map table's index: a line of the list, large enough
+   to be read down as a list is. */
+.t-index {
+  font-family: var(--font-text);
+  font-size: max(1.1875rem, calc(28 * var(--u)));
+  line-height: 1.2;
+  line-height: round(nearest, calc(max(1.1875rem, calc(28 * var(--u))) * 1.2), var(--bl));
+  letter-spacing: var(--track-heading);
+  font-weight: 400;
+}
+
+/* THE COVER'S ONE CUE (StartCue.tsx): the words that start the film, and the
+   bar falling down a hairline that leads into them. */
+.start-cue {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--bl) * 4);
+  min-height: calc(var(--bl) * 11);
+  color: #f2ede4;
+  font-family: var(--font-text);
+  font-size: var(--step--2);
+  font-weight: 500;
+  line-height: calc(var(--bl) * 4);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: color 0.35s ease;
+}
+.start-cue::after {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto 0;
+  height: 100%;
+  min-height: 44px;
+  transform: translateY(-50%);
+}
+.start-cue-line {
+  position: relative;
+  display: block;
+  width: 1px;
+  height: calc(var(--bl) * 11);
+  overflow: hidden;
+  background: rgba(242, 237, 228, 0.22);
+}
+.start-cue-line i {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 42%;
+  background: #e8b98a;
+  animation: scrollcue 2.4s ease-in-out infinite;
+}
+.start-cue:focus-visible {
+  outline: 1px solid #e8b98a;
+  outline-offset: 6px;
+  color: #e8b98a;
+}
+@media (hover: hover) {
+  .start-cue:hover {
+    color: #e8b98a;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .start-cue-line i {
+    animation: none;
+    height: 100%;
+    background: rgba(232, 185, 138, 0.75);
+  }
+}
+
 /* A chapter that cannot be seen cannot be clicked (ChapterFade, FADED_ATTR):
    the pane's copy is given the pointer by a utility of one class, a level or
    two down, and this outranks it. The links stay in the tab order. */
@@ -765,6 +1078,14 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   min-height: calc(var(--bl) * 11);
   color: rgba(242, 237, 228, 0.82);
 }
+/* OVER THE FILM A QUIET LINK IS THE TEXT'S OWN IVORY. Its eighteen parts in a
+   hundred of transparency are for a page's flat ground; on a picture they
+   are eighteen parts of whatever is behind it, and the portrait's "Who we
+   are" stood on the hall's wall at 4.1 to 4.3:1 (measured, 1920x945 and
+   844x390, on the evening's bake). Quiet by its size and its place. */
+.film-stage .cta-quiet {
+  color: #f2ede4;
+}
 .cta-quiet:hover,
 .cta-quiet:focus-visible {
   color: #e8b98a;
@@ -832,8 +1153,14 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
 }
 
 /* THE FILM'S MENU CONTROL (SiteHeader). The word, set as the masthead sets
-   its links, and two hairlines of unequal length that close into a cross when
-   the panel is open. No box, no icon font: the same vocabulary as Enquire. */
+   its links, and two hairlines that close into a cross when the panel is
+   open. No box, no icon font: the same vocabulary as Enquire.
+
+   TWO EQUAL LINES (the audit of 2026-10-05, P3: "check the two hamburger
+   lines are optically balanced"). The lower was 62% of the upper, ranged
+   right, and grew to meet it on hover: at rest the mark leaned, and beside a
+   word in capitals it read as a line that had not finished drawing. They are
+   the same length now, and the pair is centred on the capitals' height. */
 .menu-toggle {
   display: inline-flex;
   align-items: center;
@@ -878,9 +1205,6 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
 }
 .menu-toggle-lines i:last-child {
   top: 100%;
-  width: 62%;
-}
-.menu-toggle:hover .menu-toggle-lines i:last-child {
   width: 100%;
 }
 .menu-toggle-lines.is-open i {
@@ -998,31 +1322,26 @@ html[data-menu-open] [data-film] {
   outline: 2px solid #e8b98a;
   outline-offset: 4px;
 }
-.sound-bars {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: max(2px, calc(2 * var(--u)));
-  height: max(10px, calc(12 * var(--u)));
-}
-.sound-bars i {
+/* The loudspeaker (AmbientSound.tsx): its waves when the sound is on, a
+   cross in their place when it is off. Still — the header has no moving part. */
+.sound-glyph {
   display: block;
-  width: 1px;
-  height: 34%;
-  background: currentColor;
-  transition: height 0.4s ease;
+  width: max(20px, calc(22 * var(--u)));
+  height: auto;
+  overflow: visible;
 }
-.sound-bars.is-on i {
-  animation: soundbar 1.6s ease-in-out infinite;
+.sound-glyph .sound-wave,
+.sound-glyph .sound-mute {
+  transition: opacity 0.3s ease;
 }
-.sound-bars.is-on i:nth-child(2) { animation-delay: -0.4s; }
-.sound-bars.is-on i:nth-child(3) { animation-delay: -0.9s; }
-.sound-bars.is-on i:nth-child(4) { animation-delay: -1.2s; }
-@keyframes soundbar {
-  0%, 100% { height: 25%; }
-  50% { height: 100%; }
+.sound-glyph .sound-wave {
+  opacity: 0;
 }
-@media (prefers-reduced-motion: reduce) {
-  .sound-bars.is-on i { animation: none; height: 66%; }
+.sound-glyph.is-on .sound-wave {
+  opacity: 1;
+}
+.sound-glyph.is-on .sound-mute {
+  opacity: 0;
 }
 .sound-toggle { transition: color 0.3s ease, opacity 0.4s ease; }
 .sound-toggle.is-tucked { opacity: 0; pointer-events: none; }

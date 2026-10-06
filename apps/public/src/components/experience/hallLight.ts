@@ -80,6 +80,29 @@ export const HALL_DOWN: Readonly<Record<string, number>> = {
   map: 0.07,
 };
 /**
+ * THE COURT'S FLOOR THROUGH THE CODA. Past the film's end the house lights go
+ * down round the map table (InteriorStage) — to this share of the map's own
+ * level, and not to nothing. They went to a tenth of it, and the audit of
+ * 2026-10-05 (P1) saw what that left: "the hall dims to black and the round
+ * table floats in empty space with no floor. Done when the table stays
+ * grounded on its floor as the lights go down, lit by one remaining source."
+ * The table's lamp is that source; at this level the stone it stands on is
+ * still there to stand on.
+ *
+ * AND NO BRIGHTER THAN THAT (the client, 2026-10-06, with two pictures: "make
+ * this dark like this"). When the lit room came back, this share was set at
+ * 0.45 of it, and the last frame was a grey marble court with the stair
+ * beside it and the colophon lying across both. His picture of how it should
+ * be was that audit's own ending: the room gone, the table lit, the floor
+ * only just there. Measured on its last frame at 1920x945: a median luma of
+ * 4.0, the brightest tenth from 13, the floor right of the table 7.9. Dialled
+ * on the running build (`window.__estateHall.level`): 0.45 gave 12.6, 38.5
+ * and 18.3; 0.20 gives 3.9, 16.9 and 8.4; 0.15 gives 2.1, 12.0 and 6.9. So
+ * 0.18. (A tenth, where it stood before either, is 1.1, 7.0 and 5.3: the
+ * table afloat.)
+ */
+export const HALL_CODA = 0.18;
+/**
  * THE WALK TO THE FIRST TABLE, with no copy up. It was made at HALL_DIM — the
  * key was simply "down at the turn" — and a room at a twentieth of its light
  * with nothing to read in it is not a gallery, it is a house with the power

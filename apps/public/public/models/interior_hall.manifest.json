@@ -1,10 +1,11 @@
 {
   "model": "interior_hall.glb",
-  "size_mb": 25.26,
+  "size_mb": 25.88,
   "loaders_required": {
     "KTX2Loader": "all 37 textures are KTX2/Basis (KHR_texture_basisu is in extensionsRequired). setTranscoderPath('/basis/') and detectSupport(renderer) before loading; the transcoder is served from apps/public/public/basis/.",
     "DRACOLoader": "geometry is Draco compressed. setDecoderPath('/draco/'); the decoder is served from apps/public/public/draco/."
   },
+  "portrait_note": "2026-10-06: the founder's portrait is the studio retouch of 2026-10-05 (tools/gltf/make_founder_portrait.py; the client: 'this photo is fine dont touch it'), carried into this file by its bytes alone. Everything else in it, the lightmap included, is the file of 2026-10-04: the client asked for the rooms as bright as they were.",
   "lightmap": {
     "slot": "occlusionTexture",
     "uv": "TEXCOORD_1",

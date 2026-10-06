@@ -67,10 +67,14 @@ export const hallPortal = {
  */
 export function portalWanted(): boolean {
   const st = doorwayState;
+  // Through the continuous passage; and before it, for as long as the leaves
+  // stand open at the door's rest (doorway.ts, DOOR_AJAR) — the room is what
+  // an open door shows. (The passage's first frame counts by the door being
+  // open already: its own channel is still at nothing on that one.)
+  const passage = st.mode === 'running' && st.style === 'through' && (st.channels.portal > 0.5 || st.ajar > 0.001);
+  const ajar = st.mode === 'idle' && st.ajar > 0.001 && st.throughOk;
   return (
-    st.mode === 'running' &&
-    st.style === 'through' &&
-    st.channels.portal > 0.5 &&
+    (passage || ajar) &&
     st.sceneLeg === 'exterior' &&
     hallPortal.draw !== null &&
     hallPortal.wrapper !== null &&

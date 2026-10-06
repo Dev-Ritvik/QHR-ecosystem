@@ -32,7 +32,7 @@ const config: Config = {
       // own stack — ui-serif, Georgia — so every inner page that asked for it
       // set its headings in Georgia rather than the site's face.
       fontFamily: {
-        serif: ['var(--font-serif)', 'Playfair Display', 'Georgia', 'serif'],
+        serif: ['Estate Ampersand', 'var(--font-serif)', 'Playfair Display', 'Georgia', 'serif'],
       },
       spacing: Object.fromEntries(SPACING_STEPS.map((n) => [String(n), baselines(n)])),
       lineHeight: Object.fromEntries(LEADING_STEPS.map((n) => [String(n), baselines(n)])),
@@ -68,12 +68,33 @@ const config: Config = {
     // `short:` is a wide frame no taller than 520px — a phone on its side —
     // where a chapter keeps its headings and lets its glosses go (copyZone.ts,
     // SHORT_QUERY; such a frame is wide whatever its width).
+    //
+    // `panoramic:` is a frame at least twice as wide as it is tall: a phone on
+    // its side, a laptop's window under a tall browser bar, an ultrawide
+    // monitor. The camera's field is set by the frame's height, so such a
+    // frame sees further to either side of every composition than the 16:10
+    // it was composed on — and a block set off the left edge stands on
+    // picture the design's frame does not have. Declared last: where it
+    // speaks it overrides the two above.
     plugin(({ addVariant }) => {
       addVariant(
         'wide',
         '@media (min-width: 768px) and (orientation: landscape), (max-height: 520px) and (orientation: landscape)',
       );
       addVariant('short', '@media (max-height: 520px) and (orientation: landscape)');
+      addVariant('panoramic', '@media (min-aspect-ratio: 2/1)');
+      // `held:` is every frame on which the colophon's sign-off is HELD under
+      // the map table (SiteFooter): the wide ones, and a tablet held upright,
+      // which is laid out as a phone is but stands the table beside the
+      // sign-off. A phone keeps the table above and lets the lines ride.
+      addVariant('held', '@media (min-width: 768px), (max-height: 520px) and (orientation: landscape)');
+      // `low:` is a landscape frame no taller than 700px: a 13-inch laptop's
+      // window. The film's type has floors there, so the colophon's small
+      // matter is a larger share of the frame's height than on a desk, and
+      // its offices came to rest AT the map table's foot instead of under it
+      // (measured at 1280x593: the third office's label 0.4% of the height
+      // below the foot). It closes its own spaces up on such a frame.
+      addVariant('low', '@media (max-height: 700px) and (orientation: landscape)');
     }),
   ],
 };

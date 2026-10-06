@@ -38,6 +38,9 @@ import { guardAnisotropy } from './materialGuards';
 import { markFocusDepth } from './LensFocus';
 import { dressLawn, sharpenTextures } from './exteriorLawn';
 import { dressFoliage, followSun } from './exteriorFoliage';
+import { dressPalmCrowns, replantBelt, varyTrees } from './exteriorTrees';
+import { dressHaze, horizonSkirt } from './exteriorHaze';
+import { groundObjects } from './exteriorContact';
 import { dressWindows, roomLights } from './exteriorWindows';
 import { buildPoolMap, dressPools } from './nightPools';
 import { dressSurfaces } from './exteriorSurfaces';
@@ -1197,8 +1200,11 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   // the pale thing in the picture.
   MAT_Stone_Terrace: { colour: 0.66, rough: 2.4, env: 0.7 },
   // THE FLAT'S LEAD (build_estate_v7.py, build_roof): dull, and a little of
-  // the sky on it.
-  MAT_Roof_Lead: { rough: 1.2, env: 0.55 },
+  // the sky on it. Duller still since the audit of 2026-10-05 (P1: "the roof
+  // shows a shimmering magenta and purple pattern as the camera orbits"): see
+  // ROOF_ROLLS below for what shimmered; what is left is a sheet that takes
+  // the sunset as a soft wash and not as a mirror.
+  MAT_Roof_Lead: { rough: 1.7, env: 0.3 },
   // THE GENERATED PALMS. Their own maps make leaf and trunk a little metallic
   // and smooth, and with the sky bound as the environment every frond carried
   // a pale skin of it: the paid audit's "3D asset feeling", seen from the
@@ -1444,6 +1450,10 @@ type SkyReflector = {
   /** That probe was taken at night: it holds the dark and the lit rooms at
    *  their own radiance, so the evening does not dim it a second time. */
   night?: boolean;
+  /** That probe was taken in the evening (EVENING_PROBE), and how far it has
+   *  come up since it was given, 0 to 1. */
+  evening?: boolean;
+  since?: number;
 };
 
 /**
@@ -1519,7 +1529,7 @@ function polishSurfaces(root: THREE.Object3D): SkyReflector[] {
  */
 function useSkyReflections(reflectors: { current: SkyReflector[] }) {
   const scene = useThree((s) => s.scene);
-  useFrame(() => {
+  useFrame((_, delta) => {
     const sky = scene.environment;
     const base = scene.environmentIntensity;
     for (const r of reflectors.current) {
@@ -1534,7 +1544,21 @@ function useSkyReflections(reflectors: { current: SkyReflector[] }) {
       // the background is dimmed), so a surface still reflecting it at dusk
       // glowed: the canal in the holdings frame read as a band of sunset. The
       // sky-lit polish falls with the evening; the pool's own probe too.
-      const dusk = r.night ? 1 : 1 - 0.85 * filmState.evening;
+      //
+      // AND THE POOL AT SUNSET HAS ITS OWN PHOTOGRAPH (usePoolProbe; the audit
+      // of 2026-10-05, P2: "at sunset the pool is a flat teal surface. Done
+      // when it picks up the sky and house"). The morning's probe is what was
+      // being put out here, to fifteen per cent, and nothing took its place
+      // until night: for the whole of the evening the water reflected nothing.
+      // The morning's picture still goes down as the evening comes; the
+      // evening's comes up in its place, eased in from the frame it is ready.
+      const dayDusk = 1 - 0.85 * Math.min(1, filmState.evening / EVENING_PROBE.from);
+      let dusk = r.night ? 1 : dayDusk;
+      if (r.evening) {
+        r.since = Math.min(1, (r.since ?? 0) + delta / EVENING_PROBE.ease);
+        const up = THREE.MathUtils.smoothstep(filmState.evening, EVENING_PROBE.from, EVENING_PROBE.whole);
+        dusk = 0.15 + (EVENING_PROBE.gain - 0.15) * up * r.since * r.since * (3 - 2 * r.since);
+      }
       const want = (r.local ? POOL_PROBE_GAIN : r.gain * base) * dusk;
       // And the low sun's own glint off open water, which at dusk lay across
       // the canal as a hot band behind the holdings copy: the water roughens
@@ -1552,6 +1576,18 @@ function useSkyReflections(reflectors: { current: SkyReflector[] }) {
 
 /** The pool's reflection, from its own probe. */
 const POOL_PROBE_GAIN = 1.0;
+
+/**
+ * THE EVENING'S PROBE. Taken once the film's evening is `take` on (the sun
+ * low, the sky lit); shown from `from`, whole by `whole`, coming up over
+ * `ease` seconds from the frame it is ready. `gain`: the high frames look
+ * down on the pool at 25 to 30 degrees, where still water returns under a
+ * tenth of what is above it — a true mirror there is a dark pool with a hint
+ * of sky, which is what "flat teal" was. A pool seen from above at sunset
+ * reads as sky because the eye is given the brightest thing in it; this is
+ * that, a little more than physics would allow at the angle.
+ */
+export const EVENING_PROBE = { take: 0.86, from: 0.5, whole: 0.85, ease: 1.2, gain: 1.6 } as const;
 
 /**
  * THE POOL'S OWN PROBE (poolProbe.ts): taken once, on the first frames the
@@ -1582,6 +1618,11 @@ function usePoolProbe(
     nightCapture: PoolProbeCapture | null;
     nightTarget: THREE.WebGLRenderTarget | null;
     showingNight: boolean;
+    /** THE EVENING PROBE (EVENING_PROBE): the estate under the low sun and
+     *  the lit sky, for the water to hold between the day's and the night's. */
+    eveningCapture: PoolProbeCapture | null;
+    eveningTarget: THREE.WebGLRenderTarget | null;
+    showing: 'day' | 'evening' | 'night';
   }>({
     frames: 0,
     capture: null,
@@ -1592,6 +1633,9 @@ function usePoolProbe(
     nightCapture: null,
     nightTarget: null,
     showingNight: false,
+    eveningCapture: null,
+    eveningTarget: null,
+    showing: 'day',
   });
 
   useEffect(() => {
@@ -1601,10 +1645,15 @@ function usePoolProbe(
       st.target?.dispose();
       st.nightCapture?.cancel();
       st.nightTarget?.dispose();
+      st.eveningCapture?.cancel();
+      st.eveningTarget?.dispose();
       st.capture = null;
       st.target = null;
       st.nightCapture = null;
       st.nightTarget = null;
+      st.eveningCapture = null;
+      st.eveningTarget = null;
+      st.showing = 'day';
       st.showingNight = false;
       st.at = null;
       st.water = [];
@@ -1612,6 +1661,8 @@ function usePoolProbe(
       for (const r of st.given) {
         r.local = undefined;
         r.night = false;
+        r.evening = false;
+        r.since = 0;
       }
       st.given = [];
     };
@@ -1633,12 +1684,27 @@ function usePoolProbe(
           st.nightCapture = null;
         }
       }
+      // Evening: the same, once the sun is low and before the night is on.
+      if (!st.eveningTarget && st.at && filmState.evening > EVENING_PROBE.take && filmState.night < 0.12) {
+        for (let o: THREE.Object3D | null = root; o; o = o.parent) if (!o.visible) return;
+        st.eveningCapture ??= beginPoolProbe(gl, scene, st.at, st.water);
+        const t = st.eveningCapture.step();
+        if (t) {
+          st.eveningTarget = t;
+          st.eveningCapture = null;
+        }
+      }
       const night = !!st.nightTarget && filmState.night > 0.5;
-      if (night !== st.showingNight) {
+      const evening = !night && !!st.eveningTarget && filmState.evening > EVENING_PROBE.from;
+      const want = night ? 'night' : evening ? 'evening' : 'day';
+      if (want !== st.showing) {
+        st.showing = want;
         st.showingNight = night;
         for (const r of st.given) {
-          r.local = night ? st.nightTarget!.texture : st.target.texture;
+          r.local = night ? st.nightTarget!.texture : evening ? st.eveningTarget!.texture : st.target.texture;
           r.night = night;
+          r.evening = evening;
+          r.since = 0;
         }
       }
       return;
@@ -1710,6 +1776,25 @@ function dressNightPools(root: THREE.Object3D): {
   return { lights: lights.length, materials: dressPools(root, map), texture: map.texture };
 }
 
+/**
+ * THE ROOF'S ROLLS ARE NOT DRAWN (the audit of 2026-10-05, P1: "the roof shows
+ * a shimmering magenta and purple pattern as the camera orbits. Done when: the
+ * roof reads as a clean roof surface from every camera angle used").
+ *
+ * The flat was laid in sheet lead dressed over rolls (the paid audit of the
+ * day before): forty-odd ridges six centimetres wide and four high, each a
+ * real box on the deck. From the orbit's height the far ones are narrower
+ * than a pixel, and a ridge narrower than a pixel is a row of samples that
+ * land on its lit top, its shaded flank or the deck between by turns: the
+ * sunset on the tops, the sky's blue in the flanks, in bands that swam as the
+ * camera moved. No filter resolves geometry finer than the sampling; the
+ * rolls were the wrong way to draw a line. The deck under them is the roof: a
+ * plain lead flat inside its stone kerb, which is what "a clean roof surface"
+ * asks for. (They are still in the file until the estate is next built:
+ * tools/blender/build_estate_v7.py leaves them out.)
+ */
+const ROOF_ROLLS = 'mansion_roof_rolls';
+
 function applyGrade(root: THREE.Object3D, grade: Grade): string[] {
   const touched: string[] = [];
 
@@ -1737,6 +1822,11 @@ function applyGrade(root: THREE.Object3D, grade: Grade): string[] {
     const isGround = mesh.name === 'ground_plane' || mesh.name.startsWith('drive_');
     mesh.castShadow = !isGround;
     mesh.receiveShadow = true;
+    // The lead's rolls are not drawn (ROOF_ROLLS).
+    if (mesh.name === ROOF_ROLLS) {
+      mesh.visible = false;
+      mesh.castShadow = false;
+    }
 
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of mats) {
@@ -1996,8 +2086,14 @@ export function ExteriorModel({
   const world = useThree((s) => s.scene);
   const sun = useRef<THREE.DirectionalLight | null>(null);
   const sunSearch = useRef(0);
-  useFrame((_, delta) => {
+  /** The horizon's skirt (exteriorHaze.ts): a ring round the eye. */
+  const skirt = useRef<THREE.Mesh | null>(null);
+  useFrame((state, delta) => {
     waterClock.current.value += delta;
+    // It stands round the camera, wherever the camera is (in the estate's own
+    // space: the root may stand anywhere in the scene's).
+    const ring = skirt.current;
+    if (ring?.parent) ring.parent.worldToLocal(ring.position.copy(state.camera.position));
     // Looked for at most twice a second: a scene with no shadow-casting sun
     // (the dusk rollback) must not be traversed every frame.
     if ((!sun.current || !sun.current.parent) && (sunSearch.current -= delta) <= 0) {
@@ -2035,6 +2131,10 @@ export function ExteriorModel({
     // estate texture (exteriorLawn.ts): the ground seen at a grazing angle is
     // most of every exterior frame.
     const lawns = dressLawn(root);
+    // The belt's palms as trees, then every tree its own (exteriorTrees.ts).
+    replantBelt(root);
+    varyTrees(root);
+    dressPalmCrowns(root);
     const foliage = dressFoliage(root);
     const rooms = dressWindows(root);
     const aged = dressSurfaces(root);
@@ -2042,12 +2142,20 @@ export function ExteriorModel({
     // surfaces, so they chain onto the stone's and the lawn's own shaders.
     const pools = dressNightPools(root);
     const sharpened = sharpenTextures(root, Math.min(8, gl.capabilities.getMaxAnisotropy()));
+    // LAST of the shader passes: the air, toward the sky on each fragment's
+    // own bearing (exteriorHaze.ts). It wraps whatever the others compile to.
+    dressHaze(root);
 
     // AFTER the grade, and that ordering is load-bearing: applyGrade swaps the
     // paving materials per grade and looks its targets up BY NAME, so merging
     // first would hide the meshes it is meant to find. See the note on
     // MERGE_FAMILIES for what is merged and what is deliberately left alone.
     const batched = mergeStaticFamilies(root);
+    // The planters' and the step blocks' margins of shade (exteriorContact.ts):
+    // after the merge, which is no business of theirs.
+    groundObjects(root);
+    // And where the land ends, air (exteriorHaze.ts, HORIZON_SKIRT).
+    skirt.current = horizonSkirt(root);
 
     let meshes = 0;
     let tris = 0;

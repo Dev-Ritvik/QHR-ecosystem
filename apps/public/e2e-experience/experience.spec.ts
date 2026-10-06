@@ -47,13 +47,7 @@
 import { test, expect, type Page } from '@playwright/test';
 // The app's own chapter table. Imported rather than restated so the address-bar
 // walk below and the film cannot drift apart.
-import {
-  chapters,
-  CROSSOVER,
-  DOOR_IN,
-  DOOR_OUT,
-  JOURNEY_END,
-} from '../src/components/experience/journey';
+import { chapters, CROSSOVER, DOOR_OUT } from '../src/components/experience/journey';
 import { CODA_FADE } from '../src/components/experience/lensFilter';
 
 const VIEWPORT = { width: 1440, height: 900 };
@@ -189,6 +183,42 @@ async function scrollToFraction(page: Page, frac: number) {
   // Longer than ChapterUrl's 180 ms settle, so its write has landed.
   await page.waitForTimeout(700);
 }
+
+/**
+ * Scroll to where a chapter's COPY IS WHOLE: the middle of that stretch.
+ *
+ * A chapter's pane is pinned for its whole section and its copy is brought up
+ * and taken away in place, over a stretch of the film the page names
+ * (journey.ts, COPY_SPAN). So "at a chapter" is not a fraction of its section:
+ * near either end of one the copy is at nothing, links and all. The page says
+ * where each stretch is (`data-copy`: nothing before the first fraction, whole
+ * from the second to the third, gone by the fourth), and this reads it, so
+ * nothing here goes stale when the film is retimed.
+ *
+ * (The audit of 2026-10-05 had the camera stop on every chapter for that
+ * stretch; the client sent the stops back the next day, and the camera is the
+ * continuous one again. The windows stayed.)
+ */
+async function scrollToCopy(page: Page, id: string) {
+  const frac = await page.evaluate((chapter) => {
+    const pane = document.querySelector<HTMLElement>(`#${chapter} [data-copy]`);
+    if (!pane) return null;
+    const w = (pane.dataset.copy ?? '').split(',').map(Number);
+    return w.length === 4 ? (Math.max(0, w[1]) + w[2]) / 2 : null;
+  }, id);
+  if (frac === null) throw new Error(`no copy window for #${id}`);
+  await scrollToFraction(page, frac);
+}
+
+// THE FILM'S OWN CAMERA, AND NO OTHER. The hooks below learn the world's scene
+// and camera from three's render calls, and more than one camera draws that
+// scene: with the front door open the hall is drawn through it from an eye of
+// its own, nested inside the frame's render (HallPortal: a camera whose
+// matrices are written, never updated), and the pool's and the hall's probes
+// are cube cameras. Since the door opens while its line is up (the audit of
+// 2026-10-05), a hook that kept the LAST camera to draw kept the portal's eye — at
+// the origin of its own frame, z 0. Each hook now takes a camera only if it
+// updates its own matrices and is not a face of a cube.
 
 /** Collects console errors and page errors for the duration of a test. */
 function watchErrors(page: Page): string[] {
@@ -455,7 +485,13 @@ test.describe('navigation', () => {
     await consent(page);
     await ready(page);
 
-    const link = page.locator('main a[href^="/projects/"]').first();
+    // WHERE THE TABLE'S NAME IS UP. A chapter's links are on the picture only
+    // while its copy is (ChapterFade takes the pointer off a pane at nothing,
+    // so a tap meant for the plan cannot land on a name nobody can see): the
+    // first table's name is clicked where a visitor reads it.
+    await scrollToCopy(page, 'station-1');
+    await page.waitForTimeout(1200);
+    const link = page.locator('#station-1 a[href^="/projects/"]').first();
     const href = await link.getAttribute('href');
     await link.click();
     await expect(page).toHaveURL(new RegExp(`${href}$`));
@@ -571,7 +607,8 @@ test.describe('the interior', () => {
       if (!gl || gl.__e2ePatched) return;
       const orig = gl.render.bind(gl);
       gl.render = function (scene: any, camera: any) {
-        if (scene?.isScene) {
+        const film = camera?.matrixAutoUpdate !== false && !camera?.parent?.isCubeCamera;
+        if (film && scene?.isScene) {
           let isWorld = false;
           scene.traverse((o: any) => {
             if (!isWorld && /^(station_drag_|mansion_|ashlar_)/.test(o.name || '')) isWorld = true;
@@ -598,10 +635,20 @@ test.describe('the interior', () => {
           if (best || !/^station_drag_/.test(o.name || '')) return;
           const c = o.getWorldPosition(new V());
           const p = c.clone().project(pair.camera);
+          // In front of the camera and inside its depth: a table behind the
+          // camera projects to a point on the screen too, and the nearest one
+          // to a corner was being taken for the table in view.
+          if (p.z >= 1 || p.z <= -1) return;
           const x = Math.round(((p.x + 1) / 2) * window.innerWidth);
           const y = Math.round(((-p.y + 1) / 2) * window.innerHeight);
-          if (x > 60 && x < window.innerWidth - 60 && y > 110 && y < window.innerHeight - 60) {
-            set({ name: o.name, id: o.name.replace('station_drag_', ''), x, y });
+          // AT A TABLE'S REST THE PROXY'S CENTRE IS UNDER THE FRAME'S FOOT: the
+          // frame is the model on its board, the table's top and the head of
+          // its pedestal (measured at 1440x900: the centre 89px below the
+          // frame). The proxy is the height of the table, so the drag is made
+          // on the part of it that is in the frame: its own column, a little
+          // above the foot.
+          if (x > 60 && x < window.innerWidth - 60 && y > 110 && y < window.innerHeight + 260) {
+            set({ name: o.name, id: o.name.replace('station_drag_', ''), x, y: Math.min(y, window.innerHeight - 120) });
           }
         });
         return best;
@@ -632,9 +679,14 @@ test.describe('the interior', () => {
     // the leg; written as document fractions they went stale the moment the
     // exterior grew, which is exactly the duplicated-constant failure the
     // address-bar walk below already records.
-    const legToDocument = (leg: number) => DOOR_IN + leg * (JOURNEY_END - DOOR_IN);
-    for (const frac of [0.341, 0.114, 0.136].map(legToDocument)) {
-      await scrollToFraction(page, frac);
+    //
+    // WHERE EACH TABLE'S NAME IS UP, since the stations became site models:
+    // the camera dwells on the first two tables with the model, the table and
+    // its pedestal in the frame for as long as the name is whole, so that
+    // stretch is where a visitor reaches for it. The page says where it is
+    // (scrollToCopy), so nothing here goes stale when the film is retimed.
+    for (const id of ['station-1', 'station-2', 'station-3']) {
+      await scrollToCopy(page, id);
       await page.waitForTimeout(1500);
       proxy = await findProxy();
       if (proxy) break;
@@ -715,6 +767,9 @@ test.describe('the front door', () => {
       gl.render = function (scene: any, camera: any) {
         // The world scene is found once and then only its camera is refreshed;
         // the composer's own full-screen scenes are small and never match.
+        // (Only the film's own camera: see THE FILM'S OWN CAMERA, above.)
+        const film = camera?.matrixAutoUpdate !== false && !camera?.parent?.isCubeCamera;
+        if (!film) return orig(scene, camera);
         if (w.__DOOR__?.scene === scene) {
           w.__DOOR__.camera = camera;
         } else if (scene?.isScene) {
@@ -880,7 +935,9 @@ test.describe('the front door', () => {
       const orig = gl.render.bind(gl);
       gl.render = function (scene: any, camera: any) {
         // (Through the open door the hall is drawn from an eye of its own,
-        // nested in the frame's render: the same place, half a metre lower.)
+        // nested in the frame's render: that is not the film's camera.)
+        const film = camera?.matrixAutoUpdate !== false && !camera?.parent?.isCubeCamera;
+        if (!film) return orig(scene, camera);
         if (w.__DOOR__?.scene === scene) {
           w.__DOOR__.camera = camera;
         } else if (scene?.isScene) {
@@ -1498,9 +1555,11 @@ test.describe('a frame that is not wide', () => {
     expect(s.faded).toBe(true);
     expect(s.pointer).toBe('none');
 
-    // Held: developed in place, under the header and above the plan, whose
-    // pane begins at 29% of the frame's height.
-    await at(0.2);
+    // Up: developed in place, under the header and above the plan, whose
+    // pane begins at 29% of the frame's height, while the camera dwells on the
+    // table, on a phone as on a desk.
+    await scrollToCopy(page, 'station-1');
+    await page.waitForTimeout(900);
     s = await read();
     expect(s.opacity, 'whole once the camera is on the table').toBe(1);
     expect(s.faded).toBe(false);
@@ -1521,7 +1580,9 @@ test.describe('a frame that is not wide', () => {
       await ready(page);
       const y = await page.evaluate(() => {
         const h = document.querySelector('#hero h1');
-        const lede = document.querySelector('#hero p.t-hero-lede');
+        // (the cover's supporting line: the film's supporting size since the
+        // audit of 2026-10-05, where it was the hero's own lede)
+        const lede = document.querySelector('#hero p.t-support');
         if (!h || !lede) throw new Error('no hero headline');
         return {
           title: h.getBoundingClientRect().top / window.innerHeight,
@@ -1568,13 +1629,16 @@ test.describe("the film's stage", () => {
     const r = await page.evaluate(() => {
       const hero = document.getElementById('hero');
       const h1 = hero?.querySelector('h1');
-      const lede = hero?.querySelector('p.t-hero-lede');
-      // The action that is drawn: a wide frame's stands at the frame's foot,
-      // and the one in the block is the phone's.
-      const cta = Array.from(hero?.querySelectorAll('a.cta-primary') ?? []).find(
+      const lede = hero?.querySelector('p.t-support');
+      // The cover's ONE cue (the audit of 2026-10-05: "the hero shows both
+      // 'START HERE' and 'SCROLL' plus a stray vertical tick"): it starts the
+      // film, and on a wide frame it stands at the frame's foot.
+      const cta = Array.from(hero?.querySelectorAll('a.start-cue') ?? []).find(
         (a) => a.getBoundingClientRect().height > 0,
       );
-      const mark = document.querySelector('header img');
+      // The mark stands on its ivory plate (the client's own cobalt and
+      // orange, 2026-10-06): the plate's edge is the mark's edge on the page.
+      const mark = document.querySelector('header img')?.parentElement;
       if (!hero || !h1 || !lede || !cta || !mark) throw new Error('the cover is missing a part');
       const b = h1.getBoundingClientRect();
       const text = document.createRange();
@@ -1606,19 +1670,25 @@ test.describe("the film's stage", () => {
       const u = Math.min(v.height / 900, v.width / 1200);
       const c = await cover(browser, v);
       const name = `${v.width}x${v.height}`;
-      // 552 design pixels left of the frame's middle, with the mark above it on the same line
-      expect((v.width / 2 - c.left) / u, `${name}: the copy's left edge`).toBeCloseTo(552, 0);
+      // OFF THE FRAME'S OWN EDGE (the audit of 2026-10-05: "all text and nav
+      // sit inside a narrow centered column"): nine baselines or 5.2% of the
+      // width, whichever is more, with the mark above it on the same line. (It
+      // stood 552 design pixels left of the frame's middle.)
+      const baseline = Math.max(2.5, 4 * u);
+      expect(c.left, `${name}: the copy's left edge`).toBeCloseTo(Math.max(9 * baseline, 0.052 * v.width), 0);
       expect(Math.abs(c.mark - c.left), `${name}: the mark on the copy's edge`).toBeLessThan(1);
-      // the headline at the design's size in the frame's unit, on its two lines
-      expect(c.size / u, `${name}: the headline's size`).toBeCloseTo(48.83, 0);
+      // the headline at the display's first size in the frame's unit (86: it
+      // was 48.83, "in a serif built for body text"), on its two lines
+      expect(c.size / u, `${name}: the headline's size`).toBeCloseTo(86, 0);
       expect(c.lines, `${name}: the headline's lines`).toBe(2);
-      // IN THE SKY (the paid audit, 2026-10-04): the title 13% of the way down
-      // on every wide frame, its supporting line on the shaded lawn at 64%, and
-      // the one action at the frame's foot
-      expect(c.top, `${name}: the title's top`).toBeCloseTo(0.1307, 2);
-      expect(c.ledeTop, `${name}: the supporting line's top`).toBeCloseTo(0.64, 2);
-      expect(c.bottom, `${name}: the action at the foot`).toBeGreaterThan(0.88);
-      expect(c.bottom, `${name}: the action at the foot`).toBeLessThan(0.95);
+      // IN THE SKY: the title a tenth of the way down on every wide frame —
+      // FROM THE PAGE'S FIRST PIXEL, where it used to ride up 62px over the
+      // first fifth of a notch — its supporting line on the shaded lawn at
+      // 71%, and the one cue at the frame's foot.
+      expect(c.top, `${name}: the title's top`).toBeCloseTo(0.105, 2);
+      expect(c.ledeTop, `${name}: the supporting line's top`).toBeCloseTo(0.71, 2);
+      expect(c.bottom, `${name}: the cue at the foot`).toBeGreaterThan(0.88);
+      expect(c.bottom, `${name}: the cue at the foot`).toBeLessThan(0.95);
       expect(c.overflow, `${name}: no sideways scroll`).toBeLessThanOrEqual(0);
     }
   });
@@ -1769,12 +1839,17 @@ test.describe("the film's last frame", () => {
   }) => {
     const { ctx, page } = await open(browser, { width: 390, height: 844 }, true);
 
-    // Three-quarters of a frame before the end: the camera at rest, the table
+    // A frame and a twentieth before the end: the camera at rest, the table
     // in the upper part of the frame, the sign-off whole beneath it. (It was
     // seven-eighths while the colophon carried a label over the sign-off and
-    // its links in capitals: the paid audit, 2026-10-04, took both away and
-    // the colophon is a tenth of a frame shorter.)
-    const poster = await frameAt(page, 0.74);
+    // its links in capitals; three-quarters after the paid audit of
+    // 2026-10-04 took both away. The audit of 2026-10-05 made the sign-off
+    // the largest type on the site — three lines on a phone — and gave each
+    // office a role and a name over its address: the colophon is three-tenths
+    // of a frame longer. Measured on that build at 390x844: the coda at rest
+    // from 1.1 frames before the end, the sign-off's top at the table's foot
+    // at 0.95.)
+    const poster = await frameAt(page, 1.05);
     expect(poster.coda, 'the coda has run').toBe(1);
     expect(poster.table, 'the table is in the frame').not.toBeNull();
     const table = poster.table!;
@@ -1791,6 +1866,45 @@ test.describe("the film's last frame", () => {
     expect(end.lines.some((b) => over(b, end.table!)), 'lines stand on the table').toBe(true);
     expect(end.all, 'the lens is closed').toBeGreaterThan(CODA_FADE.stops * 0.97);
     await ctx.close();
+  });
+
+  test('on a desk, a laptop and an upright tablet the sign-off is held under the lit table, and the lens never closes', async ({
+    browser,
+  }) => {
+    // The audit of 2026-10-05: "the hall dims to black and the round table
+    // floats in empty space with no floor. Done when: the table stays grounded
+    // on its floor as the lights go down, lit by one remaining source. 'The
+    // land is best seen from the land.' is the largest type on the site."
+    // Made the largest, the sign-off's first line reached under the table on
+    // every one of these frames, and rode up through it with the lens closed
+    // over the whole picture. It is held under the table instead (SiteFooter,
+    // `held:`), and dissolves in place before the page lets go of it.
+    test.setTimeout(420_000);
+    const sizes: { v: { width: number; height: number }; phone?: boolean }[] = [
+      { v: VIEWPORT },
+      { v: { width: 1920, height: 945 } },
+      { v: { width: 1280, height: 593 } },
+      { v: { width: 820, height: 1180 }, phone: true },
+    ];
+    for (const { v, phone } of sizes) {
+      const name = `${v.width}x${v.height}`;
+      const { ctx, page } = await open(browser, v, phone);
+      let held = 0;
+      for (const back of [1.5, 1.3, 1.1, 0.9, 0.7, 0.5, 0.3, 0.15, 0]) {
+        const f = await frameAt(page, back);
+        expect(f.all, `${name}, ${back} before the end: the lens is open`).toBeLessThan(0.05);
+        if (!f.table) continue;
+        for (const b of f.lines) {
+          expect(over(b, f.table), `${name}, ${back} before the end: a line at ${b.l.toFixed(2)},${b.t.toFixed(2)}`).toBe(false);
+        }
+        // The sign-off at rest: one tall line of the colophon, alone or first,
+        // wholly under the table's foot.
+        const signOff = f.lines.find((b) => b.b - b.t > 0.1);
+        if (signOff && signOff.t > f.table.b + CODA_FADE.reach) held += 1;
+      }
+      expect(held, `${name}: the sign-off stands under the table for more than one of those frames`).toBeGreaterThanOrEqual(2);
+      await ctx.close();
+    }
   });
 
   test('no line of the colophon ever stands on the lit table, at any size or scroll', async ({ browser }) => {

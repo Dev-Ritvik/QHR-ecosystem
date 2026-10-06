@@ -54,6 +54,7 @@ import { ESTATE_ARCHITECTURE } from './estateBounds';
 import { journeyState } from './journey';
 import { DOORWAY, doorwayState } from './doorway';
 import { passageLight } from './passageLight';
+import { ld } from './lookdev';
 
 const MARK = '/* estate: focus depth */';
 
@@ -685,7 +686,9 @@ export const LensFocus = forwardRef<LensFocusEffect, { active?: boolean }>(funct
       u.get('focusStart')!.value = Math.max(0.5, depth) + HALL_MARGIN;
       u.get('focusRamp')!.value = HALL_RAMP;
       u.get('focusNear')!.value = 0;
-      u.get('radiusPx')!.value = HALL_RADIUS * buffer.x;
+      // Look-dev only (?debug=1): window.__estateLook.lensSharp = 1 stops the
+      // hall's lens down, to look at a wall the lens would leave soft.
+      u.get('radiusPx')!.value = ld('lensSharp', 0) > 0 ? 0 : HALL_RADIUS * buffer.x;
       lensK.value = 0;
     } else {
       // The thin lens, focused on the face of the house it is pointed at; the

@@ -52,7 +52,7 @@ import { hallEnv } from './HallModel';
 import { registerHallRoot } from './doorPortal';
 import { isShown, warmHallPrograms } from './hallProbe';
 import { lensSubject } from './LensFocus';
-import { HALL_READING, hallLight, houseKeys, houseLevelAt } from './hallLight';
+import { HALL_CODA, HALL_READING, hallLight, houseKeys, houseLevelAt } from './hallLight';
 import { MAP_TABLE, mapStage } from './mapTablePlan';
 import {
   HEADER_BAND,
@@ -65,6 +65,7 @@ import {
   tableBandFilter,
 } from './lensFilter';
 import { copyPresence, copyZone, filmIsWide } from './copyZone';
+import { stationStyle } from './stationStyle';
 
 /**
  * The portrait, measured from the GLB.
@@ -470,8 +471,9 @@ export function InteriorStage({
       // (readingLight.ts). The film sets its own level by where the camera is.
       let want = mode === 'still' ? stillLevel : houseLevelAt(keys, s);
       // The coda (WorldCanvas): past the film's end the house lights go down
-      // round the map table, whose own light stays.
-      if (mode !== 'still') want *= 1 - 0.9 * journeyState.coda;
+      // round the map table, whose own light stays — and not to nothing: the
+      // table stands on the court's stone to the last frame (HALL_CODA).
+      if (mode !== 'still') want *= 1 - (1 - HALL_CODA) * journeyState.coda;
       // Look-dev only (?debug=1): window.__estateHall.level holds the house
       // lights at a level, so a beat's level can be judged on a running build
       // before it is written into hallLight.ts.
@@ -524,11 +526,11 @@ export function InteriorStage({
         // The grad that rides with the reframed chapters' copy, and the
         // header's band down over the tables' (lensFilter.ts; phoneFraming.ts).
         phoneRoomFilter(copyZone.panes, delta);
-        tableBandFilter(copyZone.panes, delta);
+        tableBandFilter(copyZone.panes, delta, stationStyle() === 'model');
       }
       // And the film's last light, for the colophon that comes up over it:
       // the lens closes down while any of its lines stands on the map table.
-      codaFilter(copyZone.lines, mapStage.screen, delta);
+      codaFilter(copyZone.lines, mapStage.screen, delta, copyZone.remaining);
     }
 
     // The portrait's own beat, found by id: it is no longer the last beat of

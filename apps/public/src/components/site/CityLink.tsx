@@ -71,7 +71,7 @@ export function CityLink({
           carries an eyebrow, a heading, every published project and a note, and
           the pane is a centred sticky frame, so a list taller than a 390x844
           viewport would be CLIPPED rather than scrollable. */}
-      <span className="block text-step-1 text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A] group-focus-visible:text-[#E8B98A]">
+      <span className="t-index block text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A] group-focus-visible:text-[#E8B98A]">
         {name}
       </span>
       {/* Not on a phone: there the list has the height between the header and
