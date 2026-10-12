@@ -11,7 +11,14 @@
  *  against an older version is treated as absent, and the visitor is asked
  *  again — silently inheriting consent across a changed notice is exactly the
  *  "informed" failure the Act is aimed at. */
-export const CONSENT_VERSION = 1;
+export const CONSENT_VERSION = 2;
+
+/** What the control at the foot of every page is called, and so what the card
+ *  it opens is called, and what the notice and the legal pages call it (the
+ *  forensic audit of 2026-10-09, #105: the card pointed to "the Privacy
+ *  link", which the footer called something else; #107: a visitor changing a
+ *  setting was greeted with the first visit's title). */
+export const PRIVACY_CONTROL_NAME = 'Privacy and data choices';
 
 /** Twelve months. Long enough not to nag, short enough to be a real re-ask. */
 export const CONSENT_MAX_AGE_S = 60 * 60 * 24 * 365;
@@ -91,7 +98,7 @@ export const CONSENT_COPY: Record<
       'No profiling, and nothing that outlives your visit. Always on.',
   },
   experience: {
-    title: 'Experience',
+    title: 'Preferences',
     body:
       'Remembers where you were, your sound and lighting preferences, and the last ' +
       'place you visited, so returning picks up where you left off.',
@@ -101,7 +108,7 @@ export const CONSENT_COPY: Record<
     body:
       'Lets us see which projects and plots you spend time with, so we can show you ' +
       'more of what you looked at and skip what you did not. Also tells us which ' +
-      'parts of the experience are slow on your device.',
+      'parts of the site are slow on your device.',
   },
   marketing: {
     title: 'Marketing',

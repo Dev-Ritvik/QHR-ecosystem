@@ -76,21 +76,23 @@ import {
   EffectComposer,
   Bloom,
   BrightnessContrast,
-  ChromaticAberration,
   HueSaturation,
   Noise,
   Vignette,
+  wrapEffect,
 } from '@react-three/postprocessing';
 import { useCallback, useLayoutEffect, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import {
   BlendFunction,
+  EffectAttribute,
+  SMAAEffect,
+  SMAAPreset,
   type BloomEffect,
   type BrightnessContrastEffect,
   type HueSaturationEffect,
   type VignetteEffect,
 } from 'postprocessing';
-import { Vector2 } from 'three';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { FILM_GRADE, FilmGrade, HALL_GRADE, type FilmGradeEffect } from './FilmGrade';
 import { LensFocus } from './LensFocus';
@@ -119,17 +121,18 @@ import { ld, lookdevOn } from './lookdev';
  *   saturation +0.09    warm light on limestone, not on beige
  *   grain      0.028    at 45% opacity in overlay: a film stock's noise floor,
  *                       which is what stops a flat sky reading as a gradient
- *   aberration 0.4 px   only at the corners, under the vignette, where a real
- *                       lens actually has it
+ *
+ * THERE IS NO CHROMATIC ABERRATION. An art-direction audit (2026-09-30) asked
+ * for it "subtle", and it was set three times: at 0.00042 there was none to
+ * see, at 0.0009 every bright leaf at the frame's edge split into red and
+ * cyan, and at 0.00065 the forensic audit of 2026-10-09 (#21) still found it
+ * on a still — magenta along a column and a car's roofline, a teal line down
+ * the gravel's curve — on a picture with no edge smoothing, where a fringe
+ * reads as a fault of the renderer and not as glass. A value small enough
+ * not to be seen is no effect and a whole pass; the pass is gone, and its
+ * place in the chain is the edge smoothing's (below).
  */
 const GRADE = { contrast: 0.055, saturation: 0.09, grain: 0.028 } as const;
-/** At the corners only (radially modulated), and small: the art-direction
- *  audit asked for "subtle chromatic aberration" as part of a photographic
- *  logic, and at 0.00042 there was none to see. 0.0009 (about 1.3 px at the
- *  corner of a 1440 frame) split every bright leaf and lawn stripe at the
- *  frame's edge into red and cyan — the third critique's "glittery" dusk — so
- *  0.00065: still a lens at the corners, no longer a prism. */
-const ABERRATION = new Vector2(0.00065, 0.00065);
 
 /**
  * Bloom, per set. The threshold is in SCENE-LINEAR light, because bloom runs
@@ -163,18 +166,77 @@ const HALL_VIGNETTE = { offset: 0.3, darkness: 0.62 } as const;
 const FILM_VIGNETTE = { offset: 0.3, darkness: 0.35 } as const;
 
 /**
- * MULTISAMPLING OFF.
+ * MULTISAMPLING OFF, AND WHY IT STAYS OFF.
  *
- * Kept from the investigation above. It did not fix the depth blit on its own,
- * but with no depth-consuming effect left in the chain there is nothing for MSAA
- * to buy: the composer renders a full-screen quad chain, and geometric edges are
- * already resolved by the renderer's own dpr, which reaches 2 on high tier and
- * downsamples — supersampling by another name.
- *
- * `antialias` on the <Canvas> is unaffected and unrelated: it applies to the
- * default framebuffer, which the composer does not draw into.
+ * The scene is drawn into the composer's buffer, not the screen, so the
+ * canvas's own `antialias` never reaches the frame; and this buffer cannot be
+ * multisampled, because its ALPHA IS THE SCENE'S DEPTH in metres
+ * (LensFocus.tsx: the lens, the contact occlusion and the motion blur all
+ * read it, with 1.0 exactly standing for the sky and a negative value for a
+ * surface seen by its own light). A multisample resolve averages what is in a
+ * pixel: at every silhouette the depth would become a distance that is
+ * neither surface's, the sky's mark would stop being the sky's, and a lamp's
+ * edge would average to nothing at all.
  */
 const MULTISAMPLING = 0;
+
+/**
+ * EDGE SMOOTHING, AFTER THE PRINT.
+ *
+ * The forensic audit of 2026-10-09 (#5, its first systemic finding): "the
+ * picture is drawn with no edge smoothing. Thin features break into
+ * stair-steps and dotted lines, and they crawl as the camera moves" — every
+ * baluster, cornice and glazing bar, on a 1920x1080 screen at 100% scaling,
+ * which is the client's own. On such a screen a pixel of the picture is a
+ * pixel of the panel: the renderer's ratio is 1 and nothing is supersampled.
+ *
+ * So the finished frame is smoothed where it has edges (SMAA: it finds them
+ * in the picture as printed, and blends along them), after the print and
+ * before the grain, in the pass the aberration used to take. Not on a screen
+ * with two or more device pixels to each of the page's — there the renderer
+ * already draws four to a pixel of the page and the eye cannot resolve the
+ * steps — and not on the low tier, which keeps its one-pass chain.
+ *
+ * (`?aa=0` with `?debug=1` leaves it out, to compare.)
+ */
+const SMOOTH_UNDER_RATIO = 1.75;
+
+/**
+ * THE SMOOTHING PASS, DECLARING ONLY WHAT IT USES.
+ *
+ * The library's SMAA can find its edges three ways (by colour, by luma, by
+ * depth) and can sharpen that search with depth again ("predication"); so it
+ * declares to the composer that it READS THE SCENE'S DEPTH, whichever way it
+ * is asked to work. This build asks for colour and no predication: it never
+ * samples depth. But the declaration alone makes the composer attach a depth
+ * texture to its buffers, and on this chain that is the illegal blit written
+ * up at the top of this file, to the letter —
+ *
+ *   GL_INVALID_OPERATION: glBlitFramebuffer: Read and write depth stencil
+ *   attachments cannot be the same image
+ *
+ * — every frame, until the browser stops counting. MEASURED on the first
+ * build of the smoothing (2026-10-10, c13/gl_warn.mjs): 257 console messages
+ * in three and a half seconds on /about and on the film, none with `?aa=0`,
+ * none on the build the forensic audit measured. The picture was right; the
+ * console was not, and a console that fills is the first thing a reviewer
+ * with the tools open sees.
+ *
+ * So the effect is the library's own, with the one attribute it uses: a
+ * convolution (it reads its neighbours, so it takes a pass to itself).
+ */
+class EdgeSmoothingEffect extends SMAAEffect {
+  constructor(options?: ConstructorParameters<typeof SMAAEffect>[0]) {
+    super(options);
+    this.setAttributes(EffectAttribute.CONVOLUTION);
+  }
+}
+const EdgeSmoothing = wrapEffect(EdgeSmoothingEffect);
+function smoothingAsked(): boolean {
+  if (typeof window === 'undefined') return true;
+  const q = new URLSearchParams(window.location.search);
+  return !(q.get('debug') === '1' && q.get('aa') === '0');
+}
 
 /**
  * A callback ref for an effect instance. @react-three/postprocessing types an
@@ -227,15 +289,21 @@ export function PostFX({
   tier,
   set = 'exterior',
   grade = 'daylight',
+  still = false,
 }: {
   tier: DeviceTier;
   set?: SceneSet;
   grade?: Grade;
+  /** A page's held frame, not the film (LensFocus: which lens a still takes). */
+  still?: boolean;
 }) {
   // Grain and aberration are the two passes that buy the least per millisecond,
   // so they are the two a mid-tier device does without: it keeps the bloom, the
   // grade and the vignette, which carry the look.
   const lens = tier === 'high';
+  // A pixel of the picture is a pixel of the panel (or nearly): smooth it.
+  const ratio = useThree((s) => s.viewport.dpr);
+  const smooth = ratio < SMOOTH_UNDER_RATIO && smoothingAsked();
   // THE EXTERIOR PRINT (FilmGrade.tsx): a filmic curve and the green, split
   // and contrast grade, in place of the contrast/saturation pair. Outside in
   // daylight; the dusk rollback keeps the chain it was measured against.
@@ -331,11 +399,11 @@ export function PostFX({
   // and it blurred the whole frame as if it were sky. The promotion happens
   // once, at load; nothing else changes the effect set (see above).
   return (
-    <EffectComposer key={tier} multisampling={MULTISAMPLING} ref={exposeComposer}>
+    <EffectComposer key={tier + (smooth ? ':smooth' : '')} multisampling={MULTISAMPLING} ref={exposeComposer}>
       {/* FIRST, and on its own pass: the lens reads the scene's depth from
           the alpha channel, which the next pass clamps away (LensFocus.tsx).
           It rests at zero strength anywhere but the exterior leg. */}
-      {lens ? <LensFocus active={film || hall} /> : <></>}
+      {lens ? <LensFocus active={film || hall} stillHall={still && hall} /> : <></>}
       {/* Selective, per set (BLOOM / HALL_BLOOM): only light sources cross
           the threshold. Driven through the ref, like the grade below, so the
           threshold at the door is a uniform write. */}
@@ -349,11 +417,9 @@ export function PostFX({
       <BrightnessContrast ref={bindContrast} brightness={0} contrast={GRADE.contrast} />
       <HueSaturation ref={bindSaturation} hue={0} saturation={GRADE.saturation} />
       <FilmGrade ref={bindPrint} settings={printSettings} />
-      {lens ? (
-        <ChromaticAberration offset={ABERRATION} radialModulation modulationOffset={0.35} />
-      ) : (
-        <></>
-      )}
+      {/* The edges, on the printed picture and under the grain (which is
+          not an edge, and must not be found as one). */}
+      {smooth ? <EdgeSmoothing preset={SMAAPreset.HIGH} /> : <></>}
       {/* OVERLAY, not screen: overlay leaves the midtones where they are and
           works into the shadows and highlights, which is how grain sits on an
           image instead of fogging it. */}

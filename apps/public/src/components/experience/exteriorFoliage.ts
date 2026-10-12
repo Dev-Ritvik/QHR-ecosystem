@@ -22,6 +22,7 @@
 
 import * as THREE from 'three';
 import { filmState } from './FilmGrade';
+import { ld } from './lookdev';
 
 /** Shared by every foliage material: one assignment a frame moves them all. */
 export const foliageUniforms = {
@@ -33,9 +34,65 @@ export const foliageUniforms = {
   /** The light through the leaves, as a share of TRANSLUCENCY: eased down
    *  with the film's evening (followSun). */
   uGlow: { value: 1 },
+  /** The bougainvillea's light (BLOOM_LIGHT): of the sun, and of the shade. */
+  uBloomSun: { value: 1 as number },
+  uBloomShade: { value: 1 as number },
   /** The lift a petal takes in place of FOLIAGE_GAIN (PETAL_GAIN). */
   uPetal: { value: 0 as number },
+  /** The generated palms (PALM_LIGHT; exteriorTrees dresses them): the light
+   *  through a crown, and the lift on its leaf and on its trunk. */
+  uPalmThrough: { value: 0 as number },
+  uPalmLeaf: { value: 1 as number },
+  uPalmTrunk: { value: 1 as number },
+  /** How much of the model's own green a frond keeps (PALM_LIGHT.chroma). */
+  uPalmChroma: { value: 1 as number },
 };
+
+/**
+ * THE GENERATED PALMS ARE TREES IN THE SAME LIGHT.
+ *
+ * The forensic audit of 2026-10-09 (#12, HIGH): "The palms render as pure
+ * black silhouettes with hard, stair-stepped fronds and black trunks,
+ * standing on a sunlit lawn next to broadleaf trees that are fully lit ...
+ * Expected: palms lit by the same sun and sky as everything else, with
+ * translucent fronds against the light."
+ *
+ * The broadleaf crowns are cards, and everything above is theirs: the lift
+ * that undoes their doubled occlusion, the light through a leaf. The palms
+ * the film passes near are the client's generated models (exteriorTrees),
+ * one solid mesh under one material with a name this file did not know, so
+ * they had neither. Seen against the sun, on the revolve, a frond had only
+ * its shaded side to show and the sky's fill on a leaf painted nearly black:
+ * a cut-out, beside a mango in full glow.
+ *
+ * A palm's frond is a row of thin leaflets and passes light as a leaf does.
+ * So the crown of a generated palm (from where its fronds leave the trunk:
+ * exteriorTrees, PALM_CROWN), where it is green, takes the same light through
+ * it as a broadleaf card and a lift of its own; and its trunk a smaller lift,
+ * a trunk being grey bark in the open and not the near-black the model paints
+ * it.
+ *
+ * AND THE LEAF'S OWN COLOUR. Lit, the model's frond is an emerald at full
+ * saturation, which no palm is at any hour and which stood out of a hazed
+ * golden evening like a sign: seen on the first build that lit them, beside
+ * mango and rain-tree crowns in olive. `chroma` is how much of that green a
+ * frond keeps, and it is warmed toward the olive of the crowns it stands
+ * among (PALM_WARMTH).
+ *
+ * All of them can be moved on a running build (lookdev: palmThrough,
+ * palmLeaf, palmTrunk, palmChroma).
+ */
+export const PALM_LIGHT = { through: 0.8, leaf: 1.15, trunk: 3.2, chroma: 0.62 } as const;
+export const PALM_WARMTH = [1.1, 1.0, 0.74] as const;
+/** The share of the light through a crown that reaches a frond turned from
+ *  the sun (exteriorTrees, PALM_THROUGH): seen on the first lit build, the
+ *  fronds hanging on the far side of a crown were still the black they had
+ *  been, under a crown in full light. */
+export const PALM_SCATTER = 0.14;
+foliageUniforms.uPalmThrough.value = PALM_LIGHT.through;
+foliageUniforms.uPalmLeaf.value = PALM_LIGHT.leaf;
+foliageUniforms.uPalmTrunk.value = PALM_LIGHT.trunk;
+foliageUniforms.uPalmChroma.value = PALM_LIGHT.chroma;
 
 /**
  * HOW MUCH OF THE GLOW THE EVENING TAKES. The third art-direction critique
@@ -96,6 +153,30 @@ const PETAL_RE = /^MAT_Leaves_Frangipani/;
 /** The bougainvillea's cards: a bract's magenta, taken down (FOLIAGE_TINT). */
 const BLOOM_RE = /^MAT_Leaves_Bougainvillea/;
 
+/**
+ * ONE PLANTING COLOUR THROUGH THE LIGHT. The forensic audit of 2026-10-09
+ * (#22): "The shrubs are near-black noisy blobs at the cover and saturated
+ * red at the revolve ... Planting that changes from black to red between
+ * chapters looks unconsidered. Expected: one planting colour that holds
+ * through the light."
+ *
+ * A crimson has almost no luminance of its own: in the house's shade, by the
+ * sky alone, the beds along the terrace printed at 45, 12, 18, and with the
+ * low sun on them at 130, 20, 30. A bush of bracts is thin and many-layered:
+ * the sun goes through it more than it lands on it, and its shaded side is
+ * lit by the bracts beside it. So its two lights are drawn toward each other
+ * (`sun`: how much of the sun's own it takes; `shade`: how much more of the
+ * sky's than a leaf), and a little more of its colour is given up (`sat`,
+ * against the 0.62 it kept since the paid audit of 2026-10-04): a deep rose
+ * in the shade and a deep rose in the sun. Measured over the beds' own red,
+ * the shade's against the sun's: 0.38 before, 0.57 at the first setting
+ * (0.8 and 2.0), 0.68 at this one: half a stop apart instead of a stop and
+ * a half.
+ */
+export const BLOOM_LIGHT = { sun: 0.72, shade: 2.7, sat: 0.5 } as const;
+foliageUniforms.uBloomSun.value = BLOOM_LIGHT.sun;
+foliageUniforms.uBloomShade.value = BLOOM_LIGHT.shade;
+
 export const FOLIAGE_VERTEX = /* glsl */ `
 #include <begin_vertex>
 {
@@ -137,7 +218,7 @@ export const FOLIAGE_TINT = /* glsl */ `
   // own bush is a deep crimson, and most of the bush is leaf.
   #ifdef FOLIAGE_BLOOM
     float bl = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-    diffuseColor.rgb = mix(vec3(bl), diffuseColor.rgb, 0.62) * vec3(0.62, 0.6, 0.66);
+    diffuseColor.rgb = mix(vec3(bl), diffuseColor.rgb, ${BLOOM_LIGHT.sat.toFixed(2)}) * vec3(0.62, 0.6, 0.66);
   #endif
 }
 `;
@@ -174,6 +255,11 @@ export const FOLIAGE_TRANSLUCENCY = /* glsl */ `
   float wrap = 0.25 * max(0.0, -dot(normal, sunV));
   vec3 through = diffuseColor.rgb * vec3(1.0, 1.12, 0.55);
   reflectedLight.directDiffuse += through * uFoliageSunColor * ${TRANSLUCENCY.toFixed(3)} * uFoliageGlow * (back + wrap);
+  // The bougainvillea's two lights, drawn toward each other (BLOOM_LIGHT).
+  #ifdef FOLIAGE_BLOOM
+    reflectedLight.directDiffuse *= uBloomSun;
+    reflectedLight.indirectDiffuse *= uBloomShade;
+  #endif
 }
 `;
 
@@ -206,13 +292,15 @@ export function dressFoliage(root: THREE.Object3D): number {
         shader.uniforms.uFoliageSunColor = foliageUniforms.uSunColor;
         shader.uniforms.uFoliageGlow = foliageUniforms.uGlow;
         shader.uniforms.uFoliagePetal = foliageUniforms.uPetal;
+        shader.uniforms.uBloomSun = foliageUniforms.uBloomSun;
+        shader.uniforms.uBloomShade = foliageUniforms.uBloomShade;
         shader.vertexShader = shader.vertexShader
           .replace('void main() {', 'uniform float uFoliageTime;\nvarying float vFoliageSeed;\nvoid main() {')
           .replace('#include <begin_vertex>', FOLIAGE_VERTEX);
         shader.fragmentShader = shader.fragmentShader
           .replace(
             'void main() {',
-            'uniform vec3 uFoliageSunDir;\nuniform vec3 uFoliageSunColor;\nuniform float uFoliageGlow;\nuniform float uFoliagePetal;\nvarying float vFoliageSeed;\nvoid main() {',
+            'uniform vec3 uFoliageSunDir;\nuniform vec3 uFoliageSunColor;\nuniform float uFoliageGlow;\nuniform float uFoliagePetal;\nuniform float uBloomSun;\nuniform float uBloomShade;\nvarying float vFoliageSeed;\nvoid main() {',
           )
           .replace('#include <color_fragment>', FOLIAGE_TINT)
           .replace('#include <alphatest_fragment>', FOLIAGE_COVERAGE)
@@ -232,6 +320,12 @@ const at = new THREE.Vector3();
 export function followSun(light: THREE.DirectionalLight | null, dt: number): void {
   foliageUniforms.uTime.value += dt;
   foliageUniforms.uGlow.value = 1 - GLOW_EVENING_LOSS * filmState.evening;
+  foliageUniforms.uBloomSun.value = ld('bloomSun', BLOOM_LIGHT.sun);
+  foliageUniforms.uBloomShade.value = ld('bloomShade', BLOOM_LIGHT.shade);
+  foliageUniforms.uPalmThrough.value = ld('palmThrough', PALM_LIGHT.through);
+  foliageUniforms.uPalmLeaf.value = ld('palmLeaf', PALM_LIGHT.leaf);
+  foliageUniforms.uPalmTrunk.value = ld('palmTrunk', PALM_LIGHT.trunk);
+  foliageUniforms.uPalmChroma.value = ld('palmChroma', PALM_LIGHT.chroma);
   if (!light) return;
   light.updateMatrixWorld();
   light.target.updateMatrixWorld();

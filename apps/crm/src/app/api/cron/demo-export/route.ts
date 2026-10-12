@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { systemQuery } from '@/server/db';
 import { sql } from 'drizzle-orm';
+import { cronAuthorized } from '@/server/cron-auth';
 
 /**
  * T89 / NFR-R7: Weekly static demo export cron.
@@ -8,7 +9,7 @@ import { sql } from 'drizzle-orm';
  * Acts as the absolute last-resort fallback for presentation mode, operable directly from a USB stick.
  */
 export async function GET(req: NextRequest) {
-  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get('Authorization'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

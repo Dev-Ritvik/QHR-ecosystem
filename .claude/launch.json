@@ -30,6 +30,33 @@
         "start"
       ],
       "port": 3001
+    },
+    {
+      "name": "public-prod-nodb",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set DATABASE_URL=postgresql://nobody:nothing@127.0.0.1:9/none&& pnpm --filter @estate/public start"
+      ],
+      "port": 3001
+    },
+    {
+      "name": "public-stage",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd apps\\public\\.stage && npx next start --port 3003 --hostname 0.0.0.0"
+      ],
+      "port": 3003
+    },
+    {
+      "name": "public-stage-live",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd apps\\public\\.stage && npx next start --port 3001 --hostname 0.0.0.0"
+      ],
+      "port": 3001
     }
   ]
 }

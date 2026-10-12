@@ -75,7 +75,11 @@ export async function createHold(unitId: string, data: z.infer<typeof HoldSchema
     });
 
     // Call state machine via existing service outside the transaction
-    const transitionRes = await transitionUnitStatusAction(unitId, 'held', { holdId: result.hold.id, clientId: result.client.id, reason: parsed.data.reason });
+    // 'on_hold' — the status's name (the database's enum, the domain's
+    // machine). This asked for 'held', which neither knows: the machine
+    // refused every one, and the lines below took the hold back out. A hold
+    // could not be placed at all.
+    const transitionRes = await transitionUnitStatusAction(unitId, 'on_hold', { holdId: result.hold.id, clientId: result.client.id, reason: parsed.data.reason });
     
     if (!transitionRes.ok) {
       // Revert hold entry if the state machine rejects

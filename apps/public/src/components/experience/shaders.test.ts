@@ -26,7 +26,6 @@ import { join } from 'node:path';
  */
 
 const SHADER_FILES = [
-  'Motes.tsx',
   'MapTable.tsx',
   'DoorwayRig.tsx',
   'exteriorFoliage.ts',

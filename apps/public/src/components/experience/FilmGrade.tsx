@@ -46,7 +46,7 @@ import { useFrame } from '@react-three/fiber';
 import { Effect } from 'postprocessing';
 import { Uniform, Vector2, Vector3, Vector4 } from 'three';
 import { passageLight } from './passageLight';
-import { HEADER_BAND, lensFilter } from './lensFilter';
+import { COVER_GRADE, HEADER_BAND, lensFilter } from './lensFilter';
 import { READING_CEILING, READING_STOPS, readingLight } from './readingLight';
 import { ld } from './lookdev';
 
@@ -65,12 +65,10 @@ export const EVENING_LIFT = 0.2;
  *  multiplier on the evening's: 1 holds it). */
 export const NIGHT_LIFT = 1.35;
 /**
- * The print's shadows at full evening. By day they lean a breath toward teal
- * (FILM_GRADE.shadowTint): the planes the sky lights, against the planes the
- * sun does. At dusk there is no blue sky to lean toward — the client,
- * 2026-10-01: "the blue shadows of this look cheap" — so the lean comes off
- * with the evening and the shadows print warm, the colour of the air they are
- * in (WorldCanvas, HAZE_NIGHT).
+ * The print's shadows at full evening. By day they are neutral
+ * (FILM_GRADE.shadowTint: they leaned toward teal until 2026-10-11). At dusk
+ * — the client, 2026-10-01: "the blue shadows of this look cheap" — they
+ * print warm, the colour of the air they are in (WorldCanvas, HAZE_NIGHT).
  *
  * AND THEY ARE LIFTED OFF BLACK, the way a dusk exposure holds its shadows: of
  * the forecourt at dusk the client wrote "this looks darker make it less
@@ -107,6 +105,7 @@ uniform float ndStops2;
 uniform float ndInner2;
 uniform vec4 ndTop;
 uniform float ndAll;
+uniform vec2 ndSky;
 uniform vec2 readCap;
 
 // three's ACESFilmicToneMapping (Stephen Hill's fit), with the exposure taken
@@ -173,6 +172,23 @@ float ndFilter(vec2 uv) {
   return exp2(-d);
 }
 
+// THE COVER'S GRAD HAS A COLOUR (lensFilter.ts, COVER_GRADE; ndSky: how much
+// of its slate and of its warmth, 0..1 each). A graduated slate across the
+// top of the frame, clear by the tree line, and the horizon's own warmth
+// where it lets go, most on the sun's side. A gain on each channel in
+// scene-linear light, before the curve, as the density is: a filter in front
+// of the lens, not a colour laid over the print.
+vec3 skyGrad(vec2 uv) {
+  if (ndSky.x <= 0.0 && ndSky.y <= 0.0) return vec3(1.0);
+  float down = 1.0 - uv.y;
+  float cool = ndSky.x * (1.0 - smoothstep(${COVER_GRADE.coolReach[0].toFixed(3)}, ${COVER_GRADE.coolReach[1].toFixed(3)}, down));
+  float warm = ndSky.y * smoothstep(${COVER_GRADE.warmBand[0].toFixed(3)}, ${COVER_GRADE.warmBand[1].toFixed(3)}, down)
+             * (1.0 - smoothstep(${COVER_GRADE.warmBand[2].toFixed(3)}, ${COVER_GRADE.warmBand[3].toFixed(3)}, down))
+             * mix(${COVER_GRADE.side[1].toFixed(3)}, 1.0, smoothstep(${COVER_GRADE.side[0].toFixed(3)}, 1.0, uv.x));
+  return mix(vec3(1.0), vec3(${COVER_GRADE.cool.map((v) => v.toFixed(3)).join(', ')}), cool)
+       * mix(vec3(1.0), vec3(${COVER_GRADE.warm.map((v) => v.toFixed(3)).join(', ')}), warm);
+}
+
 // THE BAND'S HIGHLIGHTS, burnt in (lensFilter.ts, HEADER_BAND.ceiling): in the
 // print's gamma, a luma above the shoulder is rolled off under the ceiling —
 // a window behind the header prints as a pale pane, not a white one. Below
@@ -204,7 +220,7 @@ vec3 burnTop(vec3 g, vec2 uv) {
 }
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
-  vec3 c = filmCurve(max(inputColor.rgb, vec3(0.0)) * whiteBalance * ndFilter(uv));
+  vec3 c = filmCurve(max(inputColor.rgb, vec3(0.0)) * whiteBalance * ndFilter(uv) * skyGrad(uv));
   vec3 g = pow(c, vec3(1.0 / 2.2));
 
   vec3 hsv = toHsv(g);
@@ -262,7 +278,13 @@ export const FILM_GRADE: FilmGradeSettings = {
   greenSat: 0.72,
   greenHue: 0.012,
   greenValue: 0.9,
-  shadowTint: [-0.012, 0.002, 0.016],
+  // THE SHADOWS PRINT NEUTRAL. They leaned toward teal (-0.012, 0.002,
+  // 0.016), "the planes the sky lights, against the planes the sun does": on
+  // this house that is the shaded elevation against the lit one, and the
+  // forensic audit of 2026-10-09 (#15) read the pair as "two buildings joined
+  // at the corner". The shade's coolness is the sky's own now (WorldCanvas,
+  // FILL_DAY), which a wall takes by how it stands; the print adds none.
+  shadowTint: [0, 0, 0],
   highlightTint: [0.016, 0.006, -0.014],
   // Half of the first setting: with the sun's shadows working the curve alone
   // takes the hero to p95/p05 = 15, and the extra S was pushing p05 into black.
@@ -339,6 +361,7 @@ export class FilmGradeEffect extends Effect {
         ['ndInner2', new Uniform(0.45)],
         ['ndTop', new Uniform(new Vector4(0, 0.07, 0.24, 0.4))],
         ['ndAll', new Uniform(0)],
+        ['ndSky', new Uniform(new Vector2(0, 0))],
         ['readCap', new Uniform(new Vector2(READING_CEILING, 0))],
       ]),
     });
@@ -432,6 +455,7 @@ export const FilmGrade = forwardRef<FilmGradeEffect, { settings?: FilmGradeSetti
       (effect.uniforms.get('readCap')!.value as Vector2).set(READING_CEILING, held < 0.004 ? 0 : held);
       effect.uniforms.get('ndStops')!.value = lensFilter.stops;
       effect.uniforms.get('ndAll')!.value = lensFilter.all;
+      (effect.uniforms.get('ndSky')!.value as Vector2).set(lensFilter.sky.cool, lensFilter.sky.warm);
       effect.uniforms.get('ndInner')!.value = lensFilter.inner;
       (effect.uniforms.get('ndTop')!.value as Vector4).set(
         lensFilter.top,

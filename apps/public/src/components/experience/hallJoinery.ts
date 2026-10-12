@@ -145,6 +145,7 @@ export const JOINERY_NAMES = {
   plinth: (urn: string) => urn.replace('dress_urn_', 'dress_urn_plinth_'),
   sconcePlate: /^sconce_plate_-?\d+_-?\d+$/,
   sconceArm: /^sconce_arm_-?\d+_-?\d+_\d+$/,
+  capital: /^capital_/,
 } as const;
 
 /**
@@ -259,56 +260,210 @@ export function sconceGeometry(): THREE.BufferGeometry {
 }
 
 /**
- * THE FRIEZE HAS NEVER BEEN SEEN. Every anthemion on the hall's frieze (208
- * nodes, one shared KIT_anth_M mesh) was modelled with its carving facing local
- * -Z, and every node is placed so local -Z points INTO the wall. So from the
- * room only their back faces were visible, and three culls back faces: the
- * frieze rendered as bare plaster, and what read as ornament was the bake's
- * dark star-shaped occlusion where each hidden plaque meets the wall. Under the
- * old flat ambient those stars were a faint grey; with the bake left to light
- * its own surfaces they went black. VERIFIED by painting the anthemions magenta:
- * single-sided they did not appear at all; double-sided they sat exactly on the
- * black stars.
+ * THE FRIEZE, PLAIN.
  *
- * The fix is to the geometry, once: mirror the shared mesh through its own
- * mid-plane (z -> -z, winding reversed, normals mirrored), so the carving faces
- * the room from the same 2.3 cm slab and covers the occlusion it casts.
+ * Under the cornice the hall's file hangs a row of plaques (anth_*, 208 nodes
+ * of one mesh, KIT_anth_M): an anthemion, decimated until what is left of each
+ * is a six-pointed lump. The forensic audit of 2026-10-09 (#35, AI-SLOP): "The
+ * frieze is a row of six-pointed stars, pink-mauve, standing off the wall with
+ * a shadow under each ... A band of floating stars belongs to no order of
+ * architecture and reads as an ornament generated to fill a strip. It is in
+ * the background of the founder's portrait. Expected: a plain frieze or a real
+ * running ornament in the wall's own colour."
+ *
+ * (They had once been turned to face the room: modelled facing the wall, only
+ * their backs showed, which three culls, and what read as ornament then was
+ * the bake's star-shaped shade where each met the plaster.)
+ *
+ * A plain frieze, then. Putting the plaques away is not enough, because the
+ * bake was made with them up: the wall behind each carries its shade, a dark
+ * star 25 cm tall (measured on the bare wall: from 7.19 m to 7.43 m, and clean
+ * plaster from 7.18 m down). So each run of plaques is covered by a strip a
+ * hair off the wall that wears THE WALL'S OWN BAKED LIGHT, read from the clean
+ * plaster just under the plaques: every vertex of the strip takes the
+ * lightmap coordinate the wall has straight below it (found by a ray, so
+ * nothing here knows the atlas), and the strip is the wall's own material. The
+ * frieze is then the wall, lit as the wall is from end to end, with the
+ * architrave's own soft shade drawn back in along its top edge.
  */
-export function faceTheFrieze(root: THREE.Object3D): number {
-  const done = new Set<THREE.BufferGeometry>();
+export const FRIEZE = {
+  plaque: /^anth_/,
+  wall: /^int_wall_/,
+  /** The wall's light is read this far under the plaques' foot. */
+  below: 0.09,
+  /** The strip runs this far past the plaques' foot, and past their head. */
+  foot: 0.03,
+  head: 0.012,
+  /** A vertex this often along the wall; and this far past a run's ends. */
+  step: 0.16,
+  past: 0.06,
+  /** Off the wall's face. */
+  proud: 0.004,
+  /** The architrave's shade on the plaster under it: this deep at the strip's
+   *  top edge, gone this far down. */
+  shade: 0.84,
+  shadeOver: 0.05,
+  /** Plaques further apart than this are two runs (the stair wall's, either
+   *  side of the arch). */
+  gap: 0.6,
+} as const;
+
+export interface PlainFrieze {
+  counts: { plaques: number; runs: number; vertices: number };
+  dispose(): void;
+}
+
+export function plainFrieze(root: THREE.Object3D): PlainFrieze {
+  root.updateMatrixWorld(true);
+  const toRoot = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const boxOf = (o: THREE.Object3D) => new THREE.Box3().setFromObject(o).applyMatrix4(toRoot);
+  const plaques: THREE.Mesh[] = [];
+  const walls: THREE.Mesh[] = [];
   root.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh || !/^anth_/.test(mesh.name)) return;
-    const g = mesh.geometry as THREE.BufferGeometry & { userData: { facesRoom?: boolean } };
-    if (done.has(g) || g.userData.facesRoom) return;
-    done.add(g);
-    g.userData.facesRoom = true;
-    const pos = g.getAttribute('position') as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i += 1) pos.setZ(i, -pos.getZ(i));
-    pos.needsUpdate = true;
-    const nrm = g.getAttribute('normal') as THREE.BufferAttribute | undefined;
-    if (nrm) {
-      for (let i = 0; i < nrm.count; i += 1) nrm.setZ(i, -nrm.getZ(i));
-      nrm.needsUpdate = true;
-    }
-    // A mirror turns every triangle inside out; reverse the winding.
-    const index = g.getIndex();
-    if (index) {
-      for (let i = 0; i < index.count; i += 3) {
-        const b = index.getX(i + 1);
-        index.setX(i + 1, index.getX(i + 2));
-        index.setX(i + 2, b);
-      }
-      index.needsUpdate = true;
-    }
-    g.computeBoundingBox();
-    g.computeBoundingSphere();
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (FRIEZE.plaque.test(m.name)) plaques.push(m);
+    else if (FRIEZE.wall.test(m.name)) walls.push(m);
   });
-  return done.size;
+  const none: PlainFrieze = { counts: { plaques: plaques.length, runs: 0, vertices: 0 }, dispose() {} };
+  if (!plaques.length) return none;
+
+  const added: THREE.Mesh[] = [];
+  const made: { dispose(): void }[] = [];
+  let vertices = 0;
+  if (walls.length) {
+    const room = walls.reduce((b, w) => b.union(boxOf(w)), new THREE.Box3()).getCenter(new THREE.Vector3());
+    type Axis = 'x' | 'z';
+    // Each plaque: the wall it hangs on (the axis it is thin on, the side the
+    // room lies), where it is along that wall, and its height.
+    const hung = new Map<string, { axis: Axis; s: number; at: number; a: number; b: number; y0: number; y1: number }[]>();
+    for (const plaque of plaques) {
+      const b = boxOf(plaque);
+      const axis: Axis = b.max.x - b.min.x < b.max.z - b.min.z ? 'x' : 'z';
+      const across: Axis = axis === 'x' ? 'z' : 'x';
+      const at = (b.min[axis] + b.max[axis]) / 2;
+      const s = room[axis] >= at ? 1 : -1;
+      const key = `${axis}${s}`;
+      hung.set(key, [...(hung.get(key) ?? []), { axis, s, at, a: b.min[across], b: b.max[across], y0: b.min.y, y1: b.max.y }]);
+    }
+    const ray = new THREE.Raycaster();
+    const from = new THREE.Vector3();
+    const toward = new THREE.Vector3();
+    const patches = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+    for (const list of hung.values()) {
+      list.sort((p, q) => p.a - q.a);
+      const runs: (typeof list)[] = [];
+      for (const p of list) {
+        const run = runs[runs.length - 1];
+        if (run && p.a - run[run.length - 1].b <= FRIEZE.gap) run.push(p);
+        else runs.push([p]);
+      }
+      const { axis, s } = list[0];
+      const across: Axis = axis === 'x' ? 'z' : 'x';
+      for (const run of runs) {
+        const a0 = run[0].a - FRIEZE.past;
+        const a1 = run[run.length - 1].b + FRIEZE.past;
+        const foot = Math.min(...run.map((p) => p.y0));
+        const head = Math.max(...run.map((p) => p.y1)) + FRIEZE.head;
+        const rows: [number, number][] = [
+          [foot - FRIEZE.foot, 1],
+          [head - FRIEZE.shadeOver, 1],
+          [head, FRIEZE.shade],
+        ];
+        const n = Math.max(1, Math.ceil((a1 - a0) / FRIEZE.step));
+        // Down each column: where the wall is, and the lightmap's coordinate
+        // of the clean plaster under the plaques.
+        const columns: ({ wall: number; u: number; v: number; material: THREE.Material } | null)[] = [];
+        for (let i = 0; i <= n; i += 1) {
+          from.set(0, foot - FRIEZE.below, 0);
+          from[axis] = run[0].at + s * 0.5;
+          from[across] = a0 + ((a1 - a0) * i) / n;
+          toward.set(0, 0, 0);
+          toward[axis] = -s;
+          ray.set(from.applyMatrix4(root.matrixWorld), toward.transformDirection(root.matrixWorld));
+          ray.far = 2;
+          const hit = ray.intersectObjects(walls, false).find((h) => h.uv1 && !Array.isArray((h.object as THREE.Mesh).material));
+          columns.push(
+            hit?.uv1
+              ? { wall: hit.point.applyMatrix4(toRoot)[axis], u: hit.uv1.x, v: hit.uv1.y, material: (hit.object as THREE.Mesh).material as THREE.Material }
+              : null,
+          );
+        }
+        // A column the ray missed takes its neighbour's.
+        const first = columns.find((c) => c);
+        if (!first) continue;
+        let last = first;
+        const filled = columns.map((c) => (last = c ?? last));
+        const position: number[] = [];
+        const normal: number[] = [];
+        const uv1: number[] = [];
+        const color: number[] = [];
+        const index: number[] = [];
+        filled.forEach((c, i) => {
+          for (const [y, shade] of rows) {
+            const p = { x: 0, y, z: 0 };
+            p[axis] = c.wall + s * FRIEZE.proud;
+            p[across] = a0 + ((a1 - a0) * i) / n;
+            position.push(p.x, p.y, p.z);
+            normal.push(axis === 'x' ? s : 0, 0, axis === 'z' ? s : 0);
+            uv1.push(c.u, c.v);
+            color.push(shade, shade, shade);
+          }
+        });
+        // Wound to face the room: up x inward is the way the columns run when
+        // the triangles are counter-clockwise from the room's side.
+        const forward = (axis === 'x' ? -s : s) > 0;
+        const R = rows.length;
+        for (let i = 0; i < n; i += 1) {
+          for (let j = 0; j < R - 1; j += 1) {
+            const [p, q, r, t] = [i * R + j, (i + 1) * R + j, (i + 1) * R + j + 1, i * R + j + 1];
+            if (forward) index.push(p, q, r, p, r, t);
+            else index.push(p, r, q, p, t, r);
+          }
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+        g.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((position.length / 3) * 2), 2));
+        g.setAttribute('uv1', new THREE.Float32BufferAttribute(uv1, 2));
+        g.setAttribute('color', new THREE.Float32BufferAttribute(color, 3));
+        g.setIndex(index);
+        let material = patches.get(first.material);
+        if (!material) {
+          material = (first.material as THREE.MeshStandardMaterial).clone();
+          material.name = 'MAT_Frieze_Plain';
+          material.vertexColors = true;
+          // A hair off the wall, and never fighting it for the depth.
+          material.polygonOffset = true;
+          material.polygonOffsetFactor = -1;
+          material.polygonOffsetUnits = -2;
+          patches.set(first.material, material);
+          made.push(material);
+        }
+        const strip = new THREE.Mesh(g, material);
+        strip.name = `frieze_plain_${axis}${s > 0 ? 'p' : 'n'}_${added.length}`;
+        root.add(strip);
+        added.push(strip);
+        made.push(g);
+        vertices += position.length / 3;
+      }
+    }
+  }
+
+  const hidden = plaques.filter((m) => m.visible);
+  for (const m of hidden) m.visible = false;
+  return {
+    counts: { plaques: plaques.length, runs: added.length, vertices },
+    dispose() {
+      for (const o of added) o.removeFromParent();
+      for (const d of made) d.dispose();
+      for (const m of hidden) m.visible = true;
+    },
+  };
 }
 
 export interface Refurnished {
-  counts: { newels: number; retired: number; balusters: number; urns: number; sconces: number };
+  counts: { newels: number; retired: number; balusters: number; urns: number; sconces: number; capitals: number };
   /** Remove what was added, release what was created, show the originals again. */
   dispose(): void;
 }
@@ -334,6 +489,7 @@ export function refurnishHall(root: THREE.Object3D): Refurnished {
   const urns: THREE.Mesh[] = [];
   const plates: THREE.Mesh[] = [];
   const arms: THREE.Mesh[] = [];
+  const capitals: THREE.Mesh[] = [];
   // Typed through `as`: a plain `= null` initialiser would narrow this to null
   // for the rest of the function, since TS cannot see the assignment inside
   // the traverse callback.
@@ -347,6 +503,7 @@ export function refurnishHall(root: THREE.Object3D): Refurnished {
     else if (JOINERY_NAMES.urn.test(m.name)) urns.push(m);
     else if (JOINERY_NAMES.sconcePlate.test(m.name)) plates.push(m);
     else if (JOINERY_NAMES.sconceArm.test(m.name)) arms.push(m);
+    else if (JOINERY_NAMES.capital.test(m.name)) capitals.push(m);
     const mat = m.material as THREE.Material;
     if (!gold && !Array.isArray(m.material) && mat?.name === 'MAT_Gold') gold = mat;
   });
@@ -468,6 +625,32 @@ export function refurnishHall(root: THREE.Object3D): Refurnished {
 
   for (const m of hidden) m.visible = false;
 
+  // THE CAPITALS, DRAWN FROM BOTH SIDES. Each is a Corinthian capital on a
+  // stub of shaft (KIT_column_M), decimated to ten thousand triangles, and the
+  // decimation left its leaves wound both ways: single-sided, a third of them
+  // were not drawn and the bell showed through as black holes (the same
+  // "speckled black-and-white" the newels had; here it was tried and is NOT in
+  // the normals: recomputing them changed nothing, drawing the back faces
+  // closed the holes). The capitals wear the trim's own paint in a material of
+  // their own, by the same name, so the room's finishes and its light find it.
+  const dressed: [THREE.Mesh, THREE.Material | THREE.Material[]][] = [];
+  if (capitals.length) {
+    const both = new Map<THREE.Material, THREE.Material>();
+    for (const capital of capitals) {
+      if (Array.isArray(capital.material)) continue;
+      let mat = both.get(capital.material);
+      if (!mat) {
+        mat = capital.material.clone();
+        mat.name = capital.material.name;
+        mat.side = THREE.DoubleSide;
+        both.set(capital.material, mat);
+        created.push(mat);
+      }
+      dressed.push([capital, capital.material]);
+      capital.material = mat;
+    }
+  }
+
   return {
     counts: {
       newels: newels.length,
@@ -475,9 +658,11 @@ export function refurnishHall(root: THREE.Object3D): Refurnished {
       balusters: balusters.length,
       urns: urns.length,
       sconces: plates.length,
+      capitals: dressed.length,
     },
     dispose() {
       for (const o of added) o.removeFromParent();
+      for (const [mesh, material] of dressed) mesh.material = material;
       for (const c of created) c.dispose();
       for (const m of hidden) m.visible = true;
     },

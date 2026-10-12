@@ -30,7 +30,18 @@ import { useGLTF } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { filmState } from './FilmGrade';
-import { beginPoolProbe, type PoolProbeCapture } from './poolProbe';
+import { beginWaterProbe, type WaterProbeCapture } from './poolProbe';
+import {
+  HOUR_STEP,
+  PROBE_AT,
+  WATER_RE,
+  dressWater,
+  followWaterHour,
+  splitCanal,
+  waterShared,
+  waterUniforms,
+} from './exteriorWater';
+import { ld } from './lookdev';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { attachLoaders } from './HallModel';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -44,6 +55,7 @@ import { groundObjects } from './exteriorContact';
 import { dressWindows, roomLights } from './exteriorWindows';
 import { buildPoolMap, dressPools } from './nightPools';
 import { dressSurfaces } from './exteriorSurfaces';
+import { dressArrises } from './exteriorArris';
 import { keepDepthAlpha } from './LensFocus';
 
 /**
@@ -1052,14 +1064,22 @@ const EMISSIVE_DUSK: EmissiveSpec = {
  * any positive value paints them over the shadow the reveal is supposed to
  * cast.
  *
- * The gold keeps a token 0.08. Not for glow — at metalness 1 against a 0.7
- * environment it has plenty to reflect — but because the finials are 40mm
- * details at hero distance and dropping them to nothing loses the roofline
- * entirely. Measured: 0.4 -> 0.08 removes the bloom halo and keeps the points.
+ * The gold kept a token 0.08, "because the finials are 40mm details at hero
+ * distance and dropping them to nothing loses the roofline entirely". It
+ * glows no longer. The forensic audit of 2026-10-09 (#11, AI-SLOP): "Four
+ * different ornaments share one flat ochre-yellow with no reflection ...
+ * Untextured yellow standing in for gilding ... is what generated decoration
+ * looks like. Expected: ... if gilding stays, keep it to the roundel and
+ * finials with a real metal response." A light of its own is what made it
+ * flat: it laid the same amber over the lit side of a finial and its shaded
+ * side, and once the evening had taken the sky down it was all there was (at
+ * the approach the pediment's roundel was an orange disc). Gilding is a
+ * mirror for whatever light there is; it takes more of the sky instead
+ * (POLISH, MAT_Gold), and at dusk it goes down with the sky, as gilt does.
  */
 const EMISSIVE_DAYLIGHT: EmissiveSpec = {
   MAT_Window_Interior: { color: '#FFAA55', intensity: 0.0 },
-  MAT_Gold: { color: '#FFC98A', intensity: 0.08 },
+  MAT_Gold: { color: '#FFC98A', intensity: 0.0 },
   MAT_Wood_Dark: { color: '#FF9A40', intensity: 0.0 },
 };
 
@@ -1162,11 +1182,16 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   MAT_Roof_Slate: { colour: 1.5, rough: 1.7, env: 0.4 },
   MAT_Roof: { colour: 1.7, rough: 0.85, env: 1.3 },
   MAT_Lawn: { colour: 1.28, rough: 0.72, env: 1.0 },
+  // WATER'S `env` IS ONLY ITS PLACE ON THIS LIST: what it reflects, and how
+  // much, is exteriorWater.ts (useSkyReflections keeps it on the sky that is
+  // shown; the pool and the canal have probes of their own). The canal's
+  // material is made here from the fountain's (splitCanal).
   MAT_Water: { env: 2.0 },
+  MAT_Water_Canal: { env: 2.0 },
   // A REFLECTING POOL, not a resort one (essence.md: old money is quiet). The
   // cyan sheet over a pale shell was the loudest colour in every frame it was
   // in, and the most "game" surface in the hero. Dark water mirrors the sky and
-  // the house, and at evening its lights (MAT_Light_Pool) glow against it.
+  // the house.
   MAT_Water_Pool: { colour: 0.32, env: 4.2 },
   // Clear glass, not smoked: at 0.55 over a dark tint the panes were the
   // review's "flat black voids". Thin, so the rooms behind show
@@ -1190,7 +1215,14 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   MAT_Car_Classic: { env: 1.7 },
   MAT_Chrome: { env: 2.2 },
   MAT_Steel: { env: 1.9 },
-  MAT_Gold: { env: 1.9 },
+  // THE GILT, AS A METAL (see EMISSIVE_DAYLIGHT for the audit's finding). With
+  // its own glow gone it has to be seen by what it reflects: more than twice
+  // the sky it took, a slightly keener polish, and a tone a tenth down, which
+  // is leaf that has stood out of doors and not new brass. Seen at three
+  // settings on the running build against the roundel, a corner finial and
+  // the whole front: at this one the roundel's rim turns from light to shade
+  // round its circle and a finial has a lit side and a deep one.
+  MAT_Gold: { env: 4.2, rough: 0.9, colour: 0.9 },
   // THE TERRACE IS A DIFFERENT STONE FROM THE HOUSE, AND SITS BELOW IT (the
   // paid audit, pass 4: "material hierarchy ... restrained materials with
   // believable relationships"). Polished and as pale as the ashlar, the pool
@@ -1247,158 +1279,12 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
 };
 
 /**
- * MOVING WATER, WHICH IS THE POINT OF WATER.
- *
- * Every sheet of water on the estate — the fountain basins, the canal, the new
- * pool — was a mirror-flat plane, and a mirror that never moves does not read as
- * water. It reads as glass, or worse, as the painted blue rectangle a site plan
- * uses. Now that the sky is bound as the environment there is something in those
- * reflections worth disturbing, and disturbing them is what makes the surface
- * legible AS a surface.
- *
- * TWO CROSSED WAVE TRAINS, IN THE NORMAL ONLY. No vertex displacement (the sheet
- * is a flat quad with four corners — there is nothing to displace) and no
- * texture (a 1 KB shader chunk against a 300 KB normal map). Two sine trains at
- * different frequencies, angles and speeds sum into something that does not
- * visibly repeat at the distances the film holds; the amplitude is deliberately
- * tiny — 0.02 in the normal — because water at 40 m is a slight unsettling of
- * a reflection, not a choppy sea.
- *
- * ONE UNIFORM OBJECT, SHARED. Every water material gets the same `uTime`
- * reference, so the per-frame cost is a single assignment rather than a
- * traversal.
+ * THE WATER is drawn by exteriorWater.ts: its ripples, its body and what it
+ * reflects, one treatment for the pool, the canal and the fountain. (Its
+ * ripples and the pool's depth were written here first, as "MOVING WATER,
+ * WHICH IS THE POINT OF WATER" and its second pass; they are there now, with
+ * the forensic audit of 2026-10-09, #17 and #27, which is why it moved.)
  */
-const WATER_RE = /^MAT_Water/;
-const POOL_RE = /^MAT_Water_Pool/;
-
-/**
- * THE WATER, SECOND PASS — the art-direction review still read the pool as
- * "a solid, static blue plane ... painted plastic".
- *
- * Two sines of 0.02 were below what a 2880px frame can show. Now:
- *
- *   FOUR WAVE TRAINS, 2.3 m down to 0.27 m, each summed into the slope of the
- *   surface in WORLD space (the sheet is level) and turned into the view-space
- *   normal. Every train fades out as it shrinks toward a pixel (fwidth), so
- *   the far canal keeps its long swell and the pool at the lens gets its
- *   ripples, and nothing aliases into a shimmer. The sun's highlight breaks on
- *   them into glints; the sky and the house break in the reflection.
- *
- *   DEPTH, IN THE POOL. Water over a pale shell is light where it is shallow
- *   and deep where it is not. The pool is a single sheet, so the depth is
- *   read from the distance to its own edge (its world box, measured once):
- *   lighter over the first metre of the rim, the dark reflecting body beyond.
- *
- *   CAUSTICS where it is shallow: the network of light a rippled surface
- *   focuses onto the floor under it, drifting with the waves.
- */
-function animateWater(root: THREE.Object3D, clock: { value: number }): number {
-  const done = new Set<THREE.Material>();
-  let count = 0;
-  root.updateMatrixWorld(true);
-  const poolBox = new THREE.Box3();
-  root.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    if (mats.some((m) => m && POOL_RE.test(m.name))) poolBox.expandByObject(mesh);
-  });
-  const box = new THREE.Vector4(poolBox.min.x, poolBox.min.z, poolBox.max.x, poolBox.max.z);
-  root.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    for (const m of mats) {
-      const mat = m as THREE.MeshStandardMaterial & { __ripple?: boolean };
-      if (!mat || mat.__ripple || !WATER_RE.test(mat.name)) continue;
-      mat.__ripple = true;
-      const pool = POOL_RE.test(mat.name) && !poolBox.isEmpty();
-      if (pool) mat.defines = { ...(mat.defines ?? {}), WATER_POOL: '' };
-      const prev = mat.onBeforeCompile;
-      mat.onBeforeCompile = (shader, renderer) => {
-        prev.call(mat, shader, renderer);
-        shader.uniforms.uTime = clock;
-        shader.uniforms.uPoolBox = { value: box };
-        shader.vertexShader = shader.vertexShader
-          .replace('void main() {', `varying vec3 vRipplePos;
-             void main() {`)
-          .replace(
-            '#include <begin_vertex>',
-            `#include <begin_vertex>
-             vRipplePos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
-          );
-        shader.fragmentShader = shader.fragmentShader
-          .replace('void main() {', `${WATER_FUNCTIONS}
-             void main() {`)
-          .replace('#include <color_fragment>', `#include <color_fragment>
-${WATER_COLOUR}`)
-          .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-${WATER_NORMAL}`);
-      };
-      mat.customProgramCacheKey = () => `water-ripple-v3${pool ? '-pool' : ''}`;
-      mat.needsUpdate = true;
-      count += 1;
-    }
-  });
-  return count;
-}
-
-const WATER_FUNCTIONS = /* glsl */ `
-uniform float uTime;
-uniform vec4 uPoolBox;
-varying vec3 vRipplePos;
-// One train's slope: amplitude x wavenumber x cos, along its direction, faded
-// out before its wavelength shrinks to a couple of pixels.
-vec2 waterTrain(vec2 p, float lambda, float angle, float slope, float speed, float fw) {
-  float k = 6.2831853 / lambda;
-  vec2 d = vec2(cos(angle), sin(angle));
-  float keep = 1.0 - smoothstep(lambda * 0.18, lambda * 0.5, fw);
-  return d * slope * keep * cos(dot(d, p) * k - uTime * speed);
-}
-float waterCaustic(vec2 p, float t) {
-  float r1 = abs(sin(p.x * 3.1 + sin(p.y * 2.3 + t * 0.8) * 1.2 + t * 0.6));
-  float r2 = abs(sin(p.y * 2.7 + sin(p.x * 1.9 - t * 0.7) * 1.3 - t * 0.5));
-  return pow(1.0 - min(r1, r2), 6.0);
-}
-`;
-
-const WATER_NORMAL = /* glsl */ `
-{
-  vec2 p = vRipplePos.xz;
-  float fw = length(fwidth(p));
-  // A STILL EVENING (the paid audit of 2026-10-04, pass 4: "Water: does it
-  // reflect the environment rather than simply being blue?"). Four trains of
-  // near-equal slope crossed into a lattice of diamonds that the cover showed
-  // as a printed pattern on the pool. Water in a walled garden at dusk is a
-  // mirror that breathes: one long swell, a shorter one across it at a third
-  // of its slope, and a trace of ripple. The sky and the house hold together
-  // in the reflection, and only their edges move.
-  vec2 g = waterTrain(p, 3.1, 0.3, 0.018, 0.9, fw)
-         + waterTrain(p, 1.3, 2.1, 0.008, 1.4, fw)
-         + waterTrain(p, 0.55, 4.0, 0.004, 2.2, fw)
-         + waterTrain(p, 0.27, 5.3, 0.002, 3.1, fw);
-  vec3 nW = normalize(vec3(-g.x, 1.0, -g.y));
-  normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
-}
-`;
-
-const WATER_COLOUR = /* glsl */ `
-#ifdef WATER_POOL
-{
-  vec2 size = max(uPoolBox.zw - uPoolBox.xy, vec2(0.01));
-  vec2 q = clamp(vRipplePos.xz - uPoolBox.xy, vec2(0.0), size);
-  float edge = min(min(q.x, size.x - q.x), min(q.y, size.y - q.y));
-  float deep = smoothstep(0.25, 2.2, edge);
-  // Toward green-black, not resort cyan: a still pool over dark stone.
-  vec3 body = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.55);
-  vec3 shallow = body * vec3(1.7, 1.65, 1.5);
-  diffuseColor.rgb = mix(shallow, body * 0.5, deep);
-  float fw = length(fwidth(vRipplePos.xz));
-  float c = waterCaustic(vRipplePos.xz, uTime) * (1.0 - smoothstep(0.08, 0.25, fw));
-  diffuseColor.rgb += c * (1.0 - 0.75 * deep) * vec3(0.02, 0.03, 0.028);
-}
-#endif
-`;
 
 /**
  * The name a material was authored under. The AO bake duplicates every material
@@ -1442,18 +1328,56 @@ function strengthenOcclusion(root: THREE.Object3D): { architecture: number; grou
   return count;
 }
 
+/**
+ * DRESSED STONE IS LEFT OUT OF THE CONTACT PASS. The forensic audit of
+ * 2026-10-09 (#32): "The stone of the arch and soffit carries a woven,
+ * cloth-like texture at this range."
+ *
+ * The weave is not in the stone. It is the screen-space contact occlusion
+ * (LensFocus.tsx, contactAO): twelve taps to a pixel, turned through a
+ * different angle at every pixel, and nothing after them to average one pixel
+ * with the next. Where a surface has a grain of its own (gravel, a lawn, a
+ * hedge) that sampling noise is lost in it. On smooth dressed stone it is the
+ * only grain there is, and it is at its worst close to the house: the kernel
+ * is held to 96 pixels there, its taps are at their furthest apart, and a
+ * frieze a metre under a balcony is caught by one tap in one pixel and by none
+ * in the next. Measured at 54.5% of the film on the portico's frieze, a face
+ * the pass darkens by four parts in a hundred: a pixel-to-pixel deviation of
+ * 3.45 with the pass and 1.11 without it.
+ *
+ * And the stone does not need the pass. Its walls, steps and terraces carry a
+ * baked map of the sky they have lost, with everything that stands on them
+ * counted (strengthenOcclusion, above), and the sun has its shadow map: the
+ * pass was a second count of the same thing, and darkened the sun as well. So
+ * each dressed-stone material writes its depth as a lamp does (LensFocus,
+ * ESTATE_EMITTER): still read as an occluder by whatever stands on it or
+ * beside it, and not itself darkened. Seen side by side at the cover, at
+ * sunset and at the door: the frieze, the column shafts and the urns' plinths
+ * come clean, the loungers stand on the terrace as they did, and the car keeps
+ * the contact it has on the gravel (46 against 46), which is not stone.
+ */
+export const CONTACT_FREE_RE = /^MAT_Stone_/;
+
+function leaveStoneOutOfContact(root: THREE.Object3D): number {
+  const done = new Set<THREE.Material>();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      const mat = m as THREE.MeshStandardMaterial;
+      if (!mat || done.has(mat) || !CONTACT_FREE_RE.test(mat.name)) continue;
+      done.add(mat);
+      if (mat.defines?.ESTATE_EMITTER !== undefined) continue;
+      mat.defines = { ...(mat.defines ?? {}), ESTATE_EMITTER: '' };
+      mat.needsUpdate = true;
+    }
+  });
+  return done.size;
+}
+
 type SkyReflector = {
   mat: THREE.MeshStandardMaterial;
   gain: number;
-  /** A probe of its own (the pool's, poolProbe.ts), in place of the sky. */
-  local?: THREE.Texture;
-  /** That probe was taken at night: it holds the dark and the lit rooms at
-   *  their own radiance, so the evening does not dim it a second time. */
-  night?: boolean;
-  /** That probe was taken in the evening (EVENING_PROBE), and how far it has
-   *  come up since it was given, 0 to 1. */
-  evening?: boolean;
-  since?: number;
 };
 
 /**
@@ -1521,6 +1445,61 @@ function polishSurfaces(root: THREE.Object3D): SkyReflector[] {
 }
 
 /**
+ * A CAR'S BRIGHTWORK IS A LINE, NOT A ROW OF LIGHTS. The forensic audit of
+ * 2026-10-09 (#26): "A dotted line of orange sparkle runs along the car's
+ * sill, as if a row of small lights were set into it ... Expected: a
+ * continuous chrome strip."
+ *
+ * The generated cars carry their chrome in their own maps: a sill strip two
+ * texels wide, mirror-smooth, under a normal map of the same fineness. From
+ * the forecourt that strip is under a pixel, and each pixel along it took one
+ * sample of one facet: where the facet happened to face the lit portico, an
+ * orange point, and beside it nothing. This is the standard answer (Kaplanyan
+ * and Hill's specular anti-aliasing): how fast the mapped normal turns across
+ * a pixel is how wide the highlight has to be for a pixel to hold all of it,
+ * so that turning is added to the surface's roughness, capped (`cap`, as a
+ * GGX variance) so a bonnet seen close stays a mirror. And `floor`: no part
+ * of them is smoother than polished metal out of doors.
+ */
+export const CAR_SPECULAR = { cap: 0.22, floor: 0.16 } as const;
+const CAR_MAPPED_RE = /^MAT_Car_(Saloon|Classic)/;
+
+const CAR_SPECULAR_AA = /* glsl */ `
+#include <lights_physical_fragment>
+{
+  vec3 carDx = dFdx(normal), carDy = dFdy(normal);
+  float carTurn = min(2.0 * 0.25 * (dot(carDx, carDx) + dot(carDy, carDy)), ${CAR_SPECULAR.cap.toFixed(2)});
+  float carRough = max(material.roughness, ${CAR_SPECULAR.floor.toFixed(2)});
+  material.roughness = sqrt(clamp(carRough * carRough + carTurn, 0.0, 1.0));
+}
+`;
+
+function calmBrightwork(root: THREE.Object3D): number {
+  const done = new Set<THREE.Material>();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      const mat = m as THREE.MeshStandardMaterial & { __brightwork?: boolean };
+      if (!mat || done.has(mat) || !CAR_MAPPED_RE.test(mat.name)) continue;
+      done.add(mat);
+      // Once for each material: drei shares the parse between mounts.
+      if (mat.__brightwork) continue;
+      mat.__brightwork = true;
+      const prev = mat.onBeforeCompile;
+      mat.onBeforeCompile = (shader, renderer) => {
+        prev.call(mat, shader, renderer);
+        shader.fragmentShader = shader.fragmentShader.replace('#include <lights_physical_fragment>', CAR_SPECULAR_AA);
+      };
+      const key = mat.customProgramCacheKey.bind(mat);
+      mat.customProgramCacheKey = () => `${key()}|estate-brightwork`;
+      mat.needsUpdate = true;
+    }
+  });
+  return done.size;
+}
+
+/**
  * Keep the polished materials on the scene's sky with their own gain. Run per
  * frame because both halves can change under it: SkyBackground swaps
  * scene.environment when the sky loads (and clears it at the threshold), and
@@ -1529,185 +1508,100 @@ function polishSurfaces(root: THREE.Object3D): SkyReflector[] {
  */
 function useSkyReflections(reflectors: { current: SkyReflector[] }) {
   const scene = useThree((s) => s.scene);
-  useFrame((_, delta) => {
+  useFrame(() => {
     const sky = scene.environment;
     const base = scene.environmentIntensity;
+    followWaterHour(filmState.evening);
+    // The sky panorama keeps its daylight when the film's evening falls (only
+    // the background is dimmed), so a surface still reflecting it at dusk
+    // glowed. The sky-lit polish falls with the evening: to fifteen per cent
+    // by the time the evening is half on.
+    const dusk = 1 - 0.85 * Math.min(1, filmState.evening / DUSK_POLISH);
+    // WATER IS NOT POLISH. It mirrors the sky that is SHOWN: the picture
+    // behind the land, at the strength it is drawn at this hour
+    // (scene.backgroundIntensity, which WorldCanvas rides through the evening
+    // and the night). At fifteen per cent of the day's sky the fountain and
+    // the canal reflected nothing for the whole of the evening; at the day's
+    // whole sky they would glow under a dusk one. Neither: what is above them.
+    const shown = scene.backgroundIntensity * ld('waterSky', WATER_SKY);
     for (const r of reflectors.current) {
-      const env = r.local ?? sky;
-      if (r.mat.envMap !== env) {
-        r.mat.envMap = env;
+      if (r.mat.envMap !== sky) {
+        r.mat.envMap = sky;
         r.mat.needsUpdate = true;
       }
-      // A local probe holds the estate at its true radiance: unity, and the
-      // water's own Fresnel does the rest.
-      // The sky panorama keeps its daylight when the film's evening falls (only
-      // the background is dimmed), so a surface still reflecting it at dusk
-      // glowed: the canal in the holdings frame read as a band of sunset. The
-      // sky-lit polish falls with the evening; the pool's own probe too.
-      //
-      // AND THE POOL AT SUNSET HAS ITS OWN PHOTOGRAPH (usePoolProbe; the audit
-      // of 2026-10-05, P2: "at sunset the pool is a flat teal surface. Done
-      // when it picks up the sky and house"). The morning's probe is what was
-      // being put out here, to fifteen per cent, and nothing took its place
-      // until night: for the whole of the evening the water reflected nothing.
-      // The morning's picture still goes down as the evening comes; the
-      // evening's comes up in its place, eased in from the frame it is ready.
-      const dayDusk = 1 - 0.85 * Math.min(1, filmState.evening / EVENING_PROBE.from);
-      let dusk = r.night ? 1 : dayDusk;
-      if (r.evening) {
-        r.since = Math.min(1, (r.since ?? 0) + delta / EVENING_PROBE.ease);
-        const up = THREE.MathUtils.smoothstep(filmState.evening, EVENING_PROBE.from, EVENING_PROBE.whole);
-        dusk = 0.15 + (EVENING_PROBE.gain - 0.15) * up * r.since * r.since * (3 - 2 * r.since);
-      }
-      const want = (r.local ? POOL_PROBE_GAIN : r.gain * base) * dusk;
-      // And the low sun's own glint off open water, which at dusk lay across
-      // the canal as a hot band behind the holdings copy: the water roughens
-      // with the evening (a breeze), spreading the glint to a sheen.
-      if (WATER_RE.test(r.mat.name) && !r.local) {
-        const u = r.mat.userData as { roughBase?: number };
-        u.roughBase ??= r.mat.roughness;
-        const rough = Math.max(u.roughBase, u.roughBase + (0.42 - u.roughBase) * filmState.evening);
-        if (Math.abs(r.mat.roughness - rough) > 1e-3) r.mat.roughness = rough;
-      }
+      const want = WATER_RE.test(r.mat.name) ? shown : r.gain * base * dusk;
       if (r.mat.envMapIntensity !== want) r.mat.envMapIntensity = want;
     }
   });
 }
 
-/** The pool's reflection, from its own probe. */
-const POOL_PROBE_GAIN = 1.0;
+/** The evening at which the sky-lit polish has gone down to its dusk. */
+const DUSK_POLISH = 0.5;
+/** The lighting copy of the sky against the plate that is shown: one sky. */
+export const WATER_SKY = 1.0;
+
+const PROBED = ['pool', 'canal'] as const;
+type Probed = (typeof PROBED)[number];
+/** The film's hour a probe was taken at, and how strong the sky was drawn. */
+type Hour = { evening: number; night: number; sky: number };
 
 /**
- * THE EVENING'S PROBE. Taken once the film's evening is `take` on (the sun
- * low, the sky lit); shown from `from`, whole by `whole`, coming up over
- * `ease` seconds from the frame it is ready. `gain`: the high frames look
- * down on the pool at 25 to 30 degrees, where still water returns under a
- * tenth of what is above it — a true mirror there is a dark pool with a hint
- * of sky, which is what "flat teal" was. A pool seen from above at sunset
- * reads as sky because the eye is given the brightest thing in it; this is
- * that, a little more than physics would allow at the angle.
+ * THE WATER'S PROBES (exteriorWater.ts, poolProbe.ts): the estate photographed
+ * from over the pool and from over the canal, a face a frame, on the first
+ * frames it is on screen with its sky — and AGAIN whenever the film's hour has
+ * moved on by HOUR_STEP since the one being shown, one probe at a time.
+ *
+ * There were three, taken once each: the day's, the evening's (shown at a gain
+ * of 1.6) and the night's (not taken until the night was 0.8 on). The forensic
+ * audit of 2026-10-09 (#17) saw what that is: "three different things in three
+ * chapters". Measured at the door frame, night 0.799: the pool still holding
+ * the sunset at 1.6 under a sky gone to a third, a luma of 139 against the
+ * sky's 72. A probe is now never more than a step behind the hour, and
+ * between takes its strength is the sky's own: the sky as drawn now over the
+ * sky as drawn when it was taken. Not on the low tier, which renders without
+ * shadows and keeps the sky alone. A remount takes its own.
  */
-export const EVENING_PROBE = { take: 0.86, from: 0.5, whole: 0.85, ease: 1.2, gain: 1.6 } as const;
-
-/**
- * THE POOL'S OWN PROBE (poolProbe.ts): taken once, on the first frames the
- * estate is on screen with its sky, a face a frame. Not on the low tier, which
- * keeps the sky. A remount (a new clone) takes its own.
- */
-function usePoolProbe(
-  root: THREE.Object3D,
-  reflectors: { current: SkyReflector[] },
-  enabled: boolean,
-) {
+function useWaterProbes(root: THREE.Object3D, enabled: boolean) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const state = useRef<{
     frames: number;
-    capture: PoolProbeCapture | null;
-    target: THREE.WebGLRenderTarget | null;
-    /** The reflectors given the probe, so the cleanup can take it back. */
-    given: SkyReflector[];
-    /** Where the probe stands and what it hides, kept for the night's. */
-    at: THREE.Vector3 | null;
-    water: THREE.Object3D[];
-    /** THE NIGHT PROBE (the fourth art-direction critique: the lit rooms
-     *  "don't cast realistic pools of warm light onto the grass or pool").
-     *  The day's probe holds a sunlit house; once night has come on, the
-     *  estate is photographed again from the same place — dark sky, lit rooms,
-     *  the terrace's pools — and the water reflects that while it is night. */
-    nightCapture: PoolProbeCapture | null;
-    nightTarget: THREE.WebGLRenderTarget | null;
-    showingNight: boolean;
-    /** THE EVENING PROBE (EVENING_PROBE): the estate under the low sun and
-     *  the lit sky, for the water to hold between the day's and the night's. */
-    eveningCapture: PoolProbeCapture | null;
-    eveningTarget: THREE.WebGLRenderTarget | null;
-    showing: 'day' | 'evening' | 'night';
-  }>({
-    frames: 0,
-    capture: null,
-    target: null,
-    given: [],
-    at: null,
-    water: [],
-    nightCapture: null,
-    nightTarget: null,
-    showingNight: false,
-    eveningCapture: null,
-    eveningTarget: null,
-    showing: 'day',
-  });
+    /** Every sheet of water: hidden while a probe is taken. */
+    water: THREE.Object3D[] | null;
+    /** The cube's face, pixels: by the tier (the sun's own map says which). */
+    px: number;
+    /** Whose turn it is to be looked at first. */
+    turn: number;
+    taking: { kind: Probed; run: WaterProbeCapture; hour: Hour } | null;
+    shown: Record<Probed, { target: THREE.WebGLCubeRenderTarget; hour: Hour } | null>;
+  }>({ frames: 0, water: null, px: 0, turn: 0, taking: null, shown: { pool: null, canal: null } });
 
   useEffect(() => {
     const st = state.current;
     return () => {
-      st.capture?.cancel();
-      st.target?.dispose();
-      st.nightCapture?.cancel();
-      st.nightTarget?.dispose();
-      st.eveningCapture?.cancel();
-      st.eveningTarget?.dispose();
-      st.capture = null;
-      st.target = null;
-      st.nightCapture = null;
-      st.nightTarget = null;
-      st.eveningCapture = null;
-      st.eveningTarget = null;
-      st.showing = 'day';
-      st.showingNight = false;
-      st.at = null;
-      st.water = [];
-      st.frames = 0;
-      for (const r of st.given) {
-        r.local = undefined;
-        r.night = false;
-        r.evening = false;
-        r.since = 0;
+      st.taking?.run.cancel();
+      st.taking = null;
+      for (const kind of PROBED) {
+        st.shown[kind]?.target.dispose();
+        st.shown[kind] = null;
+        const u = waterUniforms[kind];
+        u.uProbe.value = null;
+        u.uProbeOn.value = 0;
+        u.uProbeGain.value = 1;
       }
-      st.given = [];
+      st.water = null;
+      st.frames = 0;
     };
-  }, [root, reflectors]);
+  }, [root]);
 
   useFrame(() => {
     const st = state.current;
     // The low tier renders without shadows, and without this.
     if (!enabled || !gl.shadowMap.enabled) return;
-    if (st.target) {
-      // Night: take the second photograph once, when night is well on and
-      // the estate is on screen, a face a frame like the first.
-      if (!st.nightTarget && st.at && filmState.night > 0.8) {
-        for (let o: THREE.Object3D | null = root; o; o = o.parent) if (!o.visible) return;
-        st.nightCapture ??= beginPoolProbe(gl, scene, st.at, st.water);
-        const t = st.nightCapture.step();
-        if (t) {
-          st.nightTarget = t;
-          st.nightCapture = null;
-        }
-      }
-      // Evening: the same, once the sun is low and before the night is on.
-      if (!st.eveningTarget && st.at && filmState.evening > EVENING_PROBE.take && filmState.night < 0.12) {
-        for (let o: THREE.Object3D | null = root; o; o = o.parent) if (!o.visible) return;
-        st.eveningCapture ??= beginPoolProbe(gl, scene, st.at, st.water);
-        const t = st.eveningCapture.step();
-        if (t) {
-          st.eveningTarget = t;
-          st.eveningCapture = null;
-        }
-      }
-      const night = !!st.nightTarget && filmState.night > 0.5;
-      const evening = !night && !!st.eveningTarget && filmState.evening > EVENING_PROBE.from;
-      const want = night ? 'night' : evening ? 'evening' : 'day';
-      if (want !== st.showing) {
-        st.showing = want;
-        st.showingNight = night;
-        for (const r of st.given) {
-          r.local = night ? st.nightTarget!.texture : evening ? st.eveningTarget!.texture : st.target.texture;
-          r.night = night;
-          r.evening = evening;
-          r.since = 0;
-        }
-      }
-      return;
+    const sky = Math.max(1e-3, scene.backgroundIntensity);
+    for (const kind of PROBED) {
+      const s = st.shown[kind];
+      if (s) waterUniforms[kind].uProbeGain.value = sky / s.hour.sky;
     }
     // Only once the sky is in (a reflection of a black sky is worse than none)
     // and the estate is actually on screen.
@@ -1716,37 +1610,104 @@ function usePoolProbe(
     for (let o: THREE.Object3D | null = root; o; o = o.parent) if (!o.visible) return;
     st.frames += 1;
     if (st.frames < 20) return;
-    if (!st.capture) {
+    if (!st.water) {
       const water: THREE.Object3D[] = [];
-      const box = new THREE.Box3();
-      root.updateMatrixWorld(true);
+      let map = 0;
       root.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
         const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         if (mats.some((m) => m && WATER_RE.test(m.name))) water.push(mesh);
-        if (mats.some((m) => m && POOL_RE.test(m.name))) box.expandByObject(mesh);
       });
-      if (box.isEmpty()) {
-        st.target = new THREE.WebGLRenderTarget(1, 1);
-        return;
-      }
-      const at = box.getCenter(new THREE.Vector3());
-      at.y = box.max.y + 0.35;
-      st.at = at;
+      scene.traverse((o) => {
+        const l = o as THREE.DirectionalLight;
+        if (l.isDirectionalLight && l.castShadow) map = Math.max(map, l.shadow.mapSize.x);
+      });
       st.water = water;
-      st.capture = beginPoolProbe(gl, scene, at, water);
+      st.px = map >= 4096 ? 512 : 256;
     }
-    const target = st.capture.step();
-    if (!target) return;
-    st.capture = null;
-    st.target = target;
-    for (const r of reflectors.current) {
-      if (!POOL_RE.test(r.mat.name)) continue;
-      r.local = target.texture;
-      st.given.push(r);
-      // Still water is nearly a mirror; its ripples (animateWater) break it.
-      r.mat.roughness = Math.min(r.mat.roughness, 0.05);
+    if (st.taking) {
+      const target = st.taking.run.step();
+      if (!target) return;
+      const { kind, hour } = st.taking;
+      st.taking = null;
+      st.shown[kind]?.target.dispose();
+      st.shown[kind] = { target, hour };
+      const u = waterUniforms[kind];
+      u.uProbe.value = target.texture;
+      u.uProbeOn.value = 1;
+      u.uProbeGain.value = sky / hour.sky;
+      return;
+    }
+    const now: Hour = { evening: filmState.evening, night: filmState.night, sky };
+    for (let i = 0; i < PROBED.length; i += 1) {
+      const kind = PROBED[(st.turn + i) % PROBED.length];
+      const s = st.shown[kind];
+      if (s && Math.abs(s.hour.evening - now.evening) < HOUR_STEP && Math.abs(s.hour.night - now.night) < HOUR_STEP) {
+        continue;
+      }
+      st.turn = (st.turn + i + 1) % PROBED.length;
+      const at = new THREE.Vector3(...PROBE_AT[kind]);
+      st.taking = { kind, hour: now, run: beginWaterProbe(gl, scene, at, st.water, st.px) };
+      break;
+    }
+  });
+}
+
+/**
+ * THE GROUNDS' LAMPS COME ON WITH THE EVENING. The forensic audit of
+ * 2026-10-09 (#18): "The bollard lights glow in full daylight, and close up
+ * each is a pure white square ... Expected: lights that come on with the
+ * evening and have a lamp shape and a soft glow." (The shape is the model's:
+ * tools/blender/build_estate_v7.py, a head under a cap.) The file gives every
+ * lamp its light at full strength, and nothing here ever turned it down: the
+ * drive's, the terrace's and the helipad's were on at noon.
+ *
+ * `from`..`whole`: the film's evening at which they are switched on and at
+ * which they are fully up: after the sun has begun to go and before the dusk
+ * is whole, as a house's lamps are lit. By day a lamp's head is what it is
+ * made of, opal glass (`glass`). The terrace's bollards were given the pool's
+ * underwater colour, a cyan (0.45, 0.85, 1.0) that the client's own rule
+ * against saturated blue speaks to; lit, they are the drive's lamps (`warm`).
+ */
+export const LAMPS = {
+  from: 0.3,
+  whole: 0.75,
+  glass: [0.8, 0.78, 0.72],
+  warm: [1.0, 0.72, 0.42],
+} as const;
+const LAMP_RE = /^MAT_Light_/;
+
+function useEstateLamps(root: THREE.Object3D) {
+  const lamps = useRef<{ mat: THREE.MeshStandardMaterial; full: number }[]>([]);
+  useEffect(() => {
+    const found = new Map<THREE.MeshStandardMaterial, number>();
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const mat = m as THREE.MeshStandardMaterial;
+        if (!mat || found.has(mat) || !LAMP_RE.test(mat.name) || !mat.emissive) continue;
+        // Once for each material: drei shares the parse between mounts.
+        const u = mat.userData as { lampFull?: number };
+        if (u.lampFull === undefined) {
+          u.lampFull = mat.emissiveIntensity;
+          mat.color.setRGB(LAMPS.glass[0], LAMPS.glass[1], LAMPS.glass[2]);
+          mat.emissive.setRGB(LAMPS.warm[0], LAMPS.warm[1], LAMPS.warm[2]);
+        }
+        found.set(mat, u.lampFull);
+      }
+    });
+    lamps.current = [...found].map(([mat, full]) => ({ mat, full }));
+    return () => {
+      lamps.current = [];
+    };
+  }, [root]);
+  useFrame(() => {
+    const on = THREE.MathUtils.smoothstep(filmState.evening, ld('lampsFrom', LAMPS.from), ld('lampsWhole', LAMPS.whole));
+    for (const l of lamps.current) {
+      const want = l.full * on;
+      if (l.mat.emissiveIntensity !== want) l.mat.emissiveIntensity = want;
     }
   });
 }
@@ -2076,11 +2037,11 @@ export function ExteriorModel({
 
   const root = useMemo(() => scene.clone(true), [scene]);
 
-  // The water's clock. One object, handed to every water material's shader, so
-  // the per-frame cost of moving every sheet of water on the estate is a single
-  // assignment. A ref rather than state: it is written sixty times a second and
-  // must never re-render anything.
-  const waterClock = useRef({ value: 0 });
+  // (The water's clock is exteriorWater.ts's own, waterShared.uTime: one
+  // object, handed to every water material's shader, so the per-frame cost of
+  // moving every sheet of water on the estate is a single assignment. It was a
+  // ref of this component's, which a second mount's water never received:
+  // the materials are drei's, dressed once.)
   // The key light, found once: the foliage follows its direction and colour
   // (exteriorFoliage.ts) as the film's evening turns it.
   const world = useThree((s) => s.scene);
@@ -2089,7 +2050,7 @@ export function ExteriorModel({
   /** The horizon's skirt (exteriorHaze.ts): a ring round the eye. */
   const skirt = useRef<THREE.Mesh | null>(null);
   useFrame((state, delta) => {
-    waterClock.current.value += delta;
+    waterShared.uTime.value += delta;
     // It stands round the camera, wherever the camera is (in the estate's own
     // space: the root may stand anywhere in the scene's).
     const ring = skirt.current;
@@ -2108,7 +2069,8 @@ export function ExteriorModel({
   });
   const reflectors = useRef<SkyReflector[]>([]);
   useSkyReflections(reflectors);
-  usePoolProbe(root, reflectors, true);
+  useWaterProbes(root, true);
+  useEstateLamps(root);
 
   useEffect(() => {
     // BEFORE the grade, and before anything reads the frame: an anisotropic
@@ -2121,12 +2083,19 @@ export function ExteriorModel({
     // AFTER the grade (which clones the paving materials) and BEFORE the merge
     // (which is by material identity): a pass that changed a material after the
     // merge keyed on it would be graded into one batch and not the other.
+    // (And the canal its own water first: exteriorWater.ts, splitCanal.)
+    splitCanal(root);
     reflectors.current = polishSurfaces(root);
     const polished = reflectors.current.length;
     const occluded = strengthenOcclusion(root);
     // Every estate material writes its depth for the exterior lens.
     markFocusDepth(root);
-    const rippled = animateWater(root, waterClock.current);
+    // And the dressed stone as a surface the contact pass leaves alone
+    // (CONTACT_FREE_RE).
+    leaveStoneOutOfContact(root);
+    const rippled = dressWater(root);
+    // The generated cars' chrome, held to a line (CAR_SPECULAR).
+    calmBrightwork(root);
     // The lawn's bands and macro field, and anisotropic filtering on every
     // estate texture (exteriorLawn.ts): the ground seen at a grazing angle is
     // most of every exterior frame.
@@ -2138,6 +2107,9 @@ export function ExteriorModel({
     const foliage = dressFoliage(root);
     const rooms = dressWindows(root);
     const aged = dressSurfaces(root);
+    // The stone's eased arrises, which are their own facets only from close
+    // by (exteriorArris.ts).
+    dressArrises(root);
     // The lit rooms' pools of light on the ground (nightPools.ts): after the
     // surfaces, so they chain onto the stone's and the lawn's own shaders.
     const pools = dressNightPools(root);

@@ -132,7 +132,7 @@ describe('refurnishHall', () => {
   it('replaces each piece where it stood, in its own material', () => {
     const root = hall();
     const r = refurnishHall(root);
-    expect(r.counts).toEqual({ newels: 2, retired: 1, balusters: 3, urns: 1, sconces: 0 });
+    expect(r.counts).toEqual({ newels: 2, retired: 1, balusters: 3, urns: 1, sconces: 0, capitals: 0 });
 
     const newel = root.getObjectByName('newel_bot_-1_turned') as THREE.Mesh;
     expect(newel.position.x).toBeCloseTo(-2.45, 5);
@@ -222,8 +222,31 @@ describe('refurnishHall', () => {
     const root = new THREE.Group();
     root.add(post('int_wall_front', 0, 0, 5.4, 6.4, trim, 1));
     const r = refurnishHall(root);
-    expect(r.counts).toEqual({ newels: 0, retired: 0, balusters: 0, urns: 0, sconces: 0 });
+    expect(r.counts).toEqual({ newels: 0, retired: 0, balusters: 0, urns: 0, sconces: 0, capitals: 0 });
     expect(root.children.length).toBe(1);
+  });
+
+  it('draws the capitals from both sides, in the trim\u2019s own paint', () => {
+    // Their decimated leaves are wound both ways: single-sided, a third of
+    // each capital was holes with the dark of its bell behind them.
+    const root = new THREE.Group();
+    const a = post('capital_-1_0.0', -9.65, 6.1, 0, 1.35, trim, 0.7);
+    const b = post('capital_1_2.4_up', 9.79, 11.65, -2.4, 0.8, trim, 0.4);
+    const baluster = post('bal_-1_r00', -2.455, 0.3, -0.8, 0.88, trim, 0.11);
+    root.add(a, b, baluster);
+    const r = refurnishHall(root);
+    expect(r.counts.capitals).toBe(2);
+    const worn = a.material as THREE.MeshStandardMaterial;
+    expect(worn).not.toBe(trim);
+    expect(b.material).toBe(worn); // one material for all of them
+    expect(worn.side).toBe(THREE.DoubleSide);
+    // by the trim's own name, so the finishes and the key's colour find it
+    expect(worn.name).toBe('MAT_Trim_Cream');
+    // and the trim itself is as it was, for everything else that wears it
+    expect(trim.side).toBe(THREE.FrontSide);
+    r.dispose();
+    expect(a.material).toBe(trim);
+    expect(b.material).toBe(trim);
   });
 
   it('matches the names the hall actually uses', () => {

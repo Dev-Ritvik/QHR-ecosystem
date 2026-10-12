@@ -1,0 +1,288 @@
+## A. First visit and loading
+
+@@ load-dark-wait | HIGH | systemic | load-slow-line-empty, load-press-wait, load-404-curtain
+L: Every page, first visit. Film (/) and inner pages, through the public link, 1920×945.
+E: The loading curtain (dark ground, the words "Quality Homes Reality" at about 10 px and 62% strength, a 112 px hairline).
+O: A first-time visitor looks at a near-black screen for 12 to 17 seconds before anything of the site is shown. Measured through the link tonight: film 13.5 s, /why-us 11–14 s, /hall 14–17 s. On this machine with no network in the way it is 6.8 s for the film and 3.6–7.2 s for inner pages.
+V: Frames at 0.3, 0.8, 1.5, 2.5, 4, 6, 8 and 10 s are identical dark frames (mean brightness 18 of 255); the first picture is in the 12.5 s frame. The link runs over this machine's own line, but the wait is not the link's doing: at a simulated 20 Mbit/s with no link in the way the film's curtain still takes 12.7 s.
+W: The first quarter-minute is the whole judgment for a jury member and for a buyer on a phone. The curtain itself carries no picture, no mark and no sense of progress beyond a hairline most people will not notice, so it reads as a site that has not loaded.
+X: Something of the site within two seconds: a still of the house under the curtain, or the page's words first with the picture arriving behind them. Text pages (legal, FAQ, sitemap, 404) should not wait on a 3D scene at all.
+N: The wait is the download: the two models are 15.1 MB (estate) and 25.9 MB (hall). Lighter models or a first still are engineering choices, not design changes.
+F: 01-link-first-13-seconds.jpg, 02-link-inner-pages-timed.jpg
+
+@@ load-slow-line-empty | HIGH | systemic | load-dark-wait
+L: Film (/), first visit on a slow connection (simulated 8 Mbit/s, 80 ms latency, 1920×945).
+E: The moment the curtain lifts.
+O: The curtain has a 12-second ceiling and lifts whether or not the house has arrived. At 8 Mbit/s it lifts onto the headline, the supporting lines, the header and the chapter dots standing on an empty black frame. The house appears several seconds later.
+V: Frames at 15 s and 18 s: headline and copy on black, mean brightness 13.6 and 13.8; a small hairline alone in the middle of the frame. The frame taken at about 22 s has the house (brightness 104). At 20 Mbit/s the picture is present when the curtain lifts (12.7 s). An inner page that stands in the hall is worse: /about at 8 Mbit/s holds its words behind the curtain for about 14 s, then shows the title on an empty dark frame from 17 s until the portrait arrives between 34 s and 42 s.
+W: Words about land floating on black, with a dotted rail and no picture, is the single most "broken" state the site can show, and it is shown to exactly the visitors with the weakest connections (mobile data in the districts the site is about).
+X: The curtain should hold until the first picture is ready, or the first frame should be a still photograph of the cover that the live scene replaces.
+N: This morning's build showed this state through the link for about 27 seconds and an empty hall for 30; tonight's build (live since 22:04) no longer does at the link's present speed. The ceiling that causes it is unchanged.
+F: 04-slow-line-8mbit-curtain-lifts-on-empty-frame.jpg, 05-slow-line-8mbit-about-page-words-without-picture.jpg
+
+@@ load-press-wait | MEDIUM | isolated | load-dark-wait
+L: Film (/), a press on a hall chapter's dot (tested: "Lucky Garden") immediately after the curtain lifts, through the link.
+E: The cut to a chapter whose room has not finished arriving.
+O: The frame goes dark and stays dark for 12 to 16 seconds, showing the table's name, two small lines and a hairline, before the table appears.
+V: Twelve timed frames: dark from 0.7 s to 12 s (brightness 12), table present at 16 s (brightness 66). The hairline shows from 2.0 s.
+W: The wait is honest but long, and the frame it waits on is nearly empty. The chapter names stay printed down the right edge for the whole wait because the pointer is resting where it pressed.
+X: Hold the previous picture (or a still of the destination) under the name instead of black; keep the wait under about five seconds by loading the hall's tables first.
+F: 03-link-press-chapter-dot-wait.jpg
+
+@@ load-404-curtain | MEDIUM | isolated | load-dark-wait, meta-gaps
+L: Any address that does not exist (tested /no-such-page), every screen size.
+E: The "page not found" page.
+O: The page answers with the correct 404 status but shows the "Loading the scene" curtain for about five seconds before telling the visitor the page is not there. Its browser-tab title is empty.
+V: Frames at 1.2 s and 3.4 s are the curtain; the "That page isn't here." page is up at 6 s. The document title reads as an empty string at every size.
+W: A visitor who followed a dead link waits for a 3D scene to load in order to be told there is nothing here; the empty tab title looks like an unfinished template.
+X: The message at once, with the picture arriving behind it; a title such as "Page not found — Quality Homes Reality".
+F: 41-404-loader-then-page.jpg
+
+## B. The film, outside the house
+
+@@ aa-none | SYSTEMIC | systemic | cover-pediment-seam, wall-dashed, glass-rail-dotted, nameplate-aliased
+L: Film (/), every exterior and hall frame, and the picture at the top of every inner page. Worst on a 1920×1080 screen at 100% scaling.
+E: Every thin edge in the 3D picture: balusters, cornices, glazing bars, the compound wall's top, plaque edges.
+O: The picture is drawn with no edge smoothing. Thin features break into stair-steps and dotted lines, and they crawl as the camera moves.
+V: Cover zoom: every baluster on the roof and terrace is a column of square steps. Revolve zoom: the cornice and the compound wall's top edge are dashed white lines. The post-processing chain is set to zero multisampling (PostFX.tsx line 177), so the canvas's own anti-aliasing never reaches the final frame.
+W: Jagged, shimmering edges are the first thing that separates a real-time scene from a rendered film, and they sit on the house's most repeated detail. On the client's own 1920×1080 monitor it is at its worst; phones at 2× and 3× hide most of it.
+X: Smoothed edges at 1× screens (multisampling on the composer or a final SMAA pass), checked on the integrated graphics card for cost.
+F: 11-cover-zoom-roof-facade.jpg, 14-revolve-zoom-pediment-black-palms.jpg
+
+@@ cover-flat-sky | MEDIUM | isolated | sunset-green
+L: Film (/), cover, 0% of the scroll, the upper third of the frame.
+E: The sky behind the headline.
+O: The opening frame's sky is a flat grey-brown overcast with almost no colour, darkened further by the band under the header. The film's best skies come later; the frame everyone sees first has its dullest.
+V: Mean colour of the sky's upper band: RGB 109, 104, 97, saturation 0.11 (0.04 at 11% of the scroll). The brightest and most saturated thing in the frame is the house wall.
+W: The cover is the screenshot that gets shared and judged. Its sky reads as a murky ground for type instead of a place.
+X: A cover sky with a readable light direction and some colour, while keeping the headline legible.
+N: The cover's camera angle and the type's position are approved; this is about the sky's grade only.
+F: 10-cover-1920.jpg
+
+@@ pediment-wedge | HIGH | repeated | roof-lid
+L: Film (/), cover (0%), revolve (17%), approach (42%); both pediments.
+E: The two triangular pediments above the roofline.
+O: From the camera's high angles the pediments are thin triangular slabs standing on the parapet with a lean-to board roof behind them. From behind, each is a ramp leaning on the balustrade with an open black slot under it.
+V: Revolve zoom: the pediment is a wedge with open sides. Approach zoom: both pediment backs are exposed, each with a black rectangular gap beneath.
+W: A pediment is the front of a roof; here there is no roof behind it, and the film's own camera flies above and behind to show that. It makes the house read as a stage flat.
+X: Pediments with closed sides and a back that meets the roof, or camera heights that never see behind them.
+N: The flat roof is the client's own order (2026-10-01) and the cover's bird's-eye angle is in the storyboard; the fix is in how the pediments are closed, not in removing either.
+F: 14-revolve-zoom-pediment-black-palms.jpg, 17-approach-zoom-roof-windows.jpg, 11-cover-zoom-roof-facade.jpg
+
+@@ cover-pediment-seam | LOW | isolated | aa-none
+L: Film (/), cover (0%), the side pediment at the roof's left.
+E: The raking edge of the side pediment.
+O: A jet-black jagged line runs along the pediment's sloping edge where two surfaces meet.
+V: Cover zoom, top-left panel: a saw-toothed black seam along the slope, darker than any shadow in the frame.
+W: A pure black line on a sunlit stone house reads as a modelling gap.
+X: A closed joint with a soft contact shadow.
+F: 11-cover-zoom-roof-facade.jpg
+
+@@ roof-balustrade-gap | LOW | isolated |
+L: Film (/), cover (0%), rear roof balustrade, left of centre.
+E: One bay of the roof balustrade.
+O: One bay of the rear balustrade shows a dark irregular break where the balusters should continue.
+V: Cover zoom, top-left panel, about a third of the way along the rear rail.
+W: A single broken bay in a repeated run is exactly the kind of detail a slow look finds.
+X: An unbroken run of balusters.
+F: 11-cover-zoom-roof-facade.jpg
+
+@@ roof-lid | MEDIUM | repeated | pediment-wedge
+L: Film (/), cover (0%) and approach (38–44%).
+E: The flat roof deck.
+O: The roof is a single flat dark-brown plane with faint parallel lines. At 42% of the scroll it fills about two fifths of the frame with nothing on it.
+V: Approach frame at 42.5%: the deck spans the frame's middle; the only features are the two exposed pediment backs.
+W: The largest surface in the frame is the least detailed one.
+X: Either a deck with believable roof furniture (lead rolls that read at this distance, a roof light, gutters, access hatch) or a lower camera here.
+N: A fully flat roof is the client's order; this is about its surface, and about how long the camera looks down on it.
+F: 17-approach-zoom-roof-windows.jpg, 70-film-desktop-walk-3.jpg
+
+@@ gold-accents | AI-SLOP | repeated | door-capitals
+L: Film (/), cover (0%), approach (48%), door (53%).
+E: The yellow "gold" details: balls under the portico cornice's corners, bands round the tops of the columns, the roundel in the pediment, the finials.
+O: Four different ornaments share one flat ochre-yellow with no reflection, and two of them (the balls under the cornice corners, the bands on plain columns) have no architectural reason to be there.
+V: Approach zoom: a yellow sphere sits under each end of the cornice. Door zoom: a flat yellow band wraps each plain column under a bowl-shaped capital.
+W: Untextured yellow standing in for gilding, applied to objects that do not belong to the order of the building, is what generated decoration looks like. Gilding on a stone house is the cheapest-looking way to say "luxury".
+X: Remove the spheres and bands; if gilding stays, keep it to the roundel and finials with a real metal response.
+F: 18-approach-zoom-pool-portico-lawn-car.jpg, 19-door-zoom.jpg
+
+@@ palms-black | HIGH | repeated | fog-discontinuity
+L: Film (/), revolve and sunset, 11–20% of the scroll; also phone and tablet.
+E: The palm trees.
+O: The palms render as pure black silhouettes with hard, stair-stepped fronds and black trunks, standing on a sunlit lawn next to broadleaf trees that are fully lit.
+V: Revolve zoom, lower-left panel: four black palms beside a bright green tree, both in the same light. Tablet frame at 15.8%: the same.
+W: Two kinds of tree under one sun, one lit and one black, tells the eye that two different asset sets were dropped into the scene. It is the clearest "pasted in" tell in the film.
+X: Palms lit by the same sun and sky as everything else, with translucent fronds against the light.
+F: 14-revolve-zoom-pediment-black-palms.jpg, 66-tablet-film-header-band-white-sky.jpg
+
+@@ fog-discontinuity | MEDIUM | repeated | palms-black
+L: Film (/), cover (0%) and figures chapter (22–34%).
+E: The haze over the grounds.
+O: Trees a little further off dissolve into a pale band of fog while palms only slightly nearer are solid black, and the white compound wall runs through both at full strength.
+V: Sunset frames at 22.7% and 29.7%: a mint-white fog swallows the far trees; the palm row in front of it has no haze on it at all.
+W: Haze that does not fall off with distance looks like a fog card, not air.
+X: One atmosphere: everything loses contrast with distance at the same rate.
+F: 15-sunset-three-frames.jpg, 10-cover-1920.jpg
+
+@@ sunset-green | MEDIUM | repeated | cover-flat-sky
+L: Film (/), sunset, 17–40% of the scroll; strongest on a phone at 38–40%.
+E: The glow round the sun.
+O: The sky round the sun is yellow-green instead of warm gold.
+V: Sampled glow colour: RGB 217, 199, 148 and 198, 179, 128, hue 44°, saturation 0.32–0.36. On the phone frames at 38–40% the upper sky reads chartreuse.
+W: A green cast in a sunset is a grading error the eye notices before it can name it; it makes the stone look sickly.
+X: A sun glow between amber and rose, with the green taken out of the grade.
+F: 15-sunset-three-frames.jpg, 71-film-phone-walk-2.jpg
+
+@@ stone-two-colours | MEDIUM | repeated |
+L: Film (/), revolve, 14–20% of the scroll.
+E: The house's stone in shade.
+O: The shaded elevation turns a cold grey-green while the sunlit side stays warm ivory, so the house looks like two buildings joined at the corner.
+V: Revolve zoom, upper panels: the flank is grey-green; the pediment face beside it is cream.
+W: Shade on limestone is warmer and bluer-grey, never green; the shift reads as a wrong material.
+X: Shaded stone that is the same stone, darker and slightly cooler.
+F: 14-revolve-zoom-pediment-black-palms.jpg
+
+@@ lawn-plastic | MEDIUM | repeated |
+L: Film (/), cover (0%) and approach (48%).
+E: The lawn.
+O: At distance the lawn is a smooth, untextured dark green with soft parallel shadow bands. Close up it is a blotchy low-resolution cloud pattern with no blades.
+V: Cover: flat green planes. Approach zoom, lower-left panel: soft green blotches.
+W: Grass covers a third of most exterior frames; a plastic lawn sets the level for everything on it.
+X: Mown stripes or fine grass detail that holds at both distances.
+F: 10-cover-1920.jpg, 18-approach-zoom-pool-portico-lawn-car.jpg
+
+@@ pool-inconsistent | MEDIUM | repeated |
+L: Film (/), cover (0%), figures (30%), approach (48%).
+E: The swimming pool's water.
+O: The pool is three different things in three chapters: a flat grey-blue sheet with no reflection, then a saturated turquoise rectangle in a muted dusk scene, then a low-resolution noise texture with visible blocks.
+V: Sampled water colour: RGB 57, 82, 102 at the cover; 26, 36, 42 at 22.7%; 62, 78, 90 at 29.7%; 48, 62, 63 at 48%. Approach zoom: blocky pixels on the water's surface.
+W: Water is where real-time scenes are judged; here it never reflects the house beside it and changes character between chapters.
+X: One water treatment that reflects sky and house and holds its colour relationship to the scene through the evening.
+F: 12-cover-zoom-car-pool-trees.jpg, 15-sunset-three-frames.jpg, 18-approach-zoom-pool-portico-lawn-car.jpg
+
+@@ bollards-daylight | LOW | repeated |
+L: Film (/), cover (0%), figures (22–34%), approach (48%).
+E: The small lights round the pool and along the drive.
+O: The bollard lights glow in full daylight, and close up each is a pure white square.
+V: Cover zoom: lit bollards beside the pool at midday. Approach zoom: two white squares on the terrace.
+W: Lights on at noon and lamps drawn as squares are small continuity errors that add up to "game level".
+X: Lights that come on with the evening and have a lamp shape and a soft glow.
+F: 12-cover-zoom-car-pool-trees.jpg, 18-approach-zoom-pool-portico-lawn-car.jpg
+
+@@ glass-rail-dotted | LOW | isolated | aa-none
+L: Film (/), cover (0%) and approach (48%), the pool terrace.
+E: The glass balustrade round the pool.
+O: At the cover the rail is a dotted line; close up it is a row of black posts with nothing between them.
+V: Cover zoom, pool panel: a dashed line along the terrace edge. Approach zoom: posts only.
+W: Glass that cannot be seen reads as a missing object.
+X: A visible top rail and a faint reflection in the panels.
+F: 12-cover-zoom-car-pool-trees.jpg
+
+@@ loungers-primitives | MEDIUM | repeated |
+L: Film (/), revolve, 11% of the scroll, the pool terrace.
+E: Sun loungers and parasols.
+O: The loungers are boxy wedges and the parasols are flat grey discs on pins, each with a white dot at its centre.
+V: Revolve zoom, loungers panel.
+W: Placeholder furniture beside a carefully moulded balustrade shows two levels of finish in one frame.
+X: Loungers with a frame and cushion, parasols with ribs and cloth, or none at all.
+F: 13-revolve-zoom-loungers-fringe.jpg
+
+@@ colour-fringe | MEDIUM | systemic | aa-none
+L: Film (/), all exterior frames, toward the frame's edges.
+E: High-contrast edges: columns, the car, the drive's kerb.
+O: Magenta and teal fringes follow bright edges, strongest toward the corners.
+V: Revolve zoom, car panel: purple pixels along the column and the car's outline. Approach zoom: a teal line along the gravel's curve.
+W: At this strength on an un-smoothed picture the fringe reads as a rendering fault, not as a lens.
+X: Remove it, or reduce it until it is invisible on a still.
+N: The effect was added on an earlier audit's request ("subtle chromatic aberration"); at 1× screens it is not subtle.
+F: 13-revolve-zoom-loungers-fringe.jpg, 18-approach-zoom-pool-portico-lawn-car.jpg
+
+@@ shrubs-blobs | LOW | repeated |
+L: Film (/), cover (0%), revolve (11%), approach (48%).
+E: The crimson shrubs along the terraces.
+O: The shrubs are near-black noisy blobs at the cover and saturated red at the revolve.
+V: Cover zoom, facade panel; approach zoom, pool panel.
+W: Planting that changes from black to red between chapters looks unconsidered.
+X: One planting colour that holds through the light.
+F: 11-cover-zoom-roof-facade.jpg, 18-approach-zoom-pool-portico-lawn-car.jpg
+
+@@ wall-lanterns-specks | LOW | isolated |
+L: Film (/), cover (0%), first-floor wall beside the windows.
+E: Wall lanterns.
+O: The lanterns read as small black specks on the stone.
+V: Cover zoom, roof-right panel, between the first-floor windows.
+W: Unreadable objects look like dirt on the picture.
+X: Lanterns large enough to read, or removed at this distance.
+F: 11-cover-zoom-roof-facade.jpg
+
+@@ window-curtain-card | MEDIUM | isolated |
+L: Film (/), approach, 42% of the scroll, first floor of the flank.
+E: One first-floor window.
+O: One window is filled edge to edge with a flat corrugated grey sheet while its neighbours are black voids.
+V: Approach zoom, flank-windows panel: the third window from the left.
+W: One odd window in a row of identical ones is a classic generated-facade tell.
+X: Consistent glazing: every window either shows a dim room or a curtain with folds and a gap.
+F: 17-approach-zoom-roof-windows.jpg
+
+@@ portico-banding | MEDIUM | isolated |
+L: Film (/), approach, 48% of the scroll, the portico.
+E: The portico's entablature, steps and the wall to its right.
+O: Streaky horizontal bands run across the entablature and the steps; the wall's edge to the right of the portico is a zipper of jagged steps; black dots stipple the column bases.
+V: Approach zoom, portico panel.
+W: This is the frame held longest before the door, under the line "The door is open."
+X: Clean stone courses and a straight wall edge.
+F: 18-approach-zoom-pool-portico-lawn-car.jpg
+
+@@ car-sparkle | LOW | isolated | car-melted
+L: Film (/), approach, 48% of the scroll, the forecourt.
+E: The saloon car.
+O: A dotted line of orange sparkle runs along the car's sill, as if a row of small lights were set into it.
+V: Approach zoom, car panel.
+W: A stray highlight on a hero prop.
+X: A continuous chrome strip.
+F: 18-approach-zoom-pool-portico-lawn-car.jpg
+
+@@ fountain-flat | LOW | repeated |
+L: Film (/), approach (42%) and revolve (11%).
+E: The fountain basin and the parterre's water basins.
+O: The fountain's water is a flat cream ellipse and the parterre basins are flat grey mirrors.
+V: Approach zoom, coupe-fountain panel.
+W: More water that does not behave like water.
+X: Dark water with a reflection and a rim shadow.
+F: 17-approach-zoom-roof-windows.jpg
+
+@@ motes-specks | LOW | systemic |
+L: Film (/), exterior frames.
+E: The floating dust motes.
+O: On a still the motes are scattered white specks over the car and the lawn.
+V: Approach zoom, coupe-fountain panel: white dots over the shadow.
+W: Screenshots are how the site will be judged and shared; on them the motes look like sensor dust.
+X: Fewer, softer, or none outdoors.
+F: 17-approach-zoom-roof-windows.jpg
+
+@@ wall-dashed | MEDIUM | repeated | aa-none
+L: Film (/), cover (0%), revolve (11–20%).
+E: The compound wall behind the trees.
+O: A featureless white wall runs dead straight across the frame behind the trees, with its top edge drawn as a dashed line.
+V: Cover: a pale band between the lawn and the fog. Revolve zoom: dashed white edge.
+W: It is the brightest horizontal in several frames and has no detail at all.
+X: A wall with piers, a coping and some weather, or planting in front of it.
+F: 10-cover-1920.jpg, 14-revolve-zoom-pediment-black-palms.jpg
+
+@@ cover-edge-crops | LOW | isolated |
+L: Film (/), cover (0%), the frame's edges.
+E: A palm at the left edge, a parasol at the bottom right, a hedge at the right.
+O: Three objects are cut by the frame: a dark palm by the left edge, a parasol by the bottom edge, a box hedge by the right edge.
+V: The cover at 1920×945.
+W: Objects half in the frame on a composed opening shot read as accidents.
+X: Either in or out.
+F: 10-cover-1920.jpg
+
+@@ cover-copy-on-terrace | MEDIUM | isolated |
+L: Film (/), cover (0%), lower-left of the frame.
+E: The supporting paragraph and the "Start here" cue.
+O: The paragraph's last line sits exactly on the pool terrace's rail, and "Start here" stands on the terrace paving among the lit bollards.
+V: The cover at 1920×945: "Every sanctioned plan published in full." touches the rail line; the cue's hairline runs down into the terrace.
+W: Type that just touches an object looks unplaced; type should clear a line or sit clearly across it.
+X: The paragraph a line higher, clear of the rail; the cue on plain ground.
+F: 10-cover-1920.jpg, 12-cover-zoom-car-pool-trees.jpg

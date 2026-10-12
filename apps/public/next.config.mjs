@@ -48,6 +48,13 @@ const nextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },
+      // The stills (src/components/experience/stills.ts): each set is written
+      // to a folder named for its own contents, so an address never changes
+      // what it serves and can be kept.
+      {
+        source: '/stills/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
     ];
   },
 };

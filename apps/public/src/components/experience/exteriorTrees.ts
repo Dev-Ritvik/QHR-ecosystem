@@ -42,6 +42,7 @@
 // already holds for the groves.
 
 import * as THREE from 'three';
+import { PALM_SCATTER, PALM_WARMTH, foliageUniforms } from './exteriorFoliage';
 
 interface TreeKind {
   /** Matches the scatter's node name. */
@@ -166,12 +167,14 @@ export const CROWN_SIDE = 0.22;
 function crownVertex(c: { height: number; from: number; to: number }): string {
   return /* glsl */ `
 #include <begin_vertex>
+// Where the fronds are, for the fragment too (PALM_LEAF, below).
+float crown = smoothstep(${(c.from * c.height).toFixed(3)}, ${(c.to * c.height).toFixed(3)}, transformed.y);
+vPalmCrown = crown;
 #ifdef USE_INSTANCING
 {
   vec3 cInst = instanceMatrix[3].xyz;
   float cA = fract(sin(dot(cInst.xz, vec2(12.9898, 78.233)) + 301.752) * 43758.5453);
   float cB = fract(sin(dot(cInst.xz, vec2(12.9898, 78.233)) + 339.471) * 43758.5453);
-  float crown = smoothstep(${(c.from * c.height).toFixed(3)}, ${(c.to * c.height).toFixed(3)}, transformed.y);
   float r2 = dot(transformed.xz, transformed.xz);
   vec2 own = vec2(cos(cA * 6.2832), sin(cA * 6.2832));
   float side = dot(transformed.xz, own) / max(sqrt(r2), 1e-3);
@@ -181,6 +184,49 @@ function crownVertex(c: { height: number; from: number; to: number }): string {
 #endif
 `;
 }
+
+/**
+ * WHAT OF A GENERATED PALM IS LEAF, and its lift (exteriorFoliage, PALM_LIGHT,
+ * has the audit's finding). The model is one mesh and one map: leaf is what
+ * stands in the crown and is green; the crownshaft, the nuts and the trunk
+ * are not. Its green is a ratio, the leaf being painted too dark for a
+ * difference to tell it from bark.
+ */
+export const PALM_LEAF = /* glsl */ `
+#include <color_fragment>
+float palmLeaf = 0.0;
+{
+  float green = diffuseColor.g / max(max(diffuseColor.r, diffuseColor.b), 1.0e-4);
+  palmLeaf = vPalmCrown * smoothstep(1.0, 1.2, green);
+  // The leaf, toward olive (PALM_LIGHT.chroma, PALM_WARMTH); the trunk, as bark.
+  float value = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  vec3 leaf = mix(vec3(value), diffuseColor.rgb, uPalmChroma) * vec3(${PALM_WARMTH.map((v) => v.toFixed(2)).join(', ')});
+  diffuseColor.rgb = mix(diffuseColor.rgb * uPalmTrunk, leaf * uPalmLeaf, palmLeaf);
+}
+`;
+
+/** The sun through the crown, as through a broadleaf card
+ *  (exteriorFoliage, FOLIAGE_TRANSLUCENCY): toward the light, and a little on
+ *  the side of a leaflet turned away from it. */
+export const PALM_THROUGH = /* glsl */ `
+#include <lights_fragment_end>
+{
+  vec3 sunV = normalize((viewMatrix * vec4(uFoliageSunDir, 0.0)).xyz);
+  float back = pow(max(0.0, dot(geometryViewDir, -sunV)), 3.0);
+  // (A frond is a row of leaflets a hand apart: more of it passes light from
+  // behind than a broadleaf card's does.)
+  float wrap = 0.5 * max(0.0, -dot(normal, sunV));
+  // And inside a crown the light is passed from leaflet to leaflet: a frond
+  // that hangs on the far side of it is in green shade, not in none
+  // (PALM_SCATTER of the light through, whichever way the frond is turned).
+  vec3 through = diffuseColor.rgb * vec3(1.0, 1.12, 0.55);
+  reflectedLight.directDiffuse += through * uFoliageSunColor * uPalmThrough * uFoliageGlow * (back + wrap + ${PALM_SCATTER.toFixed(2)}) * palmLeaf;
+}
+`;
+
+const PALM_UNIFORMS =
+  'uniform vec3 uFoliageSunDir;\nuniform vec3 uFoliageSunColor;\nuniform float uFoliageGlow;\n' +
+  'uniform float uPalmThrough;\nuniform float uPalmLeaf;\nuniform float uPalmTrunk;\nuniform float uPalmChroma;\nvarying float vPalmCrown;\n';
 
 /** Dress the generated palms' materials with their crowns. Returns how many. */
 export function dressPalmCrowns(root: THREE.Object3D): number {
@@ -199,7 +245,20 @@ export function dressPalmCrowns(root: THREE.Object3D): number {
       const key = mat.customProgramCacheKey();
       mat.onBeforeCompile = (shader, renderer) => {
         prev.call(mat, shader, renderer);
-        shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', crownVertex(crown));
+        shader.uniforms.uFoliageSunDir = foliageUniforms.uSunDir;
+        shader.uniforms.uFoliageSunColor = foliageUniforms.uSunColor;
+        shader.uniforms.uFoliageGlow = foliageUniforms.uGlow;
+        shader.uniforms.uPalmThrough = foliageUniforms.uPalmThrough;
+        shader.uniforms.uPalmLeaf = foliageUniforms.uPalmLeaf;
+        shader.uniforms.uPalmTrunk = foliageUniforms.uPalmTrunk;
+        shader.uniforms.uPalmChroma = foliageUniforms.uPalmChroma;
+        shader.vertexShader = shader.vertexShader
+          .replace('void main() {', 'varying float vPalmCrown;\nvoid main() {')
+          .replace('#include <begin_vertex>', crownVertex(crown));
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', `${PALM_UNIFORMS}void main() {`)
+          .replace('#include <color_fragment>', PALM_LEAF)
+          .replace('#include <lights_fragment_end>', PALM_THROUGH);
       };
       mat.customProgramCacheKey = () => `${key}|palm-crown-${mat.name}`;
       mat.needsUpdate = true;

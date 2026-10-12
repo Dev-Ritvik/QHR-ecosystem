@@ -10,13 +10,13 @@
 // So these render loudly, and any document containing one declares itself
 // noindex via `pendingRobots` below. An incomplete legal page should not be
 // discoverable, and should not look finished to anyone reading it.
+//
+// (Loud in the folio's own terms since 2026-10-06 — app/folio.css, "pending" —
+// and no quieter: the mark is still a filled, ruled box in the middle of a
+// sentence, in capitals, and nothing else on a sheet is boxed.)
 
 export function Pending({ children }: { children: React.ReactNode }) {
-  return (
-    <mark className="mx-0.5 rounded-sm bg-amber-300/20 px-1.5 py-0.5 text-step--1 tabular-nums text-amber-200 ring-1 ring-amber-300/40">
-      [{children}]
-    </mark>
-  );
+  return <mark className="folio-pending">[{children}]</mark>;
 }
 
 /** Spread into a page's `metadata` while it still contains <Pending> facts. */
@@ -26,14 +26,11 @@ export const pendingRobots = {
 
 export function PendingNotice({ what }: { what: string }) {
   return (
-    <div className="mb-10 rounded border border-amber-300/30 bg-amber-300/5 px-5 py-4">
-      <p className="text-step--2 uppercase tracking-[0.3em] text-amber-200/90">
-        Draft — not yet in force
-      </p>
-      <p className="mt-2 text-step--1 text-[#F2EDE4]/70">
-        {what} Highlighted items are unresolved and must be confirmed by Quality
-        Homes Reality and reviewed by its legal advisers before this page is
-        published. Until then it is excluded from search engines.
+    <div className="folio-pending-notice" data-reveal>
+      <p className="folio-pending-notice-head">Draft — not yet in force</p>
+      <p>
+        {what} Highlighted items are still to be confirmed. The draft is kept out of search
+        engines.
       </p>
     </div>
   );

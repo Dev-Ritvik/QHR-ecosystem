@@ -1,43 +1,95 @@
 // apps/public/src/lib/projection.ts
+import * as React from 'react';
 import { eq, sql } from 'drizzle-orm';
 import { createProjectionClient } from '@estate/db/client-projection';
 import { projectsPub, unitsPub, geometryPub, poisPub, mediaManifests } from '@estate/db/src/schema/projection';
+import { inHallOrder } from './hallOrder';
 
 export const db = createProjectionClient(process.env.DATABASE_URL!);
 
-export async function getPublishedProjects() {
-  return db.select().from(projectsPub);
+/**
+ * React's `cache`, where there is one. The server's React has it (a read
+ * shared by everything that renders in one pass); a plain React — under the
+ * test runner, which loads this module by way of the pages' own — does not
+ * export it at all, and calling what is not there failed every suite that
+ * touched a page. Without it a read is simply a read.
+ */
+const cache: typeof React.cache =
+  typeof (React as { cache?: unknown }).cache === 'function' ? React.cache : ((fn) => fn);
+
+/**
+ * A READ OF THE REGISTER'S, ASKED AGAIN IF THE LINE DROPPED.
+ *
+ * The register is a database at the far end of a network, and every read of
+ * it was asked once. Seen on the finished build, on a connection that dropped
+ * for a few seconds (ECONNRESET, then ETIMEDOUT): a layout's page answered
+ * with a server error, and the hall was set without its layouts — and a page
+ * that is regenerated in that moment is kept for an hour.
+ *
+ * These are reads, so asking again costs nothing but the wait: twice more,
+ * a moment apart. Only while the failures are coming back quickly, though: a
+ * connection that hangs for seconds before it fails is not a dropped line,
+ * and a visitor should not be kept waiting through three of those.
+ */
+async function ask<T>(read: () => Promise<T>): Promise<T> {
+  const started = Date.now();
+  let last: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await read();
+    } catch (err) {
+      last = err;
+      if (attempt === 2 || Date.now() - started > 2500) break;
+      await new Promise((done) => setTimeout(done, 150 * 3 ** attempt));
+    }
+  }
+  throw last;
 }
+
+/**
+ * The published layouts, IN THE ORDER OF THE HALL'S TABLES (hallOrder.ts), and
+ * READ ONCE A RENDER: the segment's layout and the page under it both ask for
+ * this list, and two reads of it could disagree — one answered and the other
+ * not, and the film's chapters were laid out for three tables in a hall set
+ * with none.
+ */
+export const getPublishedProjects = cache(async () =>
+  inHallOrder(await ask(() => db.select().from(projectsPub))),
+);
 
 export async function getProjects() {
-  const data = await db.select().from(projectsPub);
-  return data;
+  const data = await ask(() => db.select().from(projectsPub));
+  return inHallOrder(data);
 }
 
-export async function getProjectBySlug(slug: string) {
-  const [project] = await db.select().from(projectsPub).where(eq(projectsPub.slug, slug));
+/** (Once a render too: a layout's page asks for its row for its title and
+ *  again for its body.) */
+export const getProjectBySlug = cache(async (slug: string) => {
+  const [project] = await ask(() => db.select().from(projectsPub).where(eq(projectsPub.slug, slug)));
   return project || null;
-}
+});
 
 export async function getUnitsByProjectId(projectId: string) {
-  const data = await db.select().from(unitsPub).where(eq(unitsPub.projectId, projectId));
+  const data = await ask(() => db.select().from(unitsPub).where(eq(unitsPub.projectId, projectId)));
   return data;
 }
 
 export async function getGeometryByProjectId(projectId: string) {
-  return db.select().from(geometryPub).where(eq(geometryPub.projectId, projectId));
+  return ask(() => db.select().from(geometryPub).where(eq(geometryPub.projectId, projectId)));
 }
 
 export async function getMediaByProjectId(projectId: string) {
-  return db.select().from(mediaManifests).where(eq(mediaManifests.projectId, projectId));
+  return ask(() => db.select().from(mediaManifests).where(eq(mediaManifests.projectId, projectId)));
 }
 
 export async function getPoisByProjectId(projectId: string) {
-  return db
-    .select()
-    .from(poisPub)
-    .where(eq(poisPub.projectId, projectId))
-    .orderBy(poisPub.sortOrder);
+  return ask(() =>
+    db
+      .select()
+      .from(poisPub)
+      .where(eq(poisPub.projectId, projectId))
+      .orderBy(poisPub.sortOrder),
+  );
 }
 
 // ───────────────────────────────────────────────────────────────────────────

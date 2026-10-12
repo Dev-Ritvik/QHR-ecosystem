@@ -51,6 +51,38 @@ with no UV2 - the compound wall, the kerbs of a different atlas - and those
 would otherwise sample a meaningless corner of someone else's map. The runtime
 strips the suffix when it looks materials up by name (ExteriorModel POLISH).
 
+WHAT IS NOT BAKED, AND WHY (the forensic audit of 2026-10-09, #8 "a jet-black
+jagged line runs along the pediment's sloping edge ... darker than any shadow
+in the frame", #25 "streaky horizontal bands run across the entablature and the
+steps ... a zipper of jagged steps"). Two kinds of face were in the atlas that
+should not have been:
+
+  BURIED FACES. The back of a quoin inside the wall, the foot of a pediment
+  inside the roof, a step's end inside the podium: a third of the atlas was
+  faces no one can see, every texel of them black, and a black island bleeds.
+  Its margin runs into the islands packed beside it, and from the film's
+  distances the GPU reads mips in which a seven-pixel gap is no gap at all.
+  Two things are done about them. Those that can be PROVED buried are parked
+  on the white strip with the undersides: standing just outside the face and
+  looking away from it, every way ends on the inside of a solid. (That proof
+  is strict, and a quoin's back with its neighbour's corner in view fails
+  it.) And in the baked image a texel of PURE black is not a value but a
+  hole: no point a camera can reach has lost every ray of a 6 m sky, so
+  nothing is taken from what can be seen, and the holes are filled from the
+  texels beside them like any other unbaked ground. What a visible face
+  blends with at its border is then its neighbour's shade, and a joint ends
+  in a soft contact shadow instead of an ink line.
+
+  ARRISES. Every block has its edges eased by a centimetre (build_estate_v7.py
+  ease_arrises), and at this atlas's four centimetres a texel a face one
+  centimetre wide has no texel of its own: it was given whatever the packer
+  had put beside it, which for 742 of them was the black of a buried face next
+  to stone in full light. Those were the black lines: along the pediments'
+  rakes, under the entablature, along every step's nosing and every quoin. An
+  arris is not an island. It is the edge of the faces it was cut from, and it
+  reads its occlusion on the more open of them, two texels in from
+  that face's own border.
+
 STORAGE. The maps are written sRGB-ENCODED, like the hall's lightmap, and the
 KTX2 step tags occlusion sRGB (encode_ktx2.py), so the GPU hands the shader
 linear occlusion back while 8 bits spend their precision in the darks, where AO
@@ -64,6 +96,8 @@ import time
 import bmesh
 import bpy
 import numpy as np
+from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 WORK = argv[0]
@@ -116,11 +150,45 @@ vl = bpy.context.view_layer
 
 
 # --------------------------------------------------------------- 0. idempotent
+# A BAKE OF A BAKED FILE STARTS FROM THE AUTHORED MATERIALS, WHETHER OR NOT THEY
+# ARE STILL IN IT. Each baked material is a copy named <name>_AO or <name>_AOG
+# (wire(), below), and a second bake put the authored one back by looking it
+# up. But Blender does not save a material nothing uses, and once the wall's
+# copy stood in for it nothing used MAT_Stone_Wall: after one save and reload
+# there was nothing to look up, the copy stayed on the mesh, and the second
+# bake copied the copy. Seen on 2026-10-11, the first time the ship script's
+# own SKIP_BUILD=1 was run on a file that had been baked and saved: materials
+# named MAT_Stone_Wall_AO_AO and MAT_Lawn_AOG_AOG, which the site knows by
+# neither name (ExteriorModel authoredName strips one suffix), so the stone
+# lost its dressing and the lawn its mowing, and carrying two sets of
+# occlusion nodes, the first pointing at an image this script had just
+# removed. Where the authored material is gone, the copy IS it: it is given
+# its name back and what wire() put on it is taken off.
 def base_name(n):
-    for suf in ("_AOG", "_AO"):
-        if n.endswith(suf):
-            return n[: -len(suf)]
-    return n
+    while True:
+        for suf in ("_AOG", "_AO"):
+            if n.endswith(suf):
+                n = n[: -len(suf)]
+                break
+        else:
+            return n
+
+
+def unwire(m):
+    """Take off a material what wire() put on it: the node that reads UV2,
+    the map it feeds and the glTF output that map feeds."""
+    nt = m.node_tree
+    if nt is None:
+        return
+    for n in [n for n in nt.nodes if n.type == "UVMAP" and n.uv_map == UVN]:
+        for tex in {l.to_node for l in n.outputs["UV"].links}:
+            for out in {l.to_node for l in tex.outputs["Color"].links if l.to_node.type == "GROUP"}:
+                nt.nodes.remove(out)
+            nt.nodes.remove(tex)
+        nt.nodes.remove(n)
+    for n in [n for n in nt.nodes if n.type == "GROUP" and n.node_tree is not None
+              and n.node_tree.name == "glTF Material Output" and not any(i.is_linked for i in n.inputs)]:
+        nt.nodes.remove(n)
 
 
 for o in bpy.data.objects:
@@ -131,6 +199,9 @@ for o in bpy.data.objects:
             b = bpy.data.materials.get(base_name(m.name))
             if b is not None:
                 o.data.materials[i] = b
+            else:
+                unwire(m)
+                m.name = base_name(m.name)
     uv = o.data.uv_layers.get(UVN)
     if uv is not None:
         o.data.uv_layers.remove(uv)
@@ -143,6 +214,18 @@ for n in ("AO_ARCH", "AO_GROUND", "AO_ARCH_RAW", "AO_GROUND_RAW"):
 for n in ("AO_GROUND_PROBE",):
     if n in bpy.data.objects:
         bpy.data.objects.remove(bpy.data.objects[n], do_unlink=True)
+
+if os.environ.get("AO_RESET_ONLY"):
+    # (A dry run of the step above, for checking it: nothing is baked or saved.)
+    for m in sorted(bpy.data.materials, key=lambda m: m.name):
+        if m.users and m.node_tree is not None and (
+                "Stone" in m.name or "Lawn" in m.name or "Gravel" in m.name or "Roof" in m.name or "_AO" in m.name):
+            log("material %-26s users %3d  uv2 nodes %d  glTF outputs %d" % (
+                m.name, m.users,
+                sum(1 for n in m.node_tree.nodes if n.type == "UVMAP" and n.uv_map == UVN),
+                sum(1 for n in m.node_tree.nodes if n.type == "GROUP" and n.node_tree is not None
+                    and n.node_tree.name == "glTF Material Output")))
+    raise SystemExit(0)
 
 objs = {o.name: o for o in bpy.data.objects if o.type == "MESH"}
 arch = [objs[n] for n in ARCH if n in objs]
@@ -192,6 +275,108 @@ def parked_mask(o):
     return m
 
 
+# Everything that is a solid of stone, for the question "is this face inside
+# one". Not the ground (an open sheet: what rests on it is parked by its own
+# rule above), not the planting.
+SOLIDS = ("mansion_", "portico_", "podium_", "garden_steps", "garden_planters", "fountain_stone", "canal_stone",
+          "pool_coping", "pool_terrace", "pool_shell", "lion_frieze", "hardscape_kerbs", "terrace_upper")
+# An arris, a fillet: narrower than this (metres) and a face is the edge of
+# its neighbours, not a surface of its own.
+# (0.02 until 2026-10-12, and the pool's coping stands exactly 0.02 proud of
+# the terrace: its outer face missed the rule by a rounding, baked black in
+# the corner it makes with the paving, and from the film's 30% printed as a
+# row of single black pixels along two sides of the pool. Anything that
+# stands a finger proud of its neighbour is that neighbour's edge.)
+SLIVER = 0.03
+# How far inside the face it is cut on an arris reads that face's occlusion.
+#
+# AS FAR IN AS THE FACE ALLOWS, UP TO INSET_DEEP_PX. It was two texels, which
+# is inside the face at the atlas's full size and no further: from the film's
+# distances the GPU reads the atlas two and three mips down, where a texel is
+# four and eight of these, and an arris two texels from the border read
+# whatever was packed on the border's other side. Along the pool's coping
+# that was a buried face at 14 of 255: its edge, a finger high, printed half
+# as bright as the stone above and below it, one dark pixel at every step of
+# the edge (found by a ray through them, 2026-10-12; with the baked occlusion
+# off they were gone). So an arris lies half way to the middle of the face it
+# is cut on, to a cap of INSET_DEEP_PX, and never nearer its border than
+# INSET_PX.
+INSET_PX = 2.0
+INSET_DEEP_PX = 10.0
+
+
+def solid_bvh():
+    verts, polys = [], []
+    for o in bpy.data.objects:
+        if o.type != "MESH" or o.hide_render or not o.name.startswith(SOLIDS):
+            continue
+        mw = o.matrix_world
+        first = len(verts)
+        verts.extend(mw @ v.co for v in o.data.vertices)
+        polys.extend([first + i for i in p.vertices] for p in o.data.polygons)
+    return BVHTree.FromPolygons(verts, polys, all_triangles=False, epsilon=0.0)
+
+
+def sphere_dirs(n):
+    out = []
+    golden = math.pi * (3.0 - math.sqrt(5.0))
+    for i in range(n):
+        z = 1.0 - 2.0 * (i + 0.5) / n
+        r = math.sqrt(max(0.0, 1.0 - z * z))
+        out.append(Vector((r * math.cos(golden * i + 0.37), r * math.sin(golden * i + 0.37), z)))
+    return out
+
+
+DIRS = sphere_dirs(72)
+
+
+def buried_mask(o, bvh):
+    """Faces whose whole outside is inside a solid. From three millimetres off
+    the face, rays AWAY from it (toward it they would only find the face
+    itself): one that ends on the BACK of a surface started inside what that
+    surface encloses. A face is buried when nine in ten do, from every one of
+    its points: its centre, and half way and nearly all the way out to each
+    corner and each edge. A face that is part out (a quoin's bed, a wall
+    behind a band, the roof's walk round its raised middle) is not."""
+    me = o.data
+    mw = o.matrix_world
+    nm = mw.to_3x3().inverted().transposed()
+    out = np.zeros(len(me.polygons), dtype=bool)
+    for p in me.polygons:
+        n = (nm @ p.normal).normalized()
+        away = [d for d in DIRS if d.dot(n) > 0.15]
+        allow = len(away) - int(0.9 * len(away))
+        c = mw @ p.center
+        vs = [mw @ me.vertices[i].co for i in p.vertices]
+        pts = [c]
+        for k, v in enumerate(vs):
+            pts += [c.lerp(v, 0.5), c.lerp(v, 0.95), c.lerp((v + vs[(k + 1) % len(vs)]) * 0.5, 0.95)]
+        buried = True
+        for q in pts:
+            q = q + n * 0.003
+            miss = 0
+            for d in away:
+                loc, hn, _i, _d = bvh.ray_cast(q, d)
+                if loc is None or hn.dot(d) <= 0.0:
+                    miss += 1
+                    if miss > allow:
+                        break
+            if miss > allow:
+                buried = False
+                break
+        out[p.index] = buried
+    return out
+
+
+def sliver_mask(o):
+    me = o.data
+    out = np.zeros(len(me.polygons), dtype=bool)
+    for p in me.polygons:
+        longest = max((me.vertices[a].co - me.vertices[b].co).length for a, b in p.edge_keys)
+        out[p.index] = p.area / max(longest, 1e-9) < SLIVER
+    return out
+
+
 # ------------------------------------------------------------ 1. arch UV atlas
 for o in arch + ground:
     me = o.data
@@ -203,12 +388,21 @@ for o in arch + ground:
     me.uv_layers.active = me.uv_layers[UVN]
 
 parked = {}
+sliver = {}
+bvh = solid_bvh()
+n_rule = n_buried = 0
 for o in arch:
     m = parked_mask(o)
+    n_rule += int(m.sum())
+    b = buried_mask(o, bvh) & ~m
+    n_buried += int(b.sum())
+    m = m | b
     parked[o.name] = m
-    o.data.polygons.foreach_set("select", (~m).astype(bool))
-log("parked faces %d of %d" % (sum(int(m.sum()) for m in parked.values()),
-                               sum(len(o.data.polygons) for o in arch)))
+    sliver[o.name] = sliver_mask(o) & ~m
+    o.data.polygons.foreach_set("select", (~(m | sliver[o.name])).astype(bool))
+del bvh
+log("parked faces %d by rule, %d buried, %d arrises set aside, of %d" % (
+    n_rule, n_buried, sum(int(m.sum()) for m in sliver.values()), sum(len(o.data.polygons) for o in arch)))
 
 # SEAMS, THEN UNWRAP - not smart_project. Smart projection groups faces by
 # normal, so the upward faces of a string course become ONE island in the shape
@@ -229,7 +423,7 @@ for o in arch:
                   or lf[0].normal.angle(lf[1].normal, 0.0) > math.radians(40.0))
     bm.to_mesh(o.data)
     bm.free()
-    o.data.polygons.foreach_set("select", (~parked[o.name]).astype(bool))
+    o.data.polygons.foreach_set("select", (~(parked[o.name] | sliver[o.name])).astype(bool))
     o.data.update()
 
 bpy.ops.object.select_all(action="DESELECT")
@@ -243,7 +437,7 @@ bpy.ops.uv.unwrap(method="CONFORMAL", margin=0.0)
 bpy.ops.uv.average_islands_scale()
 log("unwrap done")
 bpy.ops.uv.pack_islands(rotate=True, rotate_method="CARDINAL", scale=True, merge_overlap=False,
-                        margin_method="FRACTION", margin=0.0018, shape_method="CONCAVE")
+                        margin_method="FRACTION", margin=0.0024, shape_method="CONCAVE")
 bpy.ops.object.mode_set(mode="OBJECT")
 log("pack_islands done")
 
@@ -255,8 +449,9 @@ for o in arch:
     uv.data.foreach_get("uv", a)
     a = a.reshape(-1, 2)
     a[:, 0] *= RESERVE
-    # loops of parked faces go to the white strip
-    m = parked[o.name]
+    # loops of parked faces go to the white strip (and the arrises with them,
+    # until the bake is done and they can be laid on the faces they edge)
+    m = parked[o.name] | sliver[o.name]
     if m.any():
         starts = np.empty(len(me.polygons), dtype=np.int32)
         totals = np.empty(len(me.polygons), dtype=np.int32)
@@ -495,7 +690,22 @@ def save(name, v, px):
 # arch: Cycles AO is already 0..1 visibility.
 pa = pixels(raw_a)
 ao_a = pa[..., 0].astype(np.float64)
-hit_a = pa[..., 3] > 0.5
+# As baked, black and all: what an arris chooses its face by (place_arrises).
+ao_baked = ao_a.copy()
+# Pure black is a hole (see the header).
+#
+# AND SO IS ALL BUT BLACK. The threshold was 0.004, "under what 8 bits can
+# hold", and a face that lies against another's (a coping block against the
+# slab it is set in) bakes a hair over it: a ray or two in five hundred finds
+# the crack. Those faces stood in the atlas at 14 of 255 beside stone in full
+# light, and bled into it at every mip. A texel that has kept under a
+# fiftieth of its sky is not a surface any camera reads: it is a hole, and is
+# filled from beside like the rest.
+BLACK = 0.02
+hit_a = (pa[..., 3] > 0.5) & (ao_a > BLACK)
+log("arch texels baked %.1f%%, of them pure black and filled from beside %.1f%%" % (
+    100 * float((pa[..., 3] > 0.5).mean()),
+    100 * float(((pa[..., 3] > 0.5) & (ao_a <= BLACK)).sum()) / max(1.0, float((pa[..., 3] > 0.5).sum()))))
 ao_a = fill_holes(ao_a, hit_a, 24)
 ao_a[:, int(ARCH_PX * (RESERVE + 0.003)):] = 1.0
 cover = float(hit_a.mean())
@@ -503,6 +713,131 @@ lit = ao_a[hit_a]
 log("arch coverage %.1f%%  ao p5 %.3f p50 %.3f p95 %.3f" % (
     100 * cover, np.percentile(lit, 5), np.percentile(lit, 50), np.percentile(lit, 95)))
 img_a = save("AO_ARCH", ao_a, ARCH_PX)
+
+
+def place_arrises(o, ao, px):
+    """Give every arris the occlusion of the face it is cut on: its UVs are
+    laid along the edge it shares with a baked face, INSET_PX inside that
+    face's border (so it reads baked texels, not a margin), on whichever of
+    its faces is the more open - a convex edge sees at least what its better
+    face sees. The corner patches where three arrises meet take the corner of
+    a neighbour. Returns (arrises, those with no face to lie on)."""
+    me = o.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.faces.ensure_lookup_table()
+    uvl = bm.loops.layers.uv[UVN]
+    is_sliver, is_parked = sliver[o.name], parked[o.name]
+    inset = INSET_PX / px
+    deep = INSET_DEEP_PX / px
+    todo = [f for f in bm.faces if is_sliver[f.index]]
+    if not todo:
+        bm.free()
+        return 0, 0
+
+    def baked(f):
+        return not is_sliver[f.index] and not is_parked[f.index]
+
+    def sample(uv):
+        return float(ao[min(px - 1, max(0, int(uv.y * px))), min(px - 1, max(0, int(uv.x * px)))])
+
+    cache = {}
+
+    def uv_of(f):
+        got = cache.get(f.index)
+        if got is None:
+            uvs = {l.vert.index: l[uvl].uv.copy() for l in f.loops}
+            c = Vector((0.0, 0.0))
+            for u in uvs.values():
+                c += u
+            got = cache[f.index] = (uvs, c / len(uvs))
+        return got
+
+    def along(f, a, b):
+        uvs, c = uv_of(f)
+        ua, ub = uvs[a.index], uvs[b.index]
+        t = ub - ua
+        length = t.length
+        if length < 1e-9:
+            return ua.copy(), ub.copy()
+        t /= length
+        nrm = Vector((-t.y, t.x))
+        depth = nrm.dot(c - (ua + ub) * 0.5)
+        if depth < 0:
+            nrm, depth = -nrm, -depth
+        off = nrm * min(max(inset, min(deep, 0.5 * depth)), 0.7 * depth)
+        end = t * min(inset, 0.2 * length)
+        return ua + off + end, ub + off - end
+
+    placed = {}
+    for f in todo:
+        best = None
+        for e in f.edges:
+            for g in e.link_faces:
+                if g is f or not baked(g):
+                    continue
+                a, b = e.verts
+                ua, ub = along(g, a, b)
+                val = (sample(ua) + sample((ua + ub) * 0.5) + sample(ub)) / 3.0
+                if best is None or val > best[0]:
+                    best = (val, a, b, ua, ub)
+        if best is None:
+            continue
+        _val, a, b, ua, ub = best
+        at = {}
+        for l in f.loops:
+            v = l.vert
+            near_a = (v.co - a.co).length <= (v.co - b.co).length
+            at[v.index] = ua if (v is a or (v is not b and near_a)) else ub
+        placed[f.index] = at
+    for _round in range(6):
+        more = 0
+        for f in todo:
+            if f.index in placed:
+                continue
+            best = None
+            for l in f.loops:
+                v = l.vert
+                for g in v.link_faces:
+                    if g is f:
+                        continue
+                    if baked(g):
+                        uvs, c = uv_of(g)
+                        uv = uvs[v.index]
+                        d = c - uv
+                        if d.length > 1e-9:
+                            uv = uv + d * (min(inset, 0.35 * d.length) / d.length)
+                    elif g.index in placed:
+                        uv = placed[g.index][v.index]
+                    else:
+                        continue
+                    val = sample(uv)
+                    if best is None or val > best[0]:
+                        best = (val, uv)
+            if best is not None:
+                placed[f.index] = {l.vert.index: best[1] for l in f.loops}
+                more += 1
+        if not more:
+            break
+    lost = 0
+    for f in todo:
+        at = placed.get(f.index)
+        if at is None:
+            lost += 1
+        for l in f.loops:
+            l[uvl].uv = at[l.vert.index] if at else PARK_UV
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
+    return len(todo), lost
+
+
+n_arris = n_lost = 0
+for o in arch:
+    a_, l_ = place_arrises(o, ao_baked, ARCH_PX)
+    n_arris += a_
+    n_lost += l_
+log("arrises laid on their faces %d, with none to lie on (parked white) %d" % (n_arris - n_lost, n_lost))
 
 # ground: irradiance under a uniform sky, as a fraction of what open ground gets.
 E = 0.2126 * px_g[..., 0] + 0.7152 * px_g[..., 1] + 0.0722 * px_g[..., 2]

@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { hallWarmIdle, warmHallPrograms } from './hallProbe';
+import { sceneWarm } from './sceneWarm';
 
 type FakeProgram = { isReady: () => boolean; getUniforms: () => void };
 
@@ -113,6 +114,9 @@ describe('the hall warm-up', () => {
   });
 
   it('spends a bounded slice of each frame', () => {
+    // With a picture on screen (the film, the hall warming behind the lawn):
+    // the canvas is not held dark (sceneWarm.ts).
+    sceneWarm.hold = 0;
     const r = fakeRenderer({ costMs: 3 });
     vi.spyOn(performance, 'now').mockImplementation(r.now);
     const scene = new THREE.Scene();
@@ -123,6 +127,21 @@ describe('the hall warm-up', () => {
     expect(r.compiled).toHaveLength(2);
     flush(2);
     expect(r.compiled).toHaveLength(5);
+    sceneWarm.hold = 1;
+  });
+
+  it('and a larger one while the canvas is held dark: there is no picture to drop a frame from', () => {
+    sceneWarm.hold = 1;
+    const r = fakeRenderer({ costMs: 3 });
+    vi.spyOn(performance, 'now').mockImplementation(r.now);
+    const scene = new THREE.Scene();
+    for (let i = 0; i < 9; i += 1) mesh(new THREE.MeshStandardMaterial({ name: `h${i}` }), scene);
+    void warmHallPrograms(r.gl, camera, scene, null);
+    flush();
+    // 12 ms a frame at 3 ms a program: four.
+    expect(r.compiled).toHaveLength(4);
+    flush(2);
+    expect(r.compiled).toHaveLength(9);
   });
 
   it('holds the door until every program is compiled and introduced', async () => {

@@ -54,6 +54,37 @@ import * as THREE from 'three';
 import { keepDepthAlpha } from './LensFocus';
 
 const RUNNER_RE = /^MAT_Runner(_LM)?$/;
+/** The entrance rug: its field and its border. */
+const RUG_RE = /^MAT_Rug(Field|Border2?)$/;
+
+/**
+ * ONE CARPET COLOUR. The forensic audit of 2026-10-09 (#50): "A saturated
+ * navy stair carpet stands against a red entrance rug in an ivory room ...
+ * Two saturated carpets fight the 'ivory, old money' brief. Expected: one
+ * carpet colour, deeper and less saturated."
+ *
+ * The runner was dyed navy for an earlier review (below), at the film's own
+ * ink (0.16, 0.22, 0.42: two-thirds saturated), and the rug at the door was
+ * left the red it was woven. Both are one ink now, the same hue taken down to
+ * a slate (`ink`: four-tenths saturated) and a little deeper (`depth`, against
+ * the 1.15 the runner was lifted by). Each texel still keeps its own
+ * luminance, so the runner's weave and the rug's pattern are exactly as they
+ * were woven, dyed.
+ */
+export const CARPET = { ink: [0.2, 0.235, 0.34], depth: 0.95 } as const;
+const CARPET_DYE = /* glsl */ `
+  {
+    float carpetLum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+    vec3 carpetInk = vec3(${CARPET.ink.map((v) => v.toFixed(3)).join(', ')});
+    carpetInk /= dot(carpetInk, vec3(0.2126, 0.7152, 0.0722));
+    diffuseColor.rgb = carpetInk * carpetLum * ${CARPET.depth.toFixed(2)};
+  }
+`;
+/** The rug's colour_fragment: the same dye, and nothing else of the runner's. */
+export const RUG_COLOUR = /* glsl */ `
+#include <color_fragment>
+${CARPET_DYE}
+`;
 const GLASS = 'MAT_PortraitGlass';
 const PAINTING = 'MAT_Portrait';
 
@@ -74,7 +105,9 @@ float pileNoise(vec3 x) {
  * lobby's idiom. The woven map is kept — its weave, its border, every value in
  * it — and only its hue is changed, to the house's own ink navy (the film's
  * #0A1120 family): each texel keeps its luminance and takes the navy's
- * chromaticity, so the pattern is exactly as it was, dyed.
+ * chromaticity, so the pattern is exactly as it was, dyed. (That ink is the
+ * slate of CARPET since the forensic audit of 2026-10-09, #50, and the rug at
+ * the door is dyed with it.)
  */
 export const RUNNER_COLOUR = /* glsl */ `
 #include <color_fragment>
@@ -82,10 +115,8 @@ export const RUNNER_COLOUR = /* glsl */ `
   float tuft = pileNoise(vPileWorld / 0.04);
   float mottle = pileNoise(vPileWorld / 0.35 + 5.0);
   diffuseColor.rgb *= 0.9 + 0.1 * tuft + 0.06 * mottle;
-  float lum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-  vec3 ink = vec3(0.16, 0.22, 0.42);
-  ink /= dot(ink, vec3(0.2126, 0.7152, 0.0722));
-  diffuseColor.rgb = ink * lum * 1.15;
+  // (the house's one carpet ink: CARPET)
+${CARPET_DYE}
 }
 `;
 
@@ -172,6 +203,15 @@ export function dressHallDetail(root: THREE.Object3D): string[] {
         };
         mat.customProgramCacheKey = () => 'hall-runner-pile';
         mat.roughness = Math.max(mat.roughness, 0.92);
+      } else if (RUG_RE.test(mat.name)) {
+        // The rug at the door, in the runner's ink (CARPET).
+        const prev = mat.onBeforeCompile;
+        mat.onBeforeCompile = (shader, renderer) => {
+          prev.call(mat, shader, renderer);
+          shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', RUG_COLOUR);
+        };
+        const key = mat.customProgramCacheKey.bind(mat);
+        mat.customProgramCacheKey = () => `${key()}|hall-rug-dye`;
       } else if (mat.name === GLASS) {
         // No reflected windows, no lamp bar (see THE GLASS, above): a pane that
         // is there, over a print that is not veiled by it.

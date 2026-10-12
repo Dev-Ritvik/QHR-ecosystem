@@ -65,12 +65,12 @@ export const HALL_FINISHES: Readonly<Record<string, Finish>> = {
   MAT_Ceiling_Plaster_LM: { color: '#f6f1e8' },
   MAT_Trim_Cream_LM: { clear: ALL, color: '#e6ddcc', roughness: 0.5 },
   MAT_Trim_Cream: { clear: ALL, color: '#f3ecdf', roughness: 0.45 },
-  // The turned newels (the panels themselves get their own veneered material,
-  // hallWalnut.ts). No bake reaches them, so their light is the hall's
-  // reflection probe. Painted the veneer's own mean colour (#5e4632, measured
-  // from the generated sheet) so solid and veneered walnut read as one timber;
-  // the old #7b4d2b read as orange under the print.
-  MAT_Wood_Dark: { clear: ALL, color: '#5e4632', roughness: 0.26, metalness: 0 },
+  // The turned newels (the panelling is built in its own veneered materials,
+  // hallPanelling.ts). No bake reaches them, so their light is the hall's
+  // reflection probe. Painted the veneer's own mean colour (hallWalnut.ts,
+  // WALNUT_MEAN, measured from the generated sheets) so solid and veneered
+  // walnut read as one timber; the old #7b4d2b read as orange under the print.
+  MAT_Wood_Dark: { clear: ALL, color: '#957457', roughness: 0.3, metalness: 0 },
   // Handrails and the inner doors, which the bake does reach — a shade lighter,
   // as a rail polished by hands is.
   MAT_Wood_Dark_LM: { clear: ALL, color: '#6b4f38', roughness: 0.28, metalness: 0 },

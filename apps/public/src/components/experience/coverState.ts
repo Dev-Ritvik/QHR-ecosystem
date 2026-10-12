@@ -1,11 +1,9 @@
 // apps/public/src/components/experience/coverState.ts
 //
-// Whether the scene has been built in THIS document — shared by the canvas
-// host, which draws the loading cover into the server-rendered page, and the
-// Preloader, which takes it over once its chunk arrives. A module variable on
-// purpose: a client-side return to the film keeps it (nothing to cover), a
-// reload starts a new module and clears it (everything to cover). See the note
-// at the top of Preloader.tsx.
+// Whether this document has already drawn its curtain — read by the canvas
+// host (ExperienceCanvasHost), which draws it into the server-rendered page. A
+// module variable on purpose: a return within the document keeps it (no
+// curtain twice), a reload starts a new module and clears it.
 export const coverState = { sceneInMemory: false };
 
 /**
@@ -17,10 +15,11 @@ export const coverState = { sceneInMemory: false };
  * hall's own dark now — the umber of its walnut in shade — and nothing else
  * about it has changed: the name, the hairline, the fade.
  *
- * The reading pages keep the navy: their ground IS navy, and a curtain should
- * be the colour of the room it opens on.
+ * (The reading pages kept the navy then, because their ground was navy and a
+ * curtain should be the colour of the room it opens on. Their ground is the
+ * hall's dark too since 2026-10-06 — folio.css — so there is one curtain.)
  */
-export const COVER_GROUND = { film: '#15110C', page: '#0A1120' } as const;
+export const COVER_GROUND = { film: '#15110C', page: '#15110C' } as const;
 
 export function coverGround(pathname: string | null | undefined): string {
   return pathname === '/' || pathname === '/site-home' ? COVER_GROUND.film : COVER_GROUND.page;

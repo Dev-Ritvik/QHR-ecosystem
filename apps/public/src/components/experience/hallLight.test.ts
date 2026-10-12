@@ -11,6 +11,8 @@ import {
   HALL_DIM,
   HALL_DOWN,
   HALL_LEVEL_S2,
+  HALL_LEVEL_S2_MODEL,
+  HALL_PLATE,
   HALL_READING,
   HALL_READING_ROOM,
   HALL_WALK,
@@ -31,11 +33,20 @@ describe('the house lights along the path', () => {
   it('lights the tables: full at the first and third, and the second no longer in the dark', () => {
     // The second stood at 0.15 until the client had it brought up (2026-10-01:
     // "this also looks too dark"); its copy has the lens's edge instead. Not
-    // to full: its plan is light in the air, in front of an ivory wall.
+    // to full under a PROJECTED plan: that is light in the air, in front of an
+    // ivory wall.
     expect(HALL_LEVEL_S2).toBeGreaterThanOrEqual(0.3);
     expect(HALL_LEVEL_S2).toBeLessThanOrEqual(0.4);
+    const projected = houseKeys(beats, hold, 0, HALL_LEVEL_S2);
+    expect(houseLevelAt(projected, at('station-S2'))).toBeCloseTo(HALL_LEVEL_S2, 6);
+    // Under a site model, which is what the tables carry, the room is lit:
+    // a model is a solid thing and there is nothing left to wash out (the
+    // forensic audit of 2026-10-09, #42: "the wall behind the model is a
+    // muddy grey, not ivory ... this is the darkest of the three tables").
+    expect(HALL_LEVEL_S2_MODEL).toBeGreaterThanOrEqual(0.7);
+    expect(HALL_LEVEL_S2_MODEL).toBeLessThanOrEqual(1);
     expect(level(at('station-S1'))).toBeCloseTo(1, 6);
-    expect(level(at('station-S2'))).toBeCloseTo(HALL_LEVEL_S2, 6);
+    expect(level(at('station-S2'))).toBeCloseTo(HALL_LEVEL_S2_MODEL, 6);
     expect(level(at('station-S3'))).toBeCloseTo(1, 6);
   });
 
@@ -87,7 +98,7 @@ describe('the house lights along the path', () => {
     expect(hold).toBeGreaterThan(0.04);
     expect(hold).toBeLessThan(0.095);
     expect(level(at('station-S1') + hold)).toBeCloseTo(1, 6);
-    expect(level(at('station-S2') + hold)).toBeCloseTo(HALL_LEVEL_S2, 6);
+    expect(level(at('station-S2') + hold)).toBeCloseTo(HALL_LEVEL_S2_MODEL, 6);
     // the last table has no dwell and its name leaves with the camera: its
     // light holds for that name's own stretch
     const last = chapters(3).find((c) => c.id === 'station-3')!;
@@ -120,22 +131,23 @@ describe('the house lights along the path', () => {
   });
 });
 
-describe('the house lights on a reading page', () => {
-  it("gives the hall's own page the room's light, and every other page the reading level", () => {
-    // /hall is a wide frame of the whole room with one small block at its
-    // foot: without the sun's shafts it measured two-thirds of its light at
-    // the reading level. The pages that stand a column of copy on a wall, or
-    // a surface over the room, measured as they had and stay where they were.
-    expect(hallReadingLevel('/hall')).toBe(HALL_READING_ROOM);
-    expect(hallReadingLevel('/hall/')).toBe(HALL_READING_ROOM);
-    expect(hallReadingLevel('/hall?debug=1')).toBe(HALL_READING_ROOM);
-    for (const route of ['/properties', '/locations', '/branches', '/gallery', '/faqs', '/projects/lucky-garden', '/nonsense']) {
-      expect(hallReadingLevel(route), route).toBe(HALL_READING);
+describe('the house lights behind a page', () => {
+  it('lights the hall behind every page: a plate is a picture, not a ground for copy', () => {
+    // Since the folios no page stands a column of copy on the room: a page
+    // opens on a plate — one title, on a density of its own — and is read on
+    // opaque sheets. So the room behind it is lit to be looked at, the same
+    // for every page.
+    for (const route of ['/hall', '/hall/', '/hall?debug=1', '/properties', '/locations', '/gallery', '/faqs', '/projects/lucky-garden', '/nonsense']) {
+      expect(hallReadingLevel(route), route).toBe(HALL_PLATE);
     }
-    // Above the reading level, and no brighter than the film's own
-    // establishing shot of the same room, whose copy is larger.
+    // Well above both of the levels copy used to need under it…
+    expect(HALL_PLATE).toBeGreaterThan(HALL_READING_ROOM * 4);
     expect(HALL_READING_ROOM).toBeGreaterThan(HALL_READING);
-    expect(HALL_READING_ROOM).toBeLessThanOrEqual(HALL_DOWN.establish);
+    // …and above the film's own dimmed shots of the same room, whose copy
+    // does stand on the plaster; but not the room at full, where the ivory
+    // is at the top of the print and the sconces are lost in it.
+    expect(HALL_PLATE).toBeGreaterThan(HALL_DOWN.establish * 3);
+    expect(HALL_PLATE).toBeLessThanOrEqual(HALL_WALK);
   });
 });
 

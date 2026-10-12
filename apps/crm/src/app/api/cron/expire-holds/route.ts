@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { systemQuery } from '@/server/db';
-import { holds, unitStatusEvents, notifications } from '@estate/db';
+import { holds, unitStatusEvents, notifications, units } from '@estate/db';
 import { and, lt, eq, sql } from 'drizzle-orm';
+import { republishAfterStatusChange } from '@/server/publish';
+import { cronAuthorized } from '@/server/cron-auth';
 
 /**
  * T30/T85 Cron: Sweeps expired holds back to 'available' AND handles 48h/6h notification fan-outs.
  */
 export async function GET(req: NextRequest) {
-  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get('Authorization'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -18,10 +20,24 @@ export async function GET(req: NextRequest) {
         and(eq(holds.status, 'active'), lt(holds.expiresAt, new Date()))
       );
 
+      // The projects whose plots this sweep returns: republished after it.
+      const touched = new Set<string>();
+
       for (const hold of expiredHolds) {
         await tx.update(holds)
           .set({ status: 'expired', releasedAt: new Date() })
           .where(eq(holds.id, hold.id));
+
+        // THE PLOT ITSELF. The sweep recorded that the hold had lapsed (the
+        // event below) and never gave the plot back: its status stayed
+        // 'on_hold' with no hold on it, in the CRM and on the site, until
+        // somebody changed it by hand. Only a plot still on hold — one booked
+        // out of its hold is the booking's now.
+        const freed = await tx.update(units)
+          .set({ status: 'available', statusChangedAt: new Date() })
+          .where(and(eq(units.id, hold.unitId), eq(units.status, 'on_hold')))
+          .returning({ projectId: units.projectId });
+        for (const u of freed) touched.add(u.projectId);
 
         await tx.insert(unitStatusEvents).values({
           unitId: hold.unitId,
@@ -47,6 +63,10 @@ export async function GET(req: NextRequest) {
           // required for Postgres to resolve the conflict target
           where: sql`dedupe_key IS NOT NULL`
         });
+      }
+
+      for (const projectId of touched) {
+        await republishAfterStatusChange(tx, projectId);
       }
 
       // 2. 48h early warnings (FR-C23)

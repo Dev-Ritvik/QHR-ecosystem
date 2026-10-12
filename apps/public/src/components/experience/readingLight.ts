@@ -32,6 +32,31 @@
 //
 // The film itself (the home page) is not a reading page, and none of this
 // touches it.
+//
+// ---------------------------------------------------------------------------
+// SINCE THE FOLIOS (2026-10-06): THE LIGHTS ARE UP AGAIN
+// ---------------------------------------------------------------------------
+//
+// All of the above was the answer to a column of copy standing on the picture.
+// No page stands its copy on the picture now. A page opens on a PLATE — a full
+// frame of its place with one title on it, on a density of its own in the
+// frame's lower-left quarter (app/folio.css) — and is then read on opaque
+// sheets. So the world behind a page is lit to be LOOKED AT:
+//
+//   INSIDE, the house lights are at HALL_PLATE (hallLight.ts): the lit ivory
+//   room, its lamps on. At the old reading level the plates were a dark room
+//   with five points of light in it, and the client had already sent that
+//   look back from the film twice ("the darkness is much more than required
+//   and it gives out creepy vibes").
+//
+//   OUTSIDE, a page that shares the film's place holds the film's first frame
+//   at its own hour — the cover, by day, the house in the evening's haze — and
+//   not at night under a stop of print: READING_TIME is the start of the leg,
+//   and READING_STOPS is none. (The ceiling goes with the stops: with none
+//   asked for, FilmGrade holds nothing.)
+//
+// The constants are kept, at their new values, because the print's ceiling and
+// the stops are read by the grade; the account above is why they exist.
 
 export const readingLight = {
   /** Stops under, wanted for this route (WorldCanvas writes it). */
@@ -42,12 +67,12 @@ export const readingLight = {
 
 /** A film-path page that is not the film: where on the exterior leg its time
  *  of day is held (past NIGHT_TO in WorldCanvas: full night). */
-export const READING_TIME = 0.97;
+export const READING_TIME = 0;
 /** And the print this many stops under, on top of the night: the lit facade
  *  stands behind the list of layouts (measured at 390x844: its place lines
  *  over a p90 luma of 107 at the night's own print, 2.8:1; clear at one stop
  *  under). */
-export const READING_STOPS = 1;
+export const READING_STOPS = 0;
 /**
  * AND ITS HIGHLIGHTS HELD. A lit window is a light source: at one stop under
  * it still printed at a luma of 111 behind the third layout's place line at

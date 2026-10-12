@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
+import { hallBytes, releaseHallBytes } from './hallBytes';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
@@ -24,8 +25,10 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { guardAnisotropy } from './materialGuards';
 import { finishHall } from './hallFinish';
-import { faceTheFrieze, refurnishHall } from './hallJoinery';
-import { dressWalnut } from './hallWalnut';
+import { plainFrieze, refurnishHall } from './hallJoinery';
+import { roundTables } from './hallTables';
+import { stockWalnut } from './hallWalnut';
+import { panelHall } from './hallPanelling';
 import { applyHallLevel, hallLight, trackHallMaterial, untrackHallMaterials } from './hallLight';
 import { dressHallDetail } from './hallDetail';
 import { dressFloor } from './hallFloor';
@@ -42,6 +45,10 @@ import {
 } from './hallProbe';
 
 export const HALL_MODEL_URL = '/models/interior_hall.glb';
+/** The file's size, for the count of its bytes as they arrive (hallBytes.ts):
+ *  the server sends it compressed, in chunks, with no length to be a share
+ *  of. A test holds this to the file (hallBytes.test.ts). */
+export const HALL_MODEL_BYTES = 27_135_452;
 
 // Before any hall program compiles: the box-projected probe and the bake/probe
 // split are ShaderChunk edits (hallProbe.ts).
@@ -146,6 +153,62 @@ export function hallKTX2(gl: THREE.WebGLRenderer): KTX2Loader {
 /** Loaders are shared across every mount. Creating a KTX2Loader per mount spawns
  *  a fresh worker pool each time, which on mid-tier phones is a stall the user
  *  can feel. */
+/** Set on the loader once it reads the hall from hallBytes.ts. */
+const FROM_BYTES = Symbol('the hall is read from hallBytes');
+
+/**
+ * THE HALL IS PARSED FROM BYTES THAT WERE FETCHED ONCE (hallBytes.ts): by the
+ * film as soon as its first picture was up, or here if nobody had asked yet.
+ * The loader's own fetch would have been a second request for a file that may
+ * still be arriving.
+ *
+ * BY ITS ADDRESS, because the loader is not the hall's: react-three-fiber
+ * keeps ONE GLTFLoader for every model on the site and runs each caller's
+ * configuration over it, so a `load` replaced outright would hand the hall's
+ * bytes to the estate and to every table's model after it. Anything that is
+ * not the hall goes to the loader's own `load`, untouched.
+ *
+ * The loading manager is told what it would have been told (an item begun, an
+ * item ended): the gate that shows the hall reads it (WorldCanvas, WarmGate).
+ */
+export function readHallFromBytes(loader: GLTFLoader, bytes: () => Promise<ArrayBuffer> = () => hallBytes(HALL_MODEL_URL, HALL_MODEL_BYTES)) {
+  const marked = loader as unknown as Record<symbol, boolean>;
+  if (marked[FROM_BYTES]) return;
+  marked[FROM_BYTES] = true;
+  const own = loader.load.bind(loader);
+  loader.load = ((url: string, onLoad: (gltf: unknown) => void, onProgress?: (e: ProgressEvent) => void, onError?: (e: unknown) => void) => {
+    if (url !== HALL_MODEL_URL) {
+      own(url, onLoad as never, onProgress, onError as never);
+      return;
+    }
+    const manager = loader.manager;
+    manager.itemStart(url);
+    const failed = (e: unknown) => {
+      if (onError) onError(e);
+      else console.error(e);
+      manager.itemError(url);
+      manager.itemEnd(url);
+    };
+    bytes().then((data) => {
+      try {
+        loader.parse(
+          data,
+          THREE.LoaderUtils.extractUrlBase(url),
+          (gltf) => {
+            // The parser keeps what it needs of them; the rest can go.
+            releaseHallBytes();
+            onLoad(gltf);
+            manager.itemEnd(url);
+          },
+          failed,
+        );
+      } catch (e) {
+        failed(e);
+      }
+    }, failed);
+  }) as typeof loader.load;
+}
+
 export function attachLoaders(loader: GLTFLoader, gl: THREE.WebGLRenderer) {
   if (!dracoSingleton) {
     dracoSingleton = new DRACOLoader().setDecoderPath('/draco/');
@@ -777,6 +840,35 @@ function holographic(mat: THREE.MeshStandardMaterial & { __holo?: boolean }) {
 export const PICTURE_LAMP = 0.3;
 
 /**
+ * A LAMP THE COLOUR OF ITS LIGHT. The forensic audit of 2026-10-09 (#45): "The
+ * flames are pale blue-white while the light they throw on the wall is warm
+ * ... A lamp and its light in different colours. Expected: warm flames." And
+ * (#47): "The lamp is a flat bar with a pale-blue glowing line, while the
+ * light on the picture is amber."
+ *
+ * Both ship warm: the flame at (1, 0.72, 0.4), the tube at (1, 0.86, 0.66).
+ * It is their STRENGTH that prints them cold. The flame's is 55, forty times
+ * the print's white: every channel is far past the curve's shoulder, so the
+ * flame is a white shape whatever its colour, and the hall's print balances
+ * its lamps toward white by taking a seventh off the red and adding a tenth
+ * to the blue (FilmGrade, HALL_GRADE): a clipped white comes out of that a
+ * blue-white. So each is given a strength at which its blue is still under
+ * the shoulder, and a deeper colour to go through the balance with: the flame
+ * prints as a cream flame in an amber glow (and has a flame's shape, which at
+ * 55 was a ball of bloom), the tube as a warm white line. Two settings were
+ * tried on the running build at the establishing shot and the portrait; this
+ * is the brighter, which still reads as a lit sconce from the door.
+ *
+ * ONLY THE TUBE of the picture lamp: the light on the picture, the print and
+ * the lens are the client's ("fine, don't touch"), and are not touched. Its
+ * strength is as he had it turned down (PICTURE_LAMP).
+ */
+export const LAMP_COLOUR: Readonly<Record<string, { colour: readonly [number, number, number]; strength?: number }>> = {
+  MAT_SconceFlame: { colour: [1.0, 0.45, 0.12], strength: 14 },
+  MAT_PicLight: { colour: [1.0, 0.56, 0.22] },
+};
+
+/**
  * THE GLASS AT THE EXTERIOR'S HOUR.
  *
  * The film comes to the door after sundown: the estate's lamps are lit and its
@@ -868,6 +960,16 @@ function dressInterior(root: THREE.Object3D): string[] {
         mat.emissiveIntensity *= PICTURE_LAMP;
         mat.__dressed = true;
         touched.push('picture lamp');
+      }
+
+      // A LAMP THE COLOUR OF ITS LIGHT (LAMP_COLOUR): the sconces' flames and
+      // the picture lamp's tube.
+      const lamp = LAMP_COLOUR[mat.name];
+      if (lamp) {
+        mat.emissive.setRGB(lamp.colour[0], lamp.colour[1], lamp.colour[2]);
+        if (lamp.strength !== undefined) mat.emissiveIntensity = lamp.strength;
+        mat.__dressed = true;
+        touched.push('lamp colour');
       }
 
       // THE CHANDELIER'S CRYSTAL, WITHOUT TRANSMISSION. It was the only
@@ -1117,6 +1219,9 @@ export function HallModel({
   // copy we already ship in public/draco/.
   const { scene } = useGLTF(HALL_MODEL_URL, '/draco/', undefined, (loader) => {
     attachLoaders(loader as unknown as GLTFLoader, gl);
+    // ...and from the bytes the film asked for when its first picture was up
+    // (hallBytes.ts), not from a fetch of its own.
+    readHallFromBytes(loader as unknown as GLTFLoader);
   });
 
   // Clone so two mounts cannot fight over one object graph. `clone` shares
@@ -1126,8 +1231,6 @@ export function HallModel({
 
   useEffect(() => {
     const disarmed = guardAnisotropy(root);
-    // The frieze's anthemions, turned to face the room (hallJoinery.ts).
-    faceTheFrieze(root);
     const promoted = promoteLightmaps(root);
     // Straight after the promotion, before any pass clones or finishes the
     // tables' materials: they are lit live (see liveTurntables).
@@ -1206,15 +1309,31 @@ export function HallModel({
   // undone: a remount gets a fresh clone, and the replacements, the geometry
   // they were built from and the originals' visibility must not outlive it.
   useEffect(() => {
+    // The tables' rims and pedestals, turned true (hallTables.ts). Nothing to
+    // undo: each takes a geometry made once from the parse's own and kept.
+    roundTables(root);
     const joinery = refurnishHall(root);
-    return () => joinery.dispose();
+    // The frieze, plain (hallJoinery.ts): after the finishes above, because
+    // its strips wear the wall's own finished material and its bake.
+    const frieze = plainFrieze(root);
+    return () => {
+      frieze.dispose();
+      joinery.dispose();
+    };
   }, [root]);
 
-  // The panelling's walnut veneer (hallWalnut.ts): its own material and UVs,
-  // created here so the probe below binds it with the rest of the room.
+  // The hall's walnut (hallWalnut.ts) and what is built of it, the panelling
+  // and the doors (hallPanelling.ts): their own materials and geometry,
+  // created here so the probe below binds them with the rest of the room.
   useEffect(() => {
-    const walnut = dressWalnut(root, hallKTX2(gl));
-    return () => walnut.dispose();
+    const walnut = stockWalnut(root, hallKTX2(gl));
+    const panelling = panelHall(root, walnut);
+    // eslint-disable-next-line no-console
+    console.info('[hall_panelling] %o', panelling.counts);
+    return () => {
+      panelling.dispose();
+      walnut.dispose();
+    };
   }, [root, gl]);
 
   // AFTER the joinery and the panelling, so what they add is probed with

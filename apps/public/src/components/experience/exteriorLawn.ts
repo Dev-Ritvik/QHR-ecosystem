@@ -34,8 +34,36 @@ import * as THREE from 'three';
 
 /** Mowing band width, metres (a ride-on mower's cut). */
 export const BAND_M = 1.6;
-/** How far the bands move value either side of the turf, at most. */
-export const BAND_AMP = 0.05;
+/**
+ * How far the bands move value either side of the turf, at most. (0.05 until
+ * the forensic audit of 2026-10-09, #16: "At distance the lawn is a smooth,
+ * untextured dark green with soft parallel shadow bands ... Expected: mown
+ * stripes or fine grass detail that holds at both distances." At a twentieth
+ * the cut was there to be measured and not to be seen: from the cover, across
+ * the bands, it printed under two levels in 255.)
+ */
+export const BAND_AMP = 0.085;
+
+/**
+ * THE SWARD'S OWN GRAIN, at three sizes: [features a metre across the cut,
+ * features a metre along it, how far it moves the turf's value, and the
+ * metres-a-pixel at which it begins to go and is gone].
+ *
+ * The same audit, of the lawn by the forecourt at the film's 48%: "Close up
+ * it is a blotchy low-resolution cloud pattern with no blades." The turf is
+ * one six-metre tile under a field of patches metres across; between a patch
+ * and a pixel there was nothing, so from ten metres the lawn was its patches
+ * alone. Grass seen from standing height is tufts a hand across, then the
+ * lie of the blades in them, then the blades: three fields of noise, each
+ * drawn out along the cut (a mower lays the blades one way), and each put
+ * down before it is finer than the pixels that would have to draw it: tufts
+ * to some forty metres, the lie to fifteen, blades to six.
+ */
+export const SWARD = [
+  [9, 5, 0.09, 0.02, 0.055],
+  [22, 9, 0.1, 0.008, 0.0225],
+  [55, 18, 0.12, 0.0035, 0.009],
+] as const;
 /** The lawn texture's tile, metres (tools/blender/build_estate_v7.py TILE). */
 export const LAWN_TILE_M = 6.0;
 
@@ -59,6 +87,12 @@ const NOISE = /* glsl */ `
  * World metres come from the map's own UVs (the build maps the ground at one
  * tile per LAWN_TILE_M metres), so the bands need nothing but the UV.
  */
+const SWARD_GLSL = SWARD.map(
+  ([across, along, amp, from, gone], i) =>
+    `      grain += ${amp.toFixed(3)} * lawnNoise(g * vec2(${across.toFixed(1)}, ${along.toFixed(1)}) + ${(i * 17.3).toFixed(1)})` +
+    ` * (1.0 - smoothstep(${from.toFixed(4)}, ${gone.toFixed(4)}, px));`,
+).join('\n');
+
 export const LAWN_MAP_FRAGMENT = /* glsl */ `
 #ifdef USE_MAP
   vec4 sampledDiffuseColor = texture2D( map, vMapUv );
@@ -100,6 +134,14 @@ export const LAWN_MAP_FRAGMENT = /* glsl */ `
     float fine = fwidth(t);
     float amp = ${BAND_AMP.toFixed(3)} * (1.0 - smoothstep(0.25, 0.6, fine));
     sampledDiffuseColor.rgb *= 1.0 + amp * lean;
+    // The sward's grain (SWARD): tufts, the lie of the blades, the blades.
+    {
+      vec2 g = vLawnWorld.xz;
+      float px = length(fwidth(g));
+      float grain = 0.0;
+${SWARD_GLSL}
+      sampledDiffuseColor.rgb *= 1.0 + grain;
+    }
     // AT A GLANCING ANGLE grass is its blades' tips, which catch the sky: a
     // lawn seen along its length is paler and greyer than one looked down
     // on, and that fall-off with distance is most of what stops it reading

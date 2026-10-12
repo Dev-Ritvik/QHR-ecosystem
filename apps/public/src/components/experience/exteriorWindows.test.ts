@@ -9,6 +9,9 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   DAY_INTERIOR,
+  DRAWN_GAP,
+  DUSK_FROM,
+  DUSK_INTERIOR,
   EVENING_DRIVE_MAX,
   EVENING_INTERIOR,
   INTERIOR_FRAGMENT,
@@ -109,9 +112,42 @@ describe('the rooms behind the windows', () => {
     expect(night).toBeGreaterThan(DAY_INTERIOR * 1.5);
     // The daylight dies into the room, and goes with the evening.
     expect(INTERIOR_FRAGMENT).toContain('exp(-depth / ');
-    expect(INTERIOR_FRAGMENT).toContain('uInteriorDay * (1.0 - 0.92 * dusk)');
+    expect(INTERIOR_FRAGMENT).toContain(
+      `uInteriorDay * mix(1.0, uInteriorDusk, smoothstep(${DUSK_FROM.toFixed(2)}, 1.0, dusk))`,
+    );
+    // ...with the NIGHT, and not to nothing: an unlit room at sunset is a dim
+    // room, not a black pane (the forensic audit of 2026-10-09, #24: "its
+    // neighbours are black voids"). The day's light is held while the sun is
+    // on the house (the hour's measure is 0.69 with the evening whole), keeps
+    // a share at full night, and a lit room's lamps are still several times
+    // that.
+    const eveningWhole = 0.5 / EVENING_DRIVE_MAX;
+    expect(DUSK_FROM).toBeLessThan(eveningWhole);
+    expect(DUSK_FROM).toBeGreaterThan(0.4);
+    const t = (eveningWhole - DUSK_FROM) / (1 - DUSK_FROM);
+    // at the whole evening, four-fifths of the day's light and more is still in the room
+    expect(1 + (DUSK_INTERIOR - 1) * (t * t * (3 - 2 * t))).toBeGreaterThan(0.8);
+    expect(DUSK_INTERIOR).toBeGreaterThan(0.15);
+    expect(DUSK_INTERIOR).toBeLessThan(0.5);
+    expect(night * 0.62).toBeGreaterThan(DAY_INTERIOR * DUSK_INTERIOR * 3);
     // The drapes' folds are filtered before they alias.
     expect(INTERIOR_FRAGMENT).toContain('fwidth(a0)');
+  });
+
+  it('never draws a window\u2019s curtains shut: a drawn pair leaves a parting, and the room is in it', () => {
+    // The forensic audit of 2026-10-09 (#24): "One window is filled edge to
+    // edge with a flat corrugated grey sheet while its neighbours are black
+    // voids ... Expected: every window either shows a dim room or a curtain
+    // with folds and a gap."
+    expect(DRAWN_GAP).toBeGreaterThan(0.06);
+    expect(DRAWN_GAP).toBeLessThan(0.2);
+    // no drape reaches the window's centre line: its edge is never below the gap
+    expect(INTERIOR_FRAGMENT).not.toContain('? -1.0 :');
+    expect(INTERIOR_FRAGMENT).toContain(`${DRAWN_GAP.toFixed(2)} * (1.0 + 0.5 * fract(r * 3.1)), drawn)`);
+    // one room in seven, as before
+    expect(INTERIOR_FRAGMENT).toContain('float drawn = step(fract(r * 11.7), 0.14);');
+    // and its pleats are gathered, not ruled
+    expect(INTERIOR_FRAGMENT).toContain('sin(a0 * 41.0 + gather)');
   });
 });
 

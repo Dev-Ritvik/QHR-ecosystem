@@ -1,0 +1,222 @@
+## H. The design system
+
+@@ type-scale-sprawl | SYSTEMIC | systemic | body-two-sizes, numerals-mixed
+L: All pages at 1920×945 (measured on 28 pages and the film).
+E: The type system: sizes, line heights, letter spacing.
+O: One typeface is used well, but its settings have multiplied. There are 15 text sizes on the inner pages (10.24, 10.75, 12.8, 16, 16.8, 20, 23.1, 25, 31.25, 31.67, 44.1, 46.62, 63, 90.3, 121.8 px) and two more on the film's footer (13.44 and 134.4 px); 42 distinct combinations of size, weight, spacing and leading; 13 letter-spacing values; six different line heights at 20 px (27, 29, 30, 31, 32, 32.4) and eight at 16 px. The small capitals come in two sizes a half-pixel apart: 10.75 px in the header and 10.24 px on every other control.
+V: Computed styles of every text element on every page.
+W: The eye cannot name a 0.5 px or a 1 px difference in leading, but it reads the sum as "assembled". An authored system has seven or eight sizes and one leading per size.
+X: A scale of about eight sizes, one line height for each, one small-capital size.
+F: 36-all-second-screens-desktop.jpg
+
+@@ body-two-sizes | MEDIUM | systemic | type-scale-sprawl
+L: All inner pages at 1366×657, 820×1180 and 390×844.
+E: Body text.
+O: Below the widest screens two almost identical body sizes share each page: 15.93 px and 16 px on a laptop (913 and 648 uses), 15.43 and 16 on a tablet, 15.03 and 16 on a phone. On the laptop the small capitals also split into 10.05 and 10.25 px.
+V: Computed styles at each size.
+W: Part of the text follows a fluid scale and part is fixed, so neighbouring paragraphs differ by a fraction of a pixel to a full pixel.
+X: All body text on the one scale.
+F: 35-all-opening-frames-laptop-1366.jpg
+
+@@ colour-tokens | SYSTEMIC | systemic | consent-card
+L: All pages.
+E: The gilt and ivory colours.
+O: There are three gilts in use (#E8B98A on labels and links, #F1D0A6 on the gilt half of headings and on the film footer's labels, #D9B07A on the word "Reality" in the logo line) and twelve strengths of ivory text between 62% and 94% (62, 72, 74, 76, 78, 80, 82, 84, 86, 88, 90, 94). The consent card's heading is a cool grey-white (249, 250, 251) that appears nowhere else.
+V: Computed colours of every text element.
+W: Three near-identical golds and a dozen near-identical greys are what a palette looks like before it has been edited.
+X: Two gilts at most (text and display), three or four ivory strengths, no cool white.
+F: 27-footer-film-vs-inner.jpg, 50-consent-card.jpg
+
+@@ numerals-mixed | SYSTEMIC | systemic | figures-oldstyle, units-mixed
+L: All pages with numbers.
+E: The style of numerals.
+O: Four numeral settings are in use: lining proportional in most text, lining tabular in tables, old-style proportional in the display statistics and in form fields, old-style tabular in the film's fact lines. A typed telephone number shows small old-style zeros ("+91 98480 00000"). The units beside the big figures are three sizes ("years", "lakh sq yd", a smaller "ft").
+V: Computed numeral settings on every element containing a digit: 315, 24, 20 and 20 uses.
+W: Numbers are the content of this site; they should look like one set.
+X: Lining figures for statistics, tables and form fields; old-style, if kept, in running text only.
+F: 16-old-style-figures.jpg, 55-enquiry-form-filled.jpg
+
+@@ motion-values | SYSTEMIC | systemic |
+L: All controls on all pages.
+E: Hover and state transitions.
+O: Four durations (0.15, 0.3, 0.35 and 0.5 s) and three easing curves are in use. Of about 970 controls that animate, 728 still carry the styling framework's default 0.15 s curve; the site's own slow-out curve appears on 119; the rest use plain "ease".
+V: Computed transition values of every link and button.
+W: Motion is part of a design system; here most of it is the framework's default.
+X: Two durations and one curve, set once.
+F: 54-hover-and-focus-states.jpg
+
+@@ logo-plate-unique | LOW | systemic |
+L: Header, every page.
+E: The ivory tile behind the mark.
+O: The mark sits on a small ivory tile with a 3 px corner radius and a four-layer drop shadow. It is the only rounded, shadowed, light object on the site; everything else is square, flat and dark.
+V: Computed: radius 3 px on 28 elements (the tile only); its shadow is one of four shadow recipes on the site.
+W: The tile reads as an app icon dropped onto an editorial page.
+X: A ground for the mark that belongs to the page (a square ivory plate with a hairline, or the page's own dark with the mark's colours adjusted for it).
+N: The mark itself is the client's and is never to be changed; the tile is the build's choice of ground and is his to approve.
+F: 30-header-text-collision.jpg
+
+@@ header-shift | LOW | isolated | menu-enquire-thrice
+L: Header, every page, when the menu opens.
+E: The "Enquire" link.
+O: "Enquire" jumps five pixels to the left when the menu opens, because "Close" is wider than "Menu".
+V: Measured: the word spans 1644–1706 px at rest and 1639–1701 px with the menu open.
+W: Chrome that moves when it should hold still.
+X: A fixed width for the menu control.
+F: 52-menu-open.jpg
+
+@@ menu-ghost | LOW | isolated |
+L: The open menu.
+E: The menu's ground.
+O: The menu's ground is slightly see-through, so a dim ghost of the page behind it (on /about, the founder's portrait) lies under the list, with link text crossing it. The four columns hold 6, 5, 4 and 3 items, leaving the lower right of the screen empty.
+V: Menu screenshot on /about.
+W: A faint face behind a list of links looks like a rendering leftover.
+X: An opaque ground, or a deliberate picture.
+F: 52-menu-open.jpg, 53-menu-zoom.jpg
+
+@@ notice-box-offset | LOW | isolated |
+L: /privacy, /terms, /refund-policy.
+E: The draft notice box and the bulleted lists under it.
+O: The notice's text starts at 919.5 px and the bulleted list's text at 916 px, in the same column.
+V: Measured left edges.
+W: A 3.5 px step between two blocks in one column.
+X: One text edge.
+F: 37-privacy-draft-placeholders.jpg
+
+## I. Controls and their states
+
+@@ consent-card | MEDIUM | isolated | colour-tokens, consent-autofocus
+L: First visit, every page.
+E: The consent card.
+O: The card does not use the site's own components. Its three choices are outlined boxes (the only boxed buttons on the site; every other action is a hairline and capitals), its heading is tracked capitals in a cool white, and its text is the smallest body copy anywhere (12.8 px at 72%). It says "the experience" and points to "the Privacy link", which the footer calls "Privacy & data choices".
+V: Consent screenshot; computed styles of its buttons and text.
+W: It is the first designed object a visitor meets and it comes from a different kit.
+X: The site's own action style, ivory heading, readable text, the control's real name.
+F: 50-consent-card.jpg
+
+@@ consent-autofocus | MEDIUM | isolated | consent-card
+L: First visit, every page.
+E: "Accept all".
+O: "Accept all" is focused when the card opens, so it alone carries a gilt ring and pressing Enter accepts all tracking.
+V: Consent screenshot: a second outline round the first button only.
+W: It makes the tracking choice look like the recommended one, on a site whose copy is about not doing that.
+X: No choice pre-selected, or focus on "Essential only".
+F: 50-consent-card.jpg
+
+@@ consent-reopen | LOW | isolated | consent-card
+L: Footer, "Privacy & data choices", every page.
+E: The panel the control opens.
+O: The control reopens the first-visit card under its first-visit title, "Before you explore", and blurs the page behind it. Nothing else on the site blurs.
+V: Screenshot after pressing the control at the foot of /projects.
+W: A returning visitor changing a setting is greeted as a new one; the blur is a one-off effect.
+X: A title that says what the panel is; the same dimming the rest of the site uses.
+F: 51-privacy-control-reopens-consent.jpg
+
+@@ focus-states | MEDIUM | systemic | consent-autofocus
+L: All pages, keyboard use.
+E: The visible focus on links and buttons.
+O: Four different focus treatments exist. The cue on the opening picture, the index rows and the full-width "Next" block show focus by a colour change alone, with no ring. The footer's main action has a 1 px gilt outline set 6 px off. The chapter dots have a ring. The consent buttons have the browser's outline.
+V: Tabbed through /about: nine stops recorded with their computed outlines.
+W: Focus is a state like hover and should belong to the same system; colour alone is also hard to see.
+X: One focus ring for everything.
+F: 54-hover-and-focus-states.jpg
+
+@@ form-date-native | MEDIUM | isolated |
+L: /book-a-site-visit, "A day that suits you".
+E: The date field.
+O: The field is the browser's own: "dd-mm-yyyy" in the browser's layout, the browser's calendar icon, and a bright blue selection on the day when focused.
+V: Visit form zoom.
+W: Every other field is drawn in the site's style; this one is the operating system's.
+X: A styled date control, or three plain fields.
+F: 56-visit-form-date-and-wrapped-option.jpg
+
+@@ form-time-wrap | LOW | isolated |
+L: /book-a-site-visit, "Time of day", at 1920 px wide.
+E: The four time options.
+O: "Any time", "Morning" and "Afternoon" sit on one line and "Evening" drops alone to a second.
+V: Visit form zoom.
+W: One orphaned option in a set of four.
+X: Four on one line or two and two.
+F: 56-visit-form-date-and-wrapped-option.jpg
+
+@@ form-field-sizes | LOW | repeated |
+L: /contact, /book-a-site-visit, the layout pages' forms.
+E: The text fields.
+O: The name and telephone fields are set at 25 px and the message field at 20 px, and the message field shows the browser's grey resize handle in its corner.
+V: Computed sizes; form screenshot.
+W: Two input sizes in one form, and a system widget in a drawn form.
+X: One input size; no resize handle.
+F: 55-enquiry-form-filled.jpg
+
+## J. Phone and tablet
+
+@@ phone-rail-tap | HIGH | systemic | phone-rail-over-content
+L: Film (/) and every inner page on a touch screen (tested at 390×844).
+E: The column of chapter dots at the right edge.
+O: The dots have an invisible touch area 186 px wide and about 200 px tall over the middle of the screen. One tap anywhere in it opens the list of chapter names over the page's text. If the visitor then scrolls, the names stay printed over the film's headline and figures until they tap somewhere else.
+V: Touch test: untouched, no names; after one tap in the invisible area, eleven names over the copy; after two scrolls, names still over the picture and over "344 / 407"; cleared only by a tap elsewhere.
+W: On a phone, a stray thumb leaves a second column of text lying across the film's words. Most of this site's buyers will see it on a phone.
+X: A touch area no wider than the dots; names that close when the page scrolls.
+F: 60-phone-rail-tap-sequence.jpg
+
+@@ phone-rail-over-content | MEDIUM | repeated | phone-rail-tap
+L: Film (/) on a phone and a tablet.
+E: The eleven dots.
+O: The dots run down over the house on the cover and over the building's right side on a tablet, and at the film's end the telephone number runs into the dots' ring at the right edge.
+V: Phone key frames; phone walk sheet 3, frame 132.
+W: Chrome lying on the subject, and text touching chrome.
+X: Dots clear of the picture's subject and of text.
+F: 61-phone-film-key-frames.jpg, 71-film-phone-walk-3.jpg
+
+@@ phone-hero-crop | MEDIUM | isolated |
+L: Film (/), cover on a phone (390×844).
+E: The house.
+O: The house is cut by the right edge of the screen: its right wing and part of the portico are out of frame.
+V: Phone key frames, first frame.
+W: The opening picture on the most-used device does not show the whole house.
+X: The whole front in frame.
+F: 61-phone-film-key-frames.jpg
+
+@@ phone-station3-wrap | LOW | isolated | dash-lists-wrap
+L: Film (/), table 3 on a phone.
+E: The place line under "VSR Gayatri Township".
+O: The line wraps so that the second line begins with the separator dot: "· Srikakulam".
+V: Phone walk sheet 3, frame 102.
+W: A separator starting a line.
+X: Break before the place name, without the dot.
+F: 71-film-phone-walk-3.jpg
+
+@@ phone-footer-ragged | LOW | isolated | footer-two-designs
+L: Film (/), the footer on a phone.
+E: The twelve page links and the legal row.
+O: The twelve links wrap as four, two, four, two, and the legal row wraps into three uneven lines.
+V: Phone walk sheet 3, last frame.
+W: The film's last screen on a phone looks unset.
+X: Two even columns, or the inner pages' footer.
+F: 71-film-phone-walk-3.jpg
+
+@@ phone-tap-targets | MEDIUM | systemic |
+L: All pages on a phone.
+E: The size of things to press.
+O: The footer's legal links are 20 px tall, the footer's telephone number 28 px, the header's "Enquire" and "Menu" 34 px, and the "privacy notice" link inside each form 18 px.
+V: Measured boxes on 28 pages at 390×844.
+W: Below about 44 px a thumb misses; the telephone number is the thing a buyer most wants to press.
+X: At least 44 px of height for every press target.
+F: 71-film-phone-walk-3.jpg
+
+@@ phone-nameplate-strip | LOW | isolated |
+L: Film (/), the map chapter on a phone, 88–91% of the scroll, top of the frame.
+E: The founder's nameplate.
+O: A thin strip of the nameplate's gilt letters shows at the very top of the frame, under the header, for three notches.
+V: Phone walk sheet 3, frames 120–124.
+W: A sliver of lettering at the frame's edge.
+X: In or out.
+F: 71-film-phone-walk-3.jpg
+
+@@ revolve-copy-on-hedge | LOW | isolated | cover-copy-on-terrace
+L: Film (/), "We do not broker land.", 11–14% of the scroll, bottom-left.
+E: The supporting lines.
+O: The two supporting lines sit across the top of the hedge and shrubs at the foot of the frame.
+V: Desktop walk sheet 1, frames 8–10.
+W: Small text on a busy, dark-and-light edge.
+X: A line higher, on the lawn.
+F: 70-film-desktop-walk-1.jpg

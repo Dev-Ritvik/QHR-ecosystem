@@ -46,6 +46,7 @@
 
 import * as THREE from 'three';
 import { withFullHall } from './hallLight';
+import { sceneWarm } from './sceneWarm';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 /**
@@ -87,6 +88,13 @@ export const PROBE_GAIN: Readonly<Record<string, number>> = {
   MAT_MarbleFloor: 1.0,
   MAT_Wood_Dark: 1.0,
   MAT_Wood_Dark_LM: 1.0,
+  // The panelling and the doors, waxed (hallWalnut.ts, WALNUT_FINISH): at the
+  // room's whole reflection a panel seen along the wall was a mirror of the
+  // wall opposite, "half washed pale grey and half black" (the forensic audit
+  // of 2026-10-09, #36).
+  MAT_Walnut_Crown: 0.55,
+  MAT_Walnut_Straight: 0.55,
+  MAT_Walnut_Crown_LM: 0.55,
   MAT_Gold: 1.15,
   // the oculus ring, the one gilt surface the bake reaches (imperial hall)
   MAT_Gold_LM: 1.15,
@@ -109,6 +117,37 @@ export const PROBE_GAIN: Readonly<Record<string, number>> = {
 
 const EMISSIVE_ONLY = /^MAT_Holo|^MAT_Hologram$/;
 
+/**
+ * THE KEY'S COLOUR, FOR WHAT THE BAKE NEVER REACHED.
+ *
+ * A third of the room carries no lightmap (the balusters, the capitals, the
+ * panelling, the newels) and takes its diffuse light from the probe: the room
+ * as a cube photographed from its middle. That is the right AMOUNT of light,
+ * from the right directions, and the wrong colour: the cube is a picture of
+ * walnut, a navy runner, gilt and dusk-blue glass as well as of plaster, and
+ * their mixture is mauve. The forensic audit of 2026-10-09 (#34, HIGH): "The
+ * balusters, plinths and capitals render pink beside ivory walls ... Lit
+ * baluster faces average RGB 210, 194, 179 (red 17 above green); the wall
+ * beside them is 232, 228, 217 (red 4 above green)."
+ *
+ * A baked wall does not have that cast, because what lights it is the lamps
+ * and the plaster they bounce off. So the surfaces named here take the
+ * probe's irradiance as a BRIGHTNESS and the key's colour as its hue: one warm
+ * white, the one the walls are lit by. MEASURED on the running build against
+ * the walls beside them (red over green, green over blue): a lit baluster
+ * +14, +17 as the probe gave it; -3, +3 under white light (grey plaster
+ * beside ivory); +4, +14 under this, between the wall by the stair (+7, +17)
+ * and the pilaster under a capital (+4, +10).
+ *
+ * A luminance of one (0.2126, 0.7152, 0.0722), so nothing is brighter or
+ * darker for it.
+ */
+export const HALL_KEY_TINT = [1.15, 0.98, 0.79] as const;
+/** The unbaked surfaces lit in the key's colour: the painted trim, the walnut
+ *  (so the panelling is one timber from every side: #36 had it "red-mahogany
+ *  at the third table and brown elsewhere"), the urns' marble plinths. */
+export const KEY_LIT = /^(MAT_Trim_Cream|MAT_Walnut_Crown|MAT_Walnut_Straight|MAT_Wood_Dark|MAT_MarbleFloor)$/;
+
 /** The defines a probed material carries. Stable strings, so every hall
  *  program shares one cache key per material kind. */
 const vec3 = (v: readonly [number, number, number]) =>
@@ -119,6 +158,9 @@ export const PROBE_DEFINES = {
   HALL_BOX_MAX: vec3(HALL_BOX.max),
   HALL_PROBE_AT: vec3(HALL_PROBE_AT),
 } as const;
+/** The define a surface lit in the key's colour carries beside them (for a
+ *  piece that is in the room and not in its file: the site models' wood). */
+export const KEY_DEFINES = { HALL_KEY_TINT: vec3(HALL_KEY_TINT) } as const;
 
 let installed = false;
 
@@ -199,7 +241,11 @@ export function installHallProbe(): void {
   C.lights_fragment_maps = C.lights_fragment_maps.replace(
     IBL_DIFFUSE,
     /* glsl */ `#if !( defined( HALL_PROBE ) && defined( USE_LIGHTMAP ) )
-			${IBL_DIFFUSE}
+			#ifdef HALL_KEY_TINT
+				iblIrradiance += HALL_KEY_TINT * dot( getIBLIrradiance( geometryNormal ), vec3( 0.2126, 0.7152, 0.0722 ) );
+			#else
+				${IBL_DIFFUSE}
+			#endif
 		#endif`,
   );
 
@@ -244,7 +290,7 @@ export function prepareHallProbe(root: THREE.Object3D, env: THREE.Texture): THRE
       } else {
         mat.envMapIntensity = PROBE_GAIN[mat.name] ?? 1;
         if (!mat.__hallProbe) {
-          mat.defines = { ...(mat.defines ?? {}), ...PROBE_DEFINES };
+          mat.defines = { ...(mat.defines ?? {}), ...PROBE_DEFINES, ...(KEY_LIT.test(mat.name) ? KEY_DEFINES : {}) };
           mat.__hallProbe = true;
         }
       }
@@ -428,6 +474,10 @@ export function warmProgramsUnder(
 
 /** Per frame, the main-thread time the warm queue may spend. */
 const WARM_BUDGET_MS = 4;
+/** And while the canvas is held dark over a set that is not built yet
+ *  (sceneWarm.ts): there is no picture for a long frame to be dropped from,
+ *  and every frame of the wait is the curtain staying down. */
+const WARM_BUDGET_HELD_MS = 12;
 
 type WarmItem = { material: THREE.Material | THREE.Material[]; meshes: THREE.Object3D[] };
 
@@ -520,7 +570,8 @@ function pumpWarm(gl: THREE.WebGLRenderer): void {
 
 function tickWarm(gl: THREE.WebGLRenderer, jobs: WarmJob[]): void {
   const t0 = performance.now();
-  const spent = () => performance.now() - t0 >= WARM_BUDGET_MS;
+  const budget = sceneWarm.hold >= 1 ? WARM_BUDGET_HELD_MS : WARM_BUDGET_MS;
+  const spent = () => performance.now() - t0 >= budget;
 
   // BUILD, oldest job first, against a bound target (see the note on `target`).
   let target: THREE.WebGLRenderTarget | null = null;

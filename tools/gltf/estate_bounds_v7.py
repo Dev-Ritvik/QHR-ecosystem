@@ -110,7 +110,7 @@ def fmt(v):
 
 arch = []
 # The house: podium, walls, parapet and its urns, pediments, portico and steps.
-mn, mx = hull(['podium_walls', 'mansion_walls', 'mansion_bands', 'mansion_parapet', 'mansion_pediments',
+mn, mx = hull(['podium_walls', 'mansion_walls', 'mansion_bands', 'mansion_parapet', 'mansion_pediments', 'mansion_acroteria',
                'portico_trim', 'portico_steps', 'mansion_window_trim', 'mansion_quoins', 'mansion_roof', 'garden_planters'])
 # The roof is flat (2026-10-01: the hip, the cupola and the spire were taken
 # off at the client's word), so the house ends at the gilt finials on its

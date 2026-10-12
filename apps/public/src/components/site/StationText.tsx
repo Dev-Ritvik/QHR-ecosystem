@@ -26,12 +26,12 @@ type Project = InferSelectModel<typeof projectsPub>;
  * plan, and the numeral closes its last line instead.
  */
 export function StationText({ project, numeral }: { project: Project; numeral?: string }) {
-  const place = [project.locality, project.city].filter(Boolean).join(' · ');
+  const place = [project.locality, project.city].filter(Boolean) as string[];
 
   return (
     <Link
       href={`/projects/${project.slug}`}
-      className="tap-target group block outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-8 focus-visible:outline-[#E8B98A]"
+      className="tap-target group block"
     >
       <h3 className="t-d2 text-[#F2EDE4] transition-colors group-hover:text-[#E8B98A] group-focus-visible:text-[#E8B98A]">
         {project.name}
@@ -39,7 +39,18 @@ export function StationText({ project, numeral }: { project: Project; numeral?: 
       {/* Full ivory (it was 90%): at the second table, which stands against
           the ivory wall, the place measured 4.23:1 on a phone held sideways
           once the hall's lamps led its light (2026-10-04). */}
-      {place ? <p className="t-support mt-2 text-[#F2EDE4] wide:mt-5">{place}</p> : null}
+      {/* (In parts, so that a part which begins a line does so without the
+          dot: globals.css, .place-run.) */}
+      {place.length ? (
+        <p className="t-support place-run mt-2 text-[#F2EDE4] wide:mt-5">
+          {place.map((part, i) => (
+            <span key={part}>
+              {i > 0 ? <span className="sr-only">, </span> : null}
+              {part}
+            </span>
+          ))}
+        </p>
+      ) : null}
       {/* The numeral follows the count, a gap on: set out at the line's far
           end it stood directly over the first plan's own "Open" marker on a
           phone's short frame (seen at 390x664, ten pixels apart).
@@ -50,7 +61,7 @@ export function StationText({ project, numeral }: { project: Project; numeral?: 
           place: with the refinement brief (2026-10-03, "tiny uppercase labels
           ... micro-metadata") it is a line of the same small text as any
           other, read as a sentence. */}
-      <p className="t-body mt-1 flex items-baseline gap-8 text-[#F2EDE4] [font-variant-numeric:tabular-nums] wide:mt-2 wide:block">
+      <p className="t-body mt-1 flex items-baseline gap-8 text-[#F2EDE4] [font-variant-numeric:lining-nums_tabular-nums] wide:mt-2 wide:block">
         <span>
           {project.isSoldOut
             ? 'Fully sold'

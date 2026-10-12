@@ -79,6 +79,20 @@ export const ASHLAR = { from: 0.9, course: 0.38, stone: 0.92, joint: 0.008, dept
 //   couple of per cent either way. The client once called a facade of
 //   patchwork stones "a skin disease": that was nine per cent a stone under a
 //   pebbled normal. This is the quiet version of the same true thing.
+/**
+ * THE COMPOUND WALL IS STONE TOO. It was the one stone surface on the estate
+ * this file did not dress: a quarter-kilometre of one flat tone behind the
+ * trees. The forensic audit of 2026-10-09 (#29): "A featureless white wall
+ * runs dead straight across the frame behind the trees ... Expected: a wall
+ * with piers, a coping and some weather." The piers and the coping are the
+ * model's (tools/blender/build_estate_v7.py, build_compound_wall: a pier
+ * every eight metres under one coping at `coping` metres). The weather is
+ * the house's own, on a garden wall's terms: the broad patina, the damp and
+ * the lichen of its first metre, and under the coping the dirt the coping
+ * sheds, in dribbles `fall` metres long.
+ */
+export const BOUNDARY = { coping: 2.3, fall: [0.45, 1.25], depth: 0.6 } as const;
+
 const STONE = /* glsl */ `
 #include <color_fragment>
 float estateGrime = 0.0;
@@ -131,6 +145,18 @@ float estateGrime = 0.0;
     estateGrime = max(estateGrime, below * dribble * 0.6);
   }
   #endif
+  // THE COMPOUND WALL, UNDER ITS OWN COPING (BOUNDARY, below): the same
+  // dribbles, from the one ledge it has.
+  #ifdef ESTATE_BOUNDARY
+  {
+    float lane = ageNoise(vec3((w.x + w.z) * 3.4, 0.0, (w.x - w.z) * 3.4));
+    float fall = ${BOUNDARY.fall[0].toFixed(2)} + ${(BOUNDARY.fall[1] - BOUNDARY.fall[0]).toFixed(2)} * (0.5 + 0.5 * lane);
+    float d = ${BOUNDARY.coping.toFixed(2)} - w.y;
+    float below = d > 0.0 ? 1.0 - smoothstep(0.03, fall, d) : 0.0;
+    float dribble = smoothstep(-0.25, 0.55, ageNoise(vec3((w.x + w.z) * 6.5, w.y * 0.6, (w.x - w.z) * 6.5)));
+    estateGrime = max(estateGrime, below * dribble * ${BOUNDARY.depth.toFixed(2)});
+  }
+  #endif
   // Faint rain streaking over the whole face.
   float streak = ageNoise(vec3((w.x + w.z) * 2.2, w.y * 0.12, (w.x - w.z) * 2.2));
   diffuseColor.rgb *= 1.0 - 0.07 * smoothstep(0.2, 0.9, streak);
@@ -176,6 +202,88 @@ roughnessFactor = clamp(roughnessFactor + 0.16 * estateGrime + 0.05 * ageNoise(v
 }
 `;
 
+/**
+ * A SOFFIT IS LIT FROM BELOW, AND WHAT STANDS BELOW IT IS LIT STONE.
+ *
+ * The forensic audit of 2026-10-09 (#8): "A jet-black jagged line runs along
+ * the pediment's sloping edge where two surfaces meet ... darker than any
+ * shadow in the frame ... A pure black line on a sunlit stone house reads as
+ * a modelling gap. Expected: a closed joint with a soft contact shadow."
+ * Found on the running build by a ray through the black pixels of the
+ * approach: they are the undersides of the raking cornice and of its bed
+ * moulding, two pixels of each, at a luma of 5 against the 50 to 75 of the
+ * mouldings either side.
+ *
+ * A face that looks down has one light in this picture: the hemisphere's
+ * ground colour, "what the land throws back up under the soffits"
+ * (WorldCanvas). The baked occlusion then took three quarters of that away
+ * (0.2 to 0.3 on those undersides), because seen from a soffit most of the
+ * world below IS shut out: by the cornice a hand under it. But that cornice
+ * is not a hole in the light. It is pale stone in the same sun, nearer than
+ * the lawn and brighter, and it is where a real soffit's light comes from.
+ * Occlusion is the sky not reaching in (ExteriorModel, AO_STRENGTH), which
+ * stays true at full strength; the bounce from below is not the sky.
+ *
+ * So on a baked face that looks down, the share of the ground's light that
+ * the occlusion took is put back, by how squarely the face looks down: all of
+ * it under a level soffit, none of it on a wall. Measured on the approach
+ * with the occlusion off altogether, that is the most it can come to: the
+ * same undersides at a luma of 24, a shadow line and not a gap.
+ */
+export const BOUNCE_UNDER_COVER = 1.0;
+
+/**
+ * AND A GABLE'S SOFFIT IS LIT BY THE TYMPANUM IT LEANS OVER.
+ *
+ * Each raking cornice ends underneath in one splayed soffit now (the model,
+ * build_pediments: the two undersides it had were drawn from the cover as two
+ * rows of dashes). It is a face of some size, and with the ground's light
+ * alone it printed at a luma of 28 beside a tympanum at 171: from the cover a
+ * heavy shadow, and from the orbit's side of the house, where the far rake's
+ * soffit is seen almost square on, a dark triangle with the roundel half in
+ * it. A soffit that leans over a wall is lit by that wall: the tympanum under
+ * it stands in the sun or in the sky's light a hand away, and is pale stone.
+ *
+ * So above the cornice the house's walls end at (`from`, metres: the model's
+ * CORNICE_TOP), a baked face that looks down AND leans out of its front takes
+ * a share of the light the wall under it stands in: the sun as it falls on
+ * that front, and the sky's and the ground's light on an upright face, off
+ * stone of the house's colour (`stone`). The gables stand on the two fronts,
+ * which face along z, so the wall under a soffit is the front its normal
+ * leans out of along z. (Not the way the soffit leans as a whole: a raking
+ * soffit leans down its rake as well, and the first build of this took that
+ * for the wall's facing and lit the far rake by a sun it does not see: 4 of
+ * luma.) By how squarely it looks down, and nothing on a soffit that does
+ * not lean out. No cornice of the house below that height is touched: their
+ * undersides are as they were measured and approved.
+ */
+export const GABLE_BOUNCE = { from: 9.42, share: 0.35, stone: [0.6, 0.55, 0.46] } as const;
+
+const STONE_BOUNCE = /* glsl */ `
+#include <aomap_fragment>
+#if defined( USE_AOMAP ) && ( NUM_HEMI_LIGHTS > 0 )
+{
+  // Both in view space: the face's own normal, and which way is up.
+  float under = saturate( -dot( geometryNormal, hemisphereLights[ 0 ].direction ) );
+  vec3 fromBelow = hemisphereLights[ 0 ].groundColor * ( 0.5 + 0.5 * under );
+  reflectedLight.indirectDiffuse += ${BOUNCE_UNDER_COVER.toFixed(2)} * ( 1.0 - ambientOcclusion ) * under * fromBelow * BRDF_Lambert( material.diffuseColor );
+  #if NUM_DIR_LIGHTS > 0
+  if ( vAgeWorld.y > ${GABLE_BOUNCE.from.toFixed(2)} && under > 0.0 ) {
+    // In the world's own axes: the fronts face along z.
+    vec3 gableN = inverseTransformDirection( geometryNormal, viewMatrix );
+    float gableLean = abs( gableN.z );
+    if ( gableLean > 0.08 ) {
+      vec3 gableSun = inverseTransformDirection( directionalLights[ 0 ].direction, viewMatrix );
+      vec3 gableWall = directionalLights[ 0 ].color * saturate( sign( gableN.z ) * gableSun.z )
+        + 0.5 * ( hemisphereLights[ 0 ].skyColor + hemisphereLights[ 0 ].groundColor );
+      reflectedLight.indirectDiffuse += ${GABLE_BOUNCE.share.toFixed(2)} * under * smoothstep( 0.08, 0.25, gableLean ) * gableWall * vec3( ${GABLE_BOUNCE.stone.map((v) => v.toFixed(2)).join(', ')} ) * BRDF_Lambert( material.diffuseColor );
+    }
+  }
+  #endif
+}
+#endif
+`;
+
 const SLATE = /* glsl */ `
 #include <color_fragment>
 {
@@ -216,7 +324,7 @@ const HEDGE_NORMAL = /* glsl */ `
 
 type Kind = 'stone' | 'slate' | 'hedge';
 const RULES: { re: RegExp; kind: Kind }[] = [
-  { re: /^MAT_Stone_(Wall|Trim|Rustic)(_AOG?)?$/, kind: 'stone' },
+  { re: /^MAT_Stone_(Wall|Trim|Rustic|Boundary)(_AOG?)?$/, kind: 'stone' },
   { re: /^MAT_Roof(_Slate)?(_AO)?$/, kind: 'slate' },
   { re: /^MAT_Hedge$/, kind: 'hedge' },
 ];
@@ -239,6 +347,10 @@ export function dressSurfaces(root: THREE.Object3D): Record<Kind, number> {
       const kind = rule.kind;
       // The trim takes the stone's age but not the wall's ledge streaks.
       if (kind === 'stone' && /Trim/.test(mat.name)) mat.defines = { ...(mat.defines ?? {}), ESTATE_TRIM: '' };
+      // The compound wall: none of the house's ledges, and one of its own.
+      if (kind === 'stone' && /Boundary/.test(mat.name)) {
+        mat.defines = { ...(mat.defines ?? {}), ESTATE_TRIM: '', ESTATE_BOUNDARY: '' };
+      }
       // And the wall alone is laid in courses: the trim is carved, the base is
       // rusticated in its own geometry.
       if (kind === 'stone' && /Wall/.test(mat.name)) mat.defines = { ...(mat.defines ?? {}), ESTATE_ASHLAR: '' };
@@ -256,7 +368,8 @@ export function dressSurfaces(root: THREE.Object3D): Record<Kind, number> {
         if (kind === 'stone') {
           frag = frag
             .replace('#include <color_fragment>', STONE)
-            .replace('#include <roughnessmap_fragment>', STONE_ROUGH);
+            .replace('#include <roughnessmap_fragment>', STONE_ROUGH)
+            .replace('#include <aomap_fragment>', STONE_BOUNCE);
         }
         if (kind === 'slate') frag = frag.replace('#include <color_fragment>', SLATE);
         if (kind === 'hedge') {

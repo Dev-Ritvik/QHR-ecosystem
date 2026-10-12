@@ -92,6 +92,36 @@ async function callRevalidate(projectSlug: string) {
 }
 
 /**
+ * A PLOT'S STATUS HAS CHANGED: if its project is published, the projection —
+ * and so the site, which prints how many plots are open — follows.
+ *
+ * A status changed by hand already did this (actions/units.ts, the inline
+ * republish hook of T38). A status changed by a BOOKING did not, and nor did
+ * a hold lapsing in the hourly sweep: a plot booked, cancelled, defaulted or
+ * registered left the site saying what it had said before, until somebody
+ * happened to edit a price. The nightly reconcile only reports the drift.
+ *
+ * Best effort, and loud. publishProject works in a savepoint of the caller's
+ * transaction, so a projection that will not write does not take the booking
+ * with it: money has changed hands in that transaction, and a stale count on
+ * a web page is the lesser failure. It is logged under a name the reconcile's
+ * own alert shares, so it is found.
+ */
+export async function republishAfterStatusChange(db: DbType, projectId: string): Promise<void> {
+  try {
+    const [project] = await db
+      .select({ publishedAt: projects.publishedAt })
+      .from(projects)
+      .where(eq(projects.id, projectId));
+    if (!project?.publishedAt) return;
+    const res = await publishProject(db, projectId);
+    if (!res.ok) console.error('PROJECTION_DRIFT_DETECTED', { cause: 'republish refused after a status change', projectId, res });
+  } catch (e) {
+    console.error('PROJECTION_DRIFT_DETECTED', { cause: 'republish failed after a status change', projectId, error: e });
+  }
+}
+
+/**
  * Transforms core entities into denormalized projection tables (ADR-002, §4.3).
  * Must be executed inside a single transaction to prevent partial projection updates.
  */

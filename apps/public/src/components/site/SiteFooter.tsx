@@ -18,44 +18,40 @@
 // HTML webpage appended to the bottom of a 3D application." It was: a solid
 // navy slab with a rule across the top, arriving under the film's last frame.
 // On the home page the footer has no ground of its own: it is set over the
-// film's closing picture (FilmColophon, below), in the film's own type. Every
-// other page keeps the plain footer it had.
+// film's closing picture (FilmColophon, below), in the film's own type.
+//
+// AND EVERY OTHER PAGE ENDS AS THE FILM DOES (the client, 2026-10-06: "make
+// sure everything gives the same vibe / no page must feel left out"). They
+// kept the plain footer for a long time: a navy block, a logo, three columns
+// of links, three addresses — the bottom of a website, under pages that had
+// meanwhile become rooms of a house. A page's footer is its colophon now
+// (PageColophon): the film's own sign-off and its one action, the three
+// offices under their roles, and then the whole site set out as a contents
+// page (siteMap.ts), in the film's type on the hall's dark.
 
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { PrivacyControl } from '@/components/consent/ConsentPanel';
-import { Logo } from './Logo';
 import { BRANCHES } from '@estate/domain/leads/branches';
 import { CONTACT_EMAIL, CONTACT_MAILTO } from '@/lib/contact';
+import { withPin } from '@/lib/units';
+import { SITE_PARTS, SITE_SMALL_PRINT } from './siteMap';
 
-const COLUMNS = [
-  { title: 'The land', links: [
-    { href: '/properties', label: 'Plots and sizes' },
-    { href: '/downloads', label: 'Layout plans' },
-    { href: '/locations', label: 'Locations' },
-    { href: '/gallery', label: 'Gallery' },
-  ]},
-  { title: 'The company', links: [
-    { href: '/about', label: 'About' },
-    { href: '/why-us', label: 'How we work' },
-    { href: '/testimonials', label: 'Testimonials' },
-    { href: '/careers', label: 'Careers' },
-  ]},
-  { title: 'Before you buy', links: [
-    { href: '/investment-guide', label: 'Investment guide' },
-    { href: '/knowledge', label: 'Knowledge' },
-    { href: '/faqs', label: 'Questions' },
-    { href: '/start-here', label: 'Start here' },
-  ]},
-];
-
-const LEGAL = [
-  { href: '/privacy', label: 'Privacy' },
-  { href: '/terms', label: 'Terms' },
-  { href: '/refund-policy', label: 'Refunds' },
-  { href: '/cookie-policy', label: 'Cookies' },
-];
+/**
+ * ONE FOOTER, IN TWO SETTINGS (the forensic audit of 2026-10-09, #58 and
+ * #91). The film's colophon kept a list of its own — twelve pages of the
+ * eighteen, under names of its own ("Layout plans", "Gallery", "Investment
+ * guide", "Testimonials"), with four of the five pages of small print — so
+ * the one component a visitor meets on every page was a different component
+ * on the home page, with no way from it to the layouts, the offices, the
+ * hall, the enquiry or the sitemap. Both colophons are made from the one
+ * list now (siteMap.ts): the same four parts, the same eighteen pages by the
+ * same names, the same five of small print, the same three offices under the
+ * same labels. What differs is the setting, and only that: the film's is its
+ * last frame, set over the picture in the film's own measure, its sign-off
+ * the largest line on the site and held; a page's is its last sheet.
+ */
 
 /**
  * THE FILM'S FOOTER IS A COLOPHON. The second art-direction audit (2026-09-30):
@@ -119,9 +115,8 @@ const LEGAL = [
  * type on the site (--end), and the spaces are the film's baselines.
  */
 function FilmColophon({ year }: { year: number }) {
-  const links = COLUMNS.flatMap((c) => c.links);
   return (
-    <footer className="film-stage relative z-10">
+    <footer id="visit" className="film-stage relative z-10">
       <div data-chapter-fade="lines" className="px-[var(--edge)] pb-14 pt-[26vh] low:pb-6">
         <h2 className="sr-only">Visit</h2>
         {/* THE SIGN-OFF IS HELD ON A WIDE FRAME (the audit of 2026-10-05, P0:
@@ -165,12 +160,15 @@ function FilmColophon({ year }: { year: number }) {
           you there.
         </p>
         <div data-line className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-5">
-          <Link href="/contact" className="cta-primary">
+          {/* To the page for it (2026-10-06). It went to /contact, whose form
+              asked for neither a layout nor a day: the film's one action led
+              to a page that could not take it. */}
+          <Link href="/book-a-site-visit" className="cta-primary">
             Arrange a site visit
           </Link>
           <a
             href="tel:+919553513366"
-            className="t-small tap-target text-[#F2EDE4]/90 transition-colors hover:text-[#F2EDE4]"
+            className="t-small tap-target press-row text-[#F2EDE4]/90 transition-colors hover:text-[#F2EDE4]"
           >
             +91 95535 13366
           </a>
@@ -184,55 +182,162 @@ function FilmColophon({ year }: { year: number }) {
               <div data-line key={b.id}>
                 <p className="t-eyebrow t-gilt">{b.role === 'head_office' ? 'Head office' : 'Branch'}</p>
                 <p className="t-support mt-2 text-[#F2EDE4]">{b.name}</p>
-                <address className="t-small mt-2 max-w-[34ch] not-italic text-[#F2EDE4]/85">
-                  {b.address} &ndash; {b.pincode}
+                <address className="t-small mt-2 max-w-[34ch] not-italic text-[#F2EDE4]/90">
+                  {withPin(b.address, b.pincode)}
                 </address>
               </div>
             );
           })}
         </div>
 
-        {/* TWO ROWS OF SIX, set that way: as one wrapped row the twelfth link
-            stood alone on a second line on every frame narrower than 1700 px
-            (seen at 1536x730). */}
+        {/* EVERY PAGE, BY ITS PART: the four parts the menu and every other
+            page's colophon have, each a line here — its name, then its
+            pages — where a page's colophon sets them as four columns. A line
+            a part, because this is a picture's last frame and not a sheet:
+            four lines stand under the offices in the dark of the court's
+            floor, where four columns six rows deep would have climbed into
+            the lit table beside the sign-off. (It was two rows of six links
+            with no parts, and six pages short.) */}
         {/* (On a low frame — tailwind's `low:`, a 13-inch laptop's window —
             the spaces under the offices close up, so the offices stand under
             the map table's foot and not at it.) */}
-        <nav aria-label="Footer" className="mt-[calc(var(--bl)*12)] low:mt-[calc(var(--bl)*7)]">
-          {[links.slice(0, 6), links.slice(6)].map((row, i) => (
-            <ul key={i} className="flex flex-wrap gap-x-6">
-              {row.map((l) => (
-                <li data-line key={l.href + l.label}>
+        <nav aria-label="Every page" className="colophon-parts mt-[calc(var(--bl)*12)] low:mt-[calc(var(--bl)*7)]">
+          {SITE_PARTS.map((part) => (
+            <div key={part.title} className="colophon-part">
+              <h3 data-line className="t-eyebrow t-gilt colophon-part-title">
+                {part.title}
+              </h3>
+              <ul className="colophon-part-pages">
+                {part.pages.map((l) => (
+                  <li data-line key={l.href}>
+                    <Link href={l.href} className="colophon-link">
+                      {l.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        {/* (The control at its row's own strength: at 60% it was the one line
+            of the colophon under AA where the stone is at its lightest —
+            measured at 390x844: 3.98:1 on a p90 luma of 72.) */}
+        <LegalRow year={year} className="t-small mt-4 text-[#F2EDE4]/[0.72]" line />
+      </div>
+    </footer>
+  );
+}
+
+/**
+ * THE LEGAL LINE, the same in both colophons: whose site it is and the
+ * address the offices read; the five pages of small print; and the control
+ * that reopens a visitor's own choices. One row on a wide frame, the control
+ * at its far end. On a phone, three lines — who, the small print, the choices
+ * — where the row used to wrap wherever its words happened to run out (the
+ * forensic audit of 2026-10-09, #116: "three uneven lines"), and every word
+ * that can be pressed is a row a thumb is sure of (#117).
+ */
+function LegalRow({ year, className, line }: { year: number; className: string; line?: boolean }) {
+  return (
+    <div data-line={line ? '' : undefined} className={'colophon-legal ' + className}>
+      <span className="colophon-legal-own">
+        <span>&copy; {year} Quality Homes Reality</span>
+        <a className="colophon-legal-link" href={CONTACT_MAILTO}>
+          {CONTACT_EMAIL}
+        </a>
+      </span>
+      <span className="colophon-legal-print">
+        {SITE_SMALL_PRINT.map((l) => (
+          <Link key={l.href} href={l.href} className="colophon-legal-link">
+            {l.name}
+          </Link>
+        ))}
+      </span>
+      <span className="colophon-legal-choices">
+        <PrivacyControl className="colophon-legal-link" />
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A PAGE'S COLOPHON. The film's ending without the film: the sign-off a step
+ * under the film's (it is a page's last line here, not a picture's), the one
+ * action and the telephone number beside it; the three offices, each a name
+ * under its role; then every page of the site by its part, as the menu has
+ * them; and the legal line. On the sheets' own ground, off the frame's own
+ * edge, so it is the page's last sheet and not a block under the page.
+ */
+function PageColophon({ year, pathname }: { year: number; pathname: string }) {
+  return (
+    <footer className="folio folio-colophon relative z-10">
+      <div className="folio-colophon-sign">
+        <p className="t-d2 text-[#F2EDE4]">
+          The land is best seen
+          <br />
+          <span className="t-gilt">from the land.</span>
+        </p>
+        <p className="folio-next-line">
+          Every open layout can be walked. The branch that holds it will take
+          you there.
+        </p>
+        <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-5">
+          <Link href="/book-a-site-visit" className="cta-primary">
+            Arrange a site visit
+          </Link>
+          <a
+            href="tel:+919553513366"
+            className="tap-target press-row text-step-0 text-[#F2EDE4]/90 transition-colors hover:text-[#E8B98A]"
+          >
+            +91 95535 13366
+          </a>
+        </div>
+      </div>
+
+      <div className="folio-colophon-offices">
+        {(['visakhapatnam', 'vizianagaram', 'srikakulam'] as const).map((id) => {
+          const b = BRANCHES[id];
+          return (
+            <div key={b.id}>
+              <p className="folio-kicker">{b.role === 'head_office' ? 'Head office' : 'Branch'}</p>
+              <p className="mt-1 text-step-2 text-[#F2EDE4]">{b.name}</p>
+              <address className="mt-2 max-w-[34ch] not-italic text-step-0 text-[#F2EDE4]/[0.8]">
+                {withPin(b.address, b.pincode)}
+              </address>
+            </div>
+          );
+        })}
+      </div>
+
+      <nav aria-label="Every page" className="folio-colophon-map">
+        {SITE_PARTS.map((part) => (
+          <div key={part.title}>
+            <h3 className="folio-kicker">{part.title}</h3>
+            {/* Real 44px rows on a touch screen rather than an invisible
+                expander: these are stacked, so a pseudo element would overlap
+                its neighbours and the wrong link would take the tap. */}
+            <ul className="mt-2">
+              {part.pages.map((l) => (
+                <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="t-small flex min-h-[44px] items-center text-[#F2EDE4]/[0.72] transition-colors hover:text-[#F2EDE4]"
+                    aria-current={pathname === l.href ? 'page' : undefined}
+                    className={
+                      'flex min-h-[44px] items-center text-step-0 transition-colors hover:text-[#E8B98A] md:min-h-[2.1rem] ' +
+                      (pathname === l.href ? 'text-[#E8B98A]' : 'text-[#F2EDE4]/[0.8]')
+                    }
                   >
-                    {l.label}
+                    {l.name}
                   </Link>
                 </li>
               ))}
             </ul>
-          ))}
-        </nav>
+          </div>
+        ))}
+      </nav>
 
-        <div data-line className="t-small mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 text-[#F2EDE4]/[0.72]">
-          <span>&copy; {year} Quality Homes Reality</span>
-          <a className="tap-target transition-colors hover:text-[#F2EDE4]" href={CONTACT_MAILTO}>
-            {CONTACT_EMAIL}
-          </a>
-          {LEGAL.map((l) => (
-            <Link key={l.href} href={l.href} className="tap-target transition-colors hover:text-[#F2EDE4]">
-              {l.label}
-            </Link>
-          ))}
-          {/* At its row's own strength: at the control's 60% it was the one
-              line of the colophon under AA where the stone is at its lightest
-              (measured at 390x844: 3.98:1 on a p90 luma of 72). */}
-          <span className="ml-auto">
-            <PrivacyControl className="tap-target t-small text-[#F2EDE4]/[0.72] underline-offset-4 transition hover:text-[#F2EDE4] hover:underline" />
-          </span>
-        </div>
-      </div>
+      <LegalRow year={year} className="folio-colophon-legal" />
     </footer>
   );
 }
@@ -242,101 +347,5 @@ export function SiteFooter() {
   const pathname = usePathname() || '/';
   const overFilm = pathname === '/' || pathname === '/site-home';
   if (overFilm) return <FilmColophon year={year} />;
-  const rule = 'border-white/[0.08]';
-
-  return (
-    <footer className="relative z-10 border-t border-white/[0.08] bg-[#060A14]">
-      <div className="mx-auto max-w-6xl px-6 py-16">
-        <div className="grid gap-12 md:grid-cols-[1.1fr_2fr]">
-          <div>
-            <Logo size={34} href={null} />
-            <p className="mt-5 max-w-xs text-step--1 text-[#F2EDE4]/55">
-              Approved plotted layouts in the northern coastal districts of
-              Andhra Pradesh, developed and sold directly.
-            </p>
-            <p className="mt-5 text-step--1 text-[#F2EDE4]/70">
-              <a className="tap-target transition-colors hover:text-[#F2EDE4]" href="tel:+919553513366">
-                +91 95535 13366
-              </a>
-              <span className="mx-2 text-[#F2EDE4]/[0.62]">·</span>
-              <a
-                className="tap-target transition-colors hover:text-[#F2EDE4]"
-                href={CONTACT_MAILTO}
-              >
-                {CONTACT_EMAIL}
-              </a>
-            </p>
-          </div>
-
-          <div className="grid gap-10 sm:grid-cols-3">
-            {COLUMNS.map((c) => (
-              <div key={c.title}>
-                <h2 className="t-eyebrow text-[#F2EDE4]/60">
-                  {c.title}
-                </h2>
-                {/* Real 44px rows rather than an invisible expander: these are
-                    stacked, so a pseudo element would overlap its neighbours and
-                    the wrong link would take the tap. The extra height also
-                    gives the footer a steadier rhythm than 19px rows with an
-                    8px gap did. */}
-                <ul className="mt-2">
-                  {c.links.map((l) => (
-                    <li key={l.href + l.label}>
-                      <Link
-                        href={l.href}
-                        className="flex min-h-[44px] items-center text-step--1 text-[#F2EDE4]/[0.62] transition-colors hover:text-[#F2EDE4]"
-                      >
-                        {l.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className={`mt-14 grid gap-8 border-t ${rule} pt-10 sm:grid-cols-3`}>
-          {(['visakhapatnam', 'vizianagaram', 'srikakulam'] as const).map((id) => {
-            const b = BRANCHES[id];
-            return (
-              <div key={b.id}>
-                <p className="text-step--1 text-[#F2EDE4]/80">{b.name}</p>
-                <p className="mt-0.5 text-step--2 uppercase tracking-[0.3em] text-[#D9B07A]/[0.78]">
-                  {b.role === 'head_office' ? 'Head office' : 'Branch'}
-                </p>
-                <address className="mt-2 not-italic text-step--1 text-[#F2EDE4]/60">
-                  {b.address} &ndash; {b.pincode}
-                </address>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className={`mt-12 flex flex-wrap items-center gap-x-6 gap-y-4 border-t ${rule} pt-8`}>
-          <p className="text-step--1 text-[#F2EDE4]/60">
-            &copy; {year} Quality Homes Reality
-          </p>
-          {/* Laid out horizontally, so the invisible expander is safe here —
-              gap-y-6 keeps enough room between wrapped rows that the 44px hit
-              areas cannot overlap. */}
-          <ul className="flex flex-wrap gap-x-5 gap-y-6">
-            {LEGAL.map((l) => (
-              <li key={l.href}>
-                <Link
-                  href={l.href}
-                  className="tap-target text-step--1 text-[#F2EDE4]/60 transition-colors hover:text-[#F2EDE4]"
-                >
-                  {l.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <div className="ml-auto text-step--1 text-[#F2EDE4]/60">
-            <PrivacyControl />
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
+  return <PageColophon year={year} pathname={pathname} />;
 }

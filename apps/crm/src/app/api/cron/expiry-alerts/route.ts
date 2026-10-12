@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { systemQuery } from '@/server/db';
 import { users, notifications } from '@estate/db';
 import { sql } from 'drizzle-orm';
+import { cronAuthorized } from '@/server/cron-auth';
 
 /**
  * T87 Cron: Sweeps for EC/documents that are approaching expiry or have expired.
@@ -11,7 +12,7 @@ import { sql } from 'drizzle-orm';
  */
 export async function GET(req: NextRequest) {
   // Validate Vercel Cron Secret
-  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get('Authorization'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

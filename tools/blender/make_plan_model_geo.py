@@ -11,9 +11,12 @@ model those are a pit in every block. So the models of the refinement brief
 same cells (assets/floorplans/<name>_cells.json), solid:
 
   plots       a block each, its top carrying the model's printed face;
-  open land   a low inlay (its holes kept: the plots and roads inside it);
-  land held   a low slab;
+  open land   a low inlay (its holes kept: the plots and roads inside it),
+              and land held back with it, as open ground;
   the board   one quad under all of it.
+
+They are read as cleaned for a model (tools/gltf/clean_plan_cells.py, which
+has the account: a hedge is a band with straight sides, a park is whole).
 
 Written on the unit square - x and z in -0.5..0.5, as the sheet lies, y up in
 METRES - so the film lays it over each station's own plate at that plate's
@@ -91,7 +94,9 @@ def plot_ring(cell):
     function draws the face: tools/gltf/make_plan_models.py.)
     """
     ring = [tuple(p) for p in cell['rings'][0]]
-    if cell['cat'] not in ('plot', 'plot_hot') or len(ring) < 4:
+    # (`as_traced`: a block cut out of a larger cell by clean_plan_cells.py,
+    # whose stepped outline is its own.)
+    if cell['cat'] not in ('plot', 'plot_hot') or len(ring) < 4 or cell.get('as_traced'):
         return ring
     h = hull(ring)
     a = ring_area(ring)
@@ -113,7 +118,9 @@ def lin(c):
 
 
 def build(name):
-    cells = json.load(open(os.path.join(FLOOR, f'{name}_cells.json')))['cells']
+    # The cells as cleaned for a model (tools/gltf/clean_plan_cells.py): open
+    # land whole and straight-edged, land held back as open ground.
+    cells = json.load(open(os.path.join(FLOOR, f'{name}_model_cells.json')))['cells']
     top_p, top_uv, top_i = [], [], []
     side_p, side_n, side_c, side_i = [], [], [], []
     for c in cells:

@@ -1,6 +1,6 @@
 // apps/public/src/app/(site)/(experience)/start-here/page.tsx
 //
-// A PLACE (mapped to 'arrival'). The deliberate way OUT of the cinematic.
+// A FOLIO with a short plate. The deliberate way OUT of the cinematic.
 //
 // This route exists because the visitors who convert fastest are the ones the
 // experience annoys most: somebody who already knows they want a 30×60 in
@@ -8,19 +8,27 @@
 // number. Without this, the 3D costs the client exactly the leads it was built
 // to win.
 //
-// So: no scene dependency, no motion, shortest possible path to a plan, a price
-// conversation, or a site visit.
+// So: the shortest possible path to a plan, a price conversation, or a site
+// visit. Its plate is the film's own cover, held still and by day — the page
+// begins where the film does and then does not make anyone watch it — and the
+// three layouts are the first thing under it. Nothing below needs the scene.
 
 import type { Metadata } from 'next';
+import { withShare } from '@/lib/share';
 import Link from 'next/link';
+import { Folio, Gilt, IndexList, NextPage, Plate, Prose, Sheet } from '@/components/folio/Folio';
+import { pageAfter, pageTitle } from '@/components/site/siteMap';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
-import { PROJECTS } from '@estate/domain/leads/branches';
+import { COMPANY } from '@/lib/company';
+import { CONTACT_EMAIL, CONTACT_MAILTO } from '@/lib/contact';
+import { LAYOUTS } from '@/lib/layouts';
+import { countLine, publishedLayouts } from '@/lib/published';
 
-export const metadata: Metadata = {
-  title: 'Start here — Quality Homes Reality',
+export const metadata: Metadata = withShare('/start-here', {
+  title: pageTitle('/start-here'),
   description:
     'The short version: three approved layouts in Vizianagaram and Srikakulam, the plans to download, and how to reach the office that holds each one.',
-};
+});
 
 const PATHS = [
   {
@@ -34,91 +42,104 @@ const PATHS = [
     blurb: 'All three approved layout plans as PDFs, ready to print or send on.',
   },
   {
+    href: '/book-a-site-visit',
+    label: 'I want to walk the land',
+    blurb: 'Name a layout and a day, and its branch arranges the visit.',
+  },
+  {
     href: '/contact',
     label: 'I want to speak to someone',
-    blurb:
-      'One enquiry, routed to the office that holds the layout you ask about.',
+    blurb: 'One enquiry, routed to the office that holds the layout you ask about.',
   },
   {
     href: '/investment-guide',
     label: 'I am checking this out first',
-    blurb:
-      'What to verify before money moves, and what the new Bhogapuram airport does and does not change.',
+    blurb: 'What to verify before money moves, and what the new Bhogapuram airport changes.',
   },
 ];
 
-export default function StartHerePage() {
+export default async function StartHerePage() {
+  const next = pageAfter('/start-here');
+  const live = await publishedLayouts();
   return (
     <>
       <RouteTelemetry routeId="start-here" />
-      <main className="relative z-10 mx-auto w-full max-w-3xl px-6 py-16 md:py-24">
-        <p className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/75">
-          Start here
-        </p>
-        <h1 className="mt-3 font-serif text-step-3 text-[#F2EDE4] md:text-step-4">
-          The short version
-        </h1>
-        <p className="mt-4 text-step-0 text-[#F2EDE4]/[0.82]">
-          Quality Homes Reality sells plotted land in the northern coastal
-          districts of Andhra Pradesh, from offices in Visakhapatnam,
-          Vizianagaram and Srikakulam. Three layouts are open. Every one of them
-          is approved, and every plan on this site is the approved drawing rather
-          than an artist&rsquo;s impression.
-        </p>
+      <Folio>
+        <Plate
+          kicker="Before you buy"
+          title={
+            <>
+              The short <Gilt>version.</Gilt>
+            </>
+          }
+          lede="Plotted land in the northern coastal districts of Andhra Pradesh, sold from offices in Visakhapatnam, Vizianagaram and Srikakulam. Three layouts are open."
+          cue={{ label: 'The three layouts', href: '#layouts' }}
+        />
 
-        <section className="mt-12">
-          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/75">
-            The three layouts
-          </h2>
-          <ul className="mt-4 space-y-3">
-            {PROJECTS.map((p) => (
-              <li key={p.slug} className="flex flex-wrap items-baseline gap-x-3">
-                <Link
-                  href={`/projects/${p.slug}`}
-                  className="font-serif text-step-1 text-[#F2EDE4] underline-offset-4 hover:underline"
-                >
-                  {p.name}
-                </Link>
-                <span className="text-step--1 text-[#F2EDE4]/75">
-                  {p.locality} &middot; {p.district}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <Sheet
+          id="layouts"
+          rail="The layouts"
+          first
+          kicker="What is open"
+          title={
+            <>
+              Three layouts, <Gilt>each approved.</Gilt>
+            </>
+          }
+          note="Each is shown by its approved drawing."
+        >
+          <IndexList
+            items={LAYOUTS.map((l) => ({
+              href: `/projects/${l.slug}`,
+              name: l.name,
+              line: (
+                <>
+                  {l.where}, {l.district} district. {l.sizes.map((s) => s.label).join(', ')}.
+                </>
+              ),
+              meta: countLine(live.find((p) => p.slug === l.slug)),
+            }))}
+          />
+        </Sheet>
 
-        <section className="mt-12">
-          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/75">
-            Where do you want to go?
-          </h2>
-          <ul className="mt-4 space-y-3">
-            {PATHS.map((p) => (
-              <li key={p.href}>
-                <Link
-                  href={p.href}
-                  className="block rounded border border-white/[0.12] px-5 py-4 transition hover:border-amber-200/50"
-                >
-                  <span className="font-serif text-step-1 text-[#F2EDE4]">
-                    {p.label}
-                  </span>
-                  <span className="mt-1 block text-step--1 text-[#F2EDE4]/75">
-                    {p.blurb}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <Sheet
+          id="ways"
+          rail="Where to go"
+          kicker="From here"
+          title={
+            <>
+              Where do you <Gilt>want to go?</Gilt>
+            </>
+          }
+        >
+          <IndexList two items={PATHS.map((p) => ({ href: p.href, name: p.label, line: p.blurb }))} />
+        </Sheet>
 
-        <p className="mt-12 text-step--1 text-[#F2EDE4]/75">
-          Prefer to look around instead? The three layouts stand as raised models
-          in{' '}
-          <Link className="underline underline-offset-4 hover:text-[#F2EDE4]" href="/hall">
-            the hall
-          </Link>
-          . Nothing on this page needs it.
-        </p>
-      </main>
+        <Sheet
+          id="directly"
+          rail="Directly"
+          kicker="Or directly"
+          title={
+            <>
+              A telephone number, <Gilt>and a room.</Gilt>
+            </>
+          }
+        >
+          <Prose>
+            <p className="folio-first">
+              Telephone <a href={COMPANY.phone.href}>{COMPANY.phone.display}</a>, or write to{' '}
+              <a href={CONTACT_MAILTO}>{CONTACT_EMAIL}</a>.
+            </p>
+            <p>
+              Prefer to look around? The three layouts stand as raised models in{' '}
+              <Link href="/hall">the hall</Link>, and <Link href="/">the film</Link> walks you up
+              to them.
+            </p>
+          </Prose>
+        </Sheet>
+
+        <NextPage href={next.href} title={next.name} line={next.line} />
+      </Folio>
     </>
   );
 }

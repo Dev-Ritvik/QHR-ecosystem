@@ -52,7 +52,15 @@ import { hallEnv } from './HallModel';
 import { registerHallRoot } from './doorPortal';
 import { isShown, warmHallPrograms } from './hallProbe';
 import { lensSubject } from './LensFocus';
-import { HALL_CODA, HALL_READING, hallLight, houseKeys, houseLevelAt } from './hallLight';
+import {
+  HALL_CODA,
+  HALL_LEVEL_S2,
+  HALL_LEVEL_S2_MODEL,
+  HALL_READING,
+  hallLight,
+  houseKeys,
+  houseLevelAt,
+} from './hallLight';
 import { MAP_TABLE, mapStage } from './mapTablePlan';
 import {
   HEADER_BAND,
@@ -256,6 +264,7 @@ export function InteriorStage({
   onOpen,
   mode = 'journey',
   stillLevel = HALL_READING,
+  stillFocus = null,
 }: {
   root: THREE.Object3D | null;
   projects: StationProject[];
@@ -267,6 +276,9 @@ export function InteriorStage({
   /** The house lights on a still (hallLight.hallReadingLevel): the reading
    *  level, and the room's own on the page that is the room. */
   stillLevel?: number;
+  /** What a still's lens holds (poses.ts, `focus`); none, and it is sharp
+   *  throughout. */
+  stillFocus?: readonly [number, number, number] | null;
 }) {
   const beats: InteriorBeat[] = useMemo(
     () => buildInteriorBeats(projects.length),
@@ -443,7 +455,13 @@ export function InteriorStage({
   // plaster, up through the turn once that copy has gone, and up at each
   // table for as long as its copy stands. Between keys, eased.
   const keys = useMemo(
-    () => houseKeys(beats, tableCopyHold(projects.length), establishCopyGone(projects.length)),
+    () =>
+      houseKeys(
+        beats,
+        tableCopyHold(projects.length),
+        establishCopyGone(projects.length),
+        stationStyle() === 'model' ? HALL_LEVEL_S2_MODEL : HALL_LEVEL_S2,
+      ),
     [beats, projects.length],
   );
 
@@ -520,7 +538,7 @@ export function InteriorStage({
       // The page's own question (copyZone.filmIsWide): a column down the left
       // of a wide frame, or across the top or foot of any other.
       const wide = filmIsWide(window.innerWidth, window.innerHeight);
-      stationFilter(stationWeights, wide, window.innerWidth / Math.max(1, window.innerHeight));
+      stationFilter(stationWeights, wide, window.innerWidth / Math.max(1, window.innerHeight), stationStyle() === 'model');
       if (wide) headerBandReach();
       else {
         // The grad that rides with the reframed chapters' copy, and the
@@ -543,9 +561,20 @@ export function InteriorStage({
     // THE LENS SUBJECT (LensFocus): the station the camera is most on, or the
     // portrait once the climb begins. Squared, so the long lens only closes
     // down as the camera settles on a subject and the traverses stay sharp.
-    // /hall has no choreography to take a subject from, so it stays sharp.
+    // A still has no choreography to take a subject from: it has the one its
+    // pose names (a layout's page, its model), or none and stays sharp.
     if (mode === 'still') {
-      lensSubject.weight = 0;
+      // (Look-dev, ?debug=1: a still tried on the running build names its own.)
+      const tried = HALL_DEV
+        ? (window as unknown as { __estateStill?: { focus?: readonly [number, number, number] } }).__estateStill
+        : undefined;
+      const held = tried ? tried.focus ?? null : stillFocus;
+      if (held) {
+        lensSubject.point.set(held[0], held[1], held[2]);
+        lensSubject.weight = 1;
+      } else {
+        lensSubject.weight = 0;
+      }
     } else {
       let best = 0;
       let subject: (typeof STATION_ANCHORS)[number] | null = null;

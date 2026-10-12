@@ -61,6 +61,28 @@ export const HEAD_RISE = 0.85;
  */
 /** Daylight in the room, by day; it goes with the evening. */
 export const DAY_INTERIOR = 0.5;
+/**
+ * WHAT IS LEFT OF IT AT FULL NIGHT, as a share of the day's, and how far the
+ * hour has to have come before it begins to go (`DUSK_FROM`, on the shader's
+ * own measure of the hour: the rooms' drive over its ceiling, which is 0.69
+ * when the evening is whole and 1 when the night is).
+ *
+ * It was gone to 0.08 in step with the EVENING, and one room in four has no
+ * lamp on (`on`, below): so at the film's 42%, with the sun still on the
+ * house, a quarter of the windows showed nothing at all. The forensic audit
+ * of 2026-10-09 (#24), of the flank from the lawn: "its neighbours are black
+ * voids ... Expected: every window either shows a dim room or a curtain with
+ * folds and a gap." A room is lit by the sky its window faces, and that sky
+ * is still up at sunset: the room dims with the NIGHT. So the day's light is
+ * held until the evening is nearly whole and falls from there to a quarter,
+ * where a dark room's ceiling and the head of its far wall are still a tone
+ * or two over black. Measured on that frame, a dark room's upper panes
+ * beside a wall at a luma of 89: 16 before, 22 now, with the line of the
+ * ceiling and the dado to be made out. The lit rooms are not moved by it
+ * (their lamps are several times this), nor is the day.
+ */
+export const DUSK_INTERIOR = 0.25;
+export const DUSK_FROM = 0.6;
 /** How fast the daylight dies into the room, metres. */
 export const DAYLIGHT_REACH = 2.2;
 /** The lamps by day, and what the evening's drive (0..1.3) adds to them. */
@@ -72,9 +94,23 @@ export const EVENING_DRIVE_MAX = 0.72;
 /** How much of its room's lamplight a drawn drape passes. */
 export const DRAPE_LAMP = 0.25;
 
+/**
+ * HOW NEARLY A DRAWN PAIR OF CURTAINS MEETS: each leaf stops this share of the
+ * window's half-width short of the middle (and up to half as much again, room
+ * by room). One room in seven has its curtains drawn, and they were drawn
+ * SHUT: the pane was silk from edge to edge in pleats as regular as a sine,
+ * and the forensic audit of 2026-10-09 (#24) saw what that is from the lawn:
+ * "One window is filled edge to edge with a flat corrugated grey sheet while
+ * its neighbours are black voids ... a classic generated-facade tell.
+ * Expected: every window either shows a dim room or a curtain with folds and
+ * a gap." Curtains pulled to by hand leave a parting, and the room is in it.
+ */
+export const DRAWN_GAP = 0.1;
+
 /** One set of uniforms for every window's room (the look can move them live). */
 export const roomUniforms = {
   uInteriorDay: { value: DAY_INTERIOR },
+  uInteriorDusk: { value: DUSK_INTERIOR },
   uInteriorEvening: { value: EVENING_INTERIOR },
   uLampDay: { value: LAMP_DAY },
   uRoomSilk: { value: DRAPE_LAMP },
@@ -84,6 +120,7 @@ export const roomUniforms = {
 export function followRoomLook(): void {
   if (!lookdevOn()) return;
   roomUniforms.uInteriorDay.value = ld('roomDay', DAY_INTERIOR);
+  roomUniforms.uInteriorDusk.value = ld('roomDusk', DUSK_INTERIOR);
   roomUniforms.uInteriorEvening.value = ld('roomEvening', EVENING_INTERIOR);
   roomUniforms.uLampDay.value = ld('roomLampDay', LAMP_DAY);
   roomUniforms.uRoomSilk.value = ld('roomSilk', DRAPE_LAMP);
@@ -93,6 +130,7 @@ const INTERIOR_RE = /^MAT_Window_Interior/;
 
 export const INTERIOR_FRAGMENT = /* glsl */ `
 uniform float uInteriorDay;
+uniform float uInteriorDusk;
 uniform float uInteriorEvening;
 uniform float uLampDay;
 uniform float uRoomSilk;
@@ -177,7 +215,7 @@ vec3 interiorRoom(vec3 pos, vec3 rd, vec3 nW, float evening) {
   // How far the evening has come, 0..1, and the two lights a room is seen by:
   // the window's own daylight, dying into the room, and the lamps.
   float dusk = clamp(evening / ${EVENING_DRIVE_MAX.toFixed(2)}, 0.0, 1.0);
-  float sky = uInteriorDay * (1.0 - 0.92 * dusk);
+  float sky = uInteriorDay * mix(1.0, uInteriorDusk, smoothstep(${DUSK_FROM.toFixed(2)}, 1.0, dusk));
   float lamps = (uLampDay + uInteriorEvening * evening) * on;
   vec3 room = col * (vec3(0.9, 0.95, 1.0) * sky * exp(-depth / ${DAYLIGHT_REACH.toFixed(2)}) + tint * lamps * lamp);
   // THE LAMP ITSELF, SEEN THROUGH THE GLASS ("opening + glass + reflection +
@@ -198,16 +236,21 @@ vec3 interiorRoom(vec3 pos, vec3 rd, vec3 nW, float evening) {
   // DRAPES, just inside the glass: ivory silk in soft folds, seen by the
   // daylight on their face and by the room behind them. How far they are drawn
   // is the room's own: most stand open at the window's edges, some half across,
-  // and one room in seven has them closed. A lit room with its curtains drawn
-  // is a pane of warm silk, not a view.
+  // and one room in seven has them drawn to: all but meeting, with the room in
+  // the parting (DRAWN_GAP). A lit room with its curtains drawn is two leaves
+  // of warm silk and a line of lamplight between them.
   float wHalf = abs(dot(vRoomH, along));
-  float edge = fract(r * 11.7) < 0.14 ? -1.0 : mix(0.4, 0.74, fract(r * 5.3));
+  float drawn = step(fract(r * 11.7), 0.14);
+  float edge = mix(mix(0.4, 0.74, fract(r * 5.3)), ${DRAWN_GAP.toFixed(2)} * (1.0 + 0.5 * fract(r * 3.1)), drawn);
   float drape = smoothstep(edge - 0.03, edge + 0.03, abs(a0) / max(wHalf, 0.05));
   if (drape > 0.0) {
     // The folds give way to their mean as they shrink toward a pixel: at the
     // hero's distance they printed as a moire over every pane.
     float keep = clamp(1.0 - fwidth(a0) * 41.0 * 0.6, 0.0, 1.0);
-    float fold = 0.72 + 0.28 * keep * sin(a0 * 41.0 + sin(u0 * 3.0) * 0.6);
+    // Pleats gathered by hand: no two the same width (a slower wave moves
+    // each fold's place, room by room), and deeper toward the hem.
+    float gather = 1.5 * sin(a0 * 6.3 + r * 31.0) + 0.6 * sin(u0 * 3.0);
+    float fold = 0.72 + 0.28 * keep * sin(a0 * 41.0 + gather);
     vec3 silk = vec3(0.8, 0.72, 0.6) * fold * (vec3(0.9, 0.95, 1.0) * sky * 0.8 + tint * lamps * uRoomSilk);
     room = mix(room, silk, drape);
   }
@@ -399,6 +442,7 @@ export function dressWindows(root: THREE.Object3D): number {
       mat.onBeforeCompile = (shader, renderer) => {
         prev.call(mat, shader, renderer);
         shader.uniforms.uInteriorDay = roomUniforms.uInteriorDay;
+        shader.uniforms.uInteriorDusk = roomUniforms.uInteriorDusk;
         shader.uniforms.uInteriorEvening = roomUniforms.uInteriorEvening;
         shader.uniforms.uLampDay = roomUniforms.uLampDay;
         shader.uniforms.uRoomSilk = roomUniforms.uRoomSilk;

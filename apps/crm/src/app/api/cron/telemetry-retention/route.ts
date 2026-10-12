@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
+import { cronAuthorized } from '@/server/cron-auth';
 
 /**
  * Telemetry retention. Spec §11.
@@ -31,7 +32,7 @@ const RAW_RETENTION_MONTHS = 13;
 const UNSTITCHED_RETENTION_DAYS = 90;
 
 export async function GET(req: NextRequest) {
-  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get('Authorization'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

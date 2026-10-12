@@ -271,7 +271,7 @@ export function RouteVeil() {
         // The same construction as the scroll crossover's blackout, so the two
         // read as one device rather than two effects that happen to be dark.
         background:
-          'radial-gradient(120% 90% at 50% 52%, #0B1220 0%, #05080F 46%, #04060B 100%)',
+          'radial-gradient(120% 90% at 50% 52%, #15110C 0%, #0B0906 46%, #070604 100%)',
         visibility: phase === 'idle' ? 'hidden' : 'visible',
       }}
     >

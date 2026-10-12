@@ -14,6 +14,7 @@ import {
   type DeviceTier,
   type TierSignals,
 } from '@estate/domain/telemetry/device-tier';
+import { sceneWarm } from './sceneWarm';
 
 /** Frames skipped before sampling begins: shader compile, texture upload and
  *  the first Draco decode all land here and describe nothing about steady
@@ -43,6 +44,13 @@ export function useDeviceTier() {
 
   useFrame((_, delta) => {
     if (settled) return;
+    // ONLY FRAMES THAT DRAW THE SCENE. A set is hidden while its programs are
+    // built (sceneWarm.ts), and those frames draw a sky and nothing under it:
+    // sampled, they measured an empty canvas and promoted every device to the
+    // heaviest tier — the weakest first, since its build takes longest.
+    // (`drawing`, not `ready`: the scene is being drawn under its still, and
+    // is not shown until this has given its verdict.)
+    if (!sceneWarm.drawing) return;
     seen.current += 1;
     if (seen.current <= WARMUP_FRAMES) return;
 
@@ -60,6 +68,7 @@ export function useDeviceTier() {
       }),
     );
     setSettled(true);
+    sceneWarm.tierSettled = true;
   });
 
   const reset = useCallback(() => {

@@ -32,19 +32,27 @@ const config: Config = {
       // own stack — ui-serif, Georgia — so every inner page that asked for it
       // set its headings in Georgia rather than the site's face.
       fontFamily: {
-        serif: ['Estate Ampersand', 'var(--font-serif)', 'Playfair Display', 'Georgia', 'serif'],
+        serif: ['var(--font-serif)', 'Playfair Display', 'Georgia', 'serif'],
       },
+      // A TRANSITION IS THE HOUSE'S (globals.css, THE SYSTEM: --t-state,
+      // --ease). Left to the framework, every `transition-colors` on the site
+      // was its 150 ms and its curve: 728 of about 970 controls (the forensic
+      // audit of 2026-10-09, #100).
+      transitionDuration: { DEFAULT: '300ms' },
+      transitionTimingFunction: { DEFAULT: 'cubic-bezier(0.22, 1, 0.36, 1)' },
       spacing: Object.fromEntries(SPACING_STEPS.map((n) => [String(n), baselines(n)])),
       lineHeight: Object.fromEntries(LEADING_STEPS.map((n) => [String(n), baselines(n)])),
       // THE SCALE, as utilities: `text-step-2` is --step-2 with its leading on
       // the 4px baseline. These are the only sizes the site's pages use.
       fontSize: {
-        'step--2': ['var(--step--2)', { lineHeight: 'round(nearest, calc(var(--step--2) * 1.6), var(--bl))' }],
-        'step--1': ['var(--step--1)', { lineHeight: 'round(nearest, calc(var(--step--1) * 1.56), var(--bl))' }],
-        'step-0': ['var(--step-0)', { lineHeight: 'round(nearest, calc(var(--step-0) * 1.75), var(--bl))' }],
-        'step-1': ['var(--step-1)', { lineHeight: 'round(nearest, calc(var(--step-1) * 1.6), var(--bl))' }],
-        'step-2': ['var(--step-2)', { lineHeight: 'round(nearest, calc(var(--step-2) * 1.3), var(--bl))' }],
-        'step-3': ['var(--step-3)', { lineHeight: 'round(nearest, calc(var(--step-3) * 1.28), var(--bl))' }],
+        // (One leading a size: globals.css, THE SYSTEM. These six were each a
+        // ratio of their own, and a class in a stylesheet a third.)
+        'step--2': ['var(--step--2)', { lineHeight: 'var(--lead--2)' }],
+        'step--1': ['var(--step--1)', { lineHeight: 'var(--lead--1)' }],
+        'step-0': ['var(--step-0)', { lineHeight: 'var(--lead-0)' }],
+        'step-1': ['var(--step-1)', { lineHeight: 'var(--lead-1)' }],
+        'step-2': ['var(--step-2)', { lineHeight: 'var(--lead-2)' }],
+        'step-3': ['var(--step-3)', { lineHeight: 'var(--lead-3)' }],
         'step-4': ['var(--step-4)', { lineHeight: 'round(nearest, calc(var(--step-4) * 1.2), var(--bl))' }],
         'step-5': ['var(--step-5)', { lineHeight: 'round(nearest, calc(var(--step-5) * 1.08), var(--bl))' }],
         'step-6': ['var(--step-6)', { lineHeight: 'round(nearest, var(--step-6), var(--bl))' }],

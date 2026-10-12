@@ -28,20 +28,15 @@ export function DownloadBrochureButton({ projectSlug, unitSlug, priceVersionId }
   };
 
   return (
-    <button 
+    // The site's quiet action — a word and a hairline (globals.css, cta-quiet)
+    // — where this was the one filled, rounded button left on the site.
+    <button
+      type="button"
       onClick={handleDownload}
       disabled={isDownloading}
-      // min-h-[44px] rather than an expander: this is the primary action on the
-      // page, so the real control should be the size of the target.
-      // bg-primary/text-primary-foreground only started resolving once the
-      // semantic tokens were actually defined in globals.css — until then this
-      // button had no fill and no colour of its own.
-      className="flex min-h-[44px] items-center rounded-[3px] bg-primary px-5 text-step--1 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 print:hidden"
+      className="cta-quiet disabled:opacity-50 print:hidden"
     >
-      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-      </svg>
-      {isDownloading ? 'Generating...' : 'Download Brochure'}
+      <span className="cta-quiet-label">{isDownloading ? 'Preparing the brochure' : 'Its brochure, as a PDF'}</span>
     </button>
   );
 }

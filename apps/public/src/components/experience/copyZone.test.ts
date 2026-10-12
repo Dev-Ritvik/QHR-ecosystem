@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { COPY_ATTR, HOLD_ATTR, HOLD_FALL, copyOpacity, heldStrength, rise } from './ChapterFade';
+import { COPY_ATTR, HOLD_ATTR, HOLD_FALL, LEAVE_ATTR, copyOpacity, earlyStrength, heldStrength, rise } from './ChapterFade';
 import { copyPresence, filmIsWide, SHORT_QUERY, WIDE_QUERY } from './copyZone';
 import { buildInteriorBeats } from './interiorPath';
 import { chapters, DOOR_IN, DOOR_OUT, JOURNEY_END, TRACK_VH, establishCopyGone, tableCopyHold } from './journey';
@@ -239,7 +239,7 @@ describe('a held line goes as a chapter does: in place, before the page lets go 
     // no room under it in its wrapper (a frame that is not wide): the header's rule alone
     expect(fade).toContain('if (wrap.height - r.height > 8) held = heldStrength(wrap.bottom - r.bottom, vh);');
     // the weaker of the two rules is the line's strength...
-    expect(fade).toContain('const oc = Math.min(strengths[i], clamp01((t - headerLine) / (HEADER_BAND * headerLine)));');
+    expect(fade).toContain('let oc = Math.min(strengths[i], clamp01((t - headerLine) / (HEADER_BAND * headerLine)));');
     // ...and a line at nothing is not among the colophon's lines (copyZone.lines)
     expect(fade).toContain('if (strengths[i] < 0.05) continue;');
   });
@@ -251,5 +251,34 @@ describe("how much of a filter the copy's presence asks for", () => {
     expect(copyPresence(0.125)).toBeCloseTo(0.5, 6);
     expect(copyPresence(0.25)).toBe(1);
     expect(copyPresence(1)).toBe(1);
+  });
+});
+
+describe('a line that goes before its chapter does', () => {
+  it('is whole until its own window opens and gone when it closes, in place', () => {
+    // The orbit's caption stands on the lawn and has gone when the canal
+    // garden's hedge comes down the frame to it (the forensic audit of
+    // 2026-10-09, #119).
+    const leave = [0.122, 0.127];
+    expect(earlyStrength(leave, 0.11)).toBe(1);
+    expect(earlyStrength(leave, 0.122)).toBe(1);
+    expect(earlyStrength(leave, 0.1245)).toBeCloseTo(0.5, 6);
+    expect(earlyStrength(leave, 0.127)).toBe(0);
+    expect(earlyStrength(leave, 0.14)).toBe(0);
+    expect(LEAVE_ATTR).toBe('data-leave');
+    const fade = readFileSync(join(__dirname, 'ChapterFade.tsx'), 'utf8').replace(/\r\n/g, '\n');
+    // on a wide frame only: on any other the line is stacked under its title
+    expect(fade).toContain('const leave = wideFrame ? leaves[i] : null;');
+    // and the lens is told, so the density under the line goes with it
+    expect(fade).toContain('bottom: Math.min(1, bottom / vh), early });');
+    expect(readFileSync(join(__dirname, 'WorldCanvas.tsx'), 'utf8')).toContain('rev ? copyPresence(rev.weight) * (rev.early ?? 1) : 0,');
+    // the orbit's caption carries it, after the chapter has spoken and before its title goes
+    const page = readFileSync(join(__dirname, '../../app/(site)/(experience)/site-home/page.tsx'), 'utf8');
+    expect(page).toContain('data-leave={leaveOf(revolution, 1.0, 1.3)}');
+    const orbit = chapters(3).find((c) => c.id === 'revolution')!;
+    const notch = 100 / 3 / TRACK_VH;
+    expect(orbit.copy.in[1] + 1.3 * notch).toBeLessThan(orbit.copy.out[0]);
+    // (a notch is a third of the frame, and the copy rises over half of one)
+    expect(orbit.copy.in[1] - orbit.copy.in[0]).toBeCloseTo(0.5 * notch, 9);
   });
 });

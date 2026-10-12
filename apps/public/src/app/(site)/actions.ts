@@ -19,8 +19,24 @@ const EnquirySchema = z.object({
   preferredTime: z.enum(['morning', 'afternoon', 'evening', 'any']).optional(),
   message: z.string().optional(),
   honeypot: z.string().max(0, 'Invalid submission'),
-  projectId: z.string().uuid(),
+  // OPTIONAL, as the CRM's intake has it. It was required here, and the one
+  // page that used the form — /contact, a general enquiry that names no
+  // layout — sent none: every enquiry from it failed this check and the form
+  // showed nothing, because the failure belonged to no field on it. An
+  // enquiry that names no layout is still a lead; the CRM routes it on the
+  // layouts the visitor spent time with.
+  projectId: z.string().uuid().optional(),
   unitId: z.string().uuid().optional(),
+  // WHAT THE CRM NOW KEEPS (its intake, @estate/domain/leads/enquiry): the
+  // visit asked for and the visitor's own words, as facts and not only as
+  // the head of one composed line. All optional: an enquiry is one without
+  // them.
+  kind: z.enum(['enquiry', 'site_visit']).optional(),
+  visitDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  visitTime: z.enum(['morning', 'afternoon', 'evening', 'any']).optional(),
+  layoutName: z.string().max(80).optional(),
+  note: z.string().max(1500).optional(),
+  page: z.string().max(120).regex(/^\//).optional(),
 });
 
 export type EnquiryActionState =
@@ -65,6 +81,12 @@ export async function submitEnquiry(
     message: parsed.data.message,
     projectId: parsed.data.projectId,
     unitId: parsed.data.unitId,
+    kind: parsed.data.kind,
+    visitDate: parsed.data.visitDate,
+    visitTime: parsed.data.visitTime,
+    layoutName: parsed.data.layoutName,
+    note: parsed.data.note,
+    page: parsed.data.page,
   };
 
   const secret = process.env.LEAD_INTAKE_SECRET;

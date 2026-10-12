@@ -23,8 +23,6 @@ Based on the roadmap/work we've actually established in this project, you're cur
 
 ## Phase 2 — Architectural reconstruction
 
-This is where you are **right now**.
-
 ### 2A — West Facade Laboratory
 
 Current task:

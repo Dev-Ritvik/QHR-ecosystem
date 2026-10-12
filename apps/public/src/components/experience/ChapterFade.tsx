@@ -46,7 +46,7 @@
 // state. The value lives outside React so that scrolling costs no render.
 
 import { useEffect } from 'react';
-import { copyZone, type CopyPane, type ScreenBox } from './copyZone';
+import { copyZone, filmIsWide, type CopyPane, type ScreenBox } from './copyZone';
 import { measureFilmSpan } from './filmTrack';
 
 /**
@@ -94,6 +94,20 @@ export const LINE_ATTR = 'data-line';
  * rule alone.
  */
 export const HOLD_ATTR = 'data-hold';
+/**
+ * `data-leave="a,b"` on a line of a chapter: it goes BEFORE its chapter does,
+ * in place: whole until `a` of the film's track, gone by `b`.
+ *
+ * The orbit's caption stands on the west lawn, and the camera is going down
+ * over that lawn: for the first notch its ground is open grass, and then the
+ * canal garden's hedge and its trees come down the frame through it (the
+ * forensic audit of 2026-10-09, #119: "The two supporting lines sit across
+ * the top of the hedge and shrubs at the foot of the frame"). No place in the
+ * lower frame is one ground for the whole of the chapter, whose title stands
+ * in the sky and can stay. So the caption is read on the lawn and has gone
+ * when the hedge arrives; the title holds for the rest of its chapter.
+ */
+export const LEAVE_ATTR = 'data-leave';
 /** The fall of a held line, in notches (a notch is a third of the frame). */
 export const HOLD_FALL = 0.5;
 /**
@@ -132,6 +146,12 @@ export function copyOpacity(window: readonly number[], at: number): number {
 export function heldStrength(room: number, frame: number): number {
   const fall = (Math.max(1, frame) / 3) * HOLD_FALL;
   return Math.min(1, Math.max(0, room / fall));
+}
+
+/** How much of an EARLY line is up (LEAVE_ATTR) at `at` of the film's track:
+ *  whole until its window's first number, gone by its second. */
+export function earlyStrength(leave: readonly number[], at: number): number {
+  return 1 - rise(at, leave[0], leave[1]);
 }
 
 /**
@@ -174,6 +194,8 @@ export function ChapterFade() {
           // The chapter's id: a section's, or the hero's header's.
           id: el.closest('section[id], header[id]')?.id ?? '',
           content: Array.from(el.querySelectorAll<HTMLElement>(lines ? `[${LINE_ATTR}]` : CONTENT)),
+          /** For each of them, the window it leaves early over (LEAVE_ATTR), if it has one. */
+          leaves: [] as (readonly number[] | null)[],
           /** Each line's strength this frame, 0..1 (LINES_MODE reads it back). */
           strengths: [] as number[],
           /** Not a chapter: only its lines are faded, at the header (LINES_MODE). */
@@ -189,6 +211,12 @@ export function ChapterFade() {
       })
       .filter((p) => p.content.length > 0);
     if (panes.length === 0) return;
+    for (const pane of panes) {
+      pane.leaves = pane.content.map((c) => {
+        const w = (c.getAttribute(LEAVE_ATTR) ?? '').split(',').map(Number);
+        return w.length === 2 && w.every((v) => Number.isFinite(v)) && w[1] > w[0] ? w : null;
+      });
+    }
 
     // The header's lower edge and the track's length: layout, so they change
     // with the frame.
@@ -232,7 +260,7 @@ export function ChapterFade() {
       const zone: CopyPane[] = [];
       let colophon: ScreenBox[] | null = null;
       for (const pane of panes) {
-        const { el, id, content, lines, ranges, strengths } = pane;
+        const { el, id, content, lines, ranges, strengths, leaves } = pane;
         // 1 while the chapter speaks; 0 before its window and after it.
         // Clamped, so the overwhelming majority of
         // frames write the same value and the browser skips the recalculation.
@@ -290,10 +318,21 @@ export function ChapterFade() {
           if (r.bottom > bottom) bottom = r.bottom;
         }
         if (top === Infinity) continue;
+        // (How much of the chapter's early line is still up, for the lens.)
+        let early = 1;
+        // An early line is a wide frame's: there the line stands on the land
+        // (on any other it is stacked under its title, in the sky).
+        const wideFrame = filmIsWide(window.innerWidth, vh);
         for (let i = 0; i < content.length; i += 1) {
           const t = tops[i];
           if (Number.isNaN(t)) continue;
-          const oc = Math.min(strengths[i], clamp01((t - headerLine) / (HEADER_BAND * headerLine)));
+          let oc = Math.min(strengths[i], clamp01((t - headerLine) / (HEADER_BAND * headerLine)));
+          const leave = wideFrame ? leaves[i] : null;
+          if (leave) {
+            const e = earlyStrength(leave, at);
+            early = Math.min(early, e);
+            oc = Math.min(oc, e);
+          }
           strengths[i] = oc;
           const want = oc === 1 ? '' : oc.toFixed(3);
           if (content[i].style.opacity !== want) content[i].style.opacity = want;
@@ -301,7 +340,7 @@ export function ChapterFade() {
 
         // (A chapter's copy, for the lens. The colophon is not one.)
         if (!lines && bottom > 0 && top < vh) {
-          zone.push({ id, weight: o, top: Math.max(0, top / vh), bottom: Math.min(1, bottom / vh) });
+          zone.push({ id, weight: o, top: Math.max(0, top / vh), bottom: Math.min(1, bottom / vh), early });
         }
 
         // The colophon's lines, for the lens (copyZone.lines): the words of

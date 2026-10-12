@@ -12,6 +12,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
+  CUT_CLOSE_MS,
+  CUT_PAGE_HOLD_MS,
   CUT_MS,
   DOORWAY,
   DOOR_ZONE,
@@ -24,9 +26,11 @@ import {
   MAX_FAR_WAIT_MS,
   MAX_HOLD_MS,
   cancelDoorway,
+  cutTo,
   doorwayChannels,
   doorwayState,
   enterResidence,
+  glideOnFilm,
   noteDoorwayInput,
   setDoorwayHost,
   stepDoorway,
@@ -531,5 +535,152 @@ describe('the director', () => {
     animate = false;
     progress = 0.3;
     expect(enterResidence()).toBe(false);
+  });
+
+  // ── the chapter rail: a cut a visitor asks for ─────────────────────────
+  it('cuts to a chapter on a press: the dark closes first, then the page moves and the camera is placed', () => {
+    progress = 0.05;
+    stepDoorway(0);
+    expect(cutTo(0.41, 100)).toBe(true);
+    // the page is held, and has not moved while the dark is closing
+    expect(calls).toEqual(['hold']);
+    stepDoorway(100 + CUT_CLOSE_MS / 2);
+    expect(progress).toBe(0.05);
+    expect(doorwayState.cutDark).toBeGreaterThan(0.4);
+    expect(doorwayState.cutDark).toBeLessThan(0.6);
+    expect(doorwayState.snap).toBe(false);
+    // at full dark it moves, places the camera, and (the same model, already
+    // on screen) lifts at once
+    stepDoorway(100 + CUT_CLOSE_MS + 1);
+    expect(progress).toBeCloseTo(0.41, 9);
+    expect(doorwayState.snap).toBe(true);
+    expect(doorwayState.cut).toBeNull();
+    expect(doorwayState.cutDark).toBe(0);
+    expect(doorwayState.cutAt).toBe(100 + CUT_CLOSE_MS + 1);
+    expect(calls).toEqual(['hold', 'jump 0.4100', 'release']);
+    // and the director does not take the move it has just made for a crossing
+    doorwayState.snap = false;
+    stepDoorway(100 + CUT_CLOSE_MS + 17);
+    expect(doorwayState.mode).toBe('idle');
+    expect(doorwayState.snap).toBe(false);
+    expect(doorwayState.cutAt).toBe(100 + CUT_CLOSE_MS + 1);
+    // shorter than the lift: a press is answered at once
+    expect(CUT_CLOSE_MS).toBeLessThan(CUT_MS);
+  });
+
+  it('holds its dark over a hall that has not loaded, placing the camera until it has', () => {
+    doorwayState.hallReady = false;
+    commits = false;
+    progress = 0.02; // the cover
+    stepDoorway(0);
+    expect(cutTo(DOOR_IN + 0.1, 0)).toBe(true);
+    stepDoorway(CUT_CLOSE_MS + 1);
+    expect(progress).toBeGreaterThan(DOOR_IN);
+    // dark, held, and the camera asked to be placed on every frame of it
+    for (const t of [400, 900, 2500]) {
+      doorwayState.snap = false;
+      stepDoorway(t);
+      expect(doorwayState.cut).not.toBeNull();
+      expect(doorwayState.cutDark).toBe(1);
+      expect(doorwayState.snap).toBe(true);
+    }
+    // the hall arrives and is on screen: the dark lifts from there
+    doorwayState.hallReady = true;
+    doorwayState.sceneLeg = 'interior';
+    stepDoorway(2600);
+    expect(doorwayState.cut).toBeNull();
+    expect(doorwayState.cutAt).toBe(2600);
+    expect(calls.filter((c) => c === 'release')).toHaveLength(1);
+  });
+
+  it('does not leave a visitor in the dark for a hall that never comes', () => {
+    doorwayState.hallReady = false;
+    commits = false;
+    progress = 0.02;
+    stepDoorway(0);
+    cutTo(DOOR_IN + 0.1, 0);
+    stepDoorway(CUT_CLOSE_MS + 1);
+    stepDoorway(CUT_CLOSE_MS + MAX_HOLD_MS + 2);
+    expect(doorwayState.cut).toBeNull();
+    expect(doorwayState.cutDark).toBe(0);
+  });
+
+  it('gives the page back after a cut into a hall still arriving, and keeps its dark and its camera', () => {
+    doorwayState.hallReady = false;
+    commits = false;
+    progress = 0.02;
+    stepDoorway(0);
+    cutTo(DOOR_IN + 0.1, 0);
+    const moved = CUT_CLOSE_MS + 1;
+    stepDoorway(moved);
+    doorwayState.sceneLeg = 'interior'; // the set is the hall's, and the hall is not in
+    // the page is held for the length of a cut...
+    stepDoorway(moved + CUT_PAGE_HOLD_MS - 10);
+    expect(calls.filter((c) => c === 'release')).toHaveLength(0);
+    // ...and then the scroll is the visitor's: the dark and the placed camera stay
+    doorwayState.snap = false;
+    stepDoorway(moved + CUT_PAGE_HOLD_MS + 10);
+    expect(calls.filter((c) => c === 'release')).toHaveLength(1);
+    expect(doorwayState.cut).not.toBeNull();
+    expect(doorwayState.cutDark).toBe(1);
+    expect(doorwayState.snap).toBe(true);
+    // a cut is longer than the hold on the page is not: a press is answered, then let go
+    expect(CUT_PAGE_HOLD_MS).toBeGreaterThanOrEqual(CUT_MS);
+    expect(CUT_PAGE_HOLD_MS).toBeLessThan(MAX_HOLD_MS / 4);
+    // they scroll back out by the door while it is dark: the estate is there, and the dark lifts on it
+    progress = 0.2;
+    doorwayState.sceneLeg = 'exterior';
+    stepDoorway(moved + CUT_PAGE_HOLD_MS + 500);
+    expect(doorwayState.cut).toBeNull();
+    expect(doorwayState.cutDark).toBe(0);
+    // released once, not again
+    expect(calls.filter((c) => c === 'release')).toHaveLength(1);
+    // and the move they made in the dark is not found afterwards as a crossing nobody made
+    stepDoorway(moved + CUT_PAGE_HOLD_MS + 516);
+    expect(doorwayState.mode).toBe('idle');
+    expect(doorwayState.cut).toBeNull();
+    expect(calls.filter((c) => /^jump/.test(c))).toHaveLength(1);
+  });
+
+  it('moves at once, with no fade, where motion is not allowed', () => {
+    animate = false;
+    progress = 0.7;
+    doorwayState.sceneLeg = 'interior';
+    stepDoorway(0);
+    expect(cutTo(0.1, 16)).toBe(true);
+    stepDoorway(17);
+    expect(progress).toBeCloseTo(0.1, 9);
+    expect(doorwayState.snap).toBe(true);
+    expect(doorwayState.cut).toBeNull();
+  });
+
+  it('declines a cut during a passage, and a second cut during a first', () => {
+    progress = DOOR_OUT - 0.01;
+    stepDoorway(1000);
+    noteDoorwayInput(1010);
+    progress = DOOR_OUT + 0.004;
+    stepDoorway(1016);
+    expect(doorwayState.mode).toBe('running');
+    expect(cutTo(0.1, 1020)).toBe(false);
+    cancelDoorway();
+    calls.length = 0;
+    progress = 0.1;
+    stepDoorway(2000);
+    expect(cutTo(0.3, 2000)).toBe(true);
+    expect(cutTo(0.8, 2010)).toBe(false);
+    // abandoned (the route changed): the page is released and nothing is dark
+    cancelDoorway();
+    expect(doorwayState.cut).toBeNull();
+    expect(doorwayState.cutDark).toBe(0);
+    expect(calls).toEqual(['hold', 'release']);
+  });
+
+  it('glides to a neighbouring chapter along the film, and declines where it cannot', () => {
+    progress = 0.1;
+    stepDoorway(0);
+    expect(glideOnFilm(0.2, 2)).toBe(true);
+    expect(calls).toEqual(['glide 0.2000']);
+    animate = false;
+    expect(glideOnFilm(0.3, 2)).toBe(false);
   });
 });

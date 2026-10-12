@@ -16,6 +16,11 @@ export default defineConfig({
     environment: 'node',
   },
   resolve: {
-    alias: { '@': path.resolve(__dirname, './src') },
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      // As tsconfig.json maps it. A test that imports a VALUE from the shared
+      // domain package, and not only a type, needs the path at run time.
+      '@estate/domain': path.resolve(__dirname, '../../packages/domain/src'),
+    },
   },
 });

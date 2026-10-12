@@ -3,15 +3,28 @@
 // apps/public/src/components/consent/ConsentPanel.tsx
 //
 // The consent moment. Spec §3.2: at this budget a grey cookie bar is a wasted
-// opportunity and an opt-in killer, so this is built in the same material
-// language as the hologram callout cards — smoked glass, a gold rule, tracked
-// caps.
+// opportunity and an opt-in killer, so this is a card of the site's own.
 //
-// Two rules that are not styling preferences:
+// IN THE SITE'S OWN KIT (the forensic audit of 2026-10-09, #105 to #107). It
+// was "the first designed object a visitor meets, and it comes from a
+// different kit": three outlined boxes where every other action on the site
+// is a hairline and capitals, a heading in tracked capitals of a cool white
+// found nowhere else, and the smallest body text anywhere. Now: the heading
+// in the text's own ivory at the size of a name, the notice at the reading
+// size, the three answers as the site's quiet action (app/globals.css,
+// .cta-quiet), a hairline for its edge, and no blur behind it — nothing else
+// on the site blurs.
+//
+// Three rules that are not styling preferences:
 //   1. The three actions carry EQUAL visual weight. A de-emphasised "Essential
 //      only" is a dark pattern, and under the DPDP Act refusal must be as easy
 //      as acceptance.
-//   2. The first decision cannot be dismissed by clicking away or pressing Esc.
+//   2. NO ANSWER IS PRE-SELECTED. The card used to open with the keyboard's
+//      focus on its first button, so "Accept all" alone carried a ring and the
+//      Enter key accepted all tracking (#106). Focus now lands on the card
+//      itself: a screen reader reads its title and notice, and the first Tab
+//      goes to the first answer.
+//   3. The first decision cannot be dismissed by clicking away or pressing Esc.
 //      Dismissal is not a choice, and treating it as one is exactly the
 //      "unambiguous" failure the Act is aimed at. Re-opened later, it closes
 //      freely — by then a valid choice already exists.
@@ -21,6 +34,7 @@ import { useConsent } from '@/lib/consent/ConsentProvider';
 import {
   CONSENT_CATEGORIES,
   CONSENT_COPY,
+  PRIVACY_CONTROL_NAME,
   type ConsentCategory,
 } from '@/lib/consent/types';
 
@@ -72,11 +86,16 @@ export function ConsentPanel() {
     marketing: false,
   });
   const ref = useRef<HTMLDivElement>(null);
+  /** "Choose" was pressed: the keyboard goes on to the first of the choices. */
+  const toChoices = useRef(false);
 
   const open = needsDecision || panelOpen;
   const dismissible = !needsDecision;
 
-  // Re-opening should show what was actually chosen, not the defaults.
+  // Re-opening should show what was actually chosen, not the defaults — and
+  // show it: a visitor who comes back to this card has come to change a
+  // setting, so it opens on the settings as they stand. A first visit opens on
+  // the three answers alone.
   useEffect(() => {
     if (!open) return;
     setChoice({
@@ -84,8 +103,8 @@ export function ConsentPanel() {
       analytics: consent?.analytics ?? false,
       marketing: consent?.marketing ?? false,
     });
-    setDetail(false);
-  }, [open, consent]);
+    setDetail(!needsDecision);
+  }, [open, consent, needsDecision]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -101,10 +120,16 @@ export function ConsentPanel() {
       if (items.length === 0) return;
       const first = items[0];
       const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
+      const at = document.activeElement;
+      // From the card itself (where focus lands): forward to the first answer,
+      // back to the last. Never out of the card.
+      if (at === ref.current) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && at === first) {
         e.preventDefault();
         last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && at === last) {
         e.preventDefault();
         first.focus();
       }
@@ -112,20 +137,25 @@ export function ConsentPanel() {
     [dismissible, closePanel],
   );
 
+  // On the card, not on an answer.
   useEffect(() => {
     if (!open || !ref.current) return;
-    ref.current.querySelector<HTMLElement>(FOCUSABLE)?.focus();
-  }, [open, detail]);
+    ref.current.focus({ preventScroll: true });
+  }, [open]);
+
+  // After "Choose", the first of the choices.
+  useEffect(() => {
+    if (!detail || !toChoices.current || !ref.current) return;
+    toChoices.current = false;
+    ref.current.querySelector<HTMLElement>('input[type="checkbox"]')?.focus();
+  }, [detail]);
 
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-end justify-center p-4 sm:items-center"
-      aria-hidden={false}
-    >
+    <div className="consent folio-stage" aria-hidden={false}>
       <div
-        className="consent-scrim absolute inset-0 backdrop-blur-[2px]"
+        className="consent-scrim"
         onClick={dismissible ? closePanel : undefined}
         aria-hidden="true"
       />
@@ -136,127 +166,110 @@ export function ConsentPanel() {
         aria-modal="true"
         aria-labelledby="consent-title"
         aria-describedby="consent-body"
+        tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="consent-card relative w-full max-w-2xl overflow-hidden rounded-[2px] border border-[#F2EDE4]/10 text-[#F2EDE4] shadow-2xl"
+        className="consent-card"
       >
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-[#E8B98A]/60 to-transparent" />
+        <h2 id="consent-title" className="consent-title">
+          {needsDecision ? 'Before you explore.' : `${PRIVACY_CONTROL_NAME}.`}
+        </h2>
 
-        <div className="px-6 py-6 sm:px-8 sm:py-7">
-          <h2
-            id="consent-title"
-            className="font-serif text-step-1 tracking-[0.18em] text-neutral-50 sm:text-step-1"
-          >
-            BEFORE YOU EXPLORE
-          </h2>
-
-          <p
-            id="consent-body"
-            className="mt-3 text-step--1 font-light text-[#F2EDE4]/[0.72]"
-          >
-            We keep what is needed to run the experience. Beyond that, you decide.
-            Turning these on lets us show you the projects and plots you actually
-            spent time with — and skip the ones you did not. You can change your
-            mind at any time from the Privacy link.
+        {needsDecision ? (
+          <p id="consent-body" className="consent-body">
+            We keep what is needed to run the site. Beyond that, you decide:
+            remembering your preferences, measuring which layouts are looked at,
+            and following up on other sites are each off until you turn them
+            on. You can change your mind at any time under “
+            {PRIVACY_CONTROL_NAME}” at the foot of every page.
           </p>
+        ) : (
+          <p id="consent-body" className="consent-body">
+            What this site keeps beyond what it needs to run. Each is off
+            unless you have turned it on.
+          </p>
+        )}
 
-          {detail && (
-            <ul className="mt-6 space-y-4 border-t border-white/10 pt-5">
-              <li className="flex items-start gap-4">
-                <span className="mt-1 shrink-0 rounded border border-white/15 px-2 py-0.5 text-step--2 uppercase tracking-[0.3em] text-neutral-400">
-                  Always on
-                </span>
-                <div>
-                  <p className="text-step--1 font-medium text-neutral-100">
-                    {CONSENT_COPY.essential.title}
-                  </p>
-                  <p className="mt-1 text-step--1 text-neutral-400">
-                    {CONSENT_COPY.essential.body}
-                  </p>
-                </div>
+        {detail && (
+          <ul className="consent-list">
+            <li className="consent-row">
+              <p className="consent-check is-fixed">
+                <span className="consent-check-mark" aria-hidden />
+                <span className="consent-row-name">{CONSENT_COPY.essential.title}</span>
+              </p>
+              <p className="consent-row-line">{CONSENT_COPY.essential.body}</p>
+            </li>
+
+            {CONSENT_CATEGORIES.map((cat) => (
+              <li key={cat} className="consent-row">
+                <label className="consent-check">
+                  <input
+                    type="checkbox"
+                    checked={choice[cat]}
+                    onChange={(e) =>
+                      setChoice((c) => ({ ...c, [cat]: e.target.checked }))
+                    }
+                  />
+                  <span className="consent-check-mark" aria-hidden />
+                  <span className="consent-row-name">{CONSENT_COPY[cat].title}</span>
+                </label>
+                <p className="consent-row-line">{CONSENT_COPY[cat].body}</p>
               </li>
+            ))}
+          </ul>
+        )}
 
-              {CONSENT_CATEGORIES.map((cat) => (
-                <li key={cat} className="flex items-start gap-4">
-                  <label className="mt-0.5 inline-flex shrink-0 cursor-pointer items-center">
-                    <input
-                      type="checkbox"
-                      checked={choice[cat]}
-                      onChange={(e) =>
-                        setChoice((c) => ({ ...c, [cat]: e.target.checked }))
-                      }
-                      className="h-4 w-4 cursor-pointer rounded-[1px] border-[#F2EDE4]/30 bg-transparent accent-[#E8B98A] text-[#E8B98A] focus:ring-1 focus:ring-[#E8B98A] focus:ring-offset-0"
-                    />
-                    <span className="sr-only">{CONSENT_COPY[cat].title}</span>
-                  </label>
-                  <div>
-                    <p className="text-step--1 font-medium text-neutral-100">
-                      {CONSENT_COPY[cat].title}
-                    </p>
-                    <p className="mt-1 text-step--1 text-neutral-400">
-                      {CONSENT_COPY[cat].body}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* Equal weight, deliberately. Same size, same treatment, no primary. */}
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={acceptAll}
-              className="flex-1 rounded-[1px] border border-[#F2EDE4]/25 px-5 py-3 min-h-[44px] text-step--2 font-normal uppercase tracking-[0.3em] text-[#F2EDE4]/90 transition hover:border-[#E8B98A]/80 hover:text-[#E8B98A] focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-[#E8B98A]"
-            >
-              Accept all
-            </button>
-            <button
-              type="button"
-              onClick={rejectAll}
-              className="flex-1 rounded-[1px] border border-[#F2EDE4]/25 px-5 py-3 min-h-[44px] text-step--2 font-normal uppercase tracking-[0.3em] text-[#F2EDE4]/90 transition hover:border-[#E8B98A]/80 hover:text-[#E8B98A] focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-[#E8B98A]"
-            >
-              Essential only
-            </button>
-            <button
-              type="button"
-              onClick={() => (detail ? save(choice) : setDetail(true))}
-              className="flex-1 rounded-[1px] border border-[#F2EDE4]/25 px-5 py-3 min-h-[44px] text-step--2 font-normal uppercase tracking-[0.3em] text-[#F2EDE4]/90 transition hover:border-[#E8B98A]/80 hover:text-[#E8B98A] focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-[#E8B98A]"
-            >
-              {detail ? 'Save choices' : 'Choose'}
-            </button>
-          </div>
-
-          {/* Erasure. The DPDP Act grants this, and an endpoint nobody can find
-              is not a right — so it lives here, next to the choice that created
-              the data, rather than behind an email address. Shown only in the
-              detail view so it cannot be hit by accident. */}
-          {detail && (
-            <div className="mt-5 border-t border-white/10 pt-4">
-              {erased ? (
-                <p className="text-step--1 text-neutral-400">
-                  Deleted. Nothing from this visit is retained.
-                </p>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={erase}
-                    disabled={erasing}
-                    className="text-step--2 uppercase tracking-[0.3em] text-neutral-400 underline-offset-4 transition hover:text-neutral-100 hover:underline disabled:opacity-50"
-                  >
-                    {erasing ? 'Deleting…' : 'Delete the data from this visit'}
-                  </button>
-                  {eraseFailed && (
-                    <p className="mt-2 text-step--1 text-amber-200/80">
-                      We could not complete that just now, so nothing was
-                      deleted. Please try again.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+        {/* Equal weight, deliberately. Same size, same treatment, no primary. */}
+        <div className="consent-actions">
+          <button type="button" onClick={acceptAll} className="cta-quiet">
+            <span className="cta-quiet-label">Accept all</span>
+          </button>
+          <button type="button" onClick={rejectAll} className="cta-quiet">
+            <span className="cta-quiet-label">Essential only</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (detail) {
+                save(choice);
+              } else {
+                toChoices.current = true;
+                setDetail(true);
+              }
+            }}
+            className="cta-quiet"
+          >
+            <span className="cta-quiet-label">{detail ? 'Save choices' : 'Choose'}</span>
+          </button>
         </div>
+
+        {/* Erasure. The DPDP Act grants this, and an endpoint nobody can find
+            is not a right — so it lives here, next to the choice that created
+            the data, rather than behind an email address. Shown only in the
+            detail view so it cannot be hit by accident. */}
+        {detail && (
+          <div className="consent-erase">
+            {erased ? (
+              <p>Deleted. Nothing from this visit is retained.</p>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={erase}
+                  disabled={erasing}
+                  className="consent-erase-action"
+                >
+                  {erasing ? 'Deleting…' : 'Delete the data from this visit'}
+                </button>
+                {eraseFailed && (
+                  <p className="consent-error" role="alert">
+                    We could not complete that just now, so nothing was
+                    deleted. Please try again.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -267,19 +280,8 @@ export function ConsentPanel() {
 export function PrivacyControl({ className }: { className?: string }) {
   const { reopen } = useConsent();
   return (
-    <button
-      type="button"
-      onClick={reopen}
-      className={
-        className ??
-        // hover:text-neutral-800 was a light-theme leftover: this control lives
-        // in the footer, so hovering it took the label to near-black on
-        // #0A1120. tap-target brings the 16px-tall trigger up to a 44px hit
-        // area without changing how it looks.
-        'tap-target text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60 underline-offset-4 transition hover:text-[#F2EDE4] hover:underline'
-      }
-    >
-      Privacy &amp; data choices
+    <button type="button" onClick={reopen} className={className ?? 'colophon-legal-link'}>
+      {PRIVACY_CONTROL_NAME}
     </button>
   );
 }

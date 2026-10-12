@@ -333,6 +333,23 @@ export const MAX_HOLD_MS = 12_000;
 export const CUT_MS = 420;
 
 /**
+ * A CUT ASKED FOR BY A CONTROL closes the dark first (the chapter rail:
+ * cutTo). A crossing nobody chose is found already made, and all that can be
+ * done for it is to lift from black; one a visitor asks for with a press can
+ * be done as an editor does it — down, then up. Short: it is a cut, and the
+ * press should feel answered at once.
+ */
+export const CUT_CLOSE_MS = 240;
+
+/**
+ * How long a cut into a hall that has not arrived keeps the PAGE (stepCut):
+ * the length of a cut, and no longer. The dark goes on waiting for the hall
+ * for as long as it takes (sceneWarm.ts holds it; this module's own hold
+ * ends at MAX_HOLD_MS); the scroll is the visitor's again after this.
+ */
+export const CUT_PAGE_HOLD_MS = 900;
+
+/**
  * Frames the far model must have been ON SCREEN, under the dark, before the
  * dark may begin to lift.
  *
@@ -640,6 +657,12 @@ export interface DoorwayState {
   /** The hall can be drawn through the doorway now: it has loaded, and this
    *  machine can draw it twice (the host's canGoThrough). */
   throughOk: boolean;
+  /** A cut asked for by a control (cutTo): where to, when it was asked, and
+   *  whether the page has been moved yet. */
+  cut: { to: number; t0: number; moved: boolean; movedAt: number; freed?: boolean } | null;
+  /** 0..1 how far that cut's dark has closed (the journey's driver paints
+   *  it). 0 at rest. */
+  cutDark: number;
 }
 
 export const doorwayState: DoorwayState = {
@@ -668,6 +691,8 @@ export const doorwayState: DoorwayState = {
   request: null,
   ajar: 0,
   throughOk: false,
+  cut: null,
+  cutDark: 0,
 };
 
 let host: DoorwayHost | null = null;
@@ -745,6 +770,11 @@ export function stepDoorway(now: number): void {
   if (!h) return;
 
   st.throughOk = st.hallReady && h.canGoThrough?.() === true;
+
+  if (st.mode === 'idle' && st.cut) {
+    stepCut(st, h, now);
+    return;
+  }
 
   if (st.mode === 'idle') {
     const s = h.progress();
@@ -871,6 +901,100 @@ export function cancelDoorway() {
   st.snap = false;
   st.lastProgress = -1;
   st.ajar = 0;
+  if (st.cut) {
+    st.cut = null;
+    host?.hold(false);
+  }
+  st.cutDark = 0;
+}
+
+/**
+ * One frame of a cut asked for by a control. The dark closes; at full dark the
+ * page is moved and the camera placed; the dark holds until the model the page
+ * now names is on the screen (and, for the hall, loaded: a press on a table's
+ * dot from the cover must not lift on an empty room); then it lifts, as any
+ * cut does (CUT_MS).
+ */
+function stepCut(st: DoorwayState, h: DoorwayHost, now: number): void {
+  const c = st.cut;
+  if (!c) return;
+  if (!c.moved) {
+    const close = h.canAnimate() ? CUT_CLOSE_MS : 0;
+    const u = close > 0 ? (now - c.t0) / close : 1;
+    st.cutDark = clamp01(u);
+    if (u < 1) return;
+    h.jumpTo(c.to);
+    st.lastProgress = h.progress();
+    c.moved = true;
+    c.movedAt = now;
+    st.cutDark = 1;
+  }
+  // Placed on every frame of the hold, so that whichever frame the far model
+  // arrives on is the frame the camera is put in it.
+  st.snap = true;
+  // (Once the page is let go, below, it may be anywhere: read where.)
+  if (c.freed) st.lastProgress = h.progress();
+  const far = st.lastProgress >= CROSSOVER ? 'interior' : 'exterior';
+  const there = st.sceneLeg === far && (far === 'exterior' || st.hallReady);
+  const limit = far === 'interior' ? MAX_HOLD_MS : MAX_FAR_WAIT_MS;
+  if (!there && now - c.movedAt < limit) {
+    // THE PAGE IS NOT HELD FOR A DOWNLOAD. The dark waits for the hall and
+    // the camera is kept placed, but the scroll is given back once the cut
+    // itself is over: on a connection the hall can be many seconds away
+    // (MEASURED through a public address, 2026-10-09: twelve, and then the
+    // hold gave up), and a visitor who pressed the rail and got a dark frame
+    // could neither go on nor go back for the whole of it. They can now; and
+    // if they scroll out by the door, the estate is `there` and the dark
+    // lifts on it.
+    if (!c.freed && far === 'interior' && now - c.movedAt >= CUT_PAGE_HOLD_MS) {
+      c.freed = true;
+      h.hold(false);
+    }
+    return;
+  }
+  st.cut = null;
+  st.cutDark = 0;
+  st.cutAt = now;
+  if (!c.freed) h.hold(false);
+}
+
+/**
+ * CUT TO A PLACE ON THE FILM, from a control rather than from the wheel (the
+ * chapter rail). `progress` is the film's own, 0..1 (the page's `data-copy`
+ * fractions are in it).
+ *
+ * Returns false when no cut will be made — there is no film on the page, or a
+ * passage or another cut is running — so the caller can let its link do the
+ * ordinary thing.
+ *
+ * A CUT AND NOT A FLIGHT, for the reason the rig gives: the camera is sprung
+ * toward where the scroll says it should be, and a scroll that jumps eight
+ * chapters would spring it there in a straight line, through the house.
+ */
+export function cutTo(progress: number, now: number = performance.now()): boolean {
+  const h = host;
+  const st = doorwayState;
+  if (!h || st.mode === 'running' || st.cut) return false;
+  // (Not held under 1: the page runs on past the film's end, to its colophon.)
+  st.cut = { to: Math.max(0, progress), t0: now, moved: false, movedAt: 0 };
+  st.request = null;
+  h.hold(true);
+  return true;
+}
+
+/**
+ * GLIDE ALONG THE FILM to a place nearby, from a control: the page scrolls
+ * there at the film's own pace and the camera follows its path, as it does
+ * under the wheel. For a neighbouring chapter on the same side of the door;
+ * anything further is a cut (cutTo). False when it cannot (no smooth scroll,
+ * motion not allowed, a passage or a cut running).
+ */
+export function glideOnFilm(progress: number, seconds: number): boolean {
+  const h = host;
+  const st = doorwayState;
+  if (!h || !h.canAnimate() || st.mode === 'running' || st.cut) return false;
+  h.glideTo(Math.max(0, progress), seconds, () => undefined);
+  return true;
 }
 
 /**

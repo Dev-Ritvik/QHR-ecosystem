@@ -72,7 +72,7 @@ export function LocationSection({ pois, projectCentroid }: LocationSectionProps)
   if (!pois || pois.length === 0) {
     return (
       <section className="space-y-6">
-        <h2 className="t-h2 text-[#F2EDE4]">Location &amp; connectivity</h2>
+        <h2 className="t-h2 text-[#F2EDE4]">Location and connectivity</h2>
         <EmptyStates type="location" />
       </section>
     );
@@ -80,7 +80,7 @@ export function LocationSection({ pois, projectCentroid }: LocationSectionProps)
 
   return (
     <section className="space-y-6">
-      <h2 className="t-h2 text-[#F2EDE4]">Location &amp; connectivity</h2>
+      <h2 className="t-h2 text-[#F2EDE4]">Location and connectivity</h2>
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Map Column */}
         <div className="relative h-[450px] overflow-hidden rounded-sm border border-white/10 bg-white/[0.02] lg:col-span-2">
@@ -103,7 +103,7 @@ export function LocationSection({ pois, projectCentroid }: LocationSectionProps)
               </div>
               <div
                 className="flex items-center gap-3 text-step--1 text-[#F2EDE4]/60"
-                style={{ fontVariantNumeric: 'tabular-nums' }}
+                style={{ fontVariantNumeric: 'lining-nums tabular-nums' }}
               >
                 <span className="text-[#E8B98A]">
                   {(poi.distanceM / 1000).toFixed(1)} km

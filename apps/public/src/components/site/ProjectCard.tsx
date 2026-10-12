@@ -46,7 +46,7 @@ export function ProjectCard({ project }: { project: Project }) {
   return (
     <Link
       href={`/projects/${project.slug}`}
-      className="group block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-amber-200/70 focus-visible:ring-offset-4 focus-visible:ring-offset-[#0A1120]"
+      className="group block"
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-sm bg-[#101A2A] ring-1 ring-white/[0.07]">
         {usable ? (

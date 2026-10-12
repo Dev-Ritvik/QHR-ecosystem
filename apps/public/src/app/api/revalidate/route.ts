@@ -18,6 +18,16 @@ export async function POST(request: Request) {
       
       // Always bust the top-level index routing cache so the catalog syncs immediately
       revalidatePath('/', 'page');
+
+      // AND EVERYTHING ELSE THAT PRINTS THE REGISTER. '/' is not the film's
+      // route — the film is /site-home behind a rewrite — so the line above
+      // refreshed nothing a visitor sees, and after a publish the film's
+      // count of open plots, the tables in the hall on every page, the
+      // layouts' index, the sizes page and the two forms' lists of layouts
+      // all waited out their hour. The whole site hangs from one layout:
+      // this marks every page under it, and each is rebuilt on its next
+      // visit.
+      revalidatePath('/', 'layout');
       
       // Target specific project paths if the tag format matches
       if (typeof body.tag === 'string' && body.tag.startsWith('project-')) {

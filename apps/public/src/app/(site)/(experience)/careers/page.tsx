@@ -1,6 +1,6 @@
 // apps/public/src/app/(site)/(experience)/careers/page.tsx
 //
-// A SURFACE read from the desk.
+// A FOLIO with a short plate, read from the desk.
 //
 // Roles, requirements and contact details are transcribed from the career page
 // on qualityhomesreality.com, which the client owns. Nothing about salary,
@@ -9,16 +9,19 @@
 // their first week.
 
 import type { Metadata } from 'next';
+import { withShare } from '@/lib/share';
 import Link from 'next/link';
-import { Surface } from '@/components/experience/Surface';
+import { Folio, Gilt, Ledger, NextPage, Note, Plate, Prose, Sheet } from '@/components/folio/Folio';
+import { pageAfter, pageTitle } from '@/components/site/siteMap';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
+import { COMPANY } from '@/lib/company';
 import { CONTACT_EMAIL } from '@/lib/contact';
 
-export const metadata: Metadata = {
-  title: 'Careers — Quality Homes Reality',
+export const metadata: Metadata = withShare('/careers', {
+  title: pageTitle('/careers'),
   description:
     'Open roles at Quality Homes Reality across Visakhapatnam, Vizianagaram and Srikakulam.',
-};
+});
 
 const ROLES = [
   {
@@ -38,83 +41,93 @@ const ROLES = [
 const APPLY_EMAIL = CONTACT_EMAIL;
 
 export default function CareersPage() {
+  const next = pageAfter('/careers');
   return (
     <>
       <RouteTelemetry routeId="careers" />
-      <Surface
-        eyebrow="Careers"
-        title="Join the team"
-        lede="We sell land we have walked. If you would rather know a site properly than read from a script, these are the roles open now."
-      >
-        <div className="space-y-8">
-          {ROLES.map((r) => (
-            <section
-              key={r.title}
-              className="border-t border-white/10 pt-6 first:border-0 first:pt-0"
-            >
-              <h2 className="font-serif text-step-1 text-[#F2EDE4]">{r.title}</h2>
-              <dl className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-3">
-                <div>
-                  <dt className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
-                    Experience
-                  </dt>
-                  <dd className="mt-1 text-step-0 text-[#F2EDE4]/80">
-                    {r.experience}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
-                    Education
-                  </dt>
-                  <dd className="mt-1 text-step-0 text-[#F2EDE4]/80">
-                    {r.education}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
-                    Location
-                  </dt>
-                  <dd className="mt-1 text-step-0 text-[#F2EDE4]/80">
-                    {r.location}
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          ))}
-        </div>
+      <Folio>
+        <Plate
+          short
+          kicker="The company"
+          title={
+            <>
+              We sell land <Gilt>we have walked.</Gilt>
+            </>
+          }
+          lede="The roles open now, for people who want to know a site properly before they speak about it."
+          cue={{ label: 'The roles', href: '#roles' }}
+        />
 
-        <h2 className="mt-14 font-serif text-step-1 text-[#F2EDE4]">How to apply</h2>
-        <p>
-          Send a CV to{' '}
-          <a
-            className="underline underline-offset-4"
-            href={`mailto:${APPLY_EMAIL}?subject=Application%20%E2%80%94%20Sales%20Executive`}
-          >
-            {APPLY_EMAIL}
-          </a>
-          , naming the role in the subject line. Applications are read at the
-          Visakhapatnam head office and passed to whichever branch is hiring.
-        </p>
-        <p>
-          Telephone{' '}
-          <a className="underline underline-offset-4" href="tel:+919553513366">
-            +91 95535 13366
-          </a>{' '}
-          if you would rather ask about a role before applying.
-        </p>
+        <Sheet
+          id="roles"
+          rail="The roles"
+          first
+          kicker="Open now"
+          title={
+            <>
+              Two roles, <Gilt>both in sales.</Gilt>
+            </>
+          }
+          note="As the company lists them. Ask about pay and benefits when you apply."
+        >
+          <div className="folio-roles">
+            {ROLES.map((r) => (
+              <section key={r.title} aria-labelledby={`role-${r.title.replace(/\s+/g, '-').toLowerCase()}`}>
+                <h3
+                  id={`role-${r.title.replace(/\s+/g, '-').toLowerCase()}`}
+                  className="folio-role-name"
+                  data-reveal
+                >
+                  {r.title}
+                </h3>
+                <Ledger
+                  rows={[
+                    { term: 'Experience', value: r.experience },
+                    { term: 'Education', value: r.education },
+                    { term: 'Location', value: r.location },
+                  ]}
+                />
+              </section>
+            ))}
+          </div>
+        </Sheet>
 
-        <p className="mt-10 text-step--1 text-[#F2EDE4]/55">
-          A CV sent to us is handled as set out in the{' '}
-          <Link className="underline underline-offset-4" href="/privacy">
-            privacy notice
-          </Link>
-          . Office addresses are on the{' '}
-          <Link className="underline underline-offset-4" href="/branches">
-            offices page
-          </Link>
-          .
-        </p>
-      </Surface>
+        <Sheet
+          id="apply"
+          rail="How to apply"
+          raised
+          kicker="How to apply"
+          title={
+            <>
+              A CV, <Gilt>and the role in the subject line.</Gilt>
+            </>
+          }
+        >
+          <Prose>
+            <p className="folio-first">
+              Send a CV to{' '}
+              <a href={`mailto:${APPLY_EMAIL}?subject=Application%20%E2%80%94%20Sales%20Executive`}>
+                {APPLY_EMAIL}
+              </a>
+              , naming the role in the subject line.
+            </p>
+            <p>
+              Applications are read at the Visakhapatnam head office and passed to whichever branch
+              is hiring.
+            </p>
+            <p>
+              To ask about a role before applying, telephone{' '}
+              <a href={COMPANY.phone.href}>{COMPANY.phone.display}</a>.
+            </p>
+          </Prose>
+          <Note className="mt-10">
+            A CV sent to us is handled as set out in the <Link href="/privacy">privacy notice</Link>.
+            Office addresses are on the <Link href="/branches">offices page</Link>.
+          </Note>
+        </Sheet>
+
+        <NextPage href={next.href} title={next.name} line={next.line} />
+      </Folio>
     </>
   );
 }

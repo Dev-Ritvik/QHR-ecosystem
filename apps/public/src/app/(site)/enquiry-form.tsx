@@ -1,37 +1,72 @@
 // apps/public/src/app/(site)/enquiry-form.tsx
 "use client";
 
-import { useState, useTransition } from 'react';
+import Link from 'next/link';
+import { useId, useState, useTransition } from 'react';
+import { VisitDay } from '@/components/folio/VisitDay';
 import { useFormTelemetry } from '@/lib/telemetry/hooks';
 import { submitEnquiry, type EnquiryActionState } from './actions';
+import { composeMessage, type VisitTime } from './enquiryMessage';
+
+interface LayoutChoice {
+  /** The layout's id in the register (what the CRM files the enquiry under). */
+  id: string;
+  name: string;
+  where: string;
+}
 
 interface EnquiryFormProps {
-  /** Omitted on the general contact page: an enquiry that names no project is
-   *  still a lead, and the CRM routes it on the layouts the visitor actually
-   *  spent time with rather than on a hidden field. */
+  /** Bound to one layout: a layout's own page. */
   projectId?: string;
   projectName?: string;
   unitId?: string;
   unitNumber?: string;
+  /**
+   * Offered as a choice instead: the contact page and the visit page. An
+   * enquiry that names no layout is still a lead (the CRM routes it on the
+   * layouts the visitor actually spent time with), so "not sure yet" is one
+   * of the answers and nothing is pre-chosen.
+   */
+  layouts?: LayoutChoice[];
+  /** A site visit: asks for a day as well, and says so to the branch. */
+  visit?: boolean;
 }
 
-// SET FOR THE DARK SITE. The form was drawn for a white card — neutral-900
-// labels, white fields, a black button — and the one page that uses it (the
-// contact surface) sets it in a dark panel, where its labels and its note were
-// dark grey on near-black (measured: 1.2:1 and 1.6:1). Ivory labels, hairline
-// fields with the house's gilt on focus, and the site's own tracked capitals
-// on the button. The fields keep the browser's 16px, so a phone does not zoom
-// into them on focus.
-const LABEL = 'block text-step--1 font-medium text-[#F2EDE4]/80';
-const FIELD =
-  'block w-full rounded-none border border-white/20 bg-transparent px-4 py-2.5 text-[#F2EDE4] placeholder:text-[#F2EDE4]/40 transition-colors focus:border-[#E8B98A]/70 focus:outline-none focus:ring-1 focus:ring-[#E8B98A]/40';
-const ERROR = 'mt-1 text-step--1 text-[#F2A38C]';
+// SET AS A FOLIO SETS EVERYTHING (app/folio.css, "the form"). It was a card:
+// boxed fields in a bordered panel, a boxed button, a heading of its own
+// inside the page's heading. On the sheets a form is lines to be written on —
+// a label, a hairline, the house's gilt under the line being written — and
+// its action is the site's one action, a gilt rule leading into the words.
+// The fields keep at least the browser's 16px, so a phone does not zoom into
+// them on focus.
 
-export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: EnquiryFormProps) {
+const TIMES: { value: VisitTime; label: string }[] = [
+  { value: 'any', label: 'Any time' },
+  { value: 'morning', label: 'Morning' },
+  { value: 'afternoon', label: 'Afternoon' },
+  { value: 'evening', label: 'Evening' },
+];
+
+/**
+ * THE MESSAGE GROWS AS IT IS WRITTEN (the forensic audit of 2026-10-09, #111:
+ * the field showed the browser's grey grip in its corner). Three lines to
+ * begin with, and then as many as have been written: nothing to drag, and no
+ * second scrollbar inside the page's. (A browser that sizes a field by its
+ * content does this itself — folio.css, `field-sizing` — and this agrees
+ * with it.)
+ */
+function grow(e: React.FormEvent<HTMLTextAreaElement>) {
+  const t = e.currentTarget;
+  t.style.height = 'auto';
+  t.style.height = `${t.scrollHeight + (t.offsetHeight - t.clientHeight)}px`;
+}
+
+export function EnquiryForm({ projectId, projectName, unitId, unitNumber, layouts, visit }: EnquiryFormProps) {
+  const uid = useId();
   const [isPending, startTransition] = useTransition();
   // form_start on first focus, form_submit on send, form_abandon on unmount.
   // Abandon carries the field COUNT reached and nothing else - never values.
-  const { onFieldFocus, onSubmit: trackSubmit } = useFormTelemetry('enquiry');
+  const { onFieldFocus, onSubmit: trackSubmit } = useFormTelemetry(visit ? 'site-visit' : 'enquiry');
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -53,28 +88,56 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
     setErrors({});
     setGlobalError(null);
 
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const chosen = (formData.get('layout') as string) || '';
+    const chosenLayout = layouts?.find((l) => l.id === chosen);
+    const time = ((formData.get('preferredTime') as string) || 'any') as VisitTime;
+    const note = ((formData.get('message') as string) || '').trim();
+    const date = ((formData.get('date') as string) || '').trim();
+    const layoutName = chosenLayout?.name ?? projectName ?? '';
     const data = {
       name: (formData.get('name') as string).trim(),
-      phone: (formData.get('phone') as string).trim(),
-      preferredTime: (formData.get('preferredTime') as string) || undefined,
-      message: (formData.get('message') as string).trim(),
+      phone: (formData.get('phone') as string).replace(/[\s()-]/g, ''),
+      preferredTime: time,
+      // What the branch reads first is the head of this line, so a visit says
+      // it is one, and for which day, before anything the visitor wrote.
+      message: composeMessage({
+        visit: Boolean(visit),
+        date,
+        time,
+        layout: layoutName,
+        note,
+      }),
       honeypot: (formData.get('honeypot') as string) || '',
-      projectId,
+      projectId: projectId ?? chosenLayout?.id,
       unitId,
+      // And the same as facts, which the CRM keeps whole on the lead (its
+      // intake; @estate/domain/leads/enquiry): the head above is sixty
+      // characters of it.
+      kind: visit ? ('site_visit' as const) : ('enquiry' as const),
+      visitDate: visit && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined,
+      visitTime: visit ? time : undefined,
+      layoutName: layoutName ? layoutName.slice(0, 80) : undefined,
+      note: note ? note.slice(0, 1500) : undefined,
+      page: typeof window !== 'undefined' ? window.location.pathname.slice(0, 120) : undefined,
     };
 
     startTransition(async () => {
       // Cast the payload because TS can't infer the exact enum type via FormData
       const res: EnquiryActionState = await submitEnquiry(data as any);
-      
+
       if (res.ok) {
         setStatus('success');
-        (e.target as HTMLFormElement).reset();
+        form.reset();
       } else {
         setStatus('error');
         if (res.code === 'VALIDATION_FAILED' && res.issues) {
           setErrors(res.issues);
+          // An issue with no field of its own on this form must still be said.
+          if (!res.issues.name && !res.issues.phone) {
+            setGlobalError('That could not be sent as written. Please check it and try again, or telephone us.');
+          }
         } else if (res.message) {
           setGlobalError(res.message);
         }
@@ -84,139 +147,222 @@ export function EnquiryForm({ projectId, projectName, unitId, unitNumber }: Enqu
 
   if (status === 'success') {
     return (
-      <div className="flex flex-col items-center justify-center space-y-4 border border-white/10 bg-white/[0.03] p-8 text-center">
-        <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full border border-[#E8B98A]/60 text-[#E8B98A]">
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h3 className="text-step-1 text-[#F2EDE4]">Enquiry received</h3>
-        <p className="max-w-sm text-step-0 text-[#F2EDE4]/70">
-          Thank you for your interest. A member of our team will be in touch with you shortly.
+      <div className="folio-form-done" role="status">
+        <p className="t-d3">{visit ? 'Your request is with the branch.' : 'Your enquiry is with the branch.'}</p>
+        <p>
+          {visit
+            ? 'The office that holds the layout will telephone you to fix the day.'
+            : 'The office that holds the layout will telephone you.'}
         </p>
       </div>
     );
   }
 
+  let field = 0;
+  const next = () => field++;
+
   return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <h3 className="text-step-1 text-[#F2EDE4]">Request information</h3>
-        <p className="text-step--1 text-[#F2EDE4]/70">
-          Leave your details and we will reach out to schedule a consultation.
-        </p>
-      </div>
-
-      <form onSubmit={onSubmit} className="space-y-5">
-        {/* Honeypot field - hidden from real users */}
+    <div className="folio-form-wrap">
+      <form onSubmit={onSubmit} className="folio-form">
+        {/* Honeypot field - hidden from real users. AND FROM THEIR TEXT: it
+            had a label, "Leave this field empty", hidden by transparency
+            alone, so the words were in every form page as copied, as read in
+            a reader view and as summarised (the forensic audit of 2026-10-09,
+            #94: "an instruction with no visible field looks like a bug to
+            anyone who meets it"). The field needs no words: nothing that
+            reads the page is meant to find it, and what fills it in is not
+            reading. */}
         <div className="absolute -z-10 opacity-0" aria-hidden="true">
-          <label htmlFor="honeypot">Leave this field empty</label>
-          <input type="text" name="honeypot" id="honeypot" tabIndex={-1} autoComplete="off" />
+          <input type="text" name="honeypot" id={`${uid}-honeypot`} tabIndex={-1} autoComplete="off" />
         </div>
 
-        <div className="space-y-1.5">
-          <label htmlFor="name" className={LABEL}>
-            Full Name
-          </label>
-          <input
-            type="text"
-            name="name"
-            onFocus={() => onFieldFocus(0)}
-            id="name"
-            required
-            className={FIELD}
-          />
-          {errors.name && <p className={ERROR}>{errors.name[0]}</p>}
+        {layouts && layouts.length > 0 && !projectId ? (
+          <fieldset className="folio-fieldset">
+            <legend>{visit ? 'Which layout would you like to walk?' : 'Which layout is it about?'}</legend>
+            <div className="folio-choices">
+              {layouts.map((l) => {
+                const i = next();
+                return (
+                  <label key={l.id} className="folio-choice">
+                    <input type="radio" name="layout" value={l.id} onFocus={() => onFieldFocus(i)} />
+                    <span className="folio-choice-mark" aria-hidden />
+                    <span className="folio-choice-name">{l.name}</span>
+                    <span className="folio-choice-line">{l.where}</span>
+                  </label>
+                );
+              })}
+              {(() => {
+                const i = next();
+                return (
+                  <label className="folio-choice">
+                    <input type="radio" name="layout" value="" defaultChecked onFocus={() => onFieldFocus(i)} />
+                    <span className="folio-choice-mark" aria-hidden />
+                    <span className="folio-choice-name">Not sure yet</span>
+                    <span className="folio-choice-line">
+                      {visit ? 'The office will help you choose' : 'A general enquiry'}
+                    </span>
+                  </label>
+                );
+              })()}
+            </div>
+          </fieldset>
+        ) : null}
+
+        {visit ? (
+          <div className="folio-form-row">
+            <div className="folio-field">
+              <label htmlFor={`${uid}-date`} id={`${uid}-date-label`}>
+                A day that suits you
+              </label>
+              {(() => {
+                const i = next();
+                return (
+                  <VisitDay
+                    name="date"
+                    id={`${uid}-date`}
+                    labelId={`${uid}-date-label`}
+                    onFocus={() => onFieldFocus(i)}
+                  />
+                );
+              })()}
+              <p className="folio-hint">Leave it open if any day will do.</p>
+            </div>
+            <fieldset className="folio-fieldset is-inline">
+              <legend>Time of day</legend>
+              <div className="folio-chips">
+                {TIMES.map((t) => {
+                  const i = next();
+                  return (
+                    <label key={t.value} className="folio-chip">
+                      <input
+                        type="radio"
+                        name="preferredTime"
+                        value={t.value}
+                        defaultChecked={t.value === 'any'}
+                        onFocus={() => onFieldFocus(i)}
+                      />
+                      <span>{t.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          </div>
+        ) : null}
+
+        <div className="folio-form-row">
+          <div className="folio-field">
+            <label htmlFor={`${uid}-name`}>Your name</label>
+            {(() => {
+              const i = next();
+              return (
+                <input
+                  type="text"
+                  name="name"
+                  id={`${uid}-name`}
+                  required
+                  minLength={2}
+                  autoComplete="name"
+                  aria-invalid={errors.name ? true : undefined}
+                  aria-describedby={errors.name ? `${uid}-name-error` : undefined}
+                  onFocus={() => onFieldFocus(i)}
+                />
+              );
+            })()}
+            {errors.name && (
+              <p className="folio-error" id={`${uid}-name-error`}>
+                {errors.name[0]}
+              </p>
+            )}
+          </div>
+
+          <div className="folio-field">
+            <label htmlFor={`${uid}-phone`}>Telephone, with country code</label>
+            {(() => {
+              const i = next();
+              return (
+                <input
+                  type="tel"
+                  name="phone"
+                  id={`${uid}-phone`}
+                  required
+                  placeholder="+91"
+                  defaultValue="+91"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  aria-invalid={errors.phone ? true : undefined}
+                  aria-describedby={errors.phone ? `${uid}-phone-error` : undefined}
+                  onFocus={() => onFieldFocus(i)}
+                />
+              );
+            })()}
+            {errors.phone && (
+              <p className="folio-error" id={`${uid}-phone-error`}>
+                {errors.phone[0]}
+              </p>
+            )}
+          </div>
         </div>
 
-        <div className="space-y-1.5">
-          <label htmlFor="phone" className={LABEL}>
-            Phone Number
-          </label>
-          <input
-            type="tel"
-            name="phone"
-            onFocus={() => onFieldFocus(1)}
-            id="phone"
-            required
-            placeholder="+91"
-            defaultValue="+91"
-            className={FIELD}
-          />
-          {errors.phone && <p className={ERROR}>{errors.phone[0]}</p>}
-        </div>
+        {!visit ? (
+          <fieldset className="folio-fieldset is-inline">
+            <legend>When should we telephone?</legend>
+            <div className="folio-chips">
+              {TIMES.map((t) => {
+                const i = next();
+                return (
+                  <label key={t.value} className="folio-chip">
+                    <input
+                      type="radio"
+                      name="preferredTime"
+                      value={t.value}
+                      defaultChecked={t.value === 'any'}
+                      onFocus={() => onFieldFocus(i)}
+                    />
+                    <span>{t.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        ) : null}
 
-        <div className="space-y-1.5">
-          <label htmlFor="preferredTime" className={LABEL}>
-            Preferred Contact Time
+        <div className="folio-field">
+          <label htmlFor={`${uid}-message`}>
+            {visit ? 'Anything the branch should know' : 'What would you like to know?'}{' '}
+            <span className="folio-optional">Optional</span>
           </label>
-          <select
-            name="preferredTime"
-            onFocus={() => onFieldFocus(2)}
-            id="preferredTime"
-            className={`${FIELD} bg-[#0A1120]`}
-          >
-            <option value="any">Any time</option>
-            <option value="morning">Morning</option>
-            <option value="afternoon">Afternoon</option>
-            <option value="evening">Evening</option>
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <label htmlFor="message" className={LABEL}>
-            Message (Optional)
-          </label>
-          <textarea
-            name="message"
-            onFocus={() => onFieldFocus(3)}
-            id="message"
-            rows={3}
-            className={`${FIELD} resize-none`}
-          />
+          {(() => {
+            const i = next();
+            return (
+              <textarea name="message" id={`${uid}-message`} rows={3} onInput={grow} onFocus={() => onFieldFocus(i)} />
+            );
+          })()}
         </div>
 
         {globalError && (
-          <div className="border border-[#F2A38C]/40 bg-[#F2A38C]/10 p-4 text-step--1 text-[#F7C9BC]">
+          <p className="folio-error is-block" role="alert">
             {globalError}
-          </div>
+          </p>
         )}
 
-        <button
-          type="submit"
-          disabled={isPending}
-          className="w-full border border-[#E8B98A]/60 px-4 py-4 text-step--2 font-medium uppercase tracking-[0.3em] text-[#F2EDE4] transition-colors hover:bg-[#E8B98A]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E8B98A]/60 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isPending ? 'Sending' : 'Send the enquiry'}
-        </button>
+        <div className="folio-form-foot">
+          <button type="submit" disabled={isPending} className="cta-primary folio-submit">
+            {isPending ? 'Sending' : visit ? 'Ask for the visit' : 'Send the enquiry'}
+          </button>
+          <p className="folio-hint">
+            Read by the office that holds the layout. See the{' '}
+            <Link href="/privacy">privacy notice</Link>.
+          </p>
+        </div>
       </form>
 
       {whatsappNumber && (
-        <div className="space-y-4 border-t border-white/10 pt-6">
-          <p className="text-center text-step--1 text-[#F2EDE4]/70">Or write to us on WhatsApp</p>
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center justify-center border border-white/20 px-4 py-4 text-step--2 font-medium uppercase tracking-[0.3em] text-[#F2EDE4] transition-colors hover:border-[#25D366]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]/60"
-          >
-            <svg
-              className="mr-3 h-4 w-4 text-[#25D366]"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
-            </svg>
-            Chat on WhatsApp
+        <p className="folio-form-alt">
+          <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="cta-quiet">
+            <span className="cta-quiet-label">Or write on WhatsApp</span>
           </a>
-        </div>
+        </p>
       )}
     </div>
   );

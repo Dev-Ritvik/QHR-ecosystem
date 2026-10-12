@@ -473,6 +473,68 @@ def box_uv(ob, _unused):
             uv[li].uv = (u / tile, v / tile)
 
 
+def wear_neighbour_normals(me, chamfers):
+    """Give each chamfer the normal of the larger face it was cut from.
+
+    AN EASED ARRIS IS A CENTIMETRE WIDE, AND THE FILM IS NEVER NEAR ENOUGH TO
+    DRAW ONE. A pixel is 1.5 cm of the house from the door and 4 cm from the
+    cover. A chamfer that looks up and toward the sun is brighter than both
+    the faces it joins, and under a pixel wide it is drawn as a bright dash at
+    every step of the edge: from the cover, dotted pale lines along the
+    plinths under the portico's columns, the platform's edge and the cheek
+    walls' caps (found by a ray through the dashes, 2026-10-12). But the pages
+    that open on the portico and the pool stand three to five metres from the
+    same stone, where a chamfer is three pixels and is what the easing was
+    asked for (the refinement brief, 2026-10-03: "close camera positions do
+    not expose ... overly clean edges").
+
+    So the chamfer stays in the mesh and is SHADED as the face beside it: its
+    corners carry that face's normal (and the bake already lays its occlusion
+    on that face's, bake_estate_ao_v7.py), which makes it the same stone to
+    the last pixel from any distance. The site's stone material turns it back
+    to its own facet's normal, from the surface's own derivatives, once a
+    pixel is finer than the chamfer (apps/public, exteriorArris.ts). A corner
+    piece, where three arrises meet, wears what the largest chamfer beside it
+    wears.
+    """
+    if not chamfers:
+        return 0
+    cham = set(chamfers)
+    by_edge = {}
+    for p in me.polygons:
+        for k in p.edge_keys:
+            by_edge.setdefault(k, []).append(p.index)
+    worn = {}
+    for i in chamfers:
+        best = None
+        for k in me.polygons[i].edge_keys:
+            for j in by_edge[k]:
+                if j == i or j in cham:
+                    continue
+                q = me.polygons[j]
+                if best is None or q.area > best.area:
+                    best = q
+        if best is not None:
+            worn[i] = best.normal.copy()
+    for _ in range(3):
+        for i in chamfers:
+            if i in worn:
+                continue
+            best, area = None, -1.0
+            for k in me.polygons[i].edge_keys:
+                for j in by_edge[k]:
+                    if j != i and j in worn and me.polygons[j].area > area:
+                        best, area = worn[j], me.polygons[j].area
+            if best is not None:
+                worn[i] = best.copy()
+    normals = [Vector((0.0, 0.0, 0.0))] * len(me.loops)     # a zero keeps the corner's own
+    for i, n in worn.items():
+        for li in me.polygons[i].loop_indices:
+            normals[li] = n
+    me.normals_split_custom_set(normals)
+    return len(worn)
+
+
 def ease_arrises(ob, width, min_edge=0.09, min_angle=55.0):
     """Take the knife edge off dressed stone: a chamfer of `width` on every
     convex arris.
@@ -490,7 +552,9 @@ def ease_arrises(ob, width, min_edge=0.09, min_angle=55.0):
     me = ob.data
     bm = bmesh.new()
     bm.from_mesh(me)
+    bm.normal_update()
     hard = []
+    looks_down = 0
     for e in bm.edges:
         if len(e.link_faces) != 2 or not e.is_convex or e.calc_length() < min_edge:
             continue
@@ -499,11 +563,35 @@ def ease_arrises(ob, width, min_edge=0.09, min_angle=55.0):
                 continue
         except ValueError:
             continue
+        # NOT AN ARRIS WHOSE CHAMFER WOULD LOOK DOWN: the lower edge of a
+        # coping, a cap, a sill, a cornice, a quoin, a step's riser where it
+        # stands on the tread below. Such a face is a centimetre of stone that
+        # sees no sky, darker than both the faces it joins, and the film is
+        # never near enough for a centimetre to be a pixel (1.5 cm at the door,
+        # 4 cm from the cover): the frame drew it as a black dot wherever a
+        # pixel's centre fell on it. On the cover they stood along the podium's
+        # coping, under the parapet's pier caps, under the portico's cheek caps
+        # and the entablature's bed (found by a ray through each, 2026-10-12:
+        # a hundred of the house's isolated dark pixels were these). An arris
+        # nobody sees from below is left as the saw cut it; the ones that look
+        # up or to the side, which catch the light, are eased as before.
+        a, b = e.link_faces
+        if (a.normal + b.normal).normalized().z < -0.25:
+            looks_down += 1
+            continue
         hard.append(e)
     before = len(bm.faces)
+    chamfers = []
     if hard:
-        bmesh.ops.bevel(bm, geom=hard, offset=width, offset_type="OFFSET", segments=1, profile=0.5,
-                        affect="EDGES", clamp_overlap=True)
+        # material=-1: the chamfer is of the stone either side of it. Left to
+        # its default the operator gave every new face the mesh's FIRST
+        # material, and on the bands that is the rusticated base's: every
+        # arris of the string course and the entablature was a thread of a
+        # darker, rougher stone along a moulding of the pale one.
+        made = bmesh.ops.bevel(bm, geom=hard, offset=width, offset_type="OFFSET", segments=1, profile=0.5,
+                               affect="EDGES", clamp_overlap=True, material=-1)
+        bm.faces.index_update()
+        chamfers = [f.index for f in made["faces"]]
     bm.to_mesh(me)
     after = len(bm.faces)
     bm.free()
@@ -514,15 +602,48 @@ def ease_arrises(ob, width, min_edge=0.09, min_angle=55.0):
         me.set_sharp_from_angle(angle=math.radians(35.0))
     except Exception:
         pass
-    print("ARRIS", ob.name, "edges", len(hard), "faces", before, "->", after)
+    worn = wear_neighbour_normals(me, chamfers)
+    print("ARRIS", ob.name, "edges", len(hard), "left sharp (would look down)", looks_down, "faces", before, "->", after,
+          "chamfers wearing a neighbour's normal", worn, "of", len(chamfers))
 
 
 # What the film's camera comes close to, and the chamfer each takes (metres).
+#
+# NOT THE PEDIMENTS. They were on this list at a centimetre, and the film is
+# never nearer to one than thirty metres, where a centimetre is a third of a
+# pixel. Worse than nothing: a raking cornice is two blocks, the slab and the
+# bed moulding under it, and easing each gave the joint between them a V-groove
+# two centimetres across along the whole rake, front and back. From the cover
+# that groove was a row of dark dots up the back of the rear pediment (the
+# forensic audit of 2026-10-09, #8: "a saw-toothed black seam along the slope",
+# found by a ray through the dots on the running build). Their arrises are as
+# the saw left them, and the two blocks meet in a line.
+#
+# NOR THE BANDS, THE PARAPET AND THE ACROTERIA, for the same reason and its
+# other half. An eased arris that looks UP is a centimetre of stone turned
+# toward the sun, brighter than both the faces it joins, and where it is under
+# a pixel wide it is drawn as a bright dash at every step of the edge: from the
+# cover, a dotted white line along the cornice under the pediment and up every
+# pier of the parapet (found by a ray through the dashes, 2026-10-12, all on
+# faces 45 degrees between a top and a front). These three stand nine metres
+# up and more; the nearest any camera comes to them is the portico's own page,
+# ten metres off, where a centimetre is one pixel. What is eased is what a
+# camera does stand close to: the portico, the steps, the terraces, the door's
+# own quoins and window dressings.
+#
+# NOR THE POOL'S COPING. What is seen of it is a plate two centimetres thick
+# (pool_terrace), and a centimetre taken off its top edge leaves an edge of one
+# centimetre between a chamfer and the face it lies on: a face with no
+# neighbour in the occlusion bake but the buried one under it, whose shading
+# it then wears (7 parts in 100 of the sky, against the 95 of the plate's top
+# beside it). From the film's 30% that was a row of single black pixels down
+# two sides of the pool, the last of them to be found (a ray names the face;
+# the atlas has it at 77 of 255). Left square, the plate's edge lies against
+# its own top and reads that.
 ARRISES = {
     "portico_trim": 0.012, "portico_steps": 0.014, "garden_steps": 0.014, "podium_walls": 0.016,
-    "mansion_quoins": 0.012, "mansion_window_trim": 0.008, "mansion_bands": 0.010,
-    "mansion_pediments": 0.010, "mansion_parapet": 0.009, "podium_balustrade": 0.009,
-    "fountain_stone": 0.012, "hardscape_kerbs": 0.010, "pool_coping": 0.010, "garden_planters": 0.010,
+    "mansion_quoins": 0.012, "mansion_window_trim": 0.008, "podium_balustrade": 0.009,
+    "fountain_stone": 0.012, "hardscape_kerbs": 0.010, "garden_planters": 0.010,
 }
 
 
@@ -632,18 +753,18 @@ def build_walls(M, col):
     walls = finish("mansion_walls", bm, [M["wall"]], col)
 
     cutters = []
-    # Banded rustication on the ground floor: a V channel every course.
-    step = (GF_TOP - BASE_TOP) / RUST_COURSES
-    for k in range(1, RUST_COURSES):
-        z = BASE_TOP + k * step
-        b = new_bm()
-        add_sweep(b, P, [(0.3, z - 0.032), (0.3, z + 0.032), (-0.028, z)], closed=True, prof_closed=True)
-        cutters.append(cutter_object(f"rust_{k}", b))
-    # The channel under the string course and over the base course.
-    for z in (BASE_TOP + 0.004, GF_TOP - 0.004):
-        b = new_bm()
-        add_sweep(b, P, [(0.3, z - 0.03), (0.3, z + 0.03), (-0.026, z)], closed=True, prof_closed=True)
-        cutters.append(cutter_object("rust_edge", b))
+    # THE GROUND FLOOR'S COURSES ARE NOT CUT INTO THE WALL. They were, as "a V
+    # channel every course": a wedge 6.4 cm tall at 30 cm in front of the wall
+    # and coming to a point 2.8 cm inside it, which leaves a slit 5.5 mm tall
+    # at the wall's face. A pixel is 4 cm of this wall from the cover and 1.5 cm
+    # from the door, so the slit was never as much as half a pixel: where a
+    # pixel's centre fell in it the frame drew one black dot, and elsewhere
+    # nothing (found by a ray through the dots on the cover, 2026-10-12: every
+    # one on a face of this wall that looks up, at 0.9 + k x 0.557 m). The
+    # wall's courses are the ones its material draws, from BASE_TOP up, with
+    # each joint at its share of a pixel so that they fade with distance and
+    # cannot dot (apps/public, exteriorSurfaces.ts, ASHLAR): the slits were a
+    # second set of courses cut across those, at a height of their own.
     for i, (f, u, kind) in enumerate(facade_openings()):
         b = new_bm()
         add_prism(b, opening_poly(kind), f.origin + f.u * u, f.u, f.n, 0.5, -WALL_T - 0.4)
@@ -659,13 +780,36 @@ def build_bands(M, col):
     """Base course, string course, entablature and cornice, as mitred sweeps."""
     bm = new_bm()
     P = perimeter()
-    add_sweep(bm, P, [(0.0, PODIUM_Z), (0.12, PODIUM_Z), (0.12, BASE_TOP - 0.1), (0.09, BASE_TOP - 0.04),
-                      (0.02, BASE_TOP), (0.0, BASE_TOP)], mi=0)
+    # ONE WEATHERING TO EACH COURSE, A HAND DEEP. The base course ended in two
+    # splays and a ledge of 2 cm, the string course in a splay of 7 cm and a
+    # level ledge of 9 cm against the wall. A level ledge at a wall's foot is
+    # the darkest face on a facade in the occlusion bake (it has the wall for
+    # half its sky: 0.41 against the wall's 0.85), and from the cover, on the
+    # flank in shade, those 9 cm are a third of a pixel as the camera sees
+    # them: a dotted dark line the length of the house along the top of the
+    # string course (seen 2026-10-12, once the bands were no longer eased; a
+    # ray through the dots names the ledge). Each course now sheds its water
+    # as a mason has it shed: one slope from its face up to the wall, sixteen
+    # centimetres of stone that is drawn as a band from any distance.
+    add_sweep(bm, P, [(0.0, PODIUM_Z), (0.12, PODIUM_Z), (0.12, BASE_TOP - 0.1), (0.0, BASE_TOP)], mi=0)
     add_sweep(bm, P, [(0.0, GF_TOP), (0.1, GF_TOP), (0.13, GF_TOP + 0.05), (0.13, UF_BASE - 0.06),
-                      (0.09, UF_BASE), (0.0, UF_BASE)], mi=1)
-    ent = [(0.0, UF_TOP), (0.05, UF_TOP), (0.05, UF_TOP + 0.08), (0.08, UF_TOP + 0.1), (0.08, UF_TOP + 0.18),
-           (0.02, UF_TOP + 0.2), (0.02, 8.98), (0.12, 8.98), (0.12, 9.02), (0.2, 9.07), (0.24, 9.12),
-           (0.58, 9.12), (0.58, 9.27), (0.63, 9.31), (0.63, 9.35), (0.55, CORNICE_TOP), (0.0, CORNICE_TOP)]
+                      (0.0, UF_BASE + 0.03)], mi=1)
+    # THE ENTABLATURE, IN MEMBERS THE FILM CAN DRAW. It was moulded as a
+    # joiner would run it: an architrave in two faces with a two-centimetre
+    # ogee between them, a four-centimetre fillet under the bed mould, another
+    # under the cymatium. The film is seldom nearer to it than thirty metres,
+    # where four centimetres is a pixel, and its frame cannot be multisampled
+    # (PostFX.tsx: the alpha is the scene's depth): a member thinner than a
+    # pixel, in the shade of the member over it, is drawn where a pixel's
+    # centre finds it and nowhere else. Seen on the flank from the approach's
+    # first frame: three rows of dark dashes the length of the house, which
+    # is the forensic audit of 2026-10-09's #25 ("streaky horizontal bands run
+    # across the entablature ... Expected: clean stone courses") on the house
+    # as well as on its portico. Every member now is a hand deep or more: one
+    # architrave face under its weathering, the frieze, a bed mould in one
+    # splay behind the dentils, the corona, and a cymatium in one rise.
+    ent = [(0.0, UF_TOP), (0.07, UF_TOP), (0.07, UF_TOP + 0.18), (0.02, UF_TOP + 0.22), (0.02, 8.98),
+           (0.10, 8.98), (0.24, 9.12), (0.58, 9.12), (0.58, 9.28), (0.64, CORNICE_TOP), (0.0, CORNICE_TOP)]
     add_sweep(bm, P, ent, mi=1)
     ob = finish("mansion_bands", bm, [M["rustic"], M["trim"]], col)
     # Dentils under the corona, every 0.24 m along every run.
@@ -696,7 +840,12 @@ def build_quoins(M, col):
                ((FX, FD), (1, 0), (0, 1)), ((-FX, FD), (-1, 0), (0, 1))]
     courses = 14
     h = (UF_TOP - BASE_TOP) / courses
-    p, q, gap = 0.055, 0.2, 0.011
+    # A JOINT A PIXEL WIDE FROM THE COVER. The blocks stood 2.2 cm apart
+    # (`gap` is taken off each), which is half a pixel of the house from the
+    # cover: each joint was a row of dark dashes, drawn where a pixel's centre
+    # fell in it. At 5 cm it is a line, the channelled joint a rusticated
+    # quoin has.
+    p, q, gap = 0.055, 0.2, 0.025
     for (cx, cy), nA2, nB2 in corners:
         C = Vector((cx, cy))
         nA, nB = Vector(nA2), Vector(nB2)
@@ -705,6 +854,15 @@ def build_quoins(M, col):
             # frontispiece corners are short on their 0.6 m return
             if abs(cx) == FX:
                 LA = min(LA, 0.5)
+            # ...and on the entrance front, under the portico, each stops at
+            # the respond that stands on the wall beside it (x 3.83 to 4.47,
+            # 9 cm proud, to the beam's foot at 4.4 m). The quoins ran on
+            # behind it, long and short by turns to 3.65 and 4.10, so every
+            # other course showed 18 cm of itself past the respond's inner
+            # edge: the forensic audit of 2026-10-09, #25, "the wall's edge to
+            # the right of the portico is a zipper of jagged steps".
+            if abs(cx) == FX and cy == -FD and BASE_TOP + k * h < 4.4:
+                LB = min(LB, FX - 4.47)
             poly = [C + nA * p + nB * p, C + nA * p - nB * LA, C - nA * q - nB * LA,
                     C - nA * q - nB * q, C - nB * q - nA * LB, C + nB * p - nA * LB]
             area = sum(poly[i].x * poly[(i + 1) % 6].y - poly[(i + 1) % 6].x * poly[i].y for i in range(6))
@@ -770,10 +928,18 @@ def window_dressing(M, col):
                 add_prism(trim, [(-hw - 0.36, base_z), (hw + 0.36, base_z), (0, base_z + rise)], O, U, N, -0.02, 0.2)
                 add_prism(trim, [(-hw - 0.26, base_z + 0.05), (hw + 0.26, base_z + 0.05), (0, base_z + rise - 0.04)], O, U, N, 0.2, 0.25)
             else:
+                # (The hood stood on a bed mould four centimetres deep: a
+                # line of dashes under every hood, from the approach. It
+                # stands on the frieze.)
                 add_oriented_box(trim, O, U, N, -hw - 0.3, hw + 0.3, head + 0.3, head + 0.44, -0.02, 0.24)
-                add_oriented_box(trim, O, U, N, -hw - 0.24, hw + 0.24, head + 0.26, head + 0.3, -0.02, 0.15)
-            for s in (-1, 1):
-                add_oriented_box(trim, O, U, N, s * (hw + 0.14), s * (hw + 0.27), head - 0.05, head + 0.3, -0.02, 0.2)
+            # (Each hood stood on a pair of consoles, blocks 13 cm wide and 20
+            # proud of the wall. In a low sun each threw its shape on the stone
+            # beside the window, and from the cover that is what was seen of
+            # them - the forensic audit of 2026-10-09, #23: "the lanterns read
+            # as small black specks on the stone ... large enough to read, or
+            # removed at this distance". They were never lanterns, and at the
+            # distance the house is seen from they could only ever be specks.
+            # The hood stands on its architrave.)
             if kind != "french":
                 add_oriented_box(trim, O, U, N, -hw - 0.2, hw + 0.2, sill - 0.11, sill, -0.12, 0.14)
                 add_oriented_box(trim, O, U, N, -hw + 0.05, hw - 0.05, sill - 0.62, sill - 0.16, -0.02, 0.03)
@@ -868,6 +1034,15 @@ def balustrade_run(bm, a, b, z, height, dies=True, die_w=0.56, spacing=0.3, mi_t
         add_oriented_box(bm, o, U, Nn, inset, L - inset, z + 0.82 * s_bal - 0.02, z + height, -0.25, 0.23, mi_trim)
     span = L - 2 * inset
     count = int(span / spacing)
+    if count == 0 and span > 0.02:
+        # A RUN TOO SHORT FOR A BALUSTER IS A SOLID PANEL. Where the parapet
+        # returns to a frontispiece its dies stand 60 cm apart, with room
+        # between them for a plinth, a coping and nothing else: a hole in the
+        # balustrade with the sky or the roof in it (the forensic audit of
+        # 2026-10-09, #9: "one bay of the rear balustrade shows a dark
+        # irregular break where the balusters should continue"). A mason
+        # closes a gap that narrow with a stone panel between the dies.
+        add_oriented_box(bm, o, U, Nn, inset, L - inset, z + 0.14 * s_bal, z + 0.82 * s_bal - 0.02, -0.16, 0.14, mi_trim)
     for k in range(count):
         t = inset + (k + 0.5) * span / count
         c = A + d * t
@@ -915,68 +1090,106 @@ def build_parapet(M, col, gold_bm):
     finish("mansion_parapet", bm, [M["trim"]], col)
 
 
-# A step's tread: how far it oversails the riser, and its thickness (metres).
-NOSING = (0.028, 0.045)
-
-
 def build_portico(M, col, gold_bm):
     bm = new_bm()      # trim
     st = new_bm()      # steps / paving
     # Platform
     add_box(bm, -FX - 0.6, FX + 0.6, -FD, PORTICO_FRONT - 0.15, 0.0, FLOOR_Z)
     add_box(st, -FX - 0.55, FX + 0.55, -FD + 0.02, PORTICO_FRONT - 0.1, FLOOR_Z - 0.02, FLOOR_Z + 0.005)
-    # Steps down to the forecourt
+    # Steps down to the forecourt.
+    #
+    # EACH A PLAIN BLOCK. Each had a tread that oversailed its riser by 28 mm
+    # under a 45 mm edge, "so a step has a nosing and a line of shadow under
+    # it". From the approach, where this flight is held longest, 28 mm is one
+    # pixel and the shadow under it less: the frame cannot be multisampled
+    # (PostFX.tsx: its alpha is the scene's depth), so that line was drawn
+    # where a pixel's centre fell on it and not between, three rows of dashes
+    # across the flight (the forensic audit of 2026-10-09, #25: "streaky
+    # horizontal bands run across ... the steps ... Expected: clean stone
+    # courses"). A step is a block now, its tread and its riser two faces that
+    # meet in an eased arris, and each block lies on the one below without
+    # sharing a side with it (they were nested, their ends in one plane).
     for k in range(3):
         top = FLOOR_Z - 0.15 * (k + 1)
         front = PORTICO_FRONT - 0.15 - 0.42 * (k + 1)
-        add_box(st, -FX, FX, PORTICO_FRONT - 0.15, front, 0.0, top - NOSING[1])
-        # The tread: a slab that oversails its riser (NOSING), so a step has a
-        # nosing and a line of shadow under it, as a stone step does.
-        add_box(st, -FX, FX, PORTICO_FRONT - 0.15, front - NOSING[0], top - NOSING[1], top)
+        add_box(st, -FX, FX, PORTICO_FRONT - 0.15, front, max(0.0, top - 0.15), top)
     # Cheek walls with urns
     for s in (-1, 1):
         x0, x1 = s * (FX + 0.02), s * (FX + 0.62)
         add_box(bm, x0, x1, PORTICO_FRONT - 0.15, PORTICO_FRONT - 1.95, 0.0, 0.78)
         add_box(bm, x0 - s * 0.05, x1 + s * 0.05, PORTICO_FRONT - 0.1, PORTICO_FRONT - 2.0, 0.78, 0.88)
         add_lathe(bm, [(r * 1.3, zz * 1.3) for r, zz in URN], 20, s * (FX + 0.32), PORTICO_FRONT - 1.05, 0.88)
-    # Columns
-    shaft = [(0.0, 0.0), (0.42, 0.0), (0.42, 0.12), (0.44, 0.13), (0.44, 0.19), (0.39, 0.24), (0.36, 0.27),
+    # Columns.
+    #
+    # A BASE WITH NO UNDERCUT. Under its torus the base had a drum two
+    # centimetres narrower, and between them a ring one centimetre high that
+    # looked DOWN: lit by nothing but the ground, half a pixel of dark at the
+    # approach's distance, drawn only where a pixel's centre found it. The
+    # forensic audit of 2026-10-09 (#25): "black dots stipple the column
+    # bases", found by a ray through three of the dots on the running build,
+    # all on that ring. The base is the order's own now, plinth, torus, fillet
+    # and the sweep up into the shaft, and every face of it looks out or up:
+    # the torus stands on the plinth by its full width and rounds over above.
+    shaft = [(0.0, 0.0), (0.455, 0.0), (0.455, 0.105), (0.448, 0.14), (0.43, 0.168), (0.405, 0.185), (0.39, 0.19),
+             (0.39, 0.215), (0.372, 0.24), (0.356, 0.275),
              (0.345, 0.34), (0.352, 1.2), (0.345, 2.2), (0.32, 3.1), (0.305, 3.35), (0.0, 3.35)]
     for x in COLUMNS_X:
-        add_box(bm, x - 0.45, x + 0.45, COLUMN_Y - 0.45, COLUMN_Y + 0.45, FLOOR_Z, FLOOR_Z + 0.12)
+        add_box(bm, x - 0.47, x + 0.47, COLUMN_Y - 0.47, COLUMN_Y + 0.47, FLOOR_Z, FLOOR_Z + 0.12)
         add_lathe(bm, shaft, 32, x, COLUMN_Y, FLOOR_Z + 0.12)
         cap = FLOOR_Z + 0.12 + 3.35
-        add_lathe(gold_bm, [(0.0, 0.0), (0.325, 0.0), (0.345, 0.02), (0.345, 0.05), (0.325, 0.07), (0.0, 0.07)], 32, x, COLUMN_Y, cap - 0.04)
-        add_lathe(bm, [(0.0, 0.0), (0.31, 0.0), (0.31, 0.1), (0.36, 0.13), (0.43, 0.19), (0.46, 0.24), (0.46, 0.26), (0.0, 0.26)], 32, x, COLUMN_Y, cap + 0.03)
-        add_box(bm, x - 0.5, x + 0.5, COLUMN_Y - 0.5, COLUMN_Y + 0.5, cap + 0.29, 4.4)
+        # A TUSCAN CAPITAL, IN THE COLUMN'S OWN STONE. What stood here was a
+        # gilt band round the shaft's neck, a turned bowl over it, and for an
+        # abacus a square plate FOUR CENTIMETRES thick. The forensic audit of
+        # 2026-10-09 (#32): "Each capital is a plain turned bowl with a thin
+        # square plate set diagonally on top ... This is the closest the
+        # camera ever comes to the house, and it is where the classical
+        # detail runs out. Expected: a proper capital (Tuscan or Ionic to
+        # match the house)"; and (#11) of the bands: "no architectural reason
+        # to be there". The order's own parts, bottom to top, in a third of a
+        # metre (half the shaft's diameter, as the order has it): an astragal
+        # closing the shaft, the plain necking, a fillet, the echinus (a
+        # quarter-round), and an abacus a hand deep with a fillet over it.
+        add_lathe(bm, [(0.0, 0.0), (0.305, 0.0), (0.33, 0.012), (0.337, 0.03), (0.33, 0.048), (0.305, 0.06),
+                       (0.305, 0.145), (0.326, 0.15), (0.326, 0.168),
+                       (0.35, 0.185), (0.392, 0.212), (0.42, 0.24), (0.432, 0.265), (0.0, 0.265)], 40, x, COLUMN_Y, cap - 0.06)
+        add_box(bm, x - 0.46, x + 0.46, COLUMN_Y - 0.46, COLUMN_Y + 0.46, cap + 0.205, cap + 0.3)
+        add_box(bm, x - 0.485, x + 0.485, COLUMN_Y - 0.485, COLUMN_Y + 0.485, cap + 0.3, 4.4)
     # Responds on the frontispiece
     for x in (-4.15, 4.15):
         add_box(bm, x - 0.32, x + 0.32, -FD - 0.09, -FD + 0.01, FLOOR_Z, 4.4)
     # Entablature block and its cornice
     add_box(bm, -FX - 0.05, FX + 0.05, -FD + 0.1, PORTICO_FRONT, 4.4, 5.22)
     path = [(-FX - 0.05, PORTICO_FRONT), (FX + 0.05, PORTICO_FRONT), (FX + 0.05, -FD + 0.3), (-FX - 0.05, -FD + 0.3)]
-    add_sweep(bm, path, [(0.0, 4.72), (0.03, 4.72), (0.03, 4.74), (0.0, 4.76)])
-    # THE ARCHITRAVE IN TWO FASCIAE, AND A DENTIL COURSE (the third review:
-    # "columns of that diameter exist to bear massive weight; here they ...
-    # [hold] up a paper-thin roof"). The entablature is 1.2 m over 4.4 m of
-    # column, which is classical; what it lacked was the modelling that makes a
-    # beam read as a beam. The architrave steps out twice as it rises, and a
-    # row of dentils under the cornice throws a line of shadow blocks: the
-    # same depth, read as stone laid in courses rather than a painted band.
-    add_sweep(bm, path, [(0.0, 4.4), (0.025, 4.4), (0.025, 4.55), (0.0, 4.55)])
-    add_sweep(bm, path, [(0.0, 4.55), (0.05, 4.55), (0.05, 4.7), (0.0, 4.7)])
+    # A DENTIL COURSE (the third review: "columns of that diameter exist to
+    # bear massive weight; here they ... [hold] up a paper-thin roof"). The
+    # entablature is 1.2 m over 4.4 m of column, which is classical; what it
+    # lacked was the modelling that makes a beam read as a beam: a row of
+    # dentils under the cornice throws a line of shadow blocks, stone laid in
+    # courses rather than a painted band.
+    #
+    # AND A PLAIN ARCHITRAVE. It stepped out twice as it rose, two fasciae of
+    # 2.5 cm each under a 3 cm fillet, and from the drive each of those ledges
+    # is a third of a pixel: the frame cannot be multisampled (PostFX.tsx: its
+    # alpha is the scene's depth), so a face thinner than a pixel is drawn
+    # where a pixel's centre happens to fall on it and nowhere else. The
+    # forensic audit of 2026-10-09 (#25): "Streaky horizontal bands run across
+    # the entablature ... Expected: clean stone courses." A beam of dressed
+    # stone, then, with its dentils and its cornice, which are a hand and more
+    # deep and are drawn whole.
     for k in range(int((2 * FX + 0.1) / 0.24)):
         x = -FX - 0.05 + 0.12 + 0.24 * k
         if x > FX - 0.07:
             break
         add_box(bm, x - 0.07, x + 0.07, PORTICO_FRONT - 0.1, PORTICO_FRONT + 0.001, 5.1, 5.22)
-    add_sweep(bm, path, [(0.0, 5.22), (0.1, 5.22), (0.16, 5.28), (0.5, 5.3), (0.5, 5.47), (0.55, 5.51), (0.55, 5.55),
-                         (0.45, 5.6), (-0.3, 5.6)])
-    # Plain frieze panels either side of the lions, each with a gilt rosette.
-    for sx in (-1, 1):
-        cx = sx * (2.8 + (FX - 2.8) / 2)
-        add_lathe_oriented(gold_bm, [(0.0, 0.0), (0.17, 0.0), (0.21, 0.03), (0.13, 0.07), (0.0, 0.09)], 20,
-                           (cx, PORTICO_FRONT - 0.005, 4.98), (0, -1, 0), (0, 0, 1))
+    # (Its cornice in the same terms as the house's, build_bands: a corona
+    # and a cymatium in one rise, where there was a four-centimetre fillet
+    # between two more.)
+    add_sweep(bm, path, [(0.0, 5.22), (0.1, 5.22), (0.16, 5.28), (0.5, 5.3), (0.5, 5.48), (0.56, 5.6), (-0.3, 5.6)])
+    # Plain frieze panels either side of the lions. (Each carried a gilt
+    # rosette, a boss 42 cm across; from the drive they were two yellow balls
+    # under the ends of the cornice. The forensic audit of 2026-10-09, #11:
+    # "Remove the spheres and bands; if gilding stays, keep it to the roundel
+    # and finials.")
     # The balcony floor over the portico.
     add_box(st, -FX + 0.2, FX - 0.2, -FD - 0.02, PORTICO_FRONT + 0.3, 5.2, 5.6)
     # Balcony over the portico
@@ -990,6 +1203,18 @@ def build_portico(M, col, gold_bm):
 
 def build_pediments(M, col, gold_bm):
     bm = new_bm()
+    # THE ACROTERIA ARE ORNAMENT, AND ORNAMENT IS NOT BAKED. The urn and its
+    # block at each foot of a pediment were part of the pediments' own mesh,
+    # which is in the occlusion atlas (tools/blender/bake_estate_ao_v7.py:
+    # "the atlas is for surfaces, not ornament" - a turned urn unwraps into
+    # slivers a texel wide). Their occlusion baked to nothing, and a surface
+    # with no sky and no sun on it is black: from the cover, the rear
+    # pediment's urn stood behind the roof's balustrade as a black shape among
+    # the balusters (the forensic audit of 2026-10-09, #9: "one bay of the
+    # rear balustrade shows a dark irregular break where the balusters should
+    # continue"). They are a mesh of their own now, unbaked like the parapet's
+    # urns and its balusters, and take the light those do.
+    orn = new_bm()
     overhang = 0.58
     half = FX + overhang
     rise = half * math.tan(PEDIMENT_PITCH)
@@ -1004,25 +1229,110 @@ def build_pediments(M, col, gold_bm):
         # and with the house's roof made flat (build_roof) the two of them stood
         # on it like sheds. They are the thickness of the wall they stand on now,
         # and the flat runs up to their backs.
-        add_prism(bm, [(-FX, base), (FX, base), (0, base + FX * math.tan(PEDIMENT_PITCH))], o, U, N, -PEDIMENT_DEPTH + 0.18, -0.22)
+        #
+        # AND SOLID. The tympanum was a slab 40 cm thick standing inside the
+        # raking cornices: 18 cm short of their back edge, and a hand lower
+        # than their underside all the way up the rake. The forensic audit of
+        # 2026-10-09 saw both from the film's own camera. From above and
+        # behind (#7): "each is a ramp leaning on the balustrade with an open
+        # black slot under it ... It makes the house read as a stage flat.
+        # Expected: pediments with closed sides and a back that meets the
+        # roof." From the front (#8): "a jet-black jagged line runs along the
+        # pediment's sloping edge where two surfaces meet" - the gap between
+        # the slab's top and the cornice over it. So the tympanum is the whole
+        # block of masonry a gable is: from its face to the pediment's back,
+        # and up to the underside of the bed moulding (a centimetre into it),
+        # across the full width that moulding spans.
+        under = base - 0.06 + rise + 0.02            # the bed moulding's underside at the apex
+        foot = half * (1 - 0.06 / (rise + 0.02))     # ...and where it meets the cornice's top
+        # (Its back stands 5 mm inside the raking cornices' own back ends: in
+        # one plane with them, the centimetre it runs up into the bed moulding
+        # fought that moulding's end for the depth, a dotted line up the rake.)
+        #
+        # AND ITS FEET STAND CLEAR OF THE ROOF'S BALUSTRADE. The gable runs
+        # 80 cm back, and the parapet's last bay each side runs across the
+        # same ground: from the die on the frontispiece's corner (x 4.32 to
+        # 4.88) outward, under its rail. The raking cornice came down through
+        # that bay to its foot at 5.18, a hand higher than the balustrade's
+        # plinth, so the bay's last baluster stood IN the cornice and a corner
+        # of the pediment's back showed between the balusters, in the dark of
+        # everything standing round it. That is what was left of the forensic
+        # audit's #9 once the acroterion was pale (2026-10-09: "one bay of the
+        # rear balustrade shows a dark irregular break where the balusters
+        # should continue"), found on the running build by a ray through the
+        # black pixel. So outside the die the gable is only as deep as the
+        # acroterion's plinth that stands on its foot (FOOT_BACK, a centimetre
+        # inside the plinth's back face); behind that line it stops at the
+        # frontispiece's corner, inside the die, and the bay has its plinth,
+        # its balusters and nothing else.
+        FOOT_BACK = -0.34
+        apex = under + 0.012
+        back = -PEDIMENT_DEPTH + 0.005
+        tymp_at_die = base + (apex - base) * (1 - FX / foot)
+        add_prism(bm, [(-FX, base), (FX, base), (FX, tymp_at_die), (0, apex), (-FX, tymp_at_die)], o, U, N, back, -0.22)
+        for s in (-1, 1):
+            add_prism(bm, [(s * FX, base), (s * foot, base), (s * FX, tymp_at_die)], o, U, N, FOOT_BACK, -0.22)
         # Raking cornices: a sloped slab and a bed moulding under it.
+        at_die = 1 - FX / half                    # how far up the rake the die stands
         for s in (-1, 1):
             for (d0, d1, t0, t1) in ((-PEDIMENT_DEPTH, overhang, 0.0, 0.3), (-PEDIMENT_DEPTH, 0.22, -0.06, 0.0)):
                 x0, z0 = s * half, base + t0
                 x1, z1 = 0.0, base + rise + t0 + 0.02
-                pts = [(x0, z0), (x1, z1), (x1, z1 + (t1 - t0) + 0.02), (x0, z0 + (t1 - t0))]
-                if s > 0:
-                    pts = pts[::-1]
-                add_prism(bm, pts, o, U, N, d0, d1)
+                xd = s * FX
+                zd0 = z0 + at_die * (z1 - z0)                               # the underside at the die
+                zd1 = z0 + (t1 - t0) + at_die * (z1 - z0 + 0.02)            # ...and the top
+                add_prism(bm, [(xd, zd0), (x1, z1), (x1, z1 + (t1 - t0) + 0.02), (xd, zd1)], o, U, N, d0, d1)
+                add_prism(bm, [(x0, z0), (xd, zd0), (xd, zd1), (x0, z0 + (t1 - t0))], o, U, N, FOOT_BACK, d1)
+        # ONE SOFFIT UNDER EACH RAKE, AND IT LOOKS OUT. The slab and the bed
+        # moulding each end underneath in a face square to the rake: 36 cm of
+        # the slab's underside in front of the moulding, 44 cm of the
+        # moulding's in front of the tympanum. The cover's camera stands to
+        # one side of the house and above it, and sees the far rake's two
+        # undersides four degrees off their own planes: two centimetres of
+        # dark stone each, half a pixel, drawn as two rows of dashes under the
+        # whole rake (found by a ray through them, 2026-10-12; the forensic
+        # audit of 2026-10-09 had the same thing on the side pediment as #8,
+        # "a saw-toothed black seam along the slope ... Expected: a closed
+        # joint with a soft contact shadow"). So the hollow under the slab is
+        # filled with one splayed soffit, from the slab's front edge down and
+        # back to the tympanum's face SOFFIT_DROP below it: a face that leans
+        # out by eighteen degrees, seen a quarter of a metre wide from the
+        # cover and wider from the drive, with the shade a soffit has. It is
+        # cut off level where it comes down to the cornice the pediment
+        # stands on. (The bed moulding is inside it now and still closes the
+        # gable behind the tympanum's face, which is what it was put there
+        # for.)
+        SOFFIT_DROP = 0.26
+        run = rise + 0.02
+
+        def rake_pt(x, d, z):
+            return o + U * x + N * d + Vector((0, 0, z))
+
+        for s in (-1, 1):
+            xc = s * half * (1 - SOFFIT_DROP / run)
+            bf, ba, aa, ac, ca, cf = [bm.verts.new(v) for v in (
+                rake_pt(s * half, overhang, base), rake_pt(0.0, overhang, base + run),
+                rake_pt(0.0, -0.22, base + run - SOFFIT_DROP), rake_pt(xc, -0.22, base),
+                rake_pt(0.0, -0.22, base + run), rake_pt(s * half, -0.22, base))]
+            made = [face(bm, [bf, ba, aa, ac], 0),     # the soffit
+                    face(bm, [cf, ca, ba, bf], 0),     # against the slab's underside
+                    face(bm, [cf, ac, aa, ca], 0),     # against the tympanum's face
+                    face(bm, [bf, ac, cf], 0),         # on the cornice's top
+                    face(bm, [aa, ba, ca], 0)]         # against its fellow at the apex
+            bmesh.ops.recalc_face_normals(bm, faces=[f for f in made if f])
         # Gilt cartouche in the tympanum.
         add_lathe_oriented(gold_bm, [(0.0, 0.0), (0.5, 0.0), (0.56, 0.04), (0.5, 0.09), (0.36, 0.09), (0.32, 0.05), (0.0, 0.04)], 32,
                            (0, face_y - side * 0.22, base + 0.72), (0, side, 0), (0, 0, 1))
         # Acroteria
         add_lathe(gold_bm, [(r * 1.6, zz * 1.6) for r, zz in FINIAL], 16, 0, face_y + side * 0.2, base + rise + 0.32)
+        # (The block is 42 cm high, not 36: the raking cornice's top is at
+        # 41 cm where it leaves the block's inner face, and at 36 a sliver of
+        # it stood up through the block's top.)
         for s in (-1, 1):
-            add_box(bm, s * half - 0.35, s * half + 0.35, face_y - 0.35, face_y + 0.35, base, base + 0.36)
-            add_lathe(bm, URN, 20, s * half, face_y, base + 0.36)
+            add_box(orn, s * half - 0.35, s * half + 0.35, face_y - 0.35, face_y + 0.35, base, base + 0.42)
+            add_lathe(orn, URN, 20, s * half, face_y, base + 0.42)
     finish("mansion_pediments", bm, [M["trim"]], col)
+    finish("mansion_acroteria", orn, [M["trim"]], col)
 
 
 def build_roof(M, col):
@@ -1039,11 +1349,18 @@ def build_roof(M, col):
     above them.
 
     What lies behind the parapet is a slate flat, as a lead or slate flat is
-    laid: one sheet from wall head to wall head, a stone kerb round its edge
-    (the gutter runs between the kerb and the balustrade's plinth), and its
-    middle raised one shallow step so the flat sheds its water outward. Flags,
-    not courses: the runtime weathers this material flag by flag
+    laid: one sheet from wall head to wall head, and a stone kerb round its
+    edge (the gutter runs between the kerb and the balustrade's plinth).
+    Flags, not courses: the runtime weathers this material flag by flag
     (exteriorSurfaces.ts), which on a level surface reads as paving.
+
+    ONE LEVEL. Its middle stood a step of 8 cm over the walk round it, "so the
+    flat sheds its water outward". From the orbit that step's side is a face
+    two centimetres deep as the camera sees it, in the shade of nothing and
+    darker than the lead either side: a dashed black line across the roof and
+    a row of black marks between the front balusters (seen on the film's 14%,
+    2026-10-12). The bays of rolls still change direction where the step was,
+    which is all a lead flat shows of its falls from the air.
     """
     bm = new_bm()       # the flat
     kerb = new_bm()     # its stone kerb
@@ -1058,10 +1375,10 @@ def build_roof(M, col):
     for s_ in (-1, 1):
         y0, y1 = sorted((s_ * (ROOF_EAVE_Y - 0.1), s_ * (FD - WALL_T + 0.06)))
         add_box(bm, -fx, fx, y0, y1, z - 0.08, z + 0.01)
-    # The raised middle: one step of 8 cm, clear of the pediments' backs.
+    # The middle field, clear of the pediments' backs (level with the walk
+    # round it: ONE LEVEL, above).
     rx, ry = X - 2.4, Y - 2.4
     k_in = 0.3          # the rolls stop at the kerb
-    add_box(bm, -rx, rx, -ry, ry, z + 0.01, z + 0.09)
     # THE ROLLS. Sheet lead is laid in bays about two feet wide, each dressed
     # over a wooden roll at its edge: from above, a flat ruled with fine
     # parallel ridges running with the fall. On the raised middle they run
@@ -1070,7 +1387,7 @@ def build_roof(M, col):
     n = int((2 * rx) / bay)
     for k in range(n + 1):
         x = -rx + (2 * rx) * k / n
-        add_box(rolls, x - 0.028, x + 0.028, -ry, ry, z + 0.09, z + 0.132)
+        add_box(rolls, x - 0.028, x + 0.028, -ry, ry, z + 0.01, z + 0.052)
     n_out = int((2 * X) / bay)
     for k in range(1, n_out):
         x = -X + (2 * X) * k / n_out
@@ -1089,7 +1406,7 @@ def build_roof(M, col):
     finish("mansion_roof", bm, [M["lead"]], col, smooth_angle=10)
     finish("mansion_roof_rolls", rolls, [M["lead"]], col, smooth_angle=10)
     finish("mansion_roof_kerb", kerb, [M["trim"]], col, smooth_angle=10)
-    return z + 0.09
+    return z + 0.01
 
 
 def build_podium(M, col):
@@ -1102,11 +1419,15 @@ def build_podium(M, col):
     add_sweep(bm, path, [(0.0, PODIUM_Z - 0.08), (0.08, PODIUM_Z - 0.06), (0.08, PODIUM_Z + 0.02), (0.0, PODIUM_Z + 0.04)])
     add_sweep(bm, path, [(0.0, 0.0), (0.1, 0.0), (0.1, 0.12), (0.0, 0.16)])
     steps = new_bm()
+    # (Plain blocks, like the portico's flight: see build_portico. The last
+    # of the three is the landing, a flag laid level with the ground.)
     for k in range(3):
         top_z = PODIUM_Z - 0.15 * (k + 1)
         front = Y + 0.42 * (k + 1)
-        add_box(steps, -3.6, 3.6, Y, front, 0.0, top_z - NOSING[1])
-        add_box(steps, -3.6 - NOSING[0], 3.6 + NOSING[0], Y, front + NOSING[0], top_z - NOSING[1], top_z + 0.0001)
+        if top_z > 0.01:
+            add_box(steps, -3.6, 3.6, Y, front, top_z - 0.15, top_z)
+        else:
+            add_box(steps, -3.6, 3.6, Y, front, -0.045, 0.0001)
     finish("podium_walls", bm, [M["rustic"]], col)
     finish("terrace_upper", top, [M["flags"]], col)
     finish("garden_steps", steps, [M["steps"]], col)
@@ -1150,10 +1471,26 @@ def append_kept(M, col):
         bake(got["lion_frieze"], lambda w: Vector((w.x, w.y + (PORTICO_FRONT + 5.9), w.z + (4.74 - 3.6))))
         got["lion_frieze"].data.materials.clear()
         got["lion_frieze"].data.materials.append(M["trim"])
+    # THE HANDLES, TURNED. P3F's are a brass block on each leaf (the forensic
+    # audit of 2026-10-09, #32: "the door handle is a plain brass block ...
+    # Expected: a turned handle"). Each is made again where it stood, on the
+    # leaf's own face and under the same name (the doorway swings the leaves
+    # and whatever is named for them): a rose, a neck and an oval knob, turned
+    # about the axis that stands out of the door.
     for n in ("door_handle_0", "door_handle_1"):
-        if n in got:
-            got[n].data.materials.clear()
-            got[n].data.materials.append(M["gold"])
+        if n not in got:
+            continue
+        old = got[n]
+        xs = [v.co.x for v in old.data.vertices]
+        ys = [v.co.y for v in old.data.vertices]
+        zs = [v.co.z for v in old.data.vertices]
+        centre = ((min(xs) + max(xs)) / 2, max(ys), (min(zs) + max(zs)) / 2)
+        bpy.data.objects.remove(old, do_unlink=True)
+        knob = new_bm()
+        add_lathe_oriented(knob, [(0.0, 0.0), (0.052, 0.0), (0.052, 0.006), (0.044, 0.012), (0.018, 0.018), (0.014, 0.046),
+                                  (0.02, 0.054), (0.034, 0.064), (0.043, 0.08), (0.041, 0.096), (0.028, 0.108), (0.0, 0.112)],
+                           24, centre, (0, -1, 0), (0, 0, 1))
+        got[n] = finish(n, knob, [M["gold"]], col, smooth_angle=50)
     print("KEPT", sorted(got))
     return got
 
@@ -1342,11 +1679,18 @@ def build_compound_wall(M, col):
         U, Nn = Vector((d.x, d.y, 0)), Vector((n.x, n.y, 0))
         add_oriented_box(bm, o, U, Nn, 0, L, 0.0, 2.3, -0.2, 0.2)
         add_oriented_box(bm, o, U, Nn, -0.05, L + 0.05, 2.3, 2.42, -0.27, 0.27)
+        # Piers every eight metres, UNDER THE WALL'S OWN COPING: each stands
+        # out from the wall's face and carries a wider block of the same
+        # coping at the same height. (They stood 46 cm over it, each with a
+        # cap, and a quarter-kilometre of wall seen from the cover had its top
+        # edge "drawn as a dashed line": the forensic audit of 2026-10-09,
+        # #29. The wall's top is one line now, and the piers are what a pier
+        # is from across a park, a rhythm of upright shadows on its face.)
         piers = int(L / 8.0)
         for k in range(piers + 1):
             t = L * k / piers
-            add_oriented_box(bm, o, U, Nn, t - 0.35, t + 0.35, 0.0, 2.75, -0.35, 0.35)
-            add_oriented_box(bm, o, U, Nn, t - 0.42, t + 0.42, 2.75, 2.88, -0.42, 0.42)
+            add_oriented_box(bm, o, U, Nn, t - 0.35, t + 0.35, 0.0, 2.3, -0.35, 0.35)
+            add_oriented_box(bm, o, U, Nn, t - 0.42, t + 0.42, 2.3, 2.42, -0.42, 0.42)
     for s in (-1, 1):
         add_box(bm, s * 6.5 - 0.7, s * 6.5 + 0.7, WALL_FRONT - 0.7, WALL_FRONT + 0.7, 0.0, 3.6)
         add_box(bm, s * 6.5 - 0.82, s * 6.5 + 0.82, WALL_FRONT - 0.82, WALL_FRONT + 0.82, 3.6, 3.78)
@@ -1727,7 +2071,18 @@ def build_vegetation(M, col):
     near, far = [], []
     # Groves stand off the camera's orbit: flanking the forecourt well out,
     # at the back corners of the house, behind the canal, and down the drive.
-    for cx, cy, n in ((-56, -40, 5), (56, -40, 5), (-46, 30, 6), (46, 30, 6), (-26, 70, 4), (26, 70, 4), (-55, -75, 5), (55, -75, 5)):
+    #
+    # THE GROVE BEHIND THE POOL STANDS CLEAR OF THE HELIPAD AND OF THE COVER'S
+    # EDGE. It was planted at (-46, 30), the mirror of the east grove: two of
+    # its six palms stood ON the helipad's deck (the pad is nine metres round
+    # (-56, 34)), and the cover's left edge ran through the other four (the
+    # forensic audit of 2026-10-09, #30: "a dark palm by the left edge ...
+    # either in or out"). Behind the pad now, nearer the west wall: out of the
+    # cover's frame on a screen as wide as 21:9, and nothing grows through
+    # the deck.
+    # (Only its centre is moved: the palms keep the places the same random
+    # numbers gave them round it, and every tree planted after it its own.)
+    for cx, cy, n in ((-56, -40, 5), (56, -40, 5), (-58, 58, 6), (46, 30, 6), (-26, 70, 4), (26, 70, 4), (-55, -75, 5), (55, -75, 5)):
         for i in range(n):
             (near if cy == -40 else far).append(
                 (cx + rng.uniform(-7, 7), cy + rng.uniform(-7, 7), rng.uniform(0, 6.28), rng.uniform(0.85, 1.15)))
@@ -1757,9 +2112,12 @@ def build_vegetation(M, col):
         scatter(col, frangi, "veg_frangipani", fr)
     # Bougainvillea in the parterre beds.
     sh = []
+    # (The east compartment's beds are five metres deep, not eight: see
+    # build_gardens. Only where each trio is centred differs; every shrub draws
+    # the same random numbers it did.)
     for sx in (-1, 1):
         for bx in (sx * 23.0, sx * 31.0):
-            for by in (-31.0, -21.0):
+            for by in ((-31.0, -21.0) if sx < 0 else (-32.1, -25.4)):
                 for j in range(3):
                     sh.append((bx + rng.uniform(-2.2, 2.2), by + rng.uniform(-2.5, 2.5), rng.uniform(0, 6.28), rng.uniform(0.8, 1.05)))
     # And the new beds: colour against the stone at the foot of the house, and
@@ -1822,11 +2180,25 @@ def build_gardens(M, col):
         add_box(hedge, x0, x0 + t, y0 + t, y1 - t, 0.0, h)
         add_box(hedge, x1 - t, x1, y0 + t, y1 - t, 0.0, h)
     # Parterres flanking the forecourt.
+    #
+    # THE EAST ONE STOPS SHORT OF THE COVER'S EDGE. Both ran from 36 m in front
+    # of the house to 15, and the film's first frame cut the east one at its
+    # corner: four metres of clipped box coming in from the right edge and
+    # stopping (the forensic audit of 2026-10-09, #30: "a box hedge by the
+    # right edge ... either in or out"). Found by a ray through it on the
+    # running build: the frame's edge crosses the hedge's west side 19.5 m in
+    # front of the house on a 1920 x 945 window, and nearer the house on any
+    # narrower one. So the compartment ends at 21.5: out of that frame by two
+    # metres, its two rows of beds five metres deep instead of eight. The
+    # west one is the hero's foreground (west_parterre) and stands as it was;
+    # no frame of the film holds the two together.
     for s in (-1, 1):
         x0, x1 = sorted((s * 19.0, s * 35.0))
-        hedge_rect(x0, x1, -36.0, -15.0)
+        north = -15.0 if s < 0 else -21.5
+        rows = ((-34.6, -26.3), (-24.7, -16.4)) if s < 0 else ((-34.6, -29.55), (-27.95, -22.9))
+        hedge_rect(x0, x1, -36.0, north)
         for (a0, a1) in ((x0 + 1.4, (x0 + x1) / 2 - 0.8), ((x0 + x1) / 2 + 0.8, x1 - 1.4)):
-            for (b0, b1) in ((-34.6, -26.3), (-24.7, -16.4)):
+            for (b0, b1) in rows:
                 add_box(soil, a0, a1, b0, b1, 0.0, 0.08)
                 add_box(hedge, a0, a1, b0, b0 + 0.3, 0.0, 0.42)
                 add_box(hedge, a0, a1, b1 - 0.3, b1, 0.0, 0.42)
@@ -1873,6 +2245,91 @@ POOL = {"x0": -32.8, "x1": -21.4, "y0": -6.6, "y1": 6.6,
 HELIPAD = (-56.0, 34.0, 9.0)
 
 
+def lounger(teak, fabric, O, U, V, top, back):
+    """A sun lounger: a teak frame on four legs, a cushion in two parts, the
+    back raised to `back` metres over the terrace (flat, if that is no higher
+    than the seat), a bolster at its head. U runs from its foot to its head.
+
+    It was a board on four pegs under a slab and a wedge: the forensic audit
+    of 2026-10-09, #20, "the loungers are boxy wedges ... Expected: loungers
+    with a frame and cushion"."""
+    seat = top + 0.3
+    for sv in (-0.33, 0.33):
+        add_oriented_box(teak, O + V * sv, U, V, -0.98, 0.98, seat - 0.07, seat, -0.03, 0.03)
+    for su in (-0.95, -0.28, 0.4, 0.95):
+        add_oriented_box(teak, O + U * su, U, V, -0.025, 0.025, seat - 0.06, seat - 0.01, -0.33, 0.33)
+    for su in (-0.86, 0.84):
+        for sv in (-0.31, 0.31):
+            add_oriented_box(teak, O + U * su + V * sv, U, V, -0.03, 0.03, top, seat - 0.07, -0.03, 0.03)
+    # the seat's cushion: a slab, and a narrower one on it, so its edge is soft
+    add_oriented_box(fabric, O, U, V, -0.95, 0.4, seat, seat + 0.07, -0.31, 0.31)
+    add_oriented_box(fabric, O, U, V, -0.93, 0.385, seat + 0.07, seat + 0.095, -0.29, 0.29)
+    # the back, hinged at the seat's head, at this lounger's rake
+    length, thick = 0.6, 0.085
+    a = math.asin(max(0.0, min(0.92, (back - 0.3) / length)))
+    c, sn = math.cos(a), math.sin(a)
+    hinge = (0.4, seat)
+    def along(d, t):
+        return (hinge[0] + d * c - t * sn, hinge[1] + d * sn + t * c)
+    add_prism(teak, [along(0.0, -0.03), along(length, -0.03), along(length, 0.0), along(0.0, 0.0)], O, U, V, -0.33, 0.33)
+    add_prism(fabric, [along(0.0, 0.0), along(length - 0.01, 0.0), along(length - 0.01, thick), along(0.0, thick)], O, U, V, -0.31, 0.31)
+    add_prism(fabric, [along(length - 0.2, thick), along(length - 0.03, thick), along(length - 0.03, thick + 0.055),
+                       along(length - 0.2, thick + 0.055)], O, U, V, -0.23, 0.23)
+
+
+def parasol(steel, teak, fabric, x, y, top):
+    """A garden parasol: a weighted foot, a pole, eight ribs, and a canopy of
+    eight gores with a valance, each gore hanging a little between its ribs,
+    under a vent cap. The canopy is a shell with an underside: the terrace's
+    own page looks up into it.
+
+    It was a twelve-sided cone 42 cm high on a square post: the forensic
+    audit of 2026-10-09, #20, "the parasols are flat grey discs on pins, each
+    with a white dot at its centre ... Expected: parasols with ribs and
+    cloth"."""
+    R, rim, apex, hub = 1.5, top + 2.05, top + 2.68, 0.14
+    add_lathe(steel, [(0.0, 0.0), (0.3, 0.0), (0.3, 0.045), (0.12, 0.085), (0.045, 0.12), (0.0, 0.12)], 20, x, y, top)
+    add_lathe(teak, [(0.0, 0.0), (0.026, 0.0), (0.026, 2.62), (0.0, 2.62)], 12, x, y, top + 0.1)
+    add_lathe(steel, [(0.0, 0.0), (0.055, 0.0), (0.055, 0.2), (0.0, 0.2)], 12, x, y, apex - 0.14)
+    # The canopy: sixteen points round the rim, a corner at each rib and a
+    # point between that hangs 3 cm and stands in from the straight line.
+    def ring(radius_of, z_of):
+        out = []
+        for k in range(16):
+            ang = 2 * math.pi * k / 16
+            corner = k % 2 == 0
+            r, z = radius_of(corner), z_of(corner)
+            out.append(fabric.verts.new((x + r * math.cos(ang), y + r * math.sin(ang), z)))
+        return out
+    mid = R * math.cos(math.pi / 8) * 0.985
+    sag = lambda corner: 0.0 if corner else 0.03
+    rings = [
+        ring(lambda c: hub, lambda c: apex),
+        ring(lambda c: R if c else mid, lambda c: rim - sag(c)),
+        ring(lambda c: R if c else mid, lambda c: rim - sag(c) - 0.11),
+        ring(lambda c: (R if c else mid) - 0.012, lambda c: rim - sag(c) - 0.11),
+        ring(lambda c: (R if c else mid) - 0.012, lambda c: rim - sag(c) - 0.014),
+        ring(lambda c: hub, lambda c: apex - 0.014),
+    ]
+    made = []
+    for i in range(len(rings)):
+        a, b = rings[i], rings[(i + 1) % len(rings)]
+        for k in range(16):
+            k2 = (k + 1) % 16
+            made.append(face(fabric, [a[k], a[k2], b[k2], b[k]], 0))
+    bmesh.ops.recalc_face_normals(fabric, faces=[f for f in made if f])
+    # The vent cap over the hub, and a finial on it.
+    add_lathe(fabric, [(0.0, 0.17), (0.34, 0.03), (0.34, 0.0), (0.0, 0.02)], 16, x, y, apex + 0.01)
+    add_lathe(steel, [(0.0, 0.0), (0.03, 0.0), (0.018, 0.03), (0.03, 0.06), (0.0, 0.1)], 10, x, y, apex + 0.17)
+    # The ribs, under the cloth, from the hub to each corner.
+    for k in range(8):
+        ang = 2 * math.pi * k / 8
+        Ur = Vector((math.cos(ang), math.sin(ang), 0.0))
+        Vr = Vector((-math.sin(ang), math.cos(ang), 0.0))
+        add_prism(steel, [(0.05, apex - 0.075), (R - 0.03, rim - 0.05), (R - 0.03, rim - 0.022), (0.05, apex - 0.045)],
+                  Vector((x, y, 0.0)), Ur, Vr, -0.012, 0.012)
+
+
 def pool_terrace(M, col):
     """A terrace, an infinity pool, a glass rail, a cabana and the furniture that
     says someone lives here."""
@@ -1881,10 +2338,32 @@ def pool_terrace(M, col):
     top, wl = T["top"], P["water"]
 
     # The slab, as a ring round the pool opening so no boolean is needed.
-    add_box(stone, T["x0"], P["catch"], T["y0"], T["y1"], 0.0, top)
-    add_box(stone, P["x1"], T["x1"], T["y0"], T["y1"], 0.0, top)
-    add_box(stone, P["catch"], P["x1"], T["y0"], P["y0"], 0.0, top)
-    add_box(stone, P["catch"], P["x1"], P["y1"], T["y1"], 0.0, top)
+    #
+    # ROUND THE COPING, NOT UNDER IT. The ring ran to the water's edge and the
+    # coping sat on it, so 45 cm of the slab's top lay inside the coping: a
+    # band of black in the occlusion bake, with the open paving's white beside
+    # it. The atlas is block-compressed, and one block out from that edge the
+    # white carried the black with it: from the film's 30% a row of single
+    # black pixels along two sides of the pool, a hand off the coping (found
+    # by a ray through one of them; gone with the baked occlusion off; the
+    # atlas itself is white there at full size). The slab stops where the
+    # coping begins (CW), except beside the overflow trough, which has none.
+    #
+    # AND ROUND THE TROUGH'S OUTER WALL, WHICH IT CAPS. The slab also ran to
+    # the trough's edge, through that wall: the wall's top and the slab's lay
+    # in one plane, two materials deep, and from the same frame the trough's
+    # far edge was a saw of the two. The slab stops at the wall's back (TW),
+    # and the paving is carried over the wall as a cap of its own.
+    CW, TW, CAP = 0.45, 0.25, 0.08
+    add_box(stone, T["x0"], P["catch"] - TW, T["y0"], T["y1"], 0.0, top)
+    add_box(stone, P["catch"] - TW, P["catch"], T["y0"], P["y0"] - 0.3, 0.0, top)
+    add_box(stone, P["catch"] - TW, P["catch"], P["y1"] + 0.3, T["y1"], 0.0, top)
+    add_box(stone, P["catch"] - TW, P["catch"], P["y0"] - 0.3, P["y1"] + 0.3, top - CAP, top)
+    add_box(stone, P["x1"] + CW, T["x1"], T["y0"], T["y1"], 0.0, top)
+    add_box(stone, P["x0"] - 0.1, P["x1"] + CW, T["y0"], P["y0"] - CW, 0.0, top)
+    add_box(stone, P["x0"] - 0.1, P["x1"] + CW, P["y1"] + CW, T["y1"], 0.0, top)
+    add_box(stone, P["catch"], P["x0"] - 0.1, T["y0"], P["y0"], 0.0, top)
+    add_box(stone, P["catch"], P["x0"] - 0.1, P["y1"], T["y1"], 0.0, top)
     # Steps down to the lawn on the south edge, and a second flight west.
     for k in range(3):
         add_box(stone, -29.0, -23.0, T["y0"] - 0.42 * (k + 1), T["y0"] - 0.42 * k, 0.0, top - 0.167 * (k + 1))
@@ -1899,12 +2378,27 @@ def pool_terrace(M, col):
     # water sheet runs over it into a catch basin a metre below — which is the
     # one detail that makes a pool read as expensive rather than as a tank.
     add_box(shell, P["catch"], P["x0"], P["y0"] - 0.3, P["y1"] + 0.3, -0.62, -0.5)
-    add_box(shell, P["catch"] - 0.25, P["catch"], P["y0"] - 0.3, P["y1"] + 0.3, -0.62, top)
-    # Coping on the three sides that are not the spill.
-    for x0, x1, y0, y1 in ((P["x1"], P["x1"] + 0.45, P["y0"] - 0.45, P["y1"] + 0.45),
-                           (P["x0"] - 0.1, P["x1"] + 0.45, P["y0"] - 0.45, P["y0"]),
-                           (P["x0"] - 0.1, P["x1"] + 0.45, P["y1"], P["y1"] + 0.45)):
-        add_box(coping, x0, x1, y0, y1, top - 0.06, top + 0.02)
+    add_box(shell, P["catch"] - TW, P["catch"], P["y0"] - 0.3, P["y1"] + 0.3, -0.62, top - CAP)
+    # Coping on the three sides that are not the spill. Each length ends
+    # where the next begins (they had lapped), and each is TWO stones: a block
+    # set down into the slot the slab left when it stopped at the coping's
+    # edge, and over it the plate that is seen, which stands a finger proud of
+    # the paving.
+    #
+    # THE PLATE IS A STONE OF ITS OWN FOR THE SAKE OF ITS EDGE. As one block,
+    # the coping's outer face was a hand of stone buried in the paving and two
+    # centimetres in the air: one face, with one value in the occlusion bake,
+    # and that value the buried hand's, near black. From the film's 30% those
+    # two centimetres are under a pixel, drawn where a pixel's centre finds
+    # them: a row of single black pixels down two sides of the pool (a ray
+    # through one of them names this face; with the baked occlusion off they
+    # are gone). The plate's edge is all in the air, and is narrow enough to
+    # take its light from the plate's own top (bake_estate_ao_v7.py, SLIVER).
+    for x0, x1, y0, y1 in ((P["x1"], P["x1"] + CW, P["y0"] - CW, P["y1"] + CW),
+                           (P["x0"] - 0.1, P["x1"], P["y0"] - CW, P["y0"]),
+                           (P["x0"] - 0.1, P["x1"], P["y1"], P["y1"] + CW)):
+        add_box(coping, x0, x1, y0, y1, top - 0.2, top)
+        add_box(coping, x0, x1, y0, y1, top, top + 0.02)
     # Water: the pool sheet, the spill face, and the catch basin below it.
     add_box(water, P["x0"] - 0.02, P["x1"], P["y0"], P["y1"], wl - 0.02, wl)
     add_box(water, P["x0"] - 0.06, P["x0"] - 0.02, P["y0"], P["y1"], -0.45, wl)
@@ -1931,8 +2425,11 @@ def pool_terrace(M, col):
             t0, t1 = L * k / n + 0.07, L * (k + 1) / n - 0.07
             add_oriented_box(glass, Vector((ax, ay, 0)), Vector((ux, uy, 0)), Vector((px, py, 0)),
                              t0, t1, top + 0.06, top + 0.98, -0.009, 0.009)
+        # (a handrail a hand wide: at 10 cm by 6 it was under a pixel from
+        # the cover, and the rail was "a dotted line" of its posts alone: the
+        # forensic audit of 2026-10-09, #19)
         add_oriented_box(steel, Vector((ax, ay, 0)), Vector((ux, uy, 0)), Vector((px, py, 0)),
-                         -0.05, L + 0.05, top + 1.02, top + 1.08, -0.05, 0.05)
+                         -0.06, L + 0.06, top + 1.0, top + 1.1, -0.07, 0.07)
     # Sun loungers and parasols on the east deck, facing the water.
     #
     # AS PEOPLE LEAVE THEM, not as a catalogue sets them. The review: "cloned
@@ -1949,18 +2446,9 @@ def pool_terrace(M, col):
         U = Vector((math.cos(yaw), math.sin(yaw), 0.0))
         V = Vector((-math.sin(yaw), math.cos(yaw), 0.0))
         O = Vector((x, y, 0.0))
-        add_oriented_box(teak, O, U, V, -0.95, 0.95, top + 0.1, top + 0.16, -0.34, 0.34)
-        for su in (-0.9, 0.9):
-            for sv in (-0.3, 0.3):
-                add_oriented_box(teak, O + U * su + V * sv, U, V, -0.04, 0.04, top, top + 0.12, -0.04, 0.04)
-        add_oriented_box(fabric, O, U, V, -0.92, 0.5, top + 0.16, top + 0.24, -0.32, 0.32)
-        # the backrest, at this lounger's rake
-        add_prism(fabric, [(0.5, top + 0.16), (0.92, top + 0.16), (0.92, top + back), (0.5 + 0.12 * (back - 0.16) / 0.46, top + back)],
-                  O, U, V, -0.32, 0.32)
+        lounger(teak, fabric, O, U, V, top, back)
     for y in (-3.9, 3.9):
-        x = -17.9
-        add_box(steel, x - 0.045, x + 0.045, y - 0.045, y + 0.045, top, top + 2.4)
-        add_lathe(fabric, [(0.0, 0.0), (1.55, -0.42), (1.62, -0.5)], 12, x, y, top + 2.36)
+        parasol(steel, teak, fabric, -17.9, y, top)
     # The day bed at the north end. (It stood under a cabana: six square
     # posts and a slab, the one thing on the terrace nobody would have built.
     # The paid audit of 2026-10-04, pass 2: "what can be removed from frame?"
@@ -1972,8 +2460,12 @@ def pool_terrace(M, col):
     # Deck bollards along the terrace walk.
     for y in (-10.4, -7.4, 7.4, 10.4):
         for x in (-34.4, -18.4):
-            add_box(steel, x - 0.07, x + 0.07, y - 0.07, y + 0.07, top, top + 0.62)
-            add_box(lamp, x - 0.09, x + 0.09, y - 0.09, y + 0.09, top + 0.62, top + 0.74)
+            # A bollard: a round post, and a lamp head under a cap. (It was a
+            # square post with a cube on it, and close up each was "a pure
+            # white square": the forensic audit of 2026-10-09, #18.)
+            add_lathe(steel, [(0.0, 0.0), (0.075, 0.0), (0.075, 0.03), (0.055, 0.045), (0.055, 0.6), (0.0, 0.6)], 14, x, y, top)
+            add_lathe(lamp, [(0.0, 0.0), (0.05, 0.0), (0.056, 0.02), (0.056, 0.1), (0.0, 0.1)], 14, x, y, top + 0.6)
+            add_lathe(steel, [(0.0, 0.0), (0.075, 0.0), (0.08, 0.012), (0.05, 0.04), (0.0, 0.05)], 14, x, y, top + 0.7)
     finish("pool_terrace", stone, [M["terrace"]], col)
     finish("pool_coping", coping, [M["trim"]], col)
     finish("pool_shell", shell, [M["pool"]], col)
@@ -2005,8 +2497,8 @@ def helipad(M, col):
     for k in range(12):
         a = 2 * math.pi * k / 12
         x, y = cx + (r + 0.9) * math.cos(a), cy + (r + 0.9) * math.sin(a)
-        add_box(steel, x - 0.08, x + 0.08, y - 0.08, y + 0.08, 0.0, 0.3)
-        add_box(lamp, x - 0.1, x + 0.1, y - 0.1, y + 0.1, 0.3, 0.42)
+        add_lathe(steel, [(0.0, 0.0), (0.085, 0.0), (0.085, 0.3), (0.0, 0.3)], 12, x, y, 0.0)
+        add_lathe(lamp, [(0.0, 0.0), (0.075, 0.0), (0.08, 0.02), (0.08, 0.09), (0.05, 0.12), (0.0, 0.125)], 12, x, y, 0.3)
     # A windsock: the mast, and the sleeve streaming off its head, which is the
     # one prop that says an aircraft is expected here rather than parked.
     wx, wy = cx + r + 3.4, cy - r + 1.0
@@ -2144,9 +2636,14 @@ def podium_balustrade(M, col, gold_bm):
             ((-x, -y), (-7.6, -y)), ((7.6, -y), (x, -y))]
     for a, b in runs:
         balustrade_run(bm, a, b, z, 1.02, die_w=0.62, spacing=0.34, segs=8)
+    # The corner urns, in the balustrade's own stone. (They were gilt: four
+    # yellow jars at the corners of the terrace, in the flat ochre the forensic
+    # audit of 2026-10-09 named, #11: "Gilding on a stone house is the
+    # cheapest-looking way to say luxury ... keep it to the roundel and
+    # finials.")
     for sx in (-1, 1):
         for sy in (-1, 1):
-            add_lathe(gold_bm, [(r * 0.85, zz * 0.85) for r, zz in URN], 20, sx * x, sy * y, z + 1.14)
+            add_lathe(bm, [(r * 0.85, zz * 0.85) for r, zz in URN], 20, sx * x, sy * y, z + 1.14)
     finish("podium_balustrade", bm, [M["trim"]], col)
 
 

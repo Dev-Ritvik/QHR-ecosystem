@@ -1,0 +1,317 @@
+## E. The plans and the inner pages' pictures
+
+@@ plan-images-broken | CRITICAL | systemic | plan-zoom-blur, counts-mismatch, model-lucky-slab
+L: /projects, /gallery, /downloads, the three layout pages, the article on reading a plan. The three files in /gallery/.
+E: The three layout plans, which the site calls "the sanctioned drawing" and says are "published in full".
+O: None of the three is a clean drawing. Lucky Garden's sheet prints "FUTURE EXTENTION" (misspelt), "ARIVIDI - VIZIANAGARAM" with the first letter cut off, a logo cut by the left edge, an aerial photograph of a resort pasted over the plan, and an area table cut by the bottom edge. Kartikeya's is a crop of a brochure page with part of a child's photograph in the bottom-left corner and cut-off caption text ("Set amidst tranquil surroundings,"). Gayatri's is shown turned on its side so every label reads vertically, with a road label cut mid-word, a stray red letter fragment at the right edge, "40' FEET WIDE ROAD", and the village spelt "Bayannapeta" where the site writes "Bayyannapeta".
+V: The source images are 1600 px wide JPEGs (1600×1557, 1600×948, 1600×1140) with visible sharpening halos. On /projects the child's face and the cut caption are on screen at the plan's corner.
+W: The site's whole argument is that the plan is the proof. The proof is three cropped brochure scans with a spelling mistake, a pasted stock-style photograph and a stranger's child in the corner. This is the most damaging thing on the site for a buyer and for a jury.
+X: The actual sanctioned sheets, whole, upright, re-scanned or exported at print resolution, with nothing pasted over them.
+N: These are the client's supplied materials; the fix needs clean originals from him.
+F: 39-project-page-kartikeya.jpg, 40-article-reading-a-layout-plan.jpg, 57-rail-hover-forms-plan-hover.jpg
+
+@@ plan-zoom-blur | HIGH | repeated | plan-images-broken
+L: /knowledge/reading-a-layout-plan, four figures.
+E: The close-ups of the plans.
+O: The close-ups are the same 1600 px images enlarged 2.3 times. Road names and plot dimensions are smeared and blocky.
+V: Figure zoom: "40' WIDE ROAD" is soft, the dimension figures beside the plot numbers cannot be read.
+W: The article says "the width is printed in each road" beside a picture in which it cannot be read.
+X: Close-ups cut from a high-resolution original.
+F: 31-plan-detail-zoomed-2.3x.jpg, 40-article-reading-a-layout-plan.jpg
+
+@@ plan-full-size-raw | LOW | repeated | plan-images-broken
+L: /gallery, /projects, the three layout pages.
+E: "Open at full size".
+O: The control opens the bare JPEG in a new browser tab, with no way back to the site, and the "full size" is the same 1600 px image already on the page. Its label is a square dark chip found nowhere else on the site.
+V: Link target: the image file itself, in a new tab.
+W: "Full size" promises more than the page shows and delivers the same picture without the site round it.
+X: A viewer inside the page with zoom and pan over a high-resolution sheet.
+F: 57-rail-hover-forms-plan-hover.jpg
+
+@@ gallery-two-layouts | MEDIUM | isolated |
+L: /gallery.
+E: The three plan blocks.
+O: The same component is laid out two ways on one page: the first plan has its picture on the left and its lists on the right; the second and third have the picture full width with the lists underneath. The text column also starts one pixel further right in the second and third blocks (1027 px against 1026 px).
+V: Measured left edges; /gallery screens.
+W: A component that changes shape with its content looks assembled, not designed.
+X: One layout for all three, with plan pictures cropped to a common proportion.
+F: 38-inner-reading-screens.jpg
+
+@@ plate-reuse | SYSTEMIC | systemic | plate-weak
+L: The opening picture of all 28 pages.
+E: Which picture each page opens on.
+O: Seven pages open on the same view of the founder's portrait above the stair (the hall, privacy, terms, refunds, cookies, the sitemap and the 404 page). Four open on the same dome and chandelier (the guide, knowledge, the article, questions). Two share the map table, two the stair rail. Several pages then repeat their own opening picture as the band halfway down (/properties, /locations, /projects and the three layout pages).
+V: Montage of all 28 opening frames.
+W: The founder's face over "If a purchase does not go ahead." and over "That page isn't here." is a mismatch of subject and picture. Twenty-eight pages drawing on about ten views makes the site feel smaller than it is.
+X: A picture chosen for each page's subject; no portrait on legal and error pages.
+F: 32-all-opening-frames-desktop.jpg, 33-all-opening-frames-phone.jpg
+
+@@ plate-weak | MEDIUM | repeated | plate-reuse, hall-wainscot-slabs
+L: /careers, /gallery, /testimonials; /properties on a phone.
+E: The opening pictures.
+O: /careers opens on a blank brown door. /gallery opens on a wall, a rug and the slab wainscot. /testimonials opens on a corner of the roof. On a phone /properties' middle band is a full screen of empty marble floor.
+V: Montages; phone /properties band.
+W: These are full-screen pictures with no subject.
+X: A subject for each: people's place for careers, the plans for the gallery, a human trace for testimonials.
+F: 32-all-opening-frames-desktop.jpg, 65-phone-properties-window.jpg, 68-tablet-gallery-plate.jpg
+
+@@ plate-heights | MEDIUM | systemic |
+L: All inner pages, desktop and tablet.
+E: The height of the opening picture.
+O: Seventeen pages open on a full-screen picture and eleven on a short one that shows the next section in the first screen (careers, knowledge, questions, contact, downloads, the four legal pages, the sitemap and the 404 page). On a phone all are full height.
+V: Desktop and tablet montages.
+W: Two opening proportions with no visible rule.
+X: One rule the visitor can sense: full for story pages, short for utility pages, applied the same on every device.
+F: 32-all-opening-frames-desktop.jpg, 34-all-opening-frames-tablet.jpg
+
+@@ layout-plate-blurred | MEDIUM | repeated |
+L: The three layout pages, opening picture.
+E: The model and its plaque behind the page's title.
+O: The model and its name plaque are out of focus, so the layout's own name on its own plaque cannot be read, and a blurred white pilaster crosses the top of the frame.
+V: Zoom of the Kartikeya page's opening picture: the plaque's letters are smudges.
+W: The picture's subject is the one thing not sharp.
+X: The model in focus beside the title.
+F: 43-layout-page-model-and-plaque-out-of-focus.jpg, 39-project-page-kartikeya.jpg
+
+@@ car-melted | AI-SLOP | repeated | car-sparkle, palms-black
+L: /why-us, the opening picture and the picture band under "Check the number, not the logo."; the film's approach.
+E: The saloon car, close up.
+O: At the distance /why-us shows it, the car's surface is melted: the grille's bars are uneven and wavy, the chrome trim round the windows and along the body is lumpy, the headlamps are soft blobs and the roofline wobbles.
+V: Car zoom from the /why-us band: no two grille bars are the same width or straight.
+W: Wavy chrome and a melted grille are the signature of a generated 3D model. /why-us opens on this car and then enlarges it under a headline about checking details.
+X: A cleanly modelled car, or the car kept at the distance at which it holds.
+N: The car is one of five models made for the forecourt with an AI model generator (Tripo) and supplied for this build, along with the coupe, the two palms and the lantern. Replacing it is the project owner's call.
+F: 42-whyus-car-closeup.jpg
+
+@@ phone-about-crop | HIGH | isolated | portrait-nameplate-crossed
+L: /about on a phone (390×844), the opening picture and the quotation band.
+E: The founder's portrait.
+O: In the quotation band the portrait is cropped at the neck: the visitor sees a jacket, a nameplate and no face behind the founder's own words. On the opening picture the page's small label is printed across the nameplate.
+V: Phone /about frames.
+W: A headless portrait of the founder behind his motto is the opposite of the respect the client asked for.
+X: The face in the band, the label clear of the plate.
+F: 63-phone-about-quote-window.jpg, 62-phone-about-plate.jpg
+
+@@ edge-strip | LOW | isolated | phone-about-crop
+L: /about on a phone (390×844), the quotation band, right edge of the screen.
+E: The shade over the band's picture.
+O: The shade that dims the picture behind the founder's motto stops about nine pixels short of the right edge, so a bright stripe of un-dimmed picture runs down the edge of the screen for the height of the band.
+V: Measured with touch only, nothing hovered: the last 9 px of the screen average 71–90 in brightness against 30–48 just inside them and 26 further in. The opening picture on the same page has no such strip.
+W: A bright seam down the edge of a full-width picture is a clipping error, on the founder's own page.
+X: The shade to the edge of the screen.
+F: 64-phone-edge-strip.jpg, 63-phone-about-quote-window.jpg
+
+## F. Inner pages: layout and components
+
+@@ header-collision | HIGH | systemic |
+L: Every inner page, just after the first scroll, top-left; all screen sizes.
+E: The small capital-letter cue at the foot of the opening picture, passing under the fixed header.
+O: The header is transparent over the opening picture, so the cue's letters scroll up through the wordmark and print across it. On the layout pages two cues pass through.
+V: /gallery: "TIKEYA WATER FRONT" printed over "Quality Homes / REALITY". /why-us: "FIVE". Phone /about: "FIGURES". Phone /properties: "RY SIZE".
+W: Text running through the logo on every page, on the first scroll, is the most visible layout fault in the reading pages.
+X: The cue fading before it reaches the header, or the header taking its ground a little earlier.
+F: 30-header-text-collision.jpg
+
+@@ sheets-empty | MEDIUM | systemic |
+L: Every inner page at 1920×945.
+E: The dark reading sections.
+O: On a wide screen the content column is 925 px in a 1920 px frame and many screens are more than half empty dark ground: a heading at the left, a few lines at the right, nothing else.
+V: Montage of every page's second screen.
+W: Emptiness can be luxury when it frames something; here it surrounds 16 and 20 px text and reads as an unfilled template.
+X: Larger type or a picture, drawing or figure in the empty half of the longer sections.
+F: 36-all-second-screens-desktop.jpg, 38-inner-reading-screens.jpg
+
+@@ short-last-lines | LOW | systemic | address-orphan
+L: Inner pages, all sizes (49 on a desktop, 30 on a phone).
+E: Paragraphs and headings whose last line is one word.
+O: Headings break with one word alone ("Poosapatirega, Vizianagaram / district.", "Three buyers, / unedited."); paragraphs end on "ask.", "for.", "there.", "about."; form options end with "Srikakulam" alone.
+V: Measured per text block: 49 short last lines at 1920 px wide.
+W: Single-word last lines are what careful typesetting removes first.
+X: Balanced headings and no single-word last lines in short paragraphs.
+F: 39-project-page-kartikeya.jpg
+
+@@ dash-lists-wrap | LOW | repeated |
+L: /about (Values), /locations (the lists of places), the layout pages (landmarks).
+E: Lists set on one line with a short rule between items.
+O: When the list wraps, the rule starts the next line.
+V: /about: "— Transparency" begins the second line.
+W: A separator at the start of a line reads as a stray dash.
+X: Break before the item, not before the rule, or set the list as a column.
+F: 39-project-page-kartikeya.jpg
+
+@@ cookie-table-wrap | LOW | isolated |
+L: /cookie-policy, both tables, the "Lasts" column.
+E: The last column.
+O: "Up to 12 months" wraps to two lines in a narrow column while the wide middle column has room to spare.
+V: Nine cells with "months" alone on a second line.
+W: A table whose narrowest column is the one that wraps.
+X: Column widths set by content.
+F: 38-inner-reading-screens.jpg
+
+@@ heading-stops | MEDIUM | systemic |
+L: All inner pages.
+E: Full stops on headings.
+O: Every page title ends with a full stop. Second-level headings do on 80 occasions and do not on 32 (mostly the legal pages, sometimes beside one that does). Third-level headings never do.
+V: Counted across 28 pages; on /privacy "Who is responsible" has none and "What we collect, and when." has one.
+W: The full stop is part of the site's voice; applied unevenly it looks like two writers.
+X: One rule per level.
+F: 37-privacy-draft-placeholders.jpg
+
+@@ numbering-three | LOW | systemic |
+L: The menu, /why-us, everywhere else.
+E: How ordered things are numbered.
+O: The menu numbers its parts I to IV in roman capitals; /why-us numbers its five points 01 to 05; no other list or sequence on the site is numbered.
+V: Menu screenshot; /why-us screens.
+W: Two numbering styles and one unnumbered default is one style too many.
+X: One convention, or none.
+F: 52-menu-open.jpg
+
+@@ closing-labels | LOW | systemic |
+L: The closing link at the foot of every inner page.
+E: The small label above the next page's name.
+O: The same block is labelled "Next" on most pages, "Also" on the legal pages, "Back to" on the article and "The next layout" on layout pages.
+V: Page text of all 28 pages.
+W: Minor, but it is one component speaking four ways.
+X: Keep, if each is deliberate; otherwise one label.
+F: 36-all-second-screens-desktop.jpg
+
+## G. Words and facts
+
+@@ legal-drafts-live | CRITICAL | repeated | dpo-personal-email
+L: /privacy, /terms, /refund-policy.
+E: The legal pages.
+O: All three are published as drafts. Each carries a box reading "Draft — not yet in force … must be confirmed … before this page is published", and about twenty-seven highlighted placeholders in square brackets across the three: [REGISTERED NAME, CIN / GST], [RETENTION PERIOD FOR LEAD RECORDS], [RESPONSE PERIOD], [BOOKING TERMS], [PAYMENT TERMS], [LIABILITY CLAUSE], [GOVERNING LAW AND COURTS], [PRE-AGREEMENT CANCELLATION TERMS], [REFUND CONTACT AND EMAIL], "Last updated: [DATE ON PUBLICATION]" and more.
+V: /privacy 5 placeholders, /terms about 10, /refund-policy about 12, each highlighted in tan on the page.
+W: A refund policy made of placeholders on a site that takes enquiries for land is disqualifying for a buyer and reads as an unfinished template to anyone else. The footer links to all three from every page.
+X: Final text from the client's lawyers, or the pages withheld until there is.
+N: Needs the client; nothing here can be written on his behalf.
+F: 37-privacy-draft-placeholders.jpg
+
+@@ dpo-personal-email | HIGH | repeated | legal-drafts-live
+L: /privacy and /cookie-policy.
+E: The named contact for data protection.
+O: Both pages name an individual and a personal Gmail address as the company's Data Protection Officer and the contact for written enquiries.
+V: "Data Protection Officer: Dev Ritvik, devritvik70@gmail.com."
+W: A developer's personal mailbox as a company's statutory contact is a placeholder that has gone live.
+X: The company's own named officer and address.
+F: 37-privacy-draft-placeholders.jpg
+
+@@ counts-mismatch | HIGH | systemic | plan-images-broken
+L: Film (/) count and tables; /projects, /properties, /hall, /start-here, /construction-updates and the layout pages.
+E: The plot counts.
+O: The site says 113, 181 and 113 plots (407 "drawn on their plans"), with two layouts at "113 plots, all open". The plans published beside those numbers are numbered to 101, 189 and 204. The film's line under the totals is "Counted from the sanctioned layout plans, not from a brochure."
+V: /projects: "407 plots drawn on their plans". The sheets' own numbering was read on 7 October (101, 189 with joined and split plots, 204 with amenity plots) and was not re-counted for this audit.
+W: A buyer who does what the site tells him to do, read the plan, finds that the plan and the count disagree, under a headline about counting in full.
+X: Counts that match the sheets, or wording that says where the count comes from.
+N: Already an open question with the client (his plot register against the published sheets).
+F: 16-old-style-figures.jpg, 39-project-page-kartikeya.jpg
+
+@@ copy-antithesis | AI-SLOP | systemic | copy-self-reference, copy-repeated
+L: All inner pages; heaviest on /why-us (8) and /investment-guide (7).
+E: The sentence pattern "this, not that".
+O: The copy leans on one construction: "Proof, not persuasion." "The approved plan, not an impression." "Offices in the district, not a call centre." "Check the number, not the logo." "The airport is a real change, not a talking point." "Not a starting price, not a range, not a rate per square yard." There are 37 of these and "rather than" turns in about 11,500 words, and most section headings are two-beat aphorisms ("The plan is the promise. The land is the proof." "Three, because three are real." "A brochure persuades. A plan is submitted.").
+V: Counted from the text of all 28 pages.
+W: Contrast-by-negation and paired aphorisms at this density are the most recognisable signature of machine-written marketing copy. One is a voice; thirty-seven is a tic.
+X: Keep the three or four strongest; say the rest plainly.
+F: 36-all-second-screens-desktop.jpg
+
+@@ copy-self-reference | AI-SLOP | systemic | copy-antithesis, content-unfinished
+L: All inner pages; heaviest on /why-us, /construction-updates, /testimonials, /gallery.
+E: Copy about the website and about what it does not contain.
+O: The pages talk about themselves ("this site", "this page", "this website": 38 times) and about what is missing (31 statements such as "No photographs, and why.", "None has been made yet.", "No price is published on this site", "What this site does not say."). /why-us has a whole section listing what the site leaves out.
+V: Counted from the text of all 28 pages.
+W: A site that explains its own honesty and its own gaps at length reads as written to a brief about trust instead of by a company with things to show.
+X: State the fact once where a buyer needs it; cut the commentary.
+F: 36-all-second-screens-desktop.jpg
+
+@@ copy-repeated | AI-SLOP | systemic | copy-antithesis
+L: Across the inner pages.
+E: Sentences reused word for word.
+O: 54 sentences of nine words or more appear on two or more pages. "A brochure list is a statement of intent; the agreement is the commitment." is on four pages. The band "The plan is the promise. The land is the proof." is on four. Each layout's description is repeated on three.
+V: Counted from the text of all 28 pages.
+W: Reused sentences are what a template leaves behind.
+X: Say each thing in one place and link to it.
+F: 36-all-second-screens-desktop.jpg
+
+@@ content-unfinished | MEDIUM | repeated | copy-self-reference
+L: /knowledge, /gallery, /construction-updates, the layout pages' approval section.
+E: Sections that announce their own absence.
+O: /knowledge lists three articles "not yet good enough". /gallery has a section titled "No photographs, and why." /construction-updates says of its record "None has been made yet." The Kartikeya page's section "Whose sanction, and how to check it." gives the reference as "Ask the branch".
+V: Page text.
+W: Four pages are, in substance, notices that the content is not there.
+X: Publish when there is something to publish; until then leave the page or section out of the menu.
+N: Each waits on something the client has not supplied (photographs, approval references).
+F: 38-inner-reading-screens.jpg
+
+@@ testimonials-other-names | MEDIUM | isolated |
+L: /testimonials.
+E: The three quotations.
+O: The quotations name "Quality Homes Reality Services", a development called "Eden Garden" and "Vizag"; none mentions the three layouts on sale, and the page's own text says so. They are undated.
+V: Page text.
+W: Praise for another project under another company name does not support this site's offer, and the page's long explanation of that draws attention to it.
+X: Dated accounts from buyers of these layouts, or a shorter page.
+F: 32-all-opening-frames-desktop.jpg
+
+@@ telugu-fallback | MEDIUM | isolated |
+L: /about, the founder's motto.
+E: The Telugu line.
+O: No Telugu typeface is loaded; the line falls to whatever the device has. On Windows that is a plain sans-serif in a page set entirely in a serif, at a different size (46.6 px) and line height from the heading style it uses.
+V: The loaded fonts list contains only the site's one family; the stylesheet names "Noto Serif Telugu, Nirmala UI, Gautami" with no font file behind them.
+W: The founder's own words, in his own language, are the one line on the site set in an accidental typeface.
+X: A Telugu serif loaded with the page and sized to sit with the English.
+F: 63-phone-about-quote-window.jpg
+
+@@ units-mixed | SYSTEMIC | systemic | numerals-mixed
+L: All pages that state sizes.
+E: How measurements are written.
+O: The same things are written many ways. Plot sizes: "30′ × 50′" on most pages and "30′×50′" on /faqs and the article. Road widths: "40-foot", "40 feet", "40ft", "40′", "forty-foot" and "30 by 60". Areas: "sq yd", "square yards", "Square yards". PIN codes: "– 530016" on most pages and "530 016" on the legal pages. Security: "24×7 CCTV" on one page and "CCTV round the clock" on others.
+V: Counted from page text: 54 multiplication signs with and without spaces; six ways of writing a road width.
+W: A site whose claim is exactness should write a foot the same way twice.
+X: One style sheet for units, applied everywhere.
+F: 38-inner-reading-screens.jpg
+
+@@ names-differ | SYSTEMIC | systemic | footer-two-designs
+L: The menu, the film's footer, the inner footer, browser-tab titles, the 404 page's list.
+E: What each page is called.
+O: Eight pages have two to four names. /downloads is "Downloads" (menu and tab), "Layout plans" (film footer), "Take the plans with you" (inner footer) and "The approved plans" (404). /gallery is "The plans", "Gallery" and "The plans, full size". /investment-guide is "The guide", "Investment guide", "Buying land here" and "Buying land in north coastal Andhra". /testimonials is "What buyers say", "Testimonials" and "In their words". /contact is "Enquire", "Contact", "Talk to the office" and "Ask about a layout". Also "Locations" and "Where the sites are"; "The Hall" and "The hall"; "Refunds" and "Cancellation & Refunds".
+V: Compared link text, tab titles and headings for every route.
+W: A visitor cannot be sure two links go to the same place.
+X: One name per page (a short form for the menu is fine if it is the same short form everywhere).
+F: 52-menu-open.jpg, 27-footer-film-vs-inner.jpg
+
+@@ generic-mission | AI-SLOP | isolated |
+L: /about, "What the company says it is for."
+E: The vision and mission paragraphs.
+O: "India's leading and most trusted real estate enterprise", "global-standard residential properties", "world-class amenities, best-in-class security and unmatched value".
+V: Page text.
+W: These are the stock phrases the rest of the site is written to avoid; set in the site's largest body type they read as filler.
+X: Shorter, or one concrete sentence in their place.
+N: The page says these are the company's own printed words; cutting them is the client's call.
+F: 36-all-second-screens-desktop.jpg
+
+@@ faq-developer-question | LOW | isolated |
+L: /faqs, "About this site".
+E: The question "Do I need a WebGL-capable device to use this site?"
+O: A buyer's FAQ asks a developer's question in a developer's words.
+V: Page text.
+W: No land buyer asks this; it is the build talking about itself.
+X: "Will this work on my phone?" or nothing.
+F: 38-inner-reading-screens.jpg
+
+@@ honeypot-text | LOW | repeated |
+L: /contact, /book-a-site-visit, the three layout pages.
+E: The hidden anti-spam field.
+O: The words "Leave this field empty" are hidden only by transparency, so they are part of the page's text: they appear when the page is copied, read in reader mode or summarised.
+V: Present in every form page's extracted text, between the form's heading and its first question.
+W: An instruction with no visible field looks like a bug to anyone who meets it.
+X: Hide it from text extraction as well as from sight.
+F: 55-enquiry-form-filled.jpg
+
+@@ meta-gaps | LOW | systemic | load-404-curtain
+L: Site-wide, the page's information for browsers and sharing.
+E: Share image, icons, tab title.
+O: 25 of 28 pages, including the home page, have no share image or share title, so a link pasted into WhatsApp shows no picture. There is no favicon.ico, no touch icon and no theme colour. The 404 page has no title. The site's files name two different domains (.in and .com).
+V: Read from each page's head; /favicon.ico and /apple-touch-icon.png answer 404.
+W: For a site sold by sharing a link, the shared card is the first impression.
+X: A share image per page (the cover frame at least), a full icon set, one domain.
+F: 41-404-loader-then-page.jpg

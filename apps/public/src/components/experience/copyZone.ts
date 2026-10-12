@@ -18,6 +18,9 @@ export interface CopyPane {
    *  height from the top, clamped to the viewport. */
   top: number;
   bottom: number;
+  /** How much of its EARLY line is still up, 0..1: a line that goes before
+   *  its chapter does (ChapterFade, LEAVE_ATTR). 1 where there is none. */
+  early?: number;
 }
 
 /** A box on the screen: fractions of the viewport, from its top-left. */

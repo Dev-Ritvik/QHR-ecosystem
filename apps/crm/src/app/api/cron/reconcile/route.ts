@@ -3,12 +3,13 @@ import { NextResponse } from 'next/server';
 import { eq, isNotNull, isNull, and } from 'drizzle-orm';
 import { systemQuery } from '@/server/db';
 import { projects, units, projectsPub, unitsPub } from '@estate/db';
+import { cronAuthorized } from '@/server/cron-auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('Authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(authHeader)) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

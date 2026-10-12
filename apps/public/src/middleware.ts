@@ -8,6 +8,7 @@ import {
   VISITOR_COOKIE,
   isGranted,
 } from '@/lib/consent/types';
+import { MISSING_HEADER, isPagePath, looksLikeFile } from '@/lib/sitePaths';
 
 /**
  * Attach the two identifiers the analytics layer needs, with the distinction
@@ -71,6 +72,21 @@ export function middleware(request: NextRequest) {
     // The kiosk is staff-operated and loads no analytics, so it gets no
     // identifiers — there is nothing here to consent to.
     return NextResponse.rewrite(new URL(target, request.url));
+  }
+
+  // AN ADDRESS THAT IS NOT A PAGE IS ANSWERED 404 HERE (lib/sitePaths.ts has
+  // the account): the catch-all route then draws the not-found folio as an
+  // ordinary server-rendered page, where a "not found" raised inside the
+  // site's layout is an empty document drawn later by script. The request is
+  // marked, so that route knows the status has been said. A file's name is
+  // the filesystem's to answer.
+  if (url.pathname !== '/' && !isPagePath(url.pathname) && !looksLikeFile(url.pathname)) {
+    const headers = new Headers(request.headers);
+    headers.set(MISSING_HEADER, '1');
+    return attachIdentifiers(
+      request,
+      NextResponse.rewrite(new URL(url.pathname, request.url), { status: 404, request: { headers } }),
+    );
   }
 
   // Public site: rewrite "/" to "/site-home" which lives under (site)/site-home/page.tsx.

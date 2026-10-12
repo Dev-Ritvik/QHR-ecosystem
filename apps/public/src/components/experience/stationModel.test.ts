@@ -14,11 +14,16 @@ import {
   PLAN_MODELS,
   STAND,
   TRAY,
+  MODEL_WOOD,
+  TRAY_VENEER,
+  layTrayVeneer,
   parsePlanModel,
   planModelFor,
   planModelUrls,
 } from './StationModel';
 import { DEFAULT_STATION_STYLE, styleFromSearch } from './stationStyle';
+import { WALNUT_SHEET } from './hallWalnut';
+import * as THREE from 'three';
 
 const here = __dirname;
 const publicDir = join(here, '..', '..', '..', 'public');
@@ -137,13 +142,47 @@ describe('how the model is put on the station', () => {
   });
 
   it("takes the room from the hall's probe and its key from the chandelier", () => {
-    expect(model).toContain('...PROBE_DEFINES, ESTATE_FOCUS');
+    expect(model).toContain("...PROBE_DEFINES, ...(keyLit ? KEY_DEFINES : {}), ESTATE_FOCUS: ''");
     expect(model).toContain('trackHallMaterial(mat);');
     expect(model).toContain('untrackHallMaterials(list);');
     expect(model).toContain("replace('#include <lights_fragment_end>', KEY_LIGHT)");
     expect(model).toContain('const CHANDELIER = new THREE.Vector3(0, 10.9, 0);');
     // compiled with the hall, not on the frame a table first comes into view
     expect(model.match(/warmHallPrograms\(/g)!.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('is made of one timber, at a model\u2019s size: the hall\u2019s quarter-cut walnut, in the key\u2019s colour', () => {
+    // The forensic audit of 2026-10-09 (#37): "the grain is cartoon-large on
+    // the small objects ... Expected: grain scaled to each object, with the
+    // boards in a finer veneer than the wall"; (#39): "Three boards of the
+    // same design are three different woods ... Expected: one timber and one
+    // finish for all three."
+    expect(TRAY_VENEER).toBeLessThan(1);
+    const g = new THREE.BoxGeometry(0.7, 0.036, 0.6);
+    layTrayVeneer(g);
+    const pos = g.getAttribute('position');
+    const nor = g.getAttribute('normal');
+    const uv = g.getAttribute('uv');
+    for (let i = 0; i < pos.count; i += 1) {
+      if (nor.getY(i) > 0.5) {
+        // the top: the grain along its length, in metres of a finer sheet
+        expect(uv.getY(i)).toBeCloseTo(pos.getX(i) / (WALNUT_SHEET.straight.along * TRAY_VENEER), 6);
+        expect(uv.getX(i)).toBeCloseTo(pos.getZ(i) / (WALNUT_SHEET.straight.across * TRAY_VENEER), 6);
+      }
+    }
+    // the tray and the board under the plan take the room's light in the
+    // key's colour, so a stand is the same wood by either wall
+    expect(model).toContain("walnut: surface('MAT_PlanModel_Walnut', { map: veneer,");
+    expect(model).toMatch(/board: surface\('MAT_PlanModel_Board', \{[^}]*\}, L\.board, key, true\)/);
+    expect(model).toMatch(/walnut: surface\('MAT_PlanModel_Walnut', \{[^}]*\}, L\.walnut, key, true\)/);
+    // and the plaster with them: its sawn sides need no cool paint against a pink light
+    expect(model).toMatch(/tops: surface\('MAT_PlanModel_Plaster', \{[^}]*\}, L\.plaster, key, true\)/);
+    expect(model).toMatch(/sides: surface\('MAT_PlanModel_Edge', \{[^}]*color: '#e6e2d8'[^}]*\}, L\.plaster \* 0\.8, key, true\)/);
+    // one tone for the three stands, at the wall's own value
+    expect(MODEL_WOOD[0]).toBeGreaterThan(MODEL_WOOD[1]);
+    expect(MODEL_WOOD[1]).toBeGreaterThan(MODEL_WOOD[2]);
+    expect(model).toContain('mats.board.color.copy(tone);');
+    expect(model).not.toContain('PANEL.test');
   });
 
   it('is a quiet object: aged brass, a lit model no brighter than the room\'s plaster', () => {

@@ -25,16 +25,15 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
               pt-[62px] clears the fixed bar. A fixed header over scrolling
               content needs the offset somewhere, and putting it here means a
               page cannot forget it. */}
-          <div className="flex min-h-screen flex-col bg-[#0A1120]">
+          <div className="flex min-h-screen flex-col bg-[#15110C]">
             {/* Skip link. The home page runs to ~10,000px with a fixed bar over
                 it, so a keyboard or switch user who lands here otherwise tabs
                 the whole chrome before reaching a word of content, on every
                 navigation. Hidden until focused, then it presents as a normal
-                control in the site's own palette rather than a browser default. */}
-            <a
-              href="#site-content"
-              className="sr-only focus:not-sr-only focus:fixed focus:left-5 focus:top-4 focus:z-50 focus:rounded-[3px] focus:border focus:border-[#C08A5D]/50 focus:bg-[#0A1120] focus:px-4 focus:py-3 focus:text-step--2 focus:uppercase focus:tracking-[0.3em] focus:text-[#E8B98A] focus:outline-none focus:ring-2 focus:ring-amber-200/60"
-            >
+                control in the site's own palette rather than a browser default
+                (globals.css, .skip-link: the site's capitals on its own dark,
+                inside the one focus ring). */}
+            <a href="#site-content" className="skip-link">
               Skip to content
             </a>
             <SiteHeader />

@@ -24,22 +24,30 @@ function baseUrl(): string {
 // explicitly refuse indexing. Keep the two in agreement.
 const NOINDEX_PENDING = new Set(['/privacy', '/terms', '/refund-policy']);
 
-// Still carrying Slice 0 placeholder copy. Out until they are written.
-const UNWRITTEN = new Set(['/about', '/why-us', '/site-home']);
+// (Two further lists stood here: UNWRITTEN, for /about and /why-us while they
+// carried placeholder copy, and UNBUILT, for the three routes the registry
+// named with no page behind them — /book-a-site-visit, /projects and
+// /sitemap. All five are written and built as of 2026-10-06, and every route
+// in the registry answers 200; a test holds that (siteMap.test.ts). If a route
+// is ever registered ahead of its page again, exclude it here until it lands:
+// a sitemap that lists a 404 teaches a crawler the site is unreliable.)
+const UNWRITTEN = new Set<string>([]);
+const UNBUILT = new Set<string>([]);
 
-// Registered in places.ts but with no page behind them yet. The registry is a
-// map of the intended experience, not a record of what has been built, so
-// deriving the sitemap from it alone publishes 404s — which is worse than
-// omitting a page, because it teaches a crawler the site is unreliable.
-//
-// Verified by request, not by assumption: each of these returned 404 while the
-// rest of the registry returned 200. Delete an entry the day its page lands,
-// and the sitemap picks it up with no other change.
-const UNBUILT = new Set(['/book-a-site-visit', '/projects', '/sitemap']);
+// A person's sitemap is not a page to rank: it is listed for people, on the
+// site, and the machine has this file.
+const NOT_FOR_SEARCH = new Set(['/sitemap']);
 
 // Higher priority for the routes that answer a buyer's question than for the
 // ones that explain the company.
-const PRIMARY = new Set(['/properties', '/start-here', '/downloads', '/contact']);
+const PRIMARY = new Set([
+  '/projects',
+  '/properties',
+  '/start-here',
+  '/downloads',
+  '/contact',
+  '/book-a-site-visit',
+]);
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = baseUrl();
@@ -53,7 +61,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // sitemap lists both `https://host` and `https://host/`, which a crawler
     // reads as two URLs serving identical content.
     .filter((r) => r !== '/')
-    .filter((r) => !NOINDEX_PENDING.has(r) && !UNWRITTEN.has(r) && !UNBUILT.has(r))
+    .filter((r) => !NOINDEX_PENDING.has(r) && !UNWRITTEN.has(r) && !UNBUILT.has(r) && !NOT_FOR_SEARCH.has(r))
     .sort();
 
   const sitemap: MetadataRoute.Sitemap = [

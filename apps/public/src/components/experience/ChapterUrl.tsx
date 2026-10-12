@@ -141,7 +141,13 @@ export function ChapterUrl({ chapters }: { chapters: Chapter[] }) {
         const bottom = el ? el.offsetTop + el.offsetHeight : Math.round(target.to * maxScroll());
         const y = window.scrollY;
         if (y < top - 8 || y > bottom) {
-          window.scrollTo({ top, behavior: 'auto' });
+          // Where the chapter SPEAKS, as its anchor does (site-home, `anchor`):
+          // its section's top is a frame of the film with no words on it.
+          const speaks =
+            target.id === chapters[0].id
+              ? top
+              : Math.max(top, Math.round(target.copy.in[1] * maxScroll()) + 2);
+          window.scrollTo({ top: speaks, behavior: 'auto' });
         }
         restored = true;
       };

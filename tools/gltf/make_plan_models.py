@@ -19,17 +19,16 @@ photograph of a resort, a child's face, plots in scarlet and cobalt. Light hid
 that. A physical model cannot wear a brochure, so this draws the model's face
 from the same two sources and nothing else:
 
-  THE PLOTS, from the cells: ivory plaster, each keeping a trace of its own
-  fill's hue (which land is which is the plan's whole job), a fine joint
-  between neighbours, and the sheet's own ink - plot numbers, dimensions -
-  engraved in sepia exactly where the sanctioned sheet puts it.
-  THE OPEN LAND (green cells): a sage ground carrying the sheet's own detail
-  quietly, its water in a grey-blue.
-  LAND HELD BACK (pad cells): a plain stone slab. No lettering.
+  THE PLOTS, from the cells: ivory plaster, ONE colour (see CHROMA), a fine
+  joint between neighbours, and the sheet's own ink - plot numbers, dimensions
+  - engraved in sepia exactly where the sanctioned sheet puts it.
+  THE OPEN LAND (green cells): a sage flock carrying the sheet's own detail
+  quietly, its water in a grey-blue; and land held back, the same flock with
+  nothing on it (clean_plan_cells.py: `plain`).
   EVERYTHING ELSE - roads, margins, the brochure's furniture - is the board:
-  walnut, two book-matched leaves of the hall's own veneer
-  (make_walnut_veneer.py) with the grain along the board, so the roads read
-  as the channels between the blocks and the whole as a thing made of wood.
+  the hall's quarter-cut walnut (make_walnut_veneer.py) at a model's size,
+  with the grain along the board's length, so the roads read as the channels
+  between the blocks and the whole as a thing made of wood.
   It was first drawn as one dark lacquer, and a black field in a gilt frame,
   tilted to the eye with bright shapes on it, is a screen. The board takes a
   soft shade round every block (direction-free, because the model turns).
@@ -63,6 +62,20 @@ PLANS = {
 IVORY = np.array([232, 225, 210], np.float32)
 # The board: the veneer, a little down so the plaster stands off it.
 BOARD_GAIN = 0.86
+# The board's veneer is laid at this share of the size the hall's framing
+# wears it, like the tray it lies in (StationModel.tsx, TRAY_VENEER; a test
+# holds the two together). The forensic audit of 2026-10-09 (#37): "the grain
+# is cartoon-large on the small objects ... Expected: grain scaled to each
+# object, with the boards in a finer veneer than the wall." It was two
+# crown-cut leaves of the wall's own sheet stretched across the whole board:
+# a flame half a metre wide under a model whose plots are three centimetres.
+BOARD_VENEER = 0.5
+# Each board's own width in the hall, metres (interior_hall.glb,
+# holo3d_S*_plate): what a pixel of its face is worth.
+BOARD_WIDTH = {'kartikeya': 1.02, 'lucky': 1.10, 'gayatri': 1.10}
+# The straight sheet: a leaf's width, and its length along the grain, metres
+# (make_walnut_veneer.py).
+LEAF_M, SHEET_M = 0.341, 1.364
 # How far a block shades the board round it: the blur's radius as a share of
 # the face's long side, and the depth of the shade at a block's foot.
 SHADE = (0.008, 0.42)
@@ -78,8 +91,13 @@ SAGE_DETAIL = 0.08
 WATER = np.array([84, 98, 106], np.float32)
 STONE = np.array([172, 166, 152], np.float32)
 INK = np.array([56, 46, 38], np.float32)
-# How much of a plot's own printed hue its plaster keeps.
-CHROMA = 0.16
+# How much of a plot's own printed hue its plaster keeps: NONE. It was 0.16,
+# "which land is which is the plan's whole job"; but the sheets print no key,
+# and the forensic audit of 2026-10-09 (#40) saw what a tint without one is:
+# "the plots carry pastel tints with nothing to explain them ... Expected:
+# plots in one colour unless a key is on the plaque." A plot the sheet marks
+# still stands a little prouder (make_plan_model_geo.py, HEIGHT).
+CHROMA = 0.0
 
 
 def hull(ring):
@@ -120,7 +138,9 @@ def plot_ring(cell):
     which is a lot that really is L-shaped, and is kept as traced.
     """
     ring = [tuple(p) for p in cell['rings'][0]]
-    if cell['cat'] not in ('plot', 'plot_hot') or len(ring) < 4:
+    # (`as_traced`: a block cut out of a larger cell by clean_plan_cells.py,
+    # whose stepped outline is its own.)
+    if cell['cat'] not in ('plot', 'plot_hot') or len(ring) < 4 or cell.get('as_traced'):
         return ring
     h = hull(ring)
     a = ring_area(ring)
@@ -131,19 +151,28 @@ def luma(a):
     return 0.2126 * a[..., 0] + 0.7152 * a[..., 1] + 0.0722 * a[..., 2]
 
 
-def veneer(aw, ah, sheet):
-    """The board: the sheet's two middle leaves (a book-matched pair), turned
-    so the grain runs along the board's length and the joint down its middle."""
-    n = sheet.width
-    pair = sheet.crop((n * 2 // 6, 0, n * 4 // 6, sheet.height)).rotate(90, expand=True)
-    return np.asarray(pair.resize((aw, ah), Image.LANCZOS)).astype(np.float32) * BOARD_GAIN
+def veneer(name, aw, ah, sheet):
+    """The board: the quarter-cut sheet at a model's size, turned so the grain
+    runs along the board's length, and repeated mirrored (an end match along
+    the grain, a book match across it) as the hall lays it."""
+    per_metre = aw / BOARD_WIDTH[name]
+    turned = sheet.rotate(90, expand=True)  # the grain along x
+    tw = max(4, round(SHEET_M * BOARD_VENEER * per_metre))
+    th = max(4, round(2 * LEAF_M * BOARD_VENEER * per_metre))
+    tile = np.asarray(turned.resize((tw, th), Image.LANCZOS)).astype(np.float32)
+    rows = []
+    for j in range(-(-ah // th)):
+        row = [tile[:, ::-1] if i % 2 else tile for i in range(-(-aw // tw))]
+        strip = np.concatenate(row, axis=1)
+        rows.append(strip[::-1] if j % 2 else strip)
+    return np.concatenate(rows, axis=0)[:ah, :aw] * BOARD_GAIN
 
 
 def build(name, wood):
     aw, ah = PLANS[name]
     sheet = Image.open(os.path.join(FLOOR, f'{name}_holo_tex.png')).convert('RGB').resize((aw, ah), Image.LANCZOS)
     src = np.asarray(sheet).astype(np.float32)
-    cells = json.load(open(os.path.join(FLOOR, f'{name}_cells.json')))['cells']
+    cells = json.load(open(os.path.join(FLOOR, f'{name}_model_cells.json')))['cells']
 
     # Which cell each pixel belongs to (0: the board). The cells are in the
     # model's own plan (y up, as build_holo3d.py laid its UVs); the sheet's rows
@@ -164,7 +193,7 @@ def build(name, wood):
             draw.polygon([(x * aw, (1 - y) * ah) for x, y in hole], fill=0)
     lab = np.asarray(label)
 
-    out = veneer(aw, ah, wood)
+    out = veneer(name, aw, ah, wood)
     # The shade at the blocks' feet.
     solid = Image.fromarray(((lab > 0) * 255).astype(np.uint8))
     near = np.asarray(solid.filter(ImageFilter.GaussianBlur(SHADE[0] * max(aw, ah)))).astype(np.float32) / 255.0
@@ -184,6 +213,10 @@ def build(name, wood):
             ink = np.clip((med - lum[m] - 26.0) / 64.0, 0.0, 1.0)[:, None]
             px = px * (1 - 0.76 * ink) + INK * (0.76 * ink)
             out[m] = px
+        elif cat == 'green' and c.get('plain'):
+            # Land held back: the flock, and nothing of the sheet on it (the
+            # sheet letters it).
+            out[m] = SAGE * 0.94
         elif cat == 'green':
             s = src[m]
             l = lum[m][:, None]
@@ -213,8 +246,8 @@ def main():
     os.makedirs(out, exist_ok=True)
     # The hall's veneer, made afresh beside the faces and thrown away after.
     scratch = os.path.join(out, '_veneer')
-    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'make_walnut_veneer.py'), scratch, '2048'], check=True)
-    wood = Image.open(os.path.join(scratch, 'walnut_basecolor.png')).convert('RGB')
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'make_walnut_veneer.py'), scratch], check=True)
+    wood = Image.open(os.path.join(scratch, 'walnut_straight.png')).convert('RGB')
     wood.load()
     for f in os.listdir(scratch):
         os.remove(os.path.join(scratch, f))

@@ -1,6 +1,6 @@
 // apps/public/src/app/(site)/(experience)/about/page.tsx
 //
-// A SURFACE read from the study.
+// A FOLIO, opened on the founder's portrait.
 //
 // ---------------------------------------------------------------------------
 // Sourcing rule for this page
@@ -8,7 +8,8 @@
 //
 // Everything here is corroborated on BOTH of the client's own sites
 // (qualityhomesreality.com, the legacy site, and qualityhomesreality.in, the
-// newer one). Where the two disagree, nothing was published.
+// newer one). Where the two disagree, nothing was published. The facts
+// themselves are kept in lib/company.ts, which has the full account.
 //
 // Deliberately NOT carried over from the .in home page, which presents these
 // under a heading reading "Verified credentials":
@@ -24,122 +25,200 @@
 // misleading-advertisement exposure under the Consumer Protection Act 2019 if
 // it is wrong. They go up when the certificates arrive, not before. PROGRESS.md.
 //
-// The leadership block there names nobody — three titles with generic duties —
-// so there is no one to introduce yet either.
+// The leadership block there names nobody — three titles with generic duties.
+// The one name this page carries is the Managing Director's, which the client
+// supplied for the nameplate under his portrait in the hall.
+//
+// THE ACREAGE in the note under the figures is arithmetic on the company's own
+// numbers (4,840 square yards to the acre), given because a reader abroad does
+// not think in lakhs of square yards. It is not a figure of its own.
 
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Surface } from '@/components/experience/Surface';
+import { withShare } from '@/lib/share';
+import { BRANCHES } from '@estate/domain/leads/branches';
+import {
+  Figures,
+  Folio,
+  Gilt,
+  IndexList,
+  Ledger,
+  NextPage,
+  Note,
+  Plate,
+  Prose,
+  Sheet,
+  Window,
+} from '@/components/folio/Folio';
+import { pageAfter, pageTitle } from '@/components/site/siteMap';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
+import { COMPANY } from '@/lib/company';
+import { LAYOUTS } from '@/lib/layouts';
 
-export const metadata: Metadata = {
-  title: 'About — Quality Homes Reality',
+export const metadata: Metadata = withShare('/about', {
+  title: pageTitle('/about'),
   description:
     'Twenty years of plotted layouts, farmlands and gated communities across the northern coastal districts of Andhra Pradesh, sold from offices in the districts where the land is.',
-};
+});
 
-// Both sites carry these four figures identically.
-const FIGURES = [
-  { value: '20', unit: 'years', label: 'in the field' },
-  { value: '5,000', unit: '', label: 'customers' },
-  { value: '12', unit: 'lakh sq yd', label: 'developed' },
-  { value: '8', unit: 'lakh sq yd', label: 'in development' },
-];
+const OFFICES = (['visakhapatnam', 'vizianagaram', 'srikakulam'] as const).map((id) => BRANCHES[id]);
 
 export default function AboutPage() {
+  const next = pageAfter('/about');
   return (
     <>
       <RouteTelemetry routeId="about" />
-      <Surface
-        eyebrow="About"
-        title="Building communities. Creating futures."
-        lede="Quality Homes Reality has been developing land in the northern coastal districts of Andhra Pradesh for more than twenty years — farmlands, residential plots, villas and apartments, sold from offices in the districts where the land actually is."
-      >
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-8 border-y border-white/10 py-8 sm:grid-cols-4">
-          {FIGURES.map((f) => (
-            <div key={f.label}>
-              <dt className="font-serif text-step-3 text-[#F2EDE4]">
-                {f.value}
-                {f.unit ? (
-                  <span className="ml-1.5 text-step--1 tracking-wide text-[#F2EDE4]/[0.68]">{f.unit}</span>
-                ) : null}
-              </dt>
-              <dd className="mt-1 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
-                {f.label}
-              </dd>
+      <Folio>
+        <Plate
+          kicker="The company"
+          title={
+            <>
+              Land, sold from <Gilt>where the land is.</Gilt>
+            </>
+          }
+          lede="Quality Homes Reality has been developing land in the northern coastal districts of Andhra Pradesh for more than twenty years."
+          cue={{ label: 'In figures', href: '#figures' }}
+        />
+
+        <Sheet
+          id="figures"
+          rail="In figures"
+          first
+          layout="full"
+          kicker="In figures"
+          title={
+            <>
+              Twenty years, <Gilt>counted.</Gilt>
+            </>
+          }
+        >
+          <Figures items={COMPANY.figures.map((f) => ({ ...f }))} />
+          <Note className="mt-12">
+            The company&rsquo;s own figures, as it publishes them. A lakh is a hundred thousand:
+            12 lakh sq yd is about 248 acres, and 8 lakh about 165.
+          </Note>
+        </Sheet>
+
+        <Sheet
+          id="idea"
+          rail="The idea"
+          kicker="The idea"
+          title={
+            <>
+              A planned address is not <Gilt>a luxury of the capital.</Gilt>
+            </>
+          }
+        >
+          <Prose>
+            <p className="folio-first">
+              The business has always been built around one idea: that a planned, gated address
+              should not be a luxury reserved for the state capital.
+            </p>
+            <p>
+              Most of what the company has sold is plotted land, bought by families who intend to
+              build on it themselves &mdash; at a price that leaves them enough left over to do so.
+            </p>
+            <p>
+              In twenty years that has meant farmlands, residential plots, villas and apartments
+              across the northern coastal districts. And it has meant selling them from offices in
+              the districts where the land actually is: the branch that answers a question about a
+              layout is the branch that holds it, and the one that will walk you over it.
+            </p>
+          </Prose>
+        </Sheet>
+
+        <Window
+          lang="te"
+          gloss={<>&ldquo;{COMPANY.motto.en}&rdquo;</>}
+          by={
+            <>
+              {COMPANY.founder.name}, {COMPANY.founder.title}
+            </>
+          }
+        >
+          {COMPANY.motto.te}
+        </Window>
+
+        <Sheet
+          id="words"
+          rail="In its own words"
+          kicker="In its own words"
+          title={
+            <>
+              What the company <Gilt>says it is for.</Gilt>
+            </>
+          }
+          note="Set down here as the company prints them."
+        >
+          <Ledger
+            rows={[
+              { term: 'Vision', value: COMPANY.vision },
+              { term: 'Mission', value: COMPANY.mission },
+              {
+                term: 'Values',
+                value: (
+                  <ul className="folio-values">
+                    {COMPANY.values.map((v) => (
+                      <li key={v}>{v}</li>
+                    ))}
+                  </ul>
+                ),
+              },
+            ]}
+          />
+        </Sheet>
+
+        <Sheet
+          id="where"
+          rail="Where it works"
+          layout="full"
+          kicker="Where it works"
+          title={
+            <>
+              Three offices. <Gilt>Three layouts open.</Gilt>
+            </>
+          }
+        >
+          <div className="folio-pair">
+            <div>
+              <h3 className="folio-sub" data-reveal>
+                The offices
+              </h3>
+              <IndexList
+                two
+                items={OFFICES.map((b) => ({
+                  href: '/branches',
+                  name: b.name,
+                  line: (
+                    <>
+                      {b.role === 'head_office' ? 'Head office' : 'Branch'}. {b.address} &ndash;{' '}
+                      {b.pincode}
+                    </>
+                  ),
+                }))}
+              />
             </div>
-          ))}
-        </dl>
+            <div>
+              <h3 className="folio-sub" data-reveal>
+                The layouts open now
+              </h3>
+              <IndexList
+                two
+                items={LAYOUTS.map((l) => ({
+                  href: `/projects/${l.slug}`,
+                  name: l.name,
+                  line: (
+                    <>
+                      {l.where}, {l.district}. {l.approval.short}.
+                    </>
+                  ),
+                }))}
+              />
+            </div>
+          </div>
+        </Sheet>
 
-        <p className="mt-10 text-step-0 text-[#F2EDE4]/75">
-          The business has always been built around one idea: that a planned,
-          gated address should not be a luxury reserved for the state capital.
-          Most of what the company has sold is plotted land, bought by families
-          who intend to build on it themselves — at a price that leaves them
-          enough left over to do so.
-        </p>
-
-        <figure className="mt-12 border-l-2 border-amber-200/40 pl-6">
-          <blockquote lang="te" className="font-serif text-step-1 text-[#F2EDE4]">
-            భూమిలో పెట్టుబడి పెట్టండి, అది ఎప్పుడూ నిరాశపరచదు.
-          </blockquote>
-          <p className="mt-3 text-step-0 text-[#F2EDE4]/60">
-            Invest in land — it will never disappoint you.
-          </p>
-          <figcaption className="mt-4 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
-            Managing Director
-          </figcaption>
-        </figure>
-
-        <section className="mt-14">
-          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">Vision</h2>
-          <p className="mt-3 text-step-0 text-[#F2EDE4]/75">
-            To be acknowledged as India&rsquo;s leading and most trusted real estate
-            enterprise by nurturing a transparent, trustworthy and professional
-            work culture that endears us to discerning customers, and by
-            continuously expanding our offerings to reach a wider market.
-          </p>
-        </section>
-
-        <section className="mt-10">
-          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">Mission</h2>
-          <p className="mt-3 text-step-0 text-[#F2EDE4]/75">
-            To be the provider of choice for global-standard residential
-            properties by delivering projects enriched with innovative design,
-            exceptional location, harmonious environs, superior quality,
-            world-class amenities, best-in-class security and unmatched value.
-          </p>
-        </section>
-
-        <section className="mt-10">
-          <h2 className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">Values</h2>
-          <ul className="mt-4 flex flex-wrap gap-x-3 gap-y-2">
-            {['Quality', 'On-time possession', 'Integrity', 'Reliability', 'Transparency'].map(
-              (v) => (
-                <li
-                  key={v}
-                  className="rounded border border-white/15 px-3 py-1.5 text-step--1 text-[#F2EDE4]/80"
-                >
-                  {v}
-                </li>
-              ),
-            )}
-          </ul>
-        </section>
-
-        <p className="mt-14 border-t border-white/10 pt-6 text-step--1 text-[#F2EDE4]/55">
-          Three layouts are open right now, in Vizianagaram and Srikakulam
-          districts. You can see{' '}
-          <Link className="underline underline-offset-4 hover:text-[#F2EDE4]" href="/properties">
-            what is on offer
-          </Link>
-          , or read{' '}
-          <Link className="underline underline-offset-4 hover:text-[#F2EDE4]" href="/why-us">
-            how we work
-          </Link>
-          .
-        </p>
-      </Surface>
+        <NextPage href={next.href} title={next.name} line={next.line} />
+      </Folio>
     </>
   );
 }

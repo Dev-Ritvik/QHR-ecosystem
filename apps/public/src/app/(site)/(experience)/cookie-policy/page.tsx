@@ -4,23 +4,29 @@
 // codebase actually sets. Every name, purpose and lifetime below was read off
 // the implementation rather than adapted from a template — see
 // lib/consent/types.ts and middleware.ts.
+//
+// A FOLIO since 2026-10-06; its text and its two tables are what they were.
 
 import type { Metadata } from 'next';
+import { withShare } from '@/lib/share';
 import Link from 'next/link';
-import { Surface } from '@/components/experience/Surface';
+import { Folio, Gilt, NextPage, Note, Plate, Prose, Sheet, Table } from '@/components/folio/Folio';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
+import { CONTACT_EMAIL, CONTACT_MAILTO } from '@/lib/contact';
+import { PRIVACY_CONTROL_NAME } from '@/lib/consent/types';
+import { pageTitle, smallPrintAfter } from '@/components/site/siteMap';
 
-export const metadata: Metadata = {
-  title: 'Cookies — Quality Homes Reality',
+export const metadata: Metadata = withShare('/cookie-policy', {
+  title: pageTitle('/cookie-policy'),
   description:
-    'Every cookie this site sets, what it is for, how long it lasts, and how to refuse or remove it.',
-};
+    'Every cookie we set, what it is for, how long it lasts, and how to refuse or remove it.',
+});
 
 const ESSENTIAL = [
   {
     name: 'qhr_sid',
     purpose:
-      'Identifies your visit so the site can keep a session together. Carries no profile and no name.',
+      'Identifies your visit, to keep a session together. Carries no profile and no name.',
     life: 'Deleted when you close the browser',
   },
   {
@@ -36,7 +42,7 @@ const OPTIONAL = [
     name: 'qhr_vid',
     group: 'Analytics',
     purpose:
-      'Recognises this browser if you return, so repeat visits are counted as one person rather than several. Only ever created after you turn Analytics on, and deleted the moment you turn it off.',
+      'Recognises this browser if you return, so repeat visits count as one person. Only ever created after you turn Analytics on, and deleted the moment you turn it off.',
     life: '12 months',
   },
   {
@@ -65,94 +71,89 @@ const OPTIONAL = [
   },
 ];
 
+function rows(list: { name: string; group?: string; purpose: string; life: string }[]) {
+  return list.map((r) => [
+    <>
+      {r.name}
+      {r.group ? <small>{r.group}</small> : null}
+    </>,
+    r.purpose,
+    r.life,
+  ]);
+}
+
 export default function CookiePolicyPage() {
+  const next = smallPrintAfter('/cookie-policy');
   return (
     <>
       <RouteTelemetry routeId="cookie-policy" />
-      <Surface
-        eyebrow="Cookies"
-        title="What this site stores on your device"
-        lede="Two cookies are needed to run the site. Everything else is off until you switch it on, and can be switched off again at any time."
-      >
-        <h2 className="font-serif text-step-1 text-[#F2EDE4]">Needed to run the site</h2>
-        <p>
-          These carry no profiling and nothing that outlives your visit beyond
-          remembering your own choices. They cannot be turned off, because
-          without them the site cannot keep a session together or remember that
-          you declined anything.
-        </p>
-        <CookieTable rows={ESSENTIAL} />
+      <Folio>
+        <Plate
+          short
+          long
+          kicker="Cookies"
+          title={
+            <>
+              What is stored <Gilt>on your device.</Gilt>
+            </>
+          }
+          lede="Two cookies are strictly necessary. Everything else is off until you switch it on, and can be switched off again at any time."
+          cue={{ label: 'Strictly necessary', href: '#needed' }}
+        />
 
-        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
-          Only if you agree
-        </h2>
-        <p>
-          Nothing in this group is set, and no request is made to any of these
-          companies, until you turn the matching category on. Turning it off
-          again stops collection immediately and deletes the cookies we can
-          reach.
-        </p>
-        <CookieTable rows={OPTIONAL} />
+        <Sheet id="needed" rail="Strictly necessary" first layout="full" title="Strictly necessary">
+          <Prose>
+            <p>
+              These carry no profiling and nothing that outlives your visit beyond remembering your
+              own choices. They cannot be turned off: one keeps your session together, and the
+              other remembers what you declined.
+            </p>
+          </Prose>
+          <div className="mt-10">
+            <Table head={['Cookie', 'Purpose', 'Lasts']} rows={rows(ESSENTIAL)} keep={[2]} />
+          </div>
+        </Sheet>
 
-        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">
-          Changing your mind
-        </h2>
-        <p>
-          Use the <strong className="text-[#F2EDE4]">Privacy &amp; data choices</strong>{' '}
-          control at the foot of any page. The same panel has a control that
-          deletes the data recorded during this visit. You can also clear
-          cookies in your browser settings; the site continues to work, and you
-          will simply be asked for your choices again.
-        </p>
+        <Sheet id="if-you-agree" rail="Only if you agree" layout="full" raised title="Only if you agree">
+          <Prose>
+            <p>
+              Nothing in this group is set, and no request is made to any of these companies, until
+              you turn the matching category on. Turning it off again stops collection immediately
+              and deletes the cookies we can reach.
+            </p>
+          </Prose>
+          <div className="mt-10">
+            <Table head={['Cookie', 'Purpose', 'Lasts']} rows={rows(OPTIONAL)} keep={[2]} />
+          </div>
+        </Sheet>
 
-        <h2 className="mt-12 font-serif text-step-1 text-[#F2EDE4]">Questions</h2>
-        <p>
-          Written enquiries about cookies or personal data go to{' '}
-          <a className="underline underline-offset-4" href="mailto:devritvik70@gmail.com">Dev Ritvik, devritvik70@gmail.com</a> at Quality
-          Homes Reality, D.No. 50-92-36, 2nd Floor, Opp. Canara Bank,
-          Shantipuram, Shankara Matam Road, Visakhapatnam 530 016, Andhra
-          Pradesh.
-        </p>
-        <p className="text-step--1 text-[#F2EDE4]/60">
-          See also our <Link className="underline underline-offset-4" href="/privacy">privacy notice</Link>.
-        </p>
-      </Surface>
+        <Sheet id="changing" rail="Changing your mind" title="Changing your mind">
+          <Prose>
+            <p>
+              Use the <strong>{PRIVACY_CONTROL_NAME}</strong> control at the foot of any page.
+              The same panel has a control that deletes the data recorded during this visit. You
+              can also clear cookies in your browser settings; everything continues to work, and
+              you are asked for your choices again.
+            </p>
+          </Prose>
+        </Sheet>
+
+        <Sheet id="questions" rail="Questions" raised title="Questions">
+          <Prose>
+            <p>
+              Written enquiries about cookies or personal data go to{' '}
+              <a href={CONTACT_MAILTO}>{CONTACT_EMAIL}</a>, or by post to Quality Homes Reality,
+              D.No. 50-92-36, 2nd Floor, Opp. Canara Bank, Shantipuram, Shankara Matam Road,
+              Visakhapatnam&nbsp;530016, Andhra Pradesh.
+            </p>
+          </Prose>
+          <Note className="mt-8">
+            See also our <Link href="/privacy">privacy notice</Link>.
+          </Note>
+        </Sheet>
+
+        <NextPage href={next.href} title={next.name} line={next.line} />
+      </Folio>
     </>
-  );
-}
-
-function CookieTable({
-  rows,
-}: {
-  rows: { name: string; group?: string; purpose: string; life: string }[];
-}) {
-  return (
-    <div className="mt-6 overflow-x-auto">
-      <table className="w-full min-w-[34rem] border-collapse text-left text-step--1">
-        <thead>
-          <tr className="border-b border-white/15 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/[0.62]">
-            <th className="py-3 pr-4 font-normal">Cookie</th>
-            <th className="py-3 pr-4 font-normal">Purpose</th>
-            <th className="py-3 font-normal">Lasts</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.name} className="border-b border-white/10 align-top">
-              <td className="py-4 pr-4 tabular-nums text-step--1 text-[#F2EDE4]">
-                {r.name}
-                {r.group && (
-                  <span className="mt-1 block text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/60">
-                    {r.group}
-                  </span>
-                )}
-              </td>
-              <td className="py-4 pr-4 text-[#F2EDE4]/75">{r.purpose}</td>
-              <td className="py-4 whitespace-nowrap text-[#F2EDE4]/60">{r.life}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }

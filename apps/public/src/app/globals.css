@@ -50,21 +50,18 @@
    second face. Capitals are the smallest step at weight 500, tracked open;
    reading text is 400; figures are the largest step at 300.
    --------------------------------------------------------------------------- */
-/* THE AMPERSAND, IN ITS STANDARD FORM (the audit of 2026-10-05, P3: "the '&'
-   in 'Privacy & data choices' is a decorative italic that matches nothing
-   else. Use the standard form"). Playfair draws its roman ampersand as the
-   italic one, a flourish; beside tracked capitals it reads as a second face.
-   This is a face of ONE character — the ampersand of the reader's own book
-   serif — set first in the stack, so every '&' the site prints takes the
-   plain form and nothing else changes. Where none of these is installed the
-   character falls through to Playfair, as before. */
-@font-face {
-  font-family: 'Estate Ampersand';
-  src: local('Georgia'), local('Times New Roman'), local('Noto Serif'), local('Liberation Serif'), local('DejaVu Serif');
-  unicode-range: U+0026;
-}
+/* ONE FACE, EVERY CHARACTER OF IT. For five days the '&' was another face's:
+   the audit of 2026-10-05 (P3) called Playfair's ampersand "a decorative
+   italic that matches nothing else", and a face of one character — the
+   reader's own Georgia, or Times, or Noto — was set first in the stack to
+   draw it plain. The forensic audit of 2026-10-09 (#60) saw what that is:
+   "one character in another typeface is the definition of an accidental font
+   substitution, even when it is on purpose", larger and heavier than the
+   letters round it and different on every device. Both are answered by the
+   site not printing an ampersand: it writes "and" (lib/units.test.ts holds
+   the pages to it), and the stack is the one face. */
 :root {
-  --font-text: 'Estate Ampersand', var(--font-serif), 'Playfair Display', Georgia, serif;
+  --font-text: var(--font-serif), 'Playfair Display', Georgia, serif;
 
   --step--2: clamp(0.6400rem, 0.6547rem + -0.0164vw, 0.6510rem); /* 10.42 -> 10.24px */
   --step--1: clamp(0.7812rem, 0.7750rem + 0.0278vw, 0.8000rem);  /* 12.50 -> 12.80px */
@@ -104,7 +101,49 @@
   --track-display: -0.018em;
   --track-heading: -0.01em;
   --track-body: 0;
+  /* A label: a kicker, a table's head, a caption's attribution. */
+  --track-label: 0.02em;
   --track-caps: 0.3em;
+
+  /* THE SYSTEM, SAID ONCE (the forensic audit of 2026-10-09, #96 to #100).
+     One typeface was held everywhere and its settings had multiplied: six
+     leadings at one size and eight at another, two sizes of small capital
+     half a pixel apart, three gilts and twelve strengths of ivory, four
+     durations and three curves — most of the last the styling framework's
+     own defaults. "The eye cannot name a half-pixel, but it reads the sum as
+     assembled."
+
+     ONE LEADING A SIZE. A multiple of the size it leads, so it is the same
+     proportion wherever that size is set (the film's stage sets its own
+     sizes in the frame's unit, and its own leadings on its own baseline). */
+  --lead--2: 1.5625; /* small capitals: 10.24 on 16 */
+  --lead--1: 1.6; /* small print */
+  --lead-0: 1.5; /* running text and labels */
+  --lead-1: 1.6; /* reading text */
+  --lead-2: 1.4; /* a standfirst, a field */
+  --lead-3: 1.24; /* a name, a question, a quotation */
+
+  /* FOUR STRENGTHS OF IVORY for text, and TWO GILTS. (A field's placeholder
+     is fainter than any of them on purpose: it must not be taken for what
+     was typed. The mark's own wordmark keeps its own tint with the mark.) */
+  --ink: #f2ede4;
+  --ink-2: rgba(242, 237, 228, 0.9);
+  --ink-3: rgba(242, 237, 228, 0.8);
+  --ink-4: rgba(242, 237, 228, 0.72);
+  --gilt: #e8b98a; /* text: a label, a link, a control */
+  --gilt-display: #f1d0a6; /* the gilt half of a display line */
+
+  /* TWO DURATIONS, ONE CURVE. A STATE changes in three-tenths of a second
+     (a colour, a rule, a strength); a control MOVES in half a second (a rule
+     drawing out, an arrow, the menu's lines). Both on the house's slow-out. */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-state: 0.3s;
+  --t-move: 0.5s;
+
+  /* ONE FOCUS RING (#108): two pixels of the text's gilt, four clear of the
+     thing it rings. */
+  --focus-ring: 2px solid var(--gilt);
+  --focus-gap: 4px;
 
   /* ---------------------------------------------------------------------------
      Semantic surface tokens.
@@ -126,23 +165,25 @@
      meant to work. Values are the existing hexes converted to HSL — this
      introduces no new colours.
      --------------------------------------------------------------------------- */
-  --background: 220.9 52.4% 8.2%; /* #0A1120 */
+  /* (The hall's own dark and its lifted planes since 2026-10-06, where these
+     were the reading pages' navy: folio.css.) */
+  --background: 33.3 27.3% 6.5%; /* #15110C */
   --foreground: 38.6 35% 92.2%; /* #F2EDE4 */
 
   /* Lifted planes, for panels that need to separate from the page without a border. */
-  --card: 216.9 44.8% 11.4%; /* #101A2A */
+  --card: 32.7 25.6% 8.4%; /* #1B1610 */
   --card-foreground: 38.6 35% 92.2%;
-  --popover: 222.9 53.8% 5.1%; /* #060A14 */
+  --popover: 30 27.3% 4.3%; /* #0E0B08 */
   --popover-foreground: 38.6 35% 92.2%;
-  --muted: 216.9 44.8% 11.4%;
+  --muted: 32.7 25.6% 8.4%;
   /* Passes AA on --background; the /50 tier proven in the contrast pass. */
   --muted-foreground: 38 8% 62%;
-  --secondary: 216.9 44.8% 14%;
+  --secondary: 34.3 25% 11%; /* #231D15 */
   --secondary-foreground: 38.6 35% 92.2%;
 
   /* The accent is the bronze the rest of the site already uses for actions. */
   --primary: 30 67.1% 72.5%; /* #E8B98A */
-  --primary-foreground: 220.9 52.4% 8.2%;
+  --primary-foreground: 33.3 27.3% 6.5%;
   --accent: 27.3 44% 55.9%; /* #C08A5D */
   --accent-foreground: 38.6 35% 92.2%;
 
@@ -150,8 +191,8 @@
   --destructive-foreground: 38.6 35% 92.2%;
 
   /* Hairlines, matching the rgba(242,237,228,0.10-0.12) used elsewhere. */
-  --border: 217 30% 20%;
-  --input: 217 30% 20%;
+  --border: 32.7 12.4% 17.5%;
+  --input: 32.7 12.4% 17.5%;
   --ring: 30 67.1% 72.5%;
 
   --radius: 3px;
@@ -302,7 +343,7 @@
    prefixed pseudo-elements for Chromium and Safari, which (unlike the
    standard `scrollbar-width: thin` on Windows) draw no arrow buttons. */
 html {
-  scrollbar-color: rgba(232, 185, 138, 0.42) #0a1120;
+  scrollbar-color: rgba(232, 185, 138, 0.42) #15110c;
 }
 html::-webkit-scrollbar,
 body *::-webkit-scrollbar {
@@ -311,13 +352,13 @@ body *::-webkit-scrollbar {
 }
 html::-webkit-scrollbar-track,
 body *::-webkit-scrollbar-track {
-  background: #0a1120;
+  background: #15110c;
 }
 html::-webkit-scrollbar-thumb,
 body *::-webkit-scrollbar-thumb {
   /* a 2px hairline in a 10px track: the border is the track's own colour */
   background: rgba(232, 185, 138, 0.5);
-  border: 4px solid #0a1120;
+  border: 4px solid #15110c;
   border-block-width: 0;
 }
 html::-webkit-scrollbar-thumb:hover,
@@ -330,7 +371,7 @@ body *::-webkit-scrollbar-button {
 }
 html::-webkit-scrollbar-corner,
 body *::-webkit-scrollbar-corner {
-  background: #0a1120;
+  background: #15110c;
 }
 @supports selector(::-webkit-scrollbar) {
   /* Chromium takes the standard property over the pseudo-elements when both
@@ -347,22 +388,238 @@ html:has(main.film-stage)::-webkit-scrollbar {
   width: 0;
 }
 
-/* THE CONSENT PANEL'S GROUND (components/consent/ConsentPanel.tsx). The
-   reading pages' navy, and on the film the curtain's own umber
-   (coverState.ts, COVER_GROUND): the panel is up while the film loads, and a
-   navy card on a navy-black scrim was most of what made the loading screen
-   read "cool navy" before a warm picture (the audit of 2026-10-05, P3). */
+/* ONE FOCUS RING, for everything a keyboard can reach (the forensic audit of
+   2026-10-09, #108). There were four treatments: a colour change alone on the
+   cue, the index rows and the "Next" block; a one-pixel outline six pixels
+   off on the actions; a ring of its own round a chapter's dot; the browser's
+   outline on the consent card's buttons. "Focus is a state like hover and
+   should belong to the same system; colour alone is also hard to see."
+
+   So nothing below sets an outline of its own. A control may ALSO change
+   colour under the keyboard, as it does under the pointer. The two
+   exceptions are stated where they are: a line to be written on shows focus
+   as its own rule in the ring's gilt and weight (folio.css, .folio-field),
+   and a control that fills the frame's width takes the ring inside its edge
+   (folio.css, .folio-next). */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-gap);
+}
+/* What the PAGE focused, not the visitor — the body of a page after "Skip to
+   content", a card that has just opened — is not a control. */
+[tabindex='-1']:focus-visible {
+  outline: none;
+}
+/* A control whose own box is not drawn (a radio or a tick under its words)
+   rings the words. */
+.folio-choice:has(input:focus-visible),
+.folio-chip:has(input:focus-visible) > span,
+.consent-check:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-gap);
+}
+/* "SKIP TO CONTENT" ((site)/layout.tsx): nowhere until a keyboard reaches it,
+   then the site's capitals on its own dark at the head of the page. */
+.skip-link {
+  position: fixed;
+  left: 1.25rem;
+  top: 1rem;
+  z-index: 70;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(242, 237, 228, 0.13);
+  background: #15110c;
+  font-size: var(--step--2);
+  line-height: var(--lead--2);
+  font-weight: 500;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--gilt);
+}
+.skip-link:not(:focus) {
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+button.cta-quiet {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* THE CONSENT CARD (components/consent/ConsentPanel.tsx), IN THE SITE'S OWN
+   KIT (the forensic audit of 2026-10-09, #105 to #107). The first designed
+   object a visitor meets: the hall's dark for its ground and a hairline for
+   its edge, square and flat like everything else; its heading the text's own
+   ivory at the size of a name; its notice at the reading size; its three
+   answers the site's quiet action, all three alike. Behind it a neutral
+   density and nothing softened — nothing on the site blurs. (It takes the
+   page's own tokens: the element is a `folio-stage`.) */
+.consent {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+}
 .consent-scrim {
-  background: rgba(10, 10, 10, 0.6);
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 11, 8, 0.72);
 }
 .consent-card {
-  background: rgba(10, 17, 32, 0.95);
+  position: relative;
+  width: 100%;
+  max-width: 42rem;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: 1.75rem 1.5rem 1.25rem;
+  border: 1px solid var(--rule);
+  background: #1d1812;
+  color: var(--ink);
+  outline: none;
 }
-html:has(main.film-stage) .consent-scrim {
-  background: rgba(21, 17, 12, 0.6);
+.consent-title {
+  font-size: var(--step-3);
+  line-height: var(--lead-3);
+  letter-spacing: var(--track-heading);
+  color: var(--ink);
 }
-html:has(main.film-stage) .consent-card {
-  background: rgba(29, 24, 18, 0.96);
+.consent-body {
+  max-width: 60ch;
+  margin-top: 0.9rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+  text-wrap: pretty;
+}
+.consent-list {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+.consent-row {
+  padding: 0.9rem 0 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+.consent-check {
+  position: relative;
+  display: grid;
+  grid-template-columns: 0.95rem minmax(0, 1fr);
+  column-gap: 0.9rem;
+  align-items: baseline;
+  cursor: pointer;
+}
+.consent-check.is-fixed {
+  cursor: default;
+}
+.consent-check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+/* The tick, drawn: a square that the chosen one fills (the form's choices
+   are rings that fill, folio.css; a square for what can be more than one). */
+.consent-check-mark {
+  position: relative;
+  top: 0.1em;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid rgba(242, 237, 228, 0.5);
+  transition: border-color var(--t-state) var(--ease);
+}
+.consent-check-mark::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: var(--gilt);
+  transform: scale(0);
+  transition: transform var(--t-move) var(--ease);
+}
+.consent-check:has(input:checked) .consent-check-mark {
+  border-color: var(--gilt);
+}
+.consent-check:has(input:checked) .consent-check-mark::after {
+  transform: scale(1);
+}
+/* What is always on is filled, and fainter: it is not there to be pressed. */
+.consent-check.is-fixed .consent-check-mark {
+  border-color: rgba(232, 185, 138, 0.5);
+}
+.consent-check.is-fixed .consent-check-mark::after {
+  background: rgba(232, 185, 138, 0.5);
+  transform: scale(1);
+}
+.consent-row-name {
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink);
+}
+.consent-row-line {
+  padding-left: 1.85rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-4);
+}
+/* Three answers of one weight: no first among them (the DPDP Act: refusing
+   must be as easy as accepting). A row where there is room, a column where
+   there is not, each a row a thumb is sure of. */
+.consent-actions {
+  display: grid;
+  margin-top: 1rem;
+  justify-items: start;
+}
+.consent-erase {
+  margin-top: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-4);
+}
+.consent-erase-action {
+  min-height: 2.75rem;
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-decoration-color: rgba(232, 185, 138, 0.5);
+  text-underline-offset: 0.28em;
+  transition: color var(--t-state) var(--ease), text-decoration-color var(--t-state) var(--ease);
+}
+.consent-erase-action:hover:not(:disabled),
+.consent-erase-action:focus-visible {
+  color: var(--gilt);
+  text-decoration-color: var(--gilt);
+}
+.consent-erase-action:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+.consent-error {
+  margin-top: 0.5rem;
+  color: #f5b4a0;
+}
+@media (min-width: 640px) {
+  .consent {
+    align-items: center;
+  }
+  .consent-card {
+    padding: 2.25rem 2.5rem 1.75rem;
+  }
+  .consent-actions {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 2.75rem;
+    margin-top: 1.5rem;
+  }
 }
 
 /* The one family, everywhere the site draws text: set on <body> and inherited,
@@ -376,6 +633,39 @@ body {
   font-kerning: normal;
   font-feature-settings: 'kern' 1, 'liga' 1;
   font-variant-numeric: lining-nums proportional-nums;
+}
+/* ONE SET OF NUMERALS (the forensic audit of 2026-10-09, #99: four were in
+   use). The face's own figures are old-style — they rise and fall like
+   lower-case letters — and the body asks for lining ones; but that asking
+   was lost in two places nobody meant:
+
+     a form field does not take its page's figures unless it is told to (a
+     telephone number typed into the enquiry form was set with small round
+     zeros);
+
+     `tabular-nums` said alone REPLACES what the body said, and a column of
+     figures went back to the face's own (the tables' counts on the film, the
+     sizes beside a ledger's lines).
+
+   So: every field inherits, and every tabular figure says `lining-nums` with
+   it. What is left in old-style figures is what was set in them on purpose,
+   the large display statistics, and that is one token:
+
+   --figure-nums  the display statistics' figures (the film's count, a
+                  page's row of figures). Old-style, kept by the audit of
+                  2026-10-05 in so many words; the forensic audit reads the
+                  old-style nought of "407" as a letter (#53) and asks for
+                  lining. That is the client's to say: `lining-nums` here is
+                  the whole change. */
+:root {
+  --figure-nums: oldstyle-nums;
+}
+input,
+select,
+textarea,
+button,
+optgroup {
+  font-variant-numeric: inherit;
 }
 
 /* THE LEADING, ON THE GRID. `round()` takes the leading to the nearest whole
@@ -507,8 +797,7 @@ body {
   font-weight: 300;
   font-variation-settings: 'opsz' 200;
   letter-spacing: -0.012em;
-  font-variant-numeric: oldstyle-nums proportional-nums;
-  font-feature-settings: 'onum' 1, 'pnum' 1;
+  font-variant-numeric: var(--figure-nums) proportional-nums;
 }
 /* The line under a display line: its gloss, in the text's own voice a step
    up, on a short measure. */
@@ -548,7 +837,7 @@ body {
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
   white-space: nowrap;
-  transition: color 0.35s ease;
+  transition: color var(--t-state) var(--ease);
 }
 .start-cue::after {
   content: '';
@@ -574,8 +863,6 @@ body {
   animation: scrollcue 2.4s ease-in-out infinite;
 }
 .start-cue:focus-visible {
-  outline: 1px solid #e8b98a;
-  outline-offset: 6px;
   color: #e8b98a;
 }
 @media (hover: hover) {
@@ -730,7 +1017,7 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
    an address) stand upright. Zero specificity, so a class still wins. */
 :where(em) {
   font-style: normal;
-  font-weight: 600;
+  font-weight: 500;
 }
 :where(i, cite, dfn, var, address) {
   font-style: normal;
@@ -817,7 +1104,7 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   text-underline-offset: 4px;
   text-decoration-thickness: 1px;
   text-decoration-color: rgba(232, 185, 138, 0.4);
-  transition: text-decoration-color 200ms ease, color 200ms ease;
+  transition: text-decoration-color var(--t-state) var(--ease), color var(--t-state) var(--ease);
 }
 .prose-surface :where(a):hover {
   color: #f2ede4;
@@ -854,6 +1141,28 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
    sets that itself. */
 .tap-target {
   position: relative;
+}
+
+/* A PLACE IN TWO PARTS, a dot between (StationText: "Bayyannapeta, near
+   Allinagaram · Srikakulam"). Where the line is too short for both, the
+   second part begins the next line WITHOUT its dot (the forensic audit of
+   2026-10-09, #115: on a phone the third table's place wrapped so that "the
+   second line begins with the separator dot ... Expected: break before the
+   place name, without the dot"). Each part carries its dot before it and the
+   line is set to the left by the dot's room, with that much cut away: the
+   part that begins a line has its dot where nothing is drawn. */
+.place-run {
+  --place-dot: 1.1em;
+  display: flex;
+  flex-wrap: wrap;
+  margin-left: calc(-1 * var(--place-dot));
+  clip-path: inset(-0.5em -0.5em -0.5em var(--place-dot));
+}
+.place-run > span::before {
+  content: '\00b7';
+  display: inline-block;
+  width: var(--place-dot);
+  text-align: center;
 }
 .tap-target::after {
   content: '';
@@ -952,6 +1261,249 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   .estate-grain { animation: none; }
 }
 
+/* THE FILM'S COLOPHON: EVERY PAGE, BY ITS PART (components/site/SiteFooter.tsx).
+   ---------------------------------------------------------------------------
+
+   The four parts of the site, each a line: its name at the line's head, in
+   the gilt capitals the offices' roles are in over them (the film's label),
+   and its pages after it in the small text, at the strength the court's dark
+   stone allows (SiteFooter has the measurements). A page's colophon sets the
+   same four names over the same pages as columns. On a phone the parts stand
+   two and two, each a column of its pages, as a page's colophon has them. A
+   row is as tall as a finger needs only where there is a finger.
+
+   (The name is a line of text on the row's baseline, never a flex row: a
+   heading's words are wrapped one by one as they are revealed, and a flex
+   row has no spaces between its items. SEEN on the first build of this:
+   "Theland", "Beforeyoubuy".) */
+/* AS TALL AS THE TWO ROWS OF LINKS IT REPLACED, and no taller: the film's
+   last frame is composed for this block (codaFrame.ts) — the offices stand
+   just under the lit table's foot — and on the first build of it, eight
+   baselines to a line, the block was a notch taller on a laptop's frame, the
+   offices rose into the table, and the lens closed over the film's last
+   picture (MEASURED at 1536x730 and 1280x593: lens 3.2 at the page's end,
+   where it had been 0). Four lines of twenty-two pixels are the eighty-eight
+   the two rows were. One column for the names, as wide as the longest of
+   them, so the pages of every part begin on one edge. */
+.colophon-parts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: calc(var(--bl) * 8);
+  align-items: baseline;
+}
+.colophon-part {
+  display: contents;
+}
+.colophon-part-title {
+  white-space: nowrap;
+}
+.colophon-part-pages {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(var(--bl) * 6);
+}
+.colophon-link {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  font-family: var(--font-text);
+  font-size: var(--step--1);
+  line-height: 1.56;
+  line-height: round(nearest, calc(var(--step--1) * 1.56), var(--bl));
+  color: rgba(242, 237, 228, 0.72);
+  transition: color var(--t-state) var(--ease);
+}
+@media (hover: hover) {
+  .colophon-link:hover {
+    color: #f2ede4;
+  }
+}
+.colophon-link:focus-visible {
+  color: #f2ede4;
+}
+@media (pointer: coarse) {
+  .colophon-link {
+    min-height: 44px;
+  }
+}
+@media (max-width: 767px) {
+  .colophon-parts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: calc(var(--bl) * 6);
+    row-gap: calc(var(--bl) * 7);
+    align-items: start;
+  }
+  .colophon-part {
+    display: block;
+  }
+  .colophon-part-title {
+    padding-bottom: calc(var(--bl) * 1);
+  }
+  .colophon-part-pages {
+    display: block;
+  }
+}
+
+/* THE LEGAL LINE of a colophon, the film's and a page's (SiteFooter, LegalRow).
+   One row on a wide frame: who, the small print, and the choices at the far
+   end. On a phone three lines of it, each whole. A word that can be pressed
+   is forty-four pixels tall wherever a finger is what presses it — a real
+   row, not a larger target laid invisibly over a small one: these are
+   stacked, and two such targets overlapped. */
+.colophon-legal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 1.5rem;
+  row-gap: 0.5rem;
+}
+.colophon-legal-own,
+.colophon-legal-print {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 1.5rem;
+}
+.colophon-legal-choices {
+  margin-left: auto;
+}
+.colophon-legal-link {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  text-underline-offset: 4px;
+  transition: color var(--t-state) var(--ease);
+}
+.colophon-legal-link:focus-visible {
+  color: #f2ede4;
+}
+@media (hover: hover) {
+  .colophon-legal-link:hover {
+    color: #f2ede4;
+  }
+  button.colophon-legal-link:hover {
+    text-decoration: underline;
+  }
+}
+@media (pointer: coarse) {
+  .colophon-legal-link {
+    min-height: 44px;
+  }
+}
+/* Too narrow for the row and wider than a phone (a tablet held upright): the
+   choices take a line of their own from the row's own edge. Left at the far
+   end they were one phrase alone at the right of an empty line. */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .colophon-legal-choices {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
+@media (max-width: 767px) {
+  .colophon-legal {
+    display: grid;
+    row-gap: 0;
+  }
+  .colophon-legal-print {
+    justify-content: space-between;
+    column-gap: 0.75rem;
+  }
+  .colophon-legal-choices {
+    margin-left: 0;
+  }
+}
+
+/* A PAGE'S ACTIONS, on the small capitals' own leading (THE SYSTEM, above):
+   the same proportion as the header's controls, whose leading is the film's
+   stage's baseline. */
+.folio .cta-primary,
+.folio .cta-quiet,
+.folio-colophon .cta-primary,
+.consent .cta-quiet {
+  line-height: var(--lead--2);
+}
+
+/* THE STILL (components/experience/SceneStill.tsx, stills.ts).
+   ---------------------------------------------------------------------------
+
+   A view's own first frame, over the canvas and under the page, until the
+   scene has been built under it. Two images, one over the other, so a still
+   dissolves into the next (the film's chapters, read ahead of the scene). The
+   layer's own strength is written each frame by the component. */
+.scene-still {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.scene-still-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0;
+  transition: opacity 620ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.scene-still-img[data-on] { opacity: 1; }
+/* (An image with nothing in it yet draws its outline in some browsers.) */
+.scene-still-img:not([src]) { visibility: hidden; }
+
+/* THE CURTAIN (components/experience/ExperienceCanvasHost.tsx).
+   ---------------------------------------------------------------------------
+
+   The house's name on its dark for as long as the first still and the type
+   take to arrive. It lifts when the document says the still is in
+   (`data-still="in"`, written by a script in the markup), or says there is
+   none; and after two and a half seconds it lifts whatever has arrived, by
+   this stylesheet alone — a curtain that needs a script to lift is a page
+   that a failed script leaves dark. */
+.scene-curtain {
+  opacity: 1;
+  transition: opacity 900ms cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 900ms;
+  animation: scene-curtain-out 900ms cubic-bezier(0.4, 0, 0.2, 1) 2500ms forwards;
+}
+html[data-still='in'] .scene-curtain,
+html[data-still='none'] .scene-curtain {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+@keyframes scene-curtain-out {
+  to { opacity: 0; visibility: hidden; }
+}
+/* Its hairline runs for as long as the curtain can stand: the one promise it
+   can keep. */
+.scene-curtain-line {
+  transform: scaleX(0);
+  animation: scene-curtain-line 2500ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes scene-curtain-line {
+  to { transform: scaleX(1); }
+}
+/* THE HEADER ARRIVES WITH THE PAGE, NOT BEFORE THE CURTAIN. It is the first
+   thing in the document and the curtain is a few kilobytes further down it:
+   on a slow line a browser painted the mark and the two controls alone on
+   the dark, then the curtain over them, then lifted it off them again (SEEN
+   in the frame at 0.3 s of an 8 Mbit load). So the header is not there for
+   its first third of a second and comes up over the next half — under the
+   curtain, on any ordinary connection. (`backwards` only: once it has run,
+   the header's strength is the cascade's again.) */
+.site-header {
+  animation: header-arrive var(--t-move) var(--ease) 350ms backwards;
+}
+@keyframes header-arrive {
+  from { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-header { animation: none; }
+  .scene-curtain { transition-duration: 1ms, 0s; transition-delay: 0s, 1ms; animation-duration: 1ms; }
+  .scene-curtain-line { animation: none; transform: scaleX(1); }
+  .scene-still-img { transition-duration: 1ms; }
+}
+
 /* The site grid.
    ---------------------------------------------------------------------------
 
@@ -1006,8 +1558,8 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   text-transform: uppercase;
   white-space: nowrap;
   transition:
-    color 0.35s ease,
-    gap 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    color var(--t-state) var(--ease),
+    gap var(--t-move) var(--ease);
 }
 /* Four baselines of leading, like every small line on the grid. */
 .cta-primary,
@@ -1032,12 +1584,6 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   min-height: 44px;
   transform: translateY(-50%);
 }
-.cta-primary:focus-visible,
-.cta-quiet:focus-visible,
-.cta-enquire:focus-visible {
-  outline: 1px solid #e8b98a;
-  outline-offset: 6px;
-}
 /* THE LEADING RULE: a gilt hairline before the words, which lengthens on
    hover as the words move up to meet the arrow. */
 .cta-primary {
@@ -1051,7 +1597,7 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   width: calc(var(--bl) * 9.6);
   height: 1px;
   background: rgba(232, 185, 138, 0.75);
-  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width var(--t-move) var(--ease);
 }
 /* The gilt is a pointer's hover and a keyboard's focus. A touch screen has
    neither: there `:hover` is whatever the last tap left it on, and the action
@@ -1076,7 +1622,7 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
 .cta-quiet {
   gap: calc(var(--bl) * 3);
   min-height: calc(var(--bl) * 11);
-  color: rgba(242, 237, 228, 0.82);
+  color: var(--ink-3);
 }
 /* OVER THE FILM A QUIET LINK IS THE TEXT'S OWN IVORY. Its eighteen parts in a
    hundred of transparency are for a page's flat ground; on a picture they
@@ -1110,7 +1656,7 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   background: #e8b98a;
   transform: scaleX(0);
   transform-origin: left;
-  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--t-move) var(--ease);
 }
 .cta-quiet:hover .cta-quiet-label::after,
 .cta-quiet:focus-visible .cta-quiet-label::after {
@@ -1141,7 +1687,7 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   height: 1px;
   background: rgba(232, 185, 138, 0.45);
   transform-origin: left;
-  transition: background-color 0.35s ease;
+  transition: background-color var(--t-state) var(--ease);
 }
 .cta-enquire:hover,
 .cta-enquire:focus-visible {
@@ -1150,6 +1696,30 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
 .cta-enquire:hover::before,
 .cta-enquire:focus-visible::before {
   background: #f2ede4;
+}
+/* UNDER A FINGER THE HEADER'S TWO CONTROLS ARE 44 PIXELS TALL THEMSELVES
+   (the forensic audit of 2026-10-09, #117: "the header's Enquire and Menu
+   34 px ... Expected: at least 44 px of height for every press target").
+   Each already had a 44px area laid invisibly over it (.tap-target); a tool
+   that measures the control measures the control. Nothing is drawn larger:
+   the words stay where the bar centres them, and Enquire's hairline keeps
+   its distance under the word (it is hung from the box's foot, so it is
+   lifted by half of what the box grew). */
+@media (pointer: coarse) {
+  .cta-enquire,
+  .menu-toggle {
+    min-height: 44px;
+  }
+  .cta-enquire::before {
+    bottom: calc(max(0px, (44px - var(--bl) * 8.4) / 2) + var(--bl) * 1.4);
+  }
+  /* A line's one pressable phrase (a colophon's telephone number beside its
+     action): a row of its own height, with the words where they were. */
+  .press-row {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
 }
 
 /* THE FILM'S MENU CONTROL (SiteHeader). The word, set as the masthead sets
@@ -1172,15 +1742,32 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   font-weight: 500;
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
-  transition: color 0.35s ease;
+  transition: color var(--t-state) var(--ease);
 }
 .menu-toggle:hover,
 .menu-toggle:focus-visible {
   color: #f2ede4;
 }
-.menu-toggle:focus-visible {
-  outline: 1px solid #e8b98a;
-  outline-offset: 6px;
+/* Its two words share one cell: the control is the width of the wider. */
+.menu-toggle-label {
+  display: inline-grid;
+  justify-items: end;
+}
+.menu-toggle-label > span {
+  grid-area: 1 / 1;
+  transition: opacity var(--t-state) var(--ease);
+}
+.menu-toggle-label > .is-off {
+  opacity: 0;
+}
+/* WITH THE MENU OPEN THE HEADER'S "ENQUIRE" STEPS OUT: it is in the menu's
+   last part, a line a finger can press, and with the row at the menu's foot
+   it stood on the screen three times (the forensic audit of 2026-10-09,
+   #61). Its place is kept, so nothing beside it moves. */
+html[data-menu-open] .site-header .cta-enquire {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--t-state) var(--ease), visibility 0s linear var(--t-state);
 }
 .menu-toggle-lines {
   position: relative;
@@ -1195,9 +1782,9 @@ html[data-doorway='exit'][data-doorway-held='1'] [data-chapter-fade] {
   height: 1px;
   background: currentColor;
   transition:
-    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    top 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    transform var(--t-move) var(--ease),
+    width var(--t-move) var(--ease),
+    top var(--t-move) var(--ease);
 }
 .menu-toggle-lines i:first-child {
   top: 0;
@@ -1312,15 +1899,11 @@ html[data-menu-open] [data-film] {
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
   color: #f2ede4;
-  transition: color 0.3s ease;
+  transition: color var(--t-state) var(--ease);
 }
 .sound-toggle:hover,
 .sound-toggle:focus-visible {
   color: #e8b98a;
-}
-.sound-toggle:focus-visible {
-  outline: 2px solid #e8b98a;
-  outline-offset: 4px;
 }
 /* The loudspeaker (AmbientSound.tsx): its waves when the sound is on, a
    cross in their place when it is off. Still — the header has no moving part. */
@@ -1332,7 +1915,7 @@ html[data-menu-open] [data-film] {
 }
 .sound-glyph .sound-wave,
 .sound-glyph .sound-mute {
-  transition: opacity 0.3s ease;
+  transition: opacity var(--t-state) var(--ease);
 }
 .sound-glyph .sound-wave {
   opacity: 0;
@@ -1343,7 +1926,7 @@ html[data-menu-open] [data-film] {
 .sound-glyph.is-on .sound-mute {
   opacity: 0;
 }
-.sound-toggle { transition: color 0.3s ease, opacity 0.4s ease; }
+.sound-toggle { transition: color var(--t-state) var(--ease), opacity var(--t-move) var(--ease); }
 .sound-toggle.is-tucked { opacity: 0; pointer-events: none; }
 /* THE WORD, ONLY WHEN IT IS ASKED FOR (the paid audit of 2026-10-04: the
    navigation "almost invisible unless needed"). The bars are the control; the
@@ -1355,11 +1938,242 @@ html[data-menu-open] [data-film] {
   white-space: nowrap;
   opacity: 0;
   margin-left: calc(var(--bl) * -2.4);
-  transition: max-width 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease, margin-left 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: max-width var(--t-move) var(--ease), opacity var(--t-state) var(--ease), margin-left var(--t-move) var(--ease);
 }
 .sound-toggle:hover .sound-label,
 .sound-toggle:focus-visible .sound-label {
   max-width: 9em;
   opacity: 1;
   margin-left: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   THE RAIL (components/experience/ChapterRail.tsx): where you are, and the way
+   to anywhere else.
+   ---------------------------------------------------------------------------
+
+   A column of dots down the frame's right edge, one a chapter of the film or a
+   section of a page, and a gilt ring that travels it with the scroll. The
+   dots' right edge is the frame's own content edge, under the header's
+   controls; the names stand out to their left when the rail is pointed at,
+   reached by keyboard or (on a touch screen) touched.
+
+   SEEN ON ANY PICTURE WITHOUT A PLATE. A dot is ivory with a hairline of dark
+   round it, so on a dark frame the ivory carries it and on an ivory wall the
+   hairline does (0.55 of black on the brightest wall the hall has, a luma of
+   215, is 97: 4:1 against that wall). The names are text, and text needs a
+   ground: a density comes up with them at the frame's edge (`rail-shade`)
+   and goes with them — density, as the lens wears under the film's copy, not
+   a blur and not a panel. 0.62 of black under every name: on the brightest
+   wall that is a luma of 82, where the ivory names stand at 6:1 and the gilt
+   one at 4.6:1; it falls away to nothing toward the picture and toward the
+   frame's top and foot, so what comes up is the frame's edge darkening, as a
+   lens vignettes, and not a shape. (At 0.9 in an ellipse it was a shape.)
+
+   Sizes are in the frame's unit on the film's stage and in pixels elsewhere
+   (`--u` is a pixel off the stage), with floors: a dot is never under 5px. */
+.rail {
+  --rail-dot: max(5px, calc(6 * var(--u, 1px)));
+  --rail-ring: max(13px, calc(16 * var(--u, 1px)));
+  --rail-pitch: max(20px, calc(27 * var(--u, 1px)));
+  --rail-hit: max(28px, calc(30 * var(--u, 1px)));
+  --rail-pos: 0;
+  position: fixed;
+  z-index: 20;
+  top: 50%;
+  right: var(--edge, 1.5rem);
+  height: calc(var(--rail-n) * var(--rail-pitch));
+  margin-top: calc(var(--rail-n) * var(--rail-pitch) / -2);
+  pointer-events: none;
+  transition: opacity var(--t-move) var(--ease), visibility var(--t-move);
+}
+html[data-menu-open] .rail,
+.rail[data-rail-hidden] {
+  opacity: 0;
+  visibility: hidden;
+}
+.rail-list {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rail-item {
+  height: var(--rail-pitch);
+}
+.rail-item a {
+  /* THE LINK IS ITS DOT, and no wider (the forensic audit of 2026-10-09,
+     #112). The name used to stand in the link's own row, unseen, and the link
+     was as wide as it: 186 px of nothing down the middle of a phone's screen
+     that opened the list of names at a touch. The name hangs off the link's
+     left edge now, out of its box, and is only there to be touched once it is
+     there to be seen. */
+  position: relative;
+  display: flex;
+  width: var(--rail-hit);
+  height: 100%;
+  margin-left: auto;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.rail-dot {
+  position: relative;
+  display: flex;
+  width: var(--rail-hit);
+  height: 100%;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+}
+.rail-dot::before {
+  content: '';
+  width: var(--rail-dot);
+  height: var(--rail-dot);
+  border-radius: 50%;
+  background: #f2ede4;
+  box-shadow: 0 0 0 1px rgba(10, 8, 6, 0.55);
+  transition: background-color var(--t-state) var(--ease), transform var(--t-state) var(--ease);
+}
+.rail-item[data-state='past'] .rail-dot::before,
+.rail-item[data-state='current'] .rail-dot::before {
+  background: #e8b98a;
+}
+.rail-item a:focus-visible .rail-dot::before {
+  transform: scale(1.5);
+  background: #e8b98a;
+}
+/* (A hover is a pointer's. A touch screen keeps the last thing touched in
+   `:hover` until something else is touched: the names, opened by a touch and
+   closed again by the scroll, stayed printed over the film's copy — #112.) */
+@media (hover: hover) {
+  .rail-item a:hover .rail-dot::before {
+    transform: scale(1.5);
+    background: #e8b98a;
+  }
+}
+/* The line the dots stand on, and how much of it is behind you. */
+.rail-track {
+  position: absolute;
+  top: calc(var(--rail-pitch) / 2);
+  right: calc(var(--rail-dot) / 2 - 0.5px);
+  width: 1px;
+  height: calc((var(--rail-n) - 1) * var(--rail-pitch));
+  background: rgba(242, 237, 228, 0.3);
+  box-shadow: 0 0 0 0.5px rgba(10, 8, 6, 0.28);
+}
+.rail-track i {
+  display: block;
+  width: 100%;
+  height: calc(var(--rail-pos) * var(--rail-pitch));
+  max-height: 100%;
+  background: #e8b98a;
+}
+/* The marker: a ring that rides the line and closes round the dot you are on. */
+.rail-marker {
+  position: absolute;
+  top: calc(var(--rail-pitch) / 2 - var(--rail-ring) / 2);
+  right: calc(var(--rail-dot) / 2 - var(--rail-ring) / 2);
+  width: var(--rail-ring);
+  height: var(--rail-ring);
+  border: 1px solid #e8b98a;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(10, 8, 6, 0.4), inset 0 0 0 1px rgba(10, 8, 6, 0.28);
+  transform: translateY(calc(var(--rail-pos) * var(--rail-pitch)));
+  will-change: transform;
+}
+/* The names: off the link's left edge, the height of its row. (The space
+   between a name and its dot is the name's own padding, so a pointer going
+   from one to the other never leaves the link.) */
+.rail-label {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding-right: max(6px, calc(10 * var(--u, 1px)));
+  white-space: nowrap;
+  font-size: var(--step--1);
+  line-height: 1;
+  letter-spacing: var(--track-body);
+  color: #f2ede4;
+  opacity: 0;
+  transform: translateX(8px);
+  pointer-events: none;
+  transition: opacity var(--t-state) var(--ease), transform var(--t-move) var(--ease), color var(--t-state) var(--ease);
+}
+.rail-item[data-state='current'] .rail-label {
+  color: #e8b98a;
+}
+.rail-item a:focus-visible .rail-label {
+  color: #e8b98a;
+}
+@media (hover: hover) {
+  .rail-item a:hover .rail-label {
+    color: #e8b98a;
+  }
+}
+/* The density the names stand on: at the frame's edge, widest at the rail's
+   middle, gone before the picture's subject. */
+.rail-shade {
+  position: absolute;
+  top: calc(var(--rail-pitch) * -7);
+  bottom: calc(var(--rail-pitch) * -7);
+  right: calc(var(--edge, 1.5rem) * -1);
+  width: max(380px, calc(470 * var(--u, 1px)));
+  background: linear-gradient(
+    to left,
+    rgba(8, 6, 4, 0.62) 0%,
+    rgba(8, 6, 4, 0.62) 56%,
+    rgba(8, 6, 4, 0.34) 78%,
+    rgba(8, 6, 4, 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 30%, #000 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 30%, #000 70%, transparent 100%);
+  opacity: 0;
+  transition: opacity var(--t-move) var(--ease);
+}
+/* Asked for: pointed at, reached by keyboard, or touched open. */
+.rail:has(a:focus-visible) .rail-label,
+.rail.is-open .rail-label {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.rail:has(a:focus-visible) .rail-shade,
+.rail.is-open .rail-shade {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .rail:has(a:hover) .rail-label {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  .rail:has(a:hover) .rail-shade {
+    opacity: 1;
+  }
+}
+/* A touch screen, opened: rows a finger can choose between (44 px, the
+   least a thumb is sure of). */
+@media (hover: none) {
+  .rail {
+    --rail-pitch: 18px;
+  }
+  .rail.is-open {
+    --rail-pitch: 44px;
+  }
+  .rail-label {
+    font-size: var(--step-0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .rail-label,
+  .rail-shade,
+  .rail-dot::before {
+    transition: none;
+  }
 }

@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { leads, leadInterests } from '@estate/db';
 import { generateDedupeKey, normalizePhone } from '@estate/domain/leads/dedupe';
+import { describeEnquiry } from '@estate/domain/leads/enquiry';
 import { OUTBOUND_THRESHOLD } from '@estate/domain/leads/scoring';
 import { stitchSessionToLead } from '@/server/leads/stitch';
 import { notifications, users } from '@estate/db';
@@ -19,6 +20,8 @@ function geoPlaceFromRequest(req: Request): string | null {
     null
   );
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // In-memory rate limiting (sufficient for single-region deployment of the CRM API)
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
@@ -93,6 +96,17 @@ export async function POST(request: Request) {
     const client = postgres(process.env.DATABASE_URL!);
     const db = drizzle(client);
 
+    // WHAT WAS SENT, KEPT WHOLE (@estate/domain/leads/enquiry). This kept
+    // sixty characters of the message and nothing else: not the time of day
+    // the visitor asked to be telephoned, not the day they asked to walk the
+    // land. The head still goes where the inbox has always read it from; the
+    // whole request goes on the lead (source_detail: for the website, what
+    // was sent), and the lead's page shows it.
+    const said = describeEnquiry(payload);
+    const projectId =
+      typeof payload.projectId === 'string' && UUID.test(payload.projectId) ? payload.projectId : null;
+    const unitId = typeof payload.unitId === 'string' && UUID.test(payload.unitId) ? payload.unitId : null;
+
     // Idempotent Insert (FR-C26)
     await db.transaction(async (tx) => {
       const insertedLeads = await tx.insert(leads).values({
@@ -100,22 +114,33 @@ export async function POST(request: Request) {
         phone: phone,
         email: payload.email,
         source: 'website',
+        sourceDetail: said.detail ?? undefined,
         triageStatus: 'new', // Lands in the triage inbox
         stage: 'new',
         dedupeKey: dedupeKey,
-        timelineExpectation: payload.message ? payload.message.substring(0, 60) : undefined,
+        timelineExpectation: said.head ?? undefined,
       }).onConflictDoNothing({ target: leads.dedupeKey }).returning({ id: leads.id });
 
       if (insertedLeads.length > 0) {
         const leadId = insertedLeads[0].id;
 
-        // Link project/unit interest context if provided
-        if (payload.projectId) {
-          await tx.insert(leadInterests).values({
-            leadId: leadId,
-            projectId: payload.projectId,
-            unitId: payload.unitId || null
-          }).onConflictDoNothing();
+        // Link project/unit interest context if provided. IN A SAVEPOINT: an
+        // id the register has and the core does not (a layout retired since
+        // the page was built, a malformed one) fails its foreign key, and
+        // inside the one transaction that failure took the lead with it —
+        // losing an interest is a nuisance, losing a lead is lost revenue.
+        if (projectId) {
+          try {
+            await tx.transaction(async (sp) => {
+              await sp.insert(leadInterests).values({
+                leadId: leadId,
+                projectId,
+                unitId,
+              }).onConflictDoNothing();
+            });
+          } catch (e) {
+            console.error('Lead interest not linked (lead kept):', e);
+          }
         }
 
         // Stitch the visitor session, score and route. Best effort by design:

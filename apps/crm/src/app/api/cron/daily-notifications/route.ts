@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { systemQuery } from '@/server/db';
 import { notifications } from '@estate/db';
 import { sql } from 'drizzle-orm';
+import { cronAuthorized } from '@/server/cron-auth';
 
 // notifications_dedupe_uq is a partial index; the predicate is required for
 // Postgres to resolve the conflict target
@@ -14,7 +15,7 @@ const DEDUPE_CONFLICT = {
  * T85 Cron: Daily sweep for upcoming time-based events (visits, follow-ups, documents).
  */
 export async function GET(req: NextRequest) {
-  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get('Authorization'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

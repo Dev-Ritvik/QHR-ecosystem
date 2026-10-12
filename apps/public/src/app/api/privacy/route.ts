@@ -7,8 +7,8 @@ import { SESSION_COOKIE, VISITOR_COOKIE } from '@/lib/consent/types';
 //
 // The DPDP Act grants access, correction, erasure and grievance redressal. Two
 // of those can be served automatically for an anonymous visitor and are served
-// here; correction and grievance need a human and are handled by the published
-// DPO contact.
+// here; correction and grievance need a human and are handled at the published
+// contact address.
 //
 // IDENTITY. An anonymous visitor has no account to authenticate against, so the
 // only honest proof they can offer is possession of their own session cookie —

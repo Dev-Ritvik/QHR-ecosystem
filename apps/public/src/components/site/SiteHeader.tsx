@@ -6,23 +6,33 @@
 // move between them except links buried in body copy, and the logo was
 // referenced by zero pages.
 //
-// Two decisions worth stating, because both were the harder option:
+// Three decisions worth stating, because each was the harder option:
 //
-// 1. FOUR LINKS, NOT TWENTY. The route registry has twenty-odd entries and the
-//    instinct is to surface them. But a buyer arrives wanting one of four
-//    things — see the land, take the plans, read up, or talk to someone — and a
-//    bar with twenty items answers none of them faster. Everything else is
-//    reachable from the footer and from the pages themselves.
+// 1. THE BAR IS THE MARK, ENQUIRE AND "MENU", ON EVERY PAGE. A buyer arrives
+//    wanting one of a few things — see the land, take the plans, read up, or
+//    talk to someone — and a bar with twenty items answers none of them
+//    faster. So the bar carries the one control a buyer reaches for when they
+//    are ready, and everything else is one press away in the panel, which is
+//    the whole site set out as a contents page (siteMap.ts).
 //
 // 2. IT DOES NOT HIDE ON SCROLL. Auto-hiding chrome is a common flourish and it
 //    costs a buyer the one control they reach for on a phone when they are
 //    ready: the way to contact somebody. It stays, and earns its space by being
 //    short.
 //
-// The bar sits above the persistent WebGL canvas, so it is deliberately thin,
-// blurred rather than opaque, and never remounts — the (site) layout survives
-// navigation inside the experience segment, which is the whole point of that
-// segment.
+// 3. ONE HEADER, NOT TWO (the client, 2026-10-06: "make sure everything gives
+//    the same vibe / no page must feel left out"). The film had this header;
+//    every other page had another — a frosted navy bar on a centred grid, with
+//    four links set across it. A visitor who left the film arrived somewhere
+//    with a different masthead, which is what a different website is. Every
+//    page has the film's now: the mark off the frame's own edge, the controls
+//    off the other, in the frame's unit. Over a picture (the film, a page's
+//    opening plate) it is air; over a page's reading sheets it stands on the
+//    sheets' own dark (folio.css, `data-folio`).
+//
+// The bar sits above the persistent WebGL canvas and never remounts — the
+// (site) layout survives navigation inside the experience segment, which is
+// the whole point of that segment.
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -30,34 +40,7 @@ import { usePathname } from 'next/navigation';
 import { lenisInstance } from '@/components/experience/SmoothScroll';
 import { Logo } from './Logo';
 import { ResumeResidence } from './ResumeResidence';
-
-const PRIMARY = [
-  { href: '/properties', label: 'Plots' },
-  { href: '/downloads', label: 'Plans' },
-  { href: '/knowledge', label: 'Knowledge' },
-  { href: '/branches', label: 'Offices' },
-];
-
-const ALL = [
-  { group: 'The land', links: [
-    { href: '/properties', label: 'Plots and sizes' },
-    { href: '/downloads', label: 'Approved layout plans' },
-    { href: '/locations', label: 'Where the sites are' },
-    { href: '/gallery', label: 'Gallery' },
-  ]},
-  { group: 'The company', links: [
-    { href: '/about', label: 'About' },
-    { href: '/why-us', label: 'How we work' },
-    { href: '/testimonials', label: 'What buyers say' },
-    { href: '/careers', label: 'Careers' },
-  ]},
-  { group: 'Before you buy', links: [
-    { href: '/investment-guide', label: 'Investment guide' },
-    { href: '/knowledge', label: 'Knowledge' },
-    { href: '/faqs', label: 'Questions' },
-    { href: '/start-here', label: 'Start here' },
-  ]},
-];
+import { FILM_PAGE, SITE_PARTS } from './siteMap';
 
 export function SiteHeader() {
   const pathname = usePathname() || '/';
@@ -137,36 +120,29 @@ export function SiteHeader() {
 
   return (
     <>
-      {/* OVER THE FILM THE HEADER IS AIR, NOT A BAR. Everywhere else it keeps
-          its frosted navy band; on the home page it is nothing at all — not
-          the band, and since the second art-direction audit (2026-09-30) not
-          the soft fall of shade that replaced it either: "artificial darkness
-          ... brute-forced onto the screen". The navigation sits on the top of
-          the picture, which the film keeps dark on purpose — a deep zenith
-          outside, the unlit vault of a gallery hall inside.
+      {/* OVER A PICTURE THE HEADER IS AIR, NOT A BAR. Over the film it is
+          nothing at all — not a band, and since the second art-direction
+          audit (2026-09-30) not the soft fall of shade that replaced one
+          either: "artificial darkness ... brute-forced onto the screen". The
+          navigation sits on the top of the picture, which the film keeps dark
+          on purpose — a deep zenith outside, the unlit vault of a gallery
+          hall inside. The same over a page's opening plate, whose own density
+          comes down from the frame's top. Over a page's reading sheets it
+          takes the sheets' own dark, so a line of text scrolling under the
+          mark is not read through it (folio.css).
 
-          AND OVER THE FILM IT STANDS ON THE FILM'S STAGE (globals.css): on a
-          wide frame the film's copy is set in the frame's own unit, on a grid
-          that scales with the picture, and the header is on that grid — the
-          mark on the copy's left edge, the controls the size of the type
-          below them — at every size of frame, not only the one it was drawn
-          at. Everywhere else the unit is a pixel and the bar is its 62. */}
-      <header
-        className={
-          'fixed inset-x-0 top-0 z-40 transition-colors duration-500 ' +
-          (overFilm
-            ? 'film-stage bg-transparent'
-            : 'border-b border-white/[0.07] bg-[#0A1120]/80 backdrop-blur-md')
-        }
-      >
-        {/* ON THE SITE GRID (globals.css): the same twelve columns as the
-            hero, so the logo stands on the copy's left edge, the nav is set
-            justified across columns 7-10 (first link on column 7's line, last
-            ending on column 10's), and Enquire ends on the right edge of the
-            frame. On a phone it is a plain row, logo left and Enquire right:
-            twelve columns and eleven gutters do not fit 390px round a badge and
-            a button, and the grid's minimum width widened the whole page to
-            484px (measured). */}
+          AND IT STANDS ON THE FILM'S STAGE (globals.css) ON EVERY PAGE: on a
+          wide frame the film's copy is set in the frame's own unit, and the
+          header is on that grid — the mark on the copy's left edge, the
+          controls the size of the type below them — at every size of frame.
+          A page's title stands under the mark exactly as the cover's does. */}
+      <header className={'site-header film-stage fixed inset-x-0 top-0 z-40' + (overFilm ? ' is-film' : '')}>
+        {/* ON THE SITE GRID (globals.css): the logo stands on the copy's left
+            edge and the controls end on the frame's right. On a phone it is a
+            plain row, logo left and the controls right: twelve columns and
+            eleven gutters do not fit 390px round a badge and a button, and
+            the grid's minimum width widened the whole page to 484px
+            (measured). */}
         <div className="site-grid h-[var(--bar)] items-center max-md:!flex max-md:justify-between">
           <div className="col-span-6 flex items-center gap-6 md:col-span-5 lg:col-span-6">
             <Logo size={30} />
@@ -178,114 +154,48 @@ export function SiteHeader() {
             <ResumeResidence className="hidden md:inline-block" />
           </div>
 
-          {/* OVER THE FILM THE NAVIGATION FOLDS INTO THE MENU. The third
-              art-direction critique (2026-09-30): "There is no top navigation,
-              just a delicate, beautifully kerned logo and a single, tiny menu
-              icon" — "the top navigation ... should be hidden behind a single,
-              elegant menu toggle until explicitly needed." So on the film the
-              bar is the mark, Enquire (the one control a buyer reaches for
-              when they are ready, which is why it never hides — note 2 above)
-              and "Menu"; every page the four links led to is one press away in
-              the panel. Every other page keeps the links. */}
-          <nav
-            aria-label="Primary"
-            className={overFilm ? 'hidden' : 'hidden md:col-span-5 md:block lg:col-span-4'}
-          >
-            <ul className="flex items-center justify-between">
-              {PRIMARY.map((l) => {
-                const active = pathname === l.href;
-                return (
-                  <li key={l.href}>
-                    <Link
-                      href={l.href}
-                      aria-current={active ? 'page' : undefined}
-                      className={
-                        // tap-target: these render 18px tall, which is fine for
-                        // a mouse and not for the tablets that also get this
-                        // bar. The hit area grows; the type does not.
-                        // 10px at 0.32em: the audit's "microscopic, perfectly
-                        // tracked" masthead, quieter than the film under it.
-                        'tap-target group relative text-step--2 font-medium uppercase tracking-[0.3em] transition-colors duration-300 ' +
-                        (active
-                          ? 'text-[#F2EDE4]'
-                          : 'text-[#F2EDE4]/[0.72] hover:text-[#F2EDE4]')
-                      }
-                    >
-                      {/* NO BRACKETS. The client's art-direction review named
-                          them outright: "[ PLOTS ]" reads as code, a
-                          wireframe, a terminal — "aggressively anti-luxury".
-                          What is left is the word, set small, tracked wide and
-                          quiet, with a hairline that draws in under it on hover
-                          and stays under the page you are on. That is the whole
-                          vocabulary an editorial masthead uses. */}
-                      {l.label}
-                      <span
-                        aria-hidden
-                        className={
-                          'pointer-events-none absolute -bottom-[5px] left-0 h-px w-full origin-left bg-[#E8B98A]/70 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ' +
-                          (active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100')
-                        }
-                      />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
-
-          <div
-            className={
-              'col-span-6 flex items-center justify-end ' +
-              (overFilm ? 'gap-7 md:col-span-7 lg:col-span-6' : 'gap-3 md:col-span-2')
-            }
-          >
+          {/* THE NAVIGATION IS IN THE MENU. The third art-direction critique
+              (2026-09-30): "There is no top navigation, just a delicate,
+              beautifully kerned logo and a single, tiny menu icon" — "the top
+              navigation ... should be hidden behind a single, elegant menu
+              toggle until explicitly needed." So the bar is the mark, Enquire
+              (the one control a buyer reaches for when they are ready, which
+              is why it never hides — note 2 above) and "Menu"; every page of
+              the site is one press away in the panel. */}
+          <div className="col-span-6 flex items-center justify-end gap-7 md:col-span-7 lg:col-span-6">
             {/* The film's sound control is set here (AmbientSound, a portal
                 into this slot): on the header's ground, which the lens holds
                 dark, rather than in a corner of the picture, which nothing
                 does. Empty, and no width, on every other page. */}
             {overFilm ? <span id="film-sound" className="flex items-center" /> : null}
-            <Link href="/contact" className={'cta-enquire tap-target' + (overFilm ? ' on-film' : '')}>
+            <Link href="/contact" className="cta-enquire on-film tap-target">
               Enquire
             </Link>
 
-            {overFilm ? (
-              // The film's one menu control: the word, set like the masthead,
-              // and two hairlines that close into a cross.
-              <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                aria-expanded={open}
-                aria-controls="site-menu"
-                className="menu-toggle on-film tap-target group"
-              >
-                <span className="sr-only">{open ? 'Close menu' : 'Open menu'}</span>
-                <span aria-hidden className="menu-toggle-label">
-                  {open ? 'Close' : 'Menu'}
-                </span>
-                <span aria-hidden className={'menu-toggle-lines' + (open ? ' is-open' : '')}>
-                  <i />
-                  <i />
-                </span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                aria-expanded={open}
-                aria-controls="site-menu"
-                className="tap-target -mr-2 flex h-10 w-10 items-center justify-center text-[#F2EDE4]/70 hover:text-[#F2EDE4] md:hidden"
-              >
-                <span className="sr-only">{open ? 'Close menu' : 'Open menu'}</span>
-                <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true">
-                  <path
-                    d={open ? 'M1 1 L17 11 M17 1 L1 11' : 'M0 1 H18 M0 6 H18 M0 11 H18'}
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    fill="none"
-                  />
-                </svg>
-              </button>
-            )}
+            {/* The one menu control: the word, set like the masthead, and two
+                hairlines that close into a cross. */}
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              aria-controls="site-menu"
+              className="menu-toggle on-film tap-target group"
+            >
+              <span className="sr-only">{open ? 'Close menu' : 'Open menu'}</span>
+              {/* BOTH WORDS, ONE OVER THE OTHER, so the control is as wide as
+                  the wider of them whichever is showing. It was one word or
+                  the other, and "Close" is five pixels wider than "Menu":
+                  "Enquire" beside it jumped left as the menu opened (the
+                  forensic audit of 2026-10-09, #102). */}
+              <span aria-hidden className="menu-toggle-label">
+                <span className={open ? 'is-off' : undefined}>Menu</span>
+                <span className={open ? undefined : 'is-off'}>Close</span>
+              </span>
+              <span aria-hidden className={'menu-toggle-lines' + (open ? ' is-open' : '')}>
+                <i />
+                <i />
+              </span>
+            </button>
           </div>
         </div>
       </header>
@@ -298,13 +208,11 @@ export function SiteHeader() {
           aria-modal="true"
           aria-label="Site menu"
           data-lenis-prevent
-          className={
-            // /[0.97], not /97: Tailwind 3 only generates the opacity steps in
-            // its scale, and /97 generated nothing — the panel had no ground at
-            // all, the page and the film showing straight through its links.
-            'menu-panel fixed inset-0 z-30 overflow-y-auto bg-[#060A14]/[0.97] px-6 pb-16 pt-[96px]' +
-            (overFilm ? ' film-stage md:px-0 md:pt-[calc(152*var(--u))]' : ' md:hidden')
-          }
+          // OPAQUE. At 97% the page behind it was a ghost under the list: on
+          // /about the founder's portrait, with the links' text crossing it
+          // (the forensic audit of 2026-10-09, #103). The hall's own dark,
+          // as every page's ground is (folio.css).
+          className="menu-panel film-stage fixed inset-0 z-30 overflow-y-auto bg-[#0E0B08] px-6 pb-16 pt-[96px] md:px-0 md:pt-[calc(138*var(--u))]"
         >
           {/* THE PANEL IS SET ON THE HEADER'S OWN GRID (the fourth
               art-direction critique, 2026-09-30: "The grid is loose. The
@@ -316,7 +224,10 @@ export function SiteHeader() {
               smallest step, links at step 3 on a ten-baseline leading, and
               nothing between them but the grid's own air. On a phone it is
               one column, links at step 2. */}
-          <div className="site-grid !px-0 md:!px-6">
+          {/* At the frame's own edge, under the mark: it stood a 24px gutter in
+              from the window on every wide frame, three inches left of the
+              header it hangs from. */}
+          <div className="site-grid !px-0 md:!px-[var(--edge)]">
             {/* First item in the panel, above the route groups: on a phone the
                 header has no room for it, so this is where the same affordance
                 lives. Renders nothing when there is nothing to resume, so the
@@ -324,48 +235,49 @@ export function SiteHeader() {
             <div className="col-span-12">
               <ResumeResidence className="mb-10 block" />
             </div>
-            {ALL.map((g, i) => (
-              <section
-                key={g.group}
-                className={'col-span-12 mb-10 ' + (overFilm ? 'md:col-span-4 md:mb-0' : '')}
-              >
-                <h2 className="t-eyebrow flex items-baseline gap-4 text-[#D9B07A]/[0.78]">
-                  <span aria-hidden>{['I', 'II', 'III'][i]}</span>
-                  <span>{g.group}</span>
-                </h2>
-                <span aria-hidden className="mt-4 block h-px w-10 bg-[#D9B07A]/40" />
-                <ul className={'mt-4 ' + (overFilm ? 'md:mt-6' : '')}>
-                  {g.links.map((l) => (
-                    <li key={l.href + l.label}>
-                      <Link
-                        href={l.href}
-                        // Real height rather than a pseudo element here: these
-                        // are stacked, so an invisible overlay would overlap its
-                        // neighbours. 44px of actual row is also just better in
-                        // a full-screen menu.
-                        className={
-                          'flex min-h-[44px] items-center text-step-2 text-[#F2EDE4]/[0.86] transition-colors duration-300 hover:text-[#E8B98A] focus-visible:text-[#E8B98A]' +
-                          (overFilm ? ' md:min-h-0 md:text-step-3' : '')
-                        }
-                      >
-                        {l.label}
-                      </Link>
-                    </li>
-                  ))}
+            {SITE_PARTS.map((g) => (
+              <section key={g.title} className="col-span-12 mb-10 md:col-span-3 md:mb-0">
+                {/* (No numerals. The parts were numbered I to IV "like a
+                    contents page", and the five points of /why-us are 01 to
+                    05: two ways of numbering on a site that numbers nothing
+                    else — the forensic audit of 2026-10-09, #79. The five
+                    points are counted because there are five of them; the
+                    menu's parts are not a sequence.) */}
+                <h2 className="t-eyebrow text-[#E8B98A]">{g.title}</h2>
+                <span aria-hidden className="mt-4 block h-px w-10 bg-[#E8B98A]/40" />
+                <ul className="mt-4 md:mt-6">
+                  {g.pages.map((l) => {
+                    const here = pathname === l.href;
+                    return (
+                      <li key={l.href}>
+                        <Link
+                          href={l.href}
+                          aria-current={here ? 'page' : undefined}
+                          // Real height rather than a pseudo element here: these
+                          // are stacked, so an invisible overlay would overlap its
+                          // neighbours. 44px of actual row is also just better in
+                          // a full-screen menu.
+                          className={
+                            'flex min-h-[44px] items-center text-step-2 transition-colors hover:text-[#E8B98A] focus-visible:text-[#E8B98A] md:min-h-0 md:py-[calc(var(--bl)*1.5)] ' +
+                            (here ? 'text-[#E8B98A]' : 'text-[#F2EDE4]/90')
+                          }
+                        >
+                          {l.name}
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             ))}
-            <div
-              className={
-                'col-span-12 mt-2 flex flex-wrap items-baseline gap-x-10 gap-y-4 border-t border-white/10 pt-6 ' +
-                (overFilm ? 'md:mt-16' : '')
-              }
-            >
-              <Link href="/hall" className="cta-quiet">
-                <span className="cta-quiet-label">Enter the hall</span>
-              </Link>
-              <Link href="/contact" className="cta-quiet">
-                <span className="cta-quiet-label">Enquire</span>
+            {/* THE ONE PAGE THE PARTS DO NOT HOLD. This row also said "Enter
+                the hall" and "Enquire", both of which are in the last part
+                above it: with the header's own "Enquire" that was one action
+                three times on one screen (the forensic audit of 2026-10-09,
+                #61). */}
+            <div className="col-span-12 mt-2 flex flex-wrap items-baseline gap-x-10 gap-y-4 border-t border-white/10 pt-6 md:mt-14">
+              <Link href={FILM_PAGE.href} className="cta-quiet">
+                <span className="cta-quiet-label">{FILM_PAGE.name}</span>
               </Link>
             </div>
           </div>

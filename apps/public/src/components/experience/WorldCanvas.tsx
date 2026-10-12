@@ -28,16 +28,29 @@ import {
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import { springTo } from './cameraSpring';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { placeForRoute, type PlaceId } from '@estate/domain/experience/places';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
-import { HallModel } from './HallModel';
-import { hallWarmIdle, roomCube } from './hallProbe';
+import { HALL_MODEL_BYTES, HALL_MODEL_URL, HallModel } from './HallModel';
+import { hallBytes, hallWaitShare, mayFetchAhead, type HallLoad } from './hallBytes';
+import { hallWarmIdle, roomCube, warmProgramsUnder } from './hallProbe';
+import {
+  HOLD_FRAMES,
+  SKY_WAIT_MS,
+  TIER_SETTLE_FRAMES,
+  TIER_WAIT_MS,
+  WARM_CEILING_MS,
+  WARM_SETTLE_FRAMES,
+  sceneWarm,
+  stepHold,
+} from './sceneWarm';
 import { ExteriorModel } from './ExteriorModel';
 import { useDeviceTier } from './useDeviceTier';
-import { poseFor, setFor, type SceneSet } from './poses';
+import { STILL_PHONE, poseFor, setFor, type Pose, type SceneSet } from './poses';
+import { pageMove, plateBand, riseInBand, stillProgress } from './plateBand';
 import {
   exteriorPoseAt,
   atmosphereAt,
@@ -67,7 +80,6 @@ import { installFocusDepth } from './LensFocus';
 import { filmState } from './FilmGrade';
 import { hallLight, hallReadingLevel } from './hallLight';
 import { CinemaOverlay } from './CinemaOverlay';
-import { Motes } from './Motes';
 import { useSceneCards } from './useSceneCards';
 import { telemetry } from '@/lib/telemetry/collector';
 import {
@@ -142,6 +154,13 @@ const SCRUB = 0.12;
 const PARALLAX = 0.42;
 /** How far the aim turns toward the cursor, metres at the look target. */
 const PARALLAX_AIM = 0.5;
+/** How far the frame is slid up at a page's window on an upright screen, as a
+ *  share of its height: the subject stands over the words at the opening's
+ *  foot, a third of the way down the screen. */
+const WINDOW_RISE = 0.14;
+/** The distance those two were sized for: the house, from the drive. A still
+ *  nearer its subject than this takes them in proportion. */
+const PARALLAX_REACH = 28;
 /** Handheld drift, metres, outside (a third of it inside). */
 const HANDHELD = 0.045;
 
@@ -157,6 +176,8 @@ const HANDHELD = 0.045;
  * requires — the typography must never touch the architecture.
  */
 const FRAME_OFFSET = 7.4;
+/** A still's lens where its pose gives none: the canvas's own. */
+const STILL_FOV = 45;
 
 // THE SWING EASE now lives in cameraPath.ts (SWING, exteriorSwing), with its
 // history, beside the beats it paces — the approach chapter gave the exterior
@@ -238,7 +259,17 @@ interface DebugPose {
   fov?: number;
 }
 
-function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: number }) {
+function CameraRig({
+  place,
+  stationCount,
+  held,
+}: {
+  place: PlaceId;
+  stationCount: number;
+  /** A page that stands on the film's own first frame and is not the film
+   *  (/start-here): the path's first pose, held. */
+  held: boolean;
+}) {
   const { camera, gl } = useThree();
   // The canvas's own proportions, for the phone's lens. Not the camera's
   // aspect: a view offset writes that (applyShift).
@@ -263,6 +294,8 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
   const target = useRef(new THREE.Vector3());
   const desired = useRef(new THREE.Vector3());
   const look = useRef(new THREE.Vector3());
+  // A still's shifted front on an upright screen, as it stands now (below).
+  const stillRise = useRef<number | null>(null);
   const scroll = useScrollProgress();
 
   // Normalised pointer, -1..1 on both axes. Fed to the parallax offset below.
@@ -308,8 +341,11 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
   const fromLook = useRef(new THREE.Vector3());
   const toLook = useRef(new THREE.Vector3());
 
+  /** Look-dev (?debug=1): the still last taken from window.__estateStill. */
+  const triedStill = useRef<Pose | undefined>(undefined);
+
   const applyPose = useCallback(() => {
-    const p = poseFor(place);
+    const p = triedStill.current ?? poseFor(place);
     fromPos.current.set(...p.position);
     fromLook.current.set(...p.target);
     if (p.to) {
@@ -370,11 +406,25 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
         }
         return;
       }
+      // A WHOLE STILL, as poses.ts writes one (position, target, `to`, fov,
+      // frameOffset, phone, focus), tried on the running build: the rig frames
+      // it exactly as it will frame it once it is written down — the aim's
+      // offset, an upright screen's band, the move down the page — so a
+      // picture can be composed at every size before it is committed. For a
+      // still of the set this page already shows.
+      const tried = (window as unknown as { __estateStill?: Pose }).__estateStill;
+      const usable = tried && tried.set === poseFor(place).set && !poseFor(place).path ? tried : undefined;
+      if (usable !== triedStill.current) {
+        triedStill.current = usable;
+        applyPose();
+      }
     }
-    const p = poseFor(place);
+    const p = triedStill.current ?? poseFor(place);
 
     // Where scroll says the camera should be, this instant.
     const t = scroll.current;
+    /** How far a still is along its own move (0 on the film). */
+    let still = 0;
     // How far the aim is pushed left of the subject at this instant. Read from
     // the active leg rather than from a constant — see CameraBeat.frameOffset.
     let offset = FRAME_OFFSET;
@@ -447,8 +497,30 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
         if (upright > 0) offset *= 1 + (uprightLensAt(s).offset - 1) * upright;
       }
     } else {
-      desired.current.lerpVectors(fromPos.current, toPos.current, t);
-      look.current.lerpVectors(fromLook.current, toLook.current, t);
+      // A STILL'S MOVE ENDS AT ITS PAGE'S WINDOW (plateBand.ts, pageMove), on
+      // the frame `to` was composed as.
+      still = stillProgress(t * scrollExtent(), scrollExtent(), pageMove.end);
+      desired.current.lerpVectors(fromPos.current, toPos.current, still);
+      look.current.lerpVectors(fromLook.current, toLook.current, still);
+      // AN UPRIGHT SCREEN'S OWN SUBJECT (poses.ts, `phone.target`), for the
+      // opening frame: by the page's second frame the aim is that frame's.
+      const upright = phoneWeight(size.width / Math.max(1, size.height));
+      if (upright > 0 && p.phone?.target) {
+        look.current.lerp(TMP.set(...p.phone.target), upright * (1 - still));
+      }
+      // A STILL'S OWN FRAMING (poses.ts). The constant above is sized for the
+      // exterior, a house 28 m away, and it was applied to every still: inside,
+      // at a table 2.5 m off, it turned the camera 71 degrees from its subject
+      // — three of the pages opened on bare panelling behind their panels.
+      // Outside it stands where a pose gives none of its own; inside, a pose
+      // is aimed at what it names unless it says otherwise.
+      offset = p.frameOffset ?? (p.set === 'exterior' ? FRAME_OFFSET : 0);
+      // (and the second frame's own, where it says one: poses.ts)
+      if (p.to?.frameOffset !== undefined) offset += (p.to.frameOffset - offset) * still;
+      // On a phone held upright the title is under the picture, not beside
+      // it: the subject is centred (and the lens opens and the frame slides
+      // up for it, below).
+      offset *= 1 - phoneWeight(size.width / Math.max(1, size.height));
     }
 
     // THE DIVE. A selected beacon overrides the scroll pose for the length of
@@ -594,14 +666,24 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
     // Off during a passage: a camera flying through a doorway that also leans
     // toward the cursor is two moves at once.
     if (!passage && pointer.current.lengthSq() > 0) {
-      desired.current.x += pointer.current.x * PARALLAX;
-      desired.current.y += pointer.current.y * PARALLAX * 0.6;
+      // A STILL'S IS IN PROPORTION TO HOW FAR OFF ITS SUBJECT IS. These are
+      // metres, sized for a house twenty-eight metres away, where they are the
+      // fraction of a degree the note below means. A page's picture can be of
+      // a plate a metre and a half from the lens: there the same half metre
+      // of aim was nineteen degrees, and a pointer resting in a corner of the
+      // screen turned the camera off its subject altogether (seen on
+      // /downloads, composing it: the layout's name at the top edge of the
+      // frame and a table's foot where the plan had been). The film's own
+      // moves are as they were approved.
+      const reach = p.path ? 1 : Math.min(1, desired.current.distanceTo(look.current) / PARALLAX_REACH);
+      desired.current.x += pointer.current.x * PARALLAX * reach;
+      desired.current.y += pointer.current.y * PARALLAX * 0.6 * reach;
       // And the aim turns a touch toward the hand (the third review: "bind
       // camera orientation slightly to the cursor position so the perspective
       // subtly shifts"). A fraction of a degree — the camera glances, it does
       // not follow.
-      look.current.addScaledVector(right.current, pointer.current.x * PARALLAX_AIM);
-      look.current.y += pointer.current.y * PARALLAX_AIM * 0.6;
+      look.current.addScaledVector(right.current, pointer.current.x * PARALLAX_AIM * reach);
+      look.current.y += pointer.current.y * PARALLAX_AIM * 0.6 * reach;
     }
 
     // Then damp toward it rather than snapping. Scroll is jittery — a trackpad
@@ -691,11 +773,58 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
         shift = pf.shift * k;
       }
     }
+    // A STILL ON AN UPRIGHT SCREEN (poses.ts, `phone`): its lens opened and
+    // its frame slid up over the axis, so the subject stands whole in the
+    // picture's own band — between the header and the title under it. How far
+    // that is belongs to the page and to the screen (plateBand.ts): a fixed
+    // share of the frame's height stood a layout's model inside its own
+    // title's density on a phone showing its browser's bars.
+    //
+    // AND A PAGE ON THE FILM'S FIRST FRAME (/start-here; `held`). That frame
+    // has the house in its lower half: under the film's own title that is
+    // the foot of the picture, and under a page's words it was BEHIND them,
+    // with nothing in the band over the words but sky (seen at 390x664 and
+    // 390x844). The same shifted front stands the house in the band; the
+    // lens stays the film's own (UPRIGHT_LENS, below).
+    let stillWiden = 1;
+    const k = phoneWeight(aspect);
+    const banded = k > 0 && (!lens || (held && journeyState.leg === 'exterior' && doorFov === null));
+    if (banded) {
+      const ph = p.phone ?? STILL_PHONE[p.set];
+      // (Look-dev, ?debug=1: window.__estateAt tries a place in the band on
+      // the running build before it is written into poses.ts.)
+      const dial = debugPose ? (window as unknown as { __estateAt?: number }).__estateAt : undefined;
+      // The frame is slid up for the band OVER THE PLATE'S WORDS, and at the
+      // page's window there are none: the picture has the whole opening, and
+      // the subject belongs in its middle. Slid up there, it stood under the
+      // header and the opening was the floor below it (the forensic audit of
+      // 2026-10-09, #67: "on a phone /properties' middle band is a full
+      // screen of empty marble floor"). So the slide is let go as the move is
+      // made, on a page that has a window.
+      // Not to nothing: at a window on an upright screen the words stand at
+      // the opening's foot (folio.css), as a plate's do, and the subject over
+      // them — a little above the frame's middle (WINDOW_RISE).
+      const let_go = pageMove.end !== null ? 1 - still : 1;
+      const want =
+        (riseInBand(typeof dial === 'number' ? dial : ph.at, plateBand.current, size.height) * let_go +
+          WINDOW_RISE * (1 - let_go)) *
+        k;
+      // Eased, except onto the first frame: a band is measured a frame after
+      // its page is laid out and again when its type arrives, and a frame
+      // that jumps twenty pixels then is a picture that twitches.
+      stillRise.current =
+        stillRise.current === null
+          ? want
+          : stillRise.current + (want - stillRise.current) * Math.min(1, delta * 6);
+      rise = stillRise.current;
+      if (!lens) stillWiden = 1 + (ph.widen - 1) * k;
+    } else {
+      stillRise.current = null;
+    }
     applyShift(cam, aspect, rise, shift);
     // And outside, an upright screen's wider field (cameraPath, UPRIGHT_LENS).
-    if (lens && p.path && journeyState.leg === 'exterior' && doorFov === null) {
-      const k = phoneWeight(aspect);
-      if (k > 0) widen = 1 + (uprightLensAt(journeyState.legProgress).widen - 1) * k;
+    if (lens && p.path && journeyState.leg === 'exterior' && doorFov === null && k > 0) {
+      widen = 1 + (uprightLensAt(journeyState.legProgress).widen - 1) * k;
     }
 
     if (lens) {
@@ -718,6 +847,16 @@ function CameraRig({ place, stationCount }: { place: PlaceId; stationCount: numb
       // horizon into the turn instead of skewing the aim off the subject.
       const roll = lens.roll * rollScale;
       if (roll !== 0) camera.rotateZ(roll);
+    } else {
+      // A STILL'S OWN LENS (poses.ts). It had none: the camera kept whatever
+      // field it last had, so a page reached from a table in the film (30
+      // degrees) and the same page loaded by its address (45) were two
+      // different frames of the same place.
+      const fov = widenFov(p.fov ?? STILL_FOV, stillWiden);
+      if (Math.abs(cam.fov - fov) > 0.01) {
+        cam.fov = fov;
+        cam.updateProjectionMatrix();
+      }
     }
   });
 
@@ -835,17 +974,19 @@ function SpatialTelemetry({ place, tier }: { place: PlaceId; tier: DeviceTier })
 function Rig({
   place,
   stationCount,
+  held,
   onTier,
 }: {
   place: PlaceId;
   stationCount: number;
+  held: boolean;
   onTier: (t: DeviceTier) => void;
 }) {
   const { tier } = useDeviceTier();
   useEffect(() => onTier(tier), [tier, onTier]);
   return (
     <>
-      <CameraRig place={place} stationCount={stationCount} />
+      <CameraRig place={place} stationCount={stationCount} held={held} />
       <SpatialTelemetry place={place} tier={tier} />
     </>
   );
@@ -991,8 +1132,16 @@ function JourneyDriver({
       shownVeil.current += (journeyState.veil - shownVeil.current) * 0.35;
     } else {
       const since = now - doorwayState.cutAt;
-      shownVeil.current = since >= 0 && since < CUT_MS ? (1 - since / CUT_MS) ** 2 : 0;
+      const lifting = since >= 0 && since < CUT_MS ? (1 - since / CUT_MS) ** 2 : 0;
+      // A cut asked for by a control closes the dark before the page moves
+      // (doorway.ts, cutTo): eased in, so the press reads as a fade and not as
+      // a shutter.
+      shownVeil.current = Math.max(lifting, smooth01(doorwayState.cutDark));
     }
+    // AND THE DARK HELD OVER A SET THAT IS NOT BUILT YET (sceneWarm.ts): the
+    // estate on a film entered in the hall and left by the door, or under a
+    // curtain that reached its ceiling before the driver was done.
+    shownVeil.current = Math.max(shownVeil.current, smooth01(sceneWarm.hold));
     if (veil.current) {
       const v = shownVeil.current;
       veil.current.style.opacity = v.toFixed(3);
@@ -1321,6 +1470,34 @@ export type Grade = 'dusk' | 'daylight';
 /** Sky/clear colour per grade. Dusk's is also the fog colour. */
 const GRADE_BG: Record<Grade, string> = { dusk: '#0A1120', daylight: '#B9C6D8' };
 
+/**
+ * WHAT IS BEHIND THE HALL: the page's own dark, and not the night's navy.
+ *
+ * The hall is a closed room, and its clear colour is in no frame of it:
+ * MEASURED (2026-10-09, c12/audit_probe.mjs: the colour painted magenta at
+ * the threshold, at each table, on the stair, over the map table and at the
+ * page's end, and counted) — none, at any of them. It was GRADE_BG.dusk all
+ * the same, and so it was what a visitor was shown whenever the room was not
+ * there to be drawn: a hall still arriving behind a press on the rail, under
+ * a veil that had given up waiting. An audit made by a script named it, "the
+ * WebGL clear color swings to a cold navy while the DOM is warm": two darks
+ * of two temperatures on one page. It is the page's now (the layout's ground
+ * and the veil's centre), so that nothing behind the room can be told from
+ * the dark in front of it.
+ */
+const HALL_GROUND = '#15110C';
+
+/** How long after the film's first picture is built the hall's bytes are
+ *  asked for (hallBytes.ts): the curtain has lifted and its fade is over. */
+const HALL_FETCH_AFTER_MS = 1500;
+
+/** A dark that has been held this long is a wait, and says so (WarmGate): a
+ *  cut closes and lifts inside it (doorway.ts, CUT_CLOSE_MS + CUT_MS). */
+const WAIT_SAID_AFTER_MS = 900;
+
+/** A fetch nobody is counting: the hairline moves on the clock (hallBytes.ts). */
+const UNCOUNTED: HallLoad = { state: 'idle', received: 0, total: 0 };
+
 /** Exterior LOOK deltas for daylight. Dusk (the rollback) is LOOK.exterior unmodified. */
 const GRADE_LOOK: Record<Grade, Partial<(typeof LOOK)['exterior']>> = {
   dusk: {},
@@ -1564,8 +1741,23 @@ const HAZE_EVENING = new THREE.Color('#6B5A52');
  * rather than black and blue, and the sun's side still stands well over it.
  * (Tried first at 0.52 of daylight: the forecourt frame's shaded flank still
  * printed at a luma of 48, against 64 by day.)
+ *
+ * AND BY DAY THE SHADE IS THE SAME STONE. The day's fill was a clear-sky blue,
+ * #9FC2E6, which is as green as it is blue: on a warm ivory stone it prints
+ * as a green-grey. The forensic audit of 2026-10-09 (#15): "The shaded
+ * elevation turns a cold grey-green while the sunlit side stays warm ivory,
+ * so the house looks like two buildings joined at the corner ... Expected:
+ * shaded stone that is the same stone, darker and slightly cooler." Measured
+ * on the revolve, the rear wall in shade: 85, 89, 86, green over red by four,
+ * beside a lit front at 168, 161, 144. This sky has cloud over half of it
+ * and a low sun: what it throws into a shadow is a blue-grey, not a blue.
+ * With this fill, the land's bounce a little warmer (BOUNCE_DAY) and the
+ * print's shadows left neutral (FilmGrade, FILM_GRADE.shadowTint), the same
+ * wall is 91, 88, 82: the lit stone's own hue at two-thirds of its
+ * saturation. (Three fills tried on the running build; the cover's lit front
+ * moves by two in any channel.)
  */
-const FILL_DAY = new THREE.Color('#9FC2E6');
+const FILL_DAY = new THREE.Color('#B8BCC8');
 const FILL_EVENING = new THREE.Color('#CDB7A6');
 /**
  * And once the SUN HAS GONE the sky is not the sunset's colour any more. The
@@ -1584,8 +1776,8 @@ const EVENING_FILL = 0.9;
 /** How much of the sun the evening takes (the night takes most of the rest). */
 const EVENING_KEY_LOSS = 0.6;
 /** The hemisphere's lower half: what the land throws back up, by the hour. */
-const BOUNCE_DAY = new THREE.Color('#6B563C');
-const BOUNCE_EVENING = new THREE.Color('#6B563C');
+const BOUNCE_DAY = new THREE.Color('#75604A');
+const BOUNCE_EVENING = new THREE.Color('#75604A');
 const BOUNCE_NIGHT = new THREE.Color('#3A3530');
 /** The sky as a light (the prefiltered environment), as a share of its
  *  daylight gain, at full evening and once the sun has gone. */
@@ -1815,7 +2007,8 @@ function ExteriorLighting({
       doorwayState.mode === 'running' && doorwayState.dir === 'exit' && doorwayState.style === 'through';
     if (!hallsFilter) {
       const out = journeyState.leg === 'exterior';
-      if (out) headerBandReach(true, delta);
+      // (further down a frame that stands upright: HEADER_BAND.zeroOutsideTall)
+      if (out) headerBandReach(true, delta, !filmIsWide(window.innerWidth, window.innerHeight));
       // Through the open door the reach goes to the hall's with the print,
       // as the band's density does (above).
       if (out && film && passageLight.grade > 0) {
@@ -1830,11 +2023,16 @@ function ExteriorLighting({
           out && film ? legS : 1,
           window.innerWidth / Math.max(1, window.innerHeight),
           cover ? copyPresence(cover.weight) : 0,
-          rev ? copyPresence(rev.weight) : 0,
+          // (the land's density is under the orbit's CAPTION, which goes
+          // before its title does: ChapterFade, LEAVE_ATTR)
+          rev ? copyPresence(rev.weight) * (rev.early ?? 1) : 0,
           filmIsShort(window.innerWidth, window.innerHeight),
         );
       } else {
         lensFilter.second.stops = 0;
+        // (and no colour in the grad: COVER_GRADE is the wide cover's)
+        lensFilter.sky.cool = 0;
+        lensFilter.sky.warm = 0;
         phoneSkyFilter(out ? copyZone.panes : [], legS, delta);
       }
       // And the foot of the frame while the lit portico passes behind the
@@ -2381,8 +2579,11 @@ function RoomEnvironmentMap() {
   const scene = useThree((s) => s.scene);
 
   useEffect(() => {
+    // What THIS component bound, so that leaving takes away only that.
+    let mine: THREE.Texture | null = null;
     const build = () => {
-      scene.environment = roomCube(gl).texture;
+      mine = roomCube(gl).texture;
+      scene.environment = mine;
     };
 
     build();
@@ -2412,10 +2613,216 @@ function RoomEnvironmentMap() {
 
     return () => {
       canvas.removeEventListener('webglcontextrestored', onRestored);
-      scene.environment = null;
+      // ONLY IF IT IS STILL OURS. This cleared the scene's environment
+      // whatever it had become. Since the estate is fetched when a page needs
+      // it, a visitor who goes from a hall page to an estate page waits on
+      // the estate inside the boundary this component is in, and React holds
+      // this cleanup until the estate has arrived — by which time the sky has
+      // long since bound ITS light to the scene. The cleanup then wiped the
+      // sky's: the estate was drawn with no environment at all (SEEN: the
+      // page reached by a click a stop darker than the same page loaded by
+      // its address, its car black and its panes dead), and the build of its
+      // programs waited four seconds for a sky that had already come and
+      // gone (sceneWarm.ts, SKY_WAIT_MS).
+      if (scene.environment === mine) scene.environment = null;
     };
   }, [gl, scene]);
 
+
+  return null;
+}
+
+/**
+ * NOTHING IS DRAWN BEFORE ITS PROGRAMS ARE BUILT (sceneWarm.ts has the account
+ * and the measurements: on the card a browser picks by itself, the estate's
+ * first frame was eight seconds long).
+ *
+ *   THE ESTATE, on every page and on the film: hidden until the warm queue
+ *   (hallProbe.ts, warmProgramsUnder) has built its programs under the lights
+ *   it is drawn under — the scene's own, which are mounted with it — and
+ *   under its sky's light, which is bound when the panorama arrives: built
+ *   before that, every one of them is built again.
+ *
+ *   THE HALL, on a page that shows it directly: hidden until the queue it
+ *   joins as it mounts (HallModel, MapTable, the tables' models) has stood
+ *   empty for a few frames. On the film the hall is the door's (HallReadiness,
+ *   below) and is not touched here.
+ *
+ * And it says so (`sceneWarm`): the curtain waits for `ready`; the canvas's
+ * dark is held at `hold` — written here on a page that holds the film still,
+ * and taken by the film's own veil where the film is running (JourneyDriver).
+ */
+function WarmGate({
+  set,
+  onJourney,
+  exteriorRoot,
+  exteriorGroup,
+  exteriorWarm,
+  onExteriorWarm,
+  hallRoot,
+  hallWarm,
+  onHallWarm,
+  veil,
+  wait,
+}: {
+  set: SceneSet;
+  onJourney: boolean;
+  exteriorRoot: THREE.Object3D | null;
+  exteriorGroup: React.RefObject<THREE.Group>;
+  exteriorWarm: boolean;
+  onExteriorWarm: () => void;
+  hallRoot: THREE.Object3D | null;
+  hallWarm: boolean;
+  onHallWarm: () => void;
+  veil: React.RefObject<HTMLDivElement>;
+  /** The hairline on the veil (the host's markup): shown for a wait. */
+  wait: React.RefObject<HTMLSpanElement>;
+}) {
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  const scene = useThree((s) => s.scene);
+
+  useEffect(() => {
+    const group = exteriorGroup.current;
+    if (exteriorWarm || set !== 'exterior' || !exteriorRoot || !group) return;
+    let alive = true;
+    let raf = 0;
+    const t0 = performance.now();
+    const begin = () => {
+      if (!alive) return;
+      if (scene.environment === null && performance.now() - t0 < SKY_WAIT_MS) {
+        raf = requestAnimationFrame(begin);
+        return;
+      }
+      void warmProgramsUnder(gl, camera, group, scene).then(() => {
+        if (!alive) return;
+        // eslint-disable-next-line no-console
+        console.info('[scene_warm] the estate ready in %sms', (performance.now() - t0).toFixed(0));
+        onExteriorWarm();
+      });
+    };
+    // Two frames on: the doors have been cut and the lights are in the scene.
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(begin);
+    });
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [gl, camera, scene, set, exteriorRoot, exteriorGroup, exteriorWarm, onExteriorWarm]);
+
+  const idle = useRef(0);
+  const drawn = useRef(0);
+  const waiting = useRef(0);
+  /** How long the scene has been drawn under its still, ms; and for how many
+   *  frames with the device's tier settled. */
+  const drawingMs = useRef(0);
+  const settledFrames = useRef(0);
+  /**
+   * THE FILM'S HALL HAS BEEN READY: latched on the door's own word for it
+   * (HallReadiness: loaded, and the warm queue empty), so the two can never
+   * disagree — a room the door would walk a visitor into is a room this shows.
+   * Latched, because that word comes and goes as the tables' models join the
+   * queue behind the room. Unlatched when the hall has gone.
+   */
+  const filmHall = useRef(false);
+  /** How long the dark has stood over a set that is not there yet, ms. */
+  const held = useRef(0);
+  useEffect(() => {
+    if (!hallRoot) filmHall.current = false;
+  }, [hallRoot]);
+  useFrame((_, delta) => {
+    const stillHall = !onJourney && set === 'interior';
+    const passage = doorwayState.mode === 'running';
+    // THE ROOM IS QUIET: it is in, the queue that builds its programs is
+    // empty, AND NOTHING IS STILL ON ITS WAY. The tables' site models and
+    // their plans are asked for when the room arrives, and on a connection
+    // they come after it: a room shown the moment its own programs were built
+    // stood with its tables bare for a second and then filled them (SEEN on
+    // the first cut of this fix, 2026-10-09: a layout's name beside an empty
+    // table). The loading manager knows — it is what the curtain reads.
+    const quiet = hallRoot !== null && hallWarmIdle() && !useProgress.getState().active;
+    idle.current = quiet ? idle.current + 1 : 0;
+    if (stillHall && !hallWarm && idle.current >= WARM_SETTLE_FRAMES) onHallWarm();
+    if (onJourney && !filmHall.current && hallRoot) {
+      // Quiet for a few frames; or the door, in a passage, has called it
+      // ready and is walking a visitor in — its word stands, as it always did.
+      if (idle.current >= WARM_SETTLE_FRAMES || (passage && doorwayState.hallReady)) filmHall.current = true;
+    }
+
+    // THE FILM'S HALL TOO, WHEN IT IS NOT THERE. On the film the hall was the
+    // door's alone, and the door waits for it: a passage holds its light, a
+    // cut holds its dark (doorway.ts). But both give up after twelve seconds,
+    // and neither is asked at all when the page gets inside by any other way
+    // — a script's jump to a chapter, a scrollbar dragged past the door. What
+    // was drawn then was the scene's bare clear colour with a chapter's copy
+    // on it (MEASURED through a public address, 2026-10-09: hallBytes.ts has
+    // the account). So the rule a page has is the film's as well: while the
+    // hall is the set and has not been ready, the canvas's dark is held, and
+    // goes by degrees once it has. A passage in flight keeps the frame — its
+    // light is its own wait — and this takes over only when it has ended.
+    const loaded = set === 'exterior' ? exteriorRoot !== null : hallRoot !== null;
+    const built =
+      set === 'exterior' ? exteriorWarm : stillHall ? hallWarm : filmHall.current || passage;
+    // A CEILING, as the curtain has: a driver that never reports, a material
+    // that will not build. Shown as it is, and compiled on its first frame.
+    waiting.current = loaded && !built ? waiting.current + delta * 1000 : 0;
+    if (waiting.current > WARM_CEILING_MS) {
+      waiting.current = 0;
+      if (set === 'exterior') onExteriorWarm();
+      else if (stillHall) onHallWarm();
+      else filmHall.current = true;
+    }
+
+    drawn.current = built ? drawn.current + 1 : 0;
+    // BEING DRAWN, and then READY: the tier's measurement and its chain's
+    // first frames are had under the still (sceneWarm.ts).
+    sceneWarm.drawing = drawn.current > HOLD_FRAMES;
+    drawingMs.current = sceneWarm.drawing ? drawingMs.current + delta * 1000 : 0;
+    settledFrames.current = sceneWarm.drawing && sceneWarm.tierSettled ? settledFrames.current + 1 : 0;
+    sceneWarm.ready =
+      sceneWarm.drawing && (settledFrames.current > TIER_SETTLE_FRAMES || drawingMs.current > TIER_WAIT_MS);
+    sceneWarm.hold = stepHold(sceneWarm.hold, sceneWarm.ready, delta);
+    if (!onJourney && veil.current) {
+      veil.current.style.opacity = smooth01(sceneWarm.hold).toFixed(3);
+    }
+
+    // THE WAIT, SAID. A dark frame with a chapter's words on it and nothing
+    // else is a page that may be broken. Past the length of an ordinary cut
+    // the veil carries the curtain's own hairline, filling with the hall's
+    // bytes as they arrive (hallBytes.ts) — or on the clock, for the estate,
+    // whose fetch is not counted. It goes with the dark.
+    held.current = built ? 0 : held.current + delta * 1000;
+    const line = wait.current;
+    if (line) {
+      const show = !built && held.current > WAIT_SAID_AFTER_MS;
+      const want = show ? '1' : '0';
+      if (line.style.opacity !== want) line.style.opacity = want;
+      // (Kept right while it is not shown too: a line that came up at the
+      // last wait's full length would be seen running backwards.)
+      const bar = line.firstElementChild as HTMLElement | null;
+      if (bar) {
+        const share = built
+          ? 1
+          : set === 'interior'
+            ? hallWaitShare(held.current, false)
+            : hallWaitShare(held.current, false, UNCOUNTED);
+        const scale = `scaleX(${share.toFixed(3)})`;
+        if (bar.style.transform !== scale) bar.style.transform = scale;
+      }
+    }
+  });
+
+  // Leaving: the next canvas starts dark and says when it is not.
+  useEffect(
+    () => () => {
+      sceneWarm.ready = false;
+      sceneWarm.drawing = false;
+      sceneWarm.tierSettled = false;
+      sceneWarm.hold = 1;
+    },
+    [],
+  );
 
   return null;
 }
@@ -2508,7 +2915,13 @@ function RoomCubeAtStart() {
 // v9 (the paid audit, 2026-10-04): the evening's haze graded into the plate's
 // foot on every bearing, so the land's far edge and the sky's foot are one air
 // (tools/gltf/grade_sky_v9.py; skyHaze.ts reads the fog from it).
-const SKY_EQUIRECT_URL = '/textures/sky_estate_v9_4k.jpg';
+// v10 (the forensic audit of 2026-10-09, #14: "the sky round the sun is
+// yellow-green instead of warm gold"): the glow round the sun and the column
+// under it turned from a camera's yellow to amber, in the plate and in the
+// lighting copy alike (tools/gltf/grade_sky_v10.py has the measurements).
+// The haze is read from the plate, so everything seen toward the sun is
+// veiled in the same amber.
+const SKY_EQUIRECT_URL = '/textures/sky_estate_v10_4k.jpg';
 /**
  * What the estate is LIT by, as opposed to what it is seen against: the same
  * sky, with the lawn's bounce below the horizon where the backdrop carries
@@ -2517,7 +2930,7 @@ const SKY_EQUIRECT_URL = '/textures/sky_estate_v9_4k.jpg';
  * the sky; lit by the lawn, they fall into the shade a photograph shows.
  * 1024 x 512: PMREM reduces it to a 256 cube, so more would be spent on nothing.
  */
-const SKY_LIGHTING_URL = '/textures/sky_estate_v9_env.jpg';
+const SKY_LIGHTING_URL = '/textures/sky_estate_v10_env.jpg';
 
 // Contact-hardening sun shadows, installed before the first frame compiles a
 // shadow-receiving material (softSunShadows.ts).
@@ -2555,6 +2968,8 @@ function DebugHandle() {
       THREE,
       journey: journeyState,
       doorway: doorwayState,
+      // the film's hour: its evening and its night, 0 to 1 (FilmGrade.tsx)
+      film: filmState,
       lens: lensFilter,
       map: mapStage,
       copy: copyZone,
@@ -2704,7 +3119,7 @@ function SkyBackground({ set, grade }: { set: SceneSet; grade: Grade }) {
     scene.background =
       wants && env
         ? env
-        : new THREE.Color(set === 'exterior' ? GRADE_BG[grade] : GRADE_BG.dusk);
+        : new THREE.Color(set === 'exterior' ? GRADE_BG[grade] : HALL_GROUND);
     return () => {
       scene.background = prev;
     };
@@ -2792,6 +3207,7 @@ export function WorldCanvas() {
       readingLight.want = 0;
     };
   }, [pathStill]);
+  // (READING_STOPS is none since the folios: readingLight.ts.)
 
   // Reset when leaving the journey, so navigating away mid-interior and coming
   // back does not open the home page standing in the hall.
@@ -2814,6 +3230,22 @@ export function WorldCanvas() {
   const [hallRoot, setHallRoot] = useState<THREE.Object3D | null>(null);
   /** The loaded exterior, for the front doors to adopt. */
   const [exteriorRoot, setExteriorRoot] = useState<THREE.Object3D | null>(null);
+  // BUILT, AND SO SHOWN (WarmGate; sceneWarm.ts). The estate's programs are
+  // built once for the canvas's life. The hall's, on a page that shows it
+  // directly, each time it is mounted there: a hall that has gone takes its
+  // table and its stage with it, and they are built again when it is back.
+  const exteriorGroup = useRef<THREE.Group>(null);
+  const [exteriorWarm, setExteriorWarm] = useState(false);
+  const [hallWarm, setHallWarm] = useState(false);
+  const onExteriorWarm = useCallback(() => setExteriorWarm(true), []);
+  const onHallWarm = useCallback(() => setHallWarm(true), []);
+  useEffect(() => {
+    if (!hallRoot) setHallWarm(false);
+  }, [hallRoot]);
+  // (And the estate's, if it has gone with a page that stood in the hall.)
+  useEffect(() => {
+    if (!exteriorRoot) setExteriorWarm(false);
+  }, [exteriorRoot]);
 
 
   // THE DOORWAY'S HOLD ON THE PAGE. Registered here because this is the client
@@ -2828,7 +3260,10 @@ export function WorldCanvas() {
         return readScrollProgress();
       },
       jumpTo: (p) => {
-        const y = Math.round(Math.min(1, Math.max(0, p)) * scrollExtent());
+        // (No ceiling at 1: the page runs on past the film's end to its
+        // colophon, where the rail's last stop is; the browser holds a scroll
+        // to the page's own end.)
+        const y = Math.round(Math.max(0, p) * scrollExtent());
         if (lenisInstance) lenisInstance.scrollTo(y, { immediate: true, force: true });
         else window.scrollTo(0, y);
         syncScrollProgress();
@@ -2845,7 +3280,7 @@ export function WorldCanvas() {
         if (coarse.matches) document.documentElement.style.overflow = on ? 'hidden' : '';
       },
       glideTo: (p, seconds, done) => {
-        const y = Math.round(Math.min(1, Math.max(0, p)) * scrollExtent());
+        const y = Math.round(Math.max(0, p) * scrollExtent());
         if (!lenisInstance) {
           window.scrollTo(0, y);
           done();
@@ -2901,6 +3336,22 @@ export function WorldCanvas() {
   // each one would undo everything the scroll driver exists to avoid.
   const interiorLeg = useRef(0);
   const veilRef = useRef<HTMLDivElement>(null);
+  const waitRef = useRef<HTMLSpanElement>(null);
+
+  // THE HALL'S BYTES, AS SOON AS THE FILM'S FIRST PICTURE IS UP (hallBytes.ts).
+  // The film asks for the hall itself a third of the way down the page; on a
+  // connection that is where a visitor who has got ahead of it — by the rail,
+  // by an address — was left in the dark for the length of a 26 MB download.
+  // The estate is in and built by now and nothing else is on the line. Not on
+  // a page that only holds the film's first frame, which never goes inside.
+  useEffect(() => {
+    if (!onJourney || !exteriorWarm || !mayFetchAhead()) return;
+    const t = window.setTimeout(() => {
+      // (A failure is the loader's to report, when the hall is asked for.)
+      hallBytes(HALL_MODEL_URL, HALL_MODEL_BYTES).catch(() => undefined);
+    }, HALL_FETCH_AFTER_MS);
+    return () => window.clearTimeout(t);
+  }, [onJourney, exteriorWarm]);
 
   // Three published projects, three stations. The count drives the interior
   // camera path, the station components and the DOM chapters, all from the same
@@ -2948,6 +3399,14 @@ export function WorldCanvas() {
   useEffect(() => setSupported(webglSupported()), []);
   const onTier = useCallback((t: DeviceTier) => setTier(t), []);
   const onError = useCallback(() => setFailed(true), []);
+  // NO SCENE HERE, said to whatever is waiting for one (sceneWarm.ts): the
+  // view's still stays as its picture, and nothing waits on a build.
+  useEffect(() => {
+    sceneWarm.absent = supported === false || failed;
+    return () => {
+      sceneWarm.absent = false;
+    };
+  }, [supported, failed]);
 
   if (supported === false || failed) {
     return (
@@ -2963,7 +3422,7 @@ export function WorldCanvas() {
         </p>
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed inset-0 z-0 bg-[#0A1120]"
+          className="pointer-events-none fixed inset-0 z-0 bg-[#15110C]"
         >
           <SceneFallback reason={supported === false ? 'unsupported' : 'error'} />
         </div>
@@ -2983,7 +3442,7 @@ export function WorldCanvas() {
       // OVER THE FILM).
       data-film=""
       className="fixed inset-0 z-0"
-      style={{ background: set === 'exterior' ? GRADE_BG[look.grade] : GRADE_BG.dusk }}
+      style={{ background: set === 'exterior' ? GRADE_BG[look.grade] : HALL_GROUND }}
     >
       <SceneBoundary onError={onError}>
         <Canvas
@@ -3007,8 +3466,25 @@ export function WorldCanvas() {
           // composer writes toneMapping once on mount — between them the value
           // was non-deterministic. <ColorPipeline> below is the single owner;
           // see the note on that component.
+          // AN OPAQUE CANVAS, WITH NO SMOOTHING OF ITS OWN.
+          //
+          // `alpha: false`: the frame's alpha is not transparency here, it is
+          // the scene's DEPTH (LensFocus.tsx), and a surface seen by its own
+          // light writes it NEGATIVE. The lens's pass consumes it — on the
+          // high tier. On every chain without the lens the value reached the
+          // canvas, was clamped to nothing, and the pixel was a hole: every
+          // lit window of the house showed the page's pale ground behind the
+          // canvas. FOUND 2026-10-10: for the two seconds before a capable
+          // device is promoted, and for good on one that never is. A canvas
+          // with no alpha cannot have a hole in it.
+          //
+          // `antialias: false`: the composer draws the finished frame onto
+          // the canvas as one triangle, and a multisampled canvas smooths the
+          // edges of that triangle and nothing else, at four samples a pixel.
+          // The picture's edges are smoothed in the composer (PostFX, SMAA).
           gl={{
-            antialias: tier !== 'low',
+            antialias: false,
+            alpha: false,
             powerPreference: 'high-performance',
           }}
           // Seeded on the exterior axis, because that is where the site opens.
@@ -3019,6 +3495,19 @@ export function WorldCanvas() {
           <SkyBackground set={set} grade={look.grade} />
           <RoomCubeAtStart />
           <HallReadiness loaded={hallRoot !== null} />
+          <WarmGate
+            set={set}
+            onJourney={onJourney}
+            exteriorRoot={exteriorRoot}
+            exteriorGroup={exteriorGroup}
+            exteriorWarm={exteriorWarm}
+            onExteriorWarm={onExteriorWarm}
+            hallRoot={hallRoot}
+            hallWarm={hallWarm}
+            onHallWarm={onHallWarm}
+            veil={veilRef}
+            wait={waitRef}
+          />
           {/* FIRST, so every reader below samples a value written earlier in
               the same frame. One driver replaces the three identical
               scroll/resize/ResizeObserver + useFrame sets that CameraRig,
@@ -3042,11 +3531,12 @@ export function WorldCanvas() {
               hemisphere light and a flat ambient would cancel the relief the
               key light exists to create. */}
           <HallAmbient intensity={look.ambient} interior={set === 'interior'} />
-          {/* The dust in the estate's air. Halved on low tier: the field is
-              atmosphere, and a phone should get thinner air rather than no
-              air. Mounted whichever set is showing and drawn only outside
-              (Motes, `shown`). */}
-          <Motes count={tier === 'low' ? 1100 : 2400} shown={set === 'exterior'} />
+          {/* (There was dust in the estate's air: 2,400 points of it, turned
+              down twice. On a still — which is how the film is shared and
+              judged — what was left of it was white specks over the car and
+              the lawn's shade, "sensor dust" (the forensic audit of
+              2026-10-09, #28). No lens sees dust at twenty-five metres; it is
+              gone, and its draw call and its program with it.) */}
           {set === 'exterior' && (
             <>
               <ExteriorLighting
@@ -3058,7 +3548,9 @@ export function WorldCanvas() {
                 hemiIntensity={look.hemi}
                 envIntensity={look.env}
                 tier={tier}
-                estate={exteriorRoot}
+                // (Its shadow map owes the estate a draw when the estate is
+                // SHOWN: drawn while it was hidden, the map is empty.)
+                estate={exteriorWarm ? exteriorRoot : null}
               />
               {/* <Terrain /> IS DELIBERATELY ABSENT.
                   It drew procedural karst relief because the exported
@@ -3093,13 +3585,22 @@ export function WorldCanvas() {
                 closes over them.
 
                 Off the journey, the old behaviour is unchanged. */}
-            <group visible={set === 'exterior'}>
+            {/* NOT ON A PAGE THAT STANDS IN THE HALL. The estate was mounted
+                here on every page of the site, shown or not: a page about the
+                offices, which is a picture of a table in the hall, fetched the
+                hall's 26 MB and then the estate's 15 MB behind it, parsed and
+                batched it, and kept its curtain down until both were in
+                (MEASURED on the finished build). The film needs both sets; a
+                page needs the one it is a picture of. */}
+            {onJourney || set === 'exterior' ? (
+            <group ref={exteriorGroup} visible={set === 'exterior' && exteriorWarm}>
               <ExteriorModel grade={look.grade} onRoot={setExteriorRoot} />
               {/* The front doors, cut into two leaves that can open. Closed,
                   they are the shipped geometry exactly; only a passage through
                   the doorway moves them. */}
               <ExteriorDoorway root={exteriorRoot} />
             </group>
+            ) : null}
             {/* ITS OWN SUSPENSE BOUNDARY, and that is a defect fix.
 
                 When the hall is armed mid-film, HallModel suspends while its
@@ -3133,10 +3634,12 @@ export function WorldCanvas() {
                   </group>
                 ) : null
               ) : set === 'interior' ? (
-                <>
+                // Hidden until its programs are built (WarmGate). A group, as
+                // the film's hall is.
+                <group visible={hallWarm}>
                   <HallModel onRoot={setHallRoot} />
                   {hallRoot ? <MapTable projects={pinProjects} onOpen={openProject} tier={tier} /> : null}
-                </>
+                </group>
               ) : null}
             </Suspense>
             {/* Metals need something to reflect or they read as flat paint.
@@ -3179,12 +3682,13 @@ export function WorldCanvas() {
               onOpen={openHref}
               mode="still"
               stillLevel={hallReadingLevel(pathname)}
+              stillFocus={poseFor(place).focus ?? null}
             />
           ) : null}
           {look.free ? (
             <FreeCamera />
           ) : (
-            <Rig place={place} stationCount={stationCount} onTier={onTier} />
+            <Rig place={place} stationCount={stationCount} held={pathStill} onTier={onTier} />
           )}
           {/* AFTER the rig, so the pass is drawn from the pose the rig has just
               placed; before the composer, which draws the frame. */}
@@ -3195,7 +3699,7 @@ export function WorldCanvas() {
               scene rendered, so it has to mount after the content it filters.
               Skipped entirely in free-camera look-dev, where an unfiltered
               frame is the whole point of the mode. */}
-          {!look.free && <PostFX tier={tier} set={set} grade={look.grade} />}
+          {!look.free && <PostFX tier={tier} set={set} grade={look.grade} still={!onJourney} />}
           {/* LAST, and after PostFX on purpose. React runs sibling effects in
               render order, so mounting the colour pipeline here means it is the
               final writer on the same commit that mounts the composer — which
@@ -3215,10 +3719,14 @@ export function WorldCanvas() {
         one, and the only reason that exchange is invisible is that this element
         is at full opacity while it happens.
 
-        It is NOT a fade to a colour that happens to be dark: #05080F is the
-        same value the fog resolves to at the end of the approach, so the frame
-        does not shift hue as it closes. A slight warm bias at the centre — the
-        light from a door that is still open — keeps it from reading as a
+        It is NOT a fade to a colour that happens to be dark. It was the navy
+        the fog resolved to at the end of the approach (#05080F) when dusk at
+        the door was navy; the dusk is slate and the hall walnut now, and this
+        is seen far more often than it was — every press on the chapter rail
+        that goes further than the next chapter is a cut under it (doorway.ts,
+        cutTo). So it is the hall's own dark, the umber of its walnut in shade
+        (coverState.ts, COVER_GROUND.film), a breath lighter at the centre —
+        the light from a door that is still open — so it does not read as a
         browser tab that stopped painting.
 
         z-[2], above the canvas and the grain, below the page
@@ -3232,14 +3740,36 @@ export function WorldCanvas() {
           opacity: 0,
           pointerEvents: 'none',
           background:
-            'radial-gradient(120% 90% at 50% 56%, #0B1220 0%, #05080F 46%, #04060B 100%)',
+            'radial-gradient(120% 90% at 50% 56%, #15110C 0%, #0B0906 46%, #070604 100%)',
           // No CSS transition: the opacity is written every frame from the
           // scroll position, and a transition on top of that is a second lag in
           // series with the damping already applied to it.
           transition: 'none',
           willChange: 'opacity',
         }}
-      />
+      >
+        {/* THE WAIT, SAID (WarmGate): the curtain's own hairline, on the dark
+            that is held over a set which has not arrived. It is the veil's
+            child, so it is only ever as visible as the dark it stands on; it
+            comes up when a wait has outlasted an ordinary cut and fills with
+            the hall's bytes. Under the frame's middle, clear of every
+            chapter's copy (which stands at the frame's left edge on a wide
+            frame and at its head on an upright one): at 54% it stood level
+            with the last line of a table's copy and read as a rule ruled
+            after it (SEEN, 2026-10-09). */}
+        <span
+          ref={waitRef}
+          aria-hidden
+          data-scene-wait=""
+          className="absolute left-1/2 top-[61%] block h-px w-28 -translate-x-1/2 bg-[#F2EDE4]/[0.12]"
+          style={{ opacity: 0, transition: 'opacity 600ms ease' }}
+        >
+          <span
+            className="absolute inset-y-0 left-0 block w-full origin-left bg-[#E8B98A]/70"
+            style={{ transform: 'scaleX(0)', transition: 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)' }}
+          />
+        </span>
+      </div>
     </div>
   );
 }

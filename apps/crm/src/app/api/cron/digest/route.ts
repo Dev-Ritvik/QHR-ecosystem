@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { systemQuery } from '@/server/db';
 import { sql } from 'drizzle-orm';
+import { cronAuthorized } from '@/server/cron-auth';
 
 /**
  * T86 Cron: Compiles daily notifications into an email digest via Resend.
  * Injects `wa.me` deep links for leads to facilitate instant action without API costs.
  */
 export async function GET(req: NextRequest) {
-  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAuthorized(req.headers.get('Authorization'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -598,8 +598,8 @@ const aoLook = (() => {
   return { radius: r > 0 ? r : AO_RADIUS, strength: w >= 0 && q?.has('aos') ? w : AO_STRENGTH };
 })();
 
-export const LensFocus = forwardRef<LensFocusEffect, { active?: boolean }>(function LensFocus(
-  { active = true },
+export const LensFocus = forwardRef<LensFocusEffect, { active?: boolean; stillHall?: boolean }>(function LensFocus(
+  { active = true, stillHall = false },
   ref,
 ) {
   const effect = useMemo(() => new LensFocusEffect(), []);
@@ -625,7 +625,13 @@ export const LensFocus = forwardRef<LensFocusEffect, { active?: boolean }>(funct
     // Anywhere else the lens eases to zero and stays out of the way (a prop,
     // not a remount: the effect instance and its pass live for the life of the
     // tier).
-    const inside = journeyState.leg === 'interior';
+    // (`stillHall`: a PAGE that stands in the hall. Off the film the journey's
+    // leg is at rest, which is 'exterior' — and a still in the hall was being
+    // given the estate's lens, focused where its axis met a house that is not
+    // in the room: the forensic audit's #69, a layout's model soft on its own
+    // page. In the hall the lens is the hall's, on the subject the page's pose
+    // names (poses.ts, `focus`) or on nothing.)
+    const inside = journeyState.leg === 'interior' || stillHall;
     // THE DOOR PASSAGE HAS THE LENS (doorway.ts): on the way in it holds the
     // door frame while the camera rushes it, so the dark beyond is soft; on
     // the far side it racks from the door at the camera's back out to the far

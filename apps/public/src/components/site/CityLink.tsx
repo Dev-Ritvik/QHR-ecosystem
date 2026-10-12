@@ -61,7 +61,7 @@ export function CityLink({
   return (
     <Link
       href={`/projects/${slug}`}
-      className="tap-target group block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E8B98A]"
+      className="tap-target group block"
       onMouseEnter={() => setFocus(slug)}
       onMouseLeave={() => setFocus(null)}
       onFocus={() => setFocus(slug)}

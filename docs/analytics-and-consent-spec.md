@@ -1,4 +1,4 @@
-# Spatial Analytics & Consent Architecture
+# Spatial Analytics & Consent Architecture 
 
 Status: **proposal, pending client sign-off.** Supersedes `leadcapture.md` as the build
 specification. `leadcapture.md` is retained as the original brief; §9 records which of its

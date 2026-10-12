@@ -1,0 +1,2154 @@
+/* ---------------------------------------------------------------------------
+   THE FOLIO: every page that is not the film, in the film's own language.
+   ---------------------------------------------------------------------------
+
+   The film is one room of this site and it was the only one furnished. The
+   other pages were a column of small type down the middle of a navy wash,
+   under a different header on a different grid: true to their facts and
+   nothing like the house they belong to (the client, 2026-10-06: "make sure
+   everything gives the same vibe / no page must feel left out").
+
+   A page is a FOLIO now, and it is made of three things:
+
+     THE PLATE   the page's opening frame. The house is behind every page of
+                 this site already (the canvas belongs to the layout), each
+                 page at its own place in it — the approach, the hall, a
+                 layout's own table. The plate is a full frame of that place
+                 with the page's title set on it in the film's display type,
+                 off the frame's own edge, on a neutral density that rises
+                 from the frame's foot: density, as the lens wears under the
+                 film's copy — never a wash of colour, never a blur.
+
+     THE SHEETS  what is read. Each section is a sheet of the hall's own dark
+                 laid over the picture — the umber of its walnut in shade
+                 (coverState.ts, COVER_GROUND.film), not the navy the pages
+                 had — so reading text never stands on a picture and needs
+                 nothing behind it. On a wide frame a sheet is set as a
+                 spread: its title in the margin, held while its text is read
+                 past it.
+
+     THE WINDOWS between sheets, where the picture is let through again and a
+                 single line stands on it.
+
+   ONE EDGE. The film's copy and the header stand off the frame's own edge
+   (`--edge`: nine baselines or 5.2% of the width, whichever is more). So does
+   every folio, by the same formula, so a page's title stands under the mark
+   exactly as the cover's does.
+
+   THE DISPLAY TYPE IS THE FILM'S (`t-d1` to `t-d3`, in the frame's unit on a
+   wide frame). The READING type is not scaled to the frame: a paragraph is
+   read, not composed against a picture, and it keeps the size a visitor's own
+   settings give it. */
+.folio,
+.folio-stage {
+  --ground: #15110c;
+  --ground-raised: #1b1610;
+  --ink: #f2ede4;
+  --gilt: #e8b98a;
+  --rule: rgba(242, 237, 228, 0.13);
+  --u: 1px;
+  --edge: 1.5rem;
+  --fbar: 62px;
+  /* ONE BODY SIZE. The scale's step for running text is fluid — 15 px on a
+     phone to 16 on a desk — and text with no class of its own is the
+     browser's 16 everywhere: on every frame under 1,920 px a page was set in
+     two sizes a fraction of a pixel apart, paragraph beside paragraph (the
+     forensic audit of 2026-10-09, #97: 15.93 and 16 on a laptop, 15.03 and 16
+     on a phone). A page's running text is a rem, the visitor's own size. */
+  --step-0: 1rem;
+}
+.folio {
+  position: relative;
+  color: var(--ink);
+}
+@media (min-width: 768px) and (orientation: landscape), (max-height: 520px) and (orientation: landscape) {
+  .folio,
+  .folio-stage {
+    --u: min(calc(100vh / 900), calc(100vw / 1200));
+    --edge: max(calc(max(0.15625rem, calc(4 * var(--u))) * 9), 5.2vw);
+    --fbar: max(2.75rem, calc(62 * var(--u)));
+    /* ONE SIZE OF SMALL CAPITALS: the header's, which stands on the film's
+       stage and takes the frame's unit. A page's own (its actions, its cue)
+       were the fluid scale's, and beside the header they were half a pixel
+       smaller: 10.24 against 10.75 (#96). The same words as the stage's. */
+    --step--2: max(0.6284rem, calc(10.24 * var(--u)));
+    --d1: max(2.5rem, calc(86 * var(--u)));
+    --d2: max(2rem, calc(60 * var(--u)));
+    --d3: max(1.5rem, calc(42 * var(--u)));
+    --fig: max(3.25rem, calc(116 * var(--u)));
+    --end: max(3.5rem, calc(128 * var(--u)));
+    --support: max(1.0625rem, calc(22 * var(--u)));
+  }
+}
+@media (min-width: 768px) and (orientation: portrait) {
+  .folio,
+  .folio-stage {
+    --edge: 2.5rem;
+  }
+}
+
+/* ── the plate ───────────────────────────────────────────────────────────── */
+.folio-plate {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  min-height: 100svh;
+  /* Under the header, which over a plate is air, as it is over the film. */
+  margin-top: -62px;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: calc(var(--fbar) + 6vh) var(--edge) var(--plate-foot, max(3.5rem, 9vh));
+  pointer-events: none;
+}
+.folio-plate > * {
+  pointer-events: auto;
+}
+/* THE DENSITY THE TITLE STANDS ON, and nothing else darkened.
+
+   It was first a band across the whole foot of the frame, rising
+   three-quarters of the way up: it carried the title, and it also put out the
+   lower half of the picture — a layout's own model on its table, the plate
+   under the portrait — which is where a frame's subject stands. Then an
+   ellipse from the frame's lower-left corner, which left the picture alone
+   and failed the words: MEASURED on all 28 plates at 1920x945 with the house
+   lights up (plates.mjs, plates_aa.py: every line of every plate against the
+   brightest tenth of the clean plate under it), 67 of 272 lines stood under
+   AA — a long title's first line, a kicker at the top of a tall block, each
+   out past the ellipse on an ivory wall at a luma of 150 to 190.
+
+   So the density belongs to the WORDS, not to the frame: it is the copy
+   block's own, as wide and as tall as the block is, running out to nothing
+   past its right edge and above its first line, and down to the frame's
+   foot. A flag in front of the lens, set for this title. Its strength is the
+   least that carries the quietest line on the brightest wall the house has:
+   small gilt (the kicker) needs its ground under a luma of 80, the hall's
+   ivory at half lights prints at 215, and 0.78 of the hall's dark over that
+   is 56. Neutral — the hall's dark with its warmth — never a colour laid
+   over the picture, and never a blur.
+
+   The frame itself keeps two: a short foot, so the first sheet rises out of
+   the picture and not across it, and the header's band across the top. */
+.folio-plate {
+  --plate-foot: max(3.5rem, 9vh);
+  overflow: clip;
+}
+.folio-plate::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(to top, #15110c 0%, rgba(21, 17, 12, 0.9) 5%, rgba(21, 17, 12, 0.45) 13%, rgba(21, 17, 12, 0) 26%),
+    linear-gradient(to bottom, rgba(14, 11, 8, 0.55) 0%, rgba(14, 11, 8, 0) 16%);
+  pointer-events: none;
+}
+.folio-plate-copy {
+  position: relative;
+  /* AS WIDE AS ITS WORDS, and no wider. A block's natural width is its
+     container's — the whole frame — and the density, sized by the block, was
+     a band across the picture from edge to edge (seen on the first build of
+     it: the portrait, the tables' models, all under it). */
+  width: fit-content;
+  max-width: 100%;
+}
+.folio-plate-copy::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  /* from the frame's left edge and its foot… */
+  left: calc(-1 * var(--edge));
+  bottom: calc(-1 * var(--plate-foot));
+  /* …to past the block's right edge, and well above its first line */
+  right: -46%;
+  top: -14rem;
+  background: linear-gradient(
+    to right,
+    rgba(14, 11, 8, 0.78) 0%,
+    rgba(14, 11, 8, 0.78) 66%,
+    rgba(14, 11, 8, 0.6) 78%,
+    rgba(14, 11, 8, 0.3) 90%,
+    rgba(14, 11, 8, 0) 100%
+  );
+  /* The same, upward — and over a LONG hand. Whole from the first line down;
+     above it, gone by degrees over fourteen rems, in an S: at seven it had an
+     edge, a soft line across an ivory wall where the flag began. A density
+     that can be seen to start is a panel. */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    rgba(0, 0, 0, 0.06) 2rem,
+    rgba(0, 0, 0, 0.2) 4rem,
+    rgba(0, 0, 0, 0.42) 6rem,
+    rgba(0, 0, 0, 0.66) 8rem,
+    rgba(0, 0, 0, 0.85) 10rem,
+    rgba(0, 0, 0, 0.96) 12rem,
+    #000 13.25rem,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    rgba(0, 0, 0, 0.06) 2rem,
+    rgba(0, 0, 0, 0.2) 4rem,
+    rgba(0, 0, 0, 0.42) 6rem,
+    rgba(0, 0, 0, 0.66) 8rem,
+    rgba(0, 0, 0, 0.85) 10rem,
+    rgba(0, 0, 0, 0.96) 12rem,
+    #000 13.25rem,
+    #000 100%
+  );
+  pointer-events: none;
+}
+/* A shorter plate: a page whose business is below it (a form, a policy). */
+.folio-plate.is-short {
+  min-height: 74vh;
+  min-height: 74svh;
+}
+/* AN UPRIGHT FRAME has no side to spare: the block is the frame's width, so
+   the density is too, and runs out only upward.
+
+   AND IT RUNS OUT SOONER THERE. On an upright screen the words stand UNDER
+   the picture, and the picture has only the band between the header and
+   their first line: 220 px of a phone showing its browser's bars (390x664),
+   and the fourteen-rem hand is 224 — every picture was wholly inside it
+   (seen on the finished build: a layout's model a ghost over its own
+   title). Five rems there. Across the whole width of a frame a density has
+   no side to be seen to start from, which is what the long hand is for on a
+   wide one.
+
+   A SHORT PLATE THERE IS ITS WORDS AND A BAND OF PICTURE OVER THEM, three
+   tenths of the screen high. It was first three-quarters of the frame, like
+   a wide screen's — and three-quarters of 664 px is the words and nothing
+   else: no band at all, and its picture whatever showed through its title.
+   So it was then made a whole frame, like any other page's; and the forensic
+   audit of 2026-10-09 (#68) saw what that left: "seventeen pages open on a
+   full-screen picture and eleven on a short one that shows the next section
+   in the first screen … on a phone all are full height. Two opening
+   proportions with no visible rule." The rule is one a visitor can sense — a
+   page that TELLS opens on a whole picture, a page that is USED (a form, a
+   list, the small print) opens on a short one with its business in sight —
+   and it holds on every screen: here the band is measured, not left over,
+   and the rig stands the subject in it (components/experience/plateBand.ts).
+
+   A PHONE'S, AND NOT EVERY UPRIGHT SCREEN'S. This rule was written for
+   "(max-width: 767px), (orientation: portrait)", and a tablet held upright
+   has a side: its block is two-thirds of its frame, and a flat density as
+   wide as the block ended in a hard vertical edge across the picture — a
+   panel, on the marble beside every title (seen at 820x1180). A tablet
+   keeps the wide frame's flag, which runs out to nothing past the words. */
+@media (max-width: 767px) {
+  .folio-plate-copy::before {
+    right: calc(-1 * var(--edge));
+    top: -5rem;
+    background: rgba(14, 11, 8, 0.8);
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      rgba(0, 0, 0, 0.06) 0.7rem,
+      rgba(0, 0, 0, 0.2) 1.4rem,
+      rgba(0, 0, 0, 0.42) 2.1rem,
+      rgba(0, 0, 0, 0.66) 2.85rem,
+      rgba(0, 0, 0, 0.85) 3.55rem,
+      rgba(0, 0, 0, 0.96) 4.3rem,
+      #000 4.7rem,
+      #000 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      rgba(0, 0, 0, 0.06) 0.7rem,
+      rgba(0, 0, 0, 0.2) 1.4rem,
+      rgba(0, 0, 0, 0.42) 2.1rem,
+      rgba(0, 0, 0, 0.66) 2.85rem,
+      rgba(0, 0, 0, 0.85) 3.55rem,
+      rgba(0, 0, 0, 0.96) 4.3rem,
+      #000 4.7rem,
+      #000 100%
+    );
+  }
+  .folio-plate.is-short {
+    min-height: 0;
+    padding-top: calc(var(--fbar) + 30vh);
+    padding-top: calc(var(--fbar) + 30svh);
+  }
+}
+/* THE WORDS GO BEFORE THEY REACH THE HEADER. `--cut` is how far down the
+   block, from its own top, the header's foot now stands (FolioClient writes
+   it as the page is scrolled; below zero while the block is clear of it).
+   Nothing of the words above that line, whole from three rems under it: a
+   line is gone as it comes to the bar, as the film's copy is, and never read
+   through the mark. With no script the block is whole. */
+.folio-plate-words {
+  --cut: -999px;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent var(--cut),
+    #000 calc(var(--cut) + 3rem),
+    #000 100%
+  );
+  mask-image: linear-gradient(to bottom, transparent 0, transparent var(--cut), #000 calc(var(--cut) + 3rem), #000 100%);
+}
+.folio-kicker {
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  letter-spacing: var(--track-label);
+  color: var(--gilt);
+}
+.folio-title {
+  max-width: 17ch;
+  margin-top: 0.4em;
+  color: var(--ink);
+}
+.folio-title.is-long {
+  max-width: 24ch;
+}
+.folio-lede {
+  max-width: 40ch;
+  margin-top: 1.1em;
+  color: var(--ink);
+}
+.folio-plate-foot {
+  display: flex;
+  margin-top: max(2rem, 5vh);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem 2.75rem;
+}
+/* The reference under the plate of the page that did not load (error.tsx):
+   small, and still to be read out over a telephone. */
+.folio-error-ref {
+  margin-top: 1.75rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  letter-spacing: var(--track-label);
+  color: var(--ink-4);
+}
+/* The cue at the plate's foot: a hairline with a gilt bar falling down it,
+   as the film's own cue has, and the word for what is below. */
+.folio-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-size: var(--step--2);
+  line-height: var(--lead--2);
+  font-weight: 500;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink);
+  transition: color var(--t-state) var(--ease);
+}
+.folio-cue i {
+  position: relative;
+  display: block;
+  width: 1px;
+  height: 2.75rem;
+  overflow: hidden;
+  background: rgba(242, 237, 228, 0.28);
+}
+.folio-cue i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--gilt);
+  transform: translateY(-100%);
+  animation: folio-cue 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes folio-cue {
+  0% {
+    transform: translateY(-100%);
+  }
+  55% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+.folio-cue:hover,
+.folio-cue:focus-visible {
+  color: var(--gilt);
+}
+
+/* ── the sheets ──────────────────────────────────────────────────────────── */
+.folio-sheet {
+  position: relative;
+  background: var(--ground);
+  padding: clamp(4rem, 13vh, 9.5rem) var(--edge);
+}
+.folio-sheet + .folio-sheet::before,
+.folio-window + .folio-sheet::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--edge);
+  right: var(--edge);
+  height: 1px;
+  background: var(--rule);
+}
+.folio-window + .folio-sheet::before {
+  display: none;
+}
+.folio-sheet.is-raised {
+  background: var(--ground-raised);
+}
+.folio-sheet.is-raised::before,
+.folio-sheet.is-raised + .folio-sheet::before {
+  display: none;
+}
+.folio-sheet.is-first {
+  padding-top: clamp(2.5rem, 7vh, 5rem);
+}
+.folio-spread {
+  display: grid;
+  gap: 2.25rem;
+}
+.folio-head h2 {
+  max-width: 16ch;
+  color: var(--ink);
+}
+.folio-head .folio-kicker {
+  margin-bottom: 0.9em;
+}
+.folio-head-note {
+  max-width: 34ch;
+  margin-top: 1.4em;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+@media (min-width: 1024px) {
+  .folio-spread {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(3rem, 7vw, 9rem);
+    align-items: start;
+  }
+  .folio-spread.is-even {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  /* The section's title is held in the margin while its text is read. */
+  .folio-head {
+    position: sticky;
+    top: calc(var(--fbar) + 7vh);
+  }
+}
+.folio-sheet.is-full .folio-spread {
+  display: block;
+}
+.folio-sheet.is-full .folio-head {
+  position: static;
+  margin-bottom: clamp(2.25rem, 6vh, 4.5rem);
+}
+.folio-sheet.is-full .folio-head h2 {
+  max-width: 24ch;
+}
+
+/* NO LINE OF ONE WORD (the forensic audit of 2026-10-09, #75: "Headings break
+   with one word alone ... paragraphs end on 'ask.', 'for.', 'there.' ...
+   form options end with 'Srikakulam' alone": 49 of them on a desktop). Every
+   block of running text on a sheet, a plate or a colophon is broken with its
+   last lines in view, and every heading and every option's label is set in
+   lines of one length. At no weight (`:where`): a rule that says otherwise
+   for its own block still does. */
+:where(.folio, .folio-colophon) :where(p, li, dd, dt, figcaption, blockquote, summary, .folio-next-line, .folio-next-title) {
+  text-wrap: pretty;
+}
+:where(.folio, .folio-colophon) :where(h1, h2, h3, h4, label, legend) {
+  text-wrap: balance;
+}
+
+/* Reading text. */
+.folio-prose {
+  max-width: 62ch;
+}
+.folio-prose > * + * {
+  margin-top: 1.25em;
+}
+.folio-prose p,
+.folio-prose li,
+.folio-prose dd {
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.folio-prose strong {
+  font-weight: 500;
+  color: var(--ink);
+}
+.folio-prose a,
+.folio-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: rgba(232, 185, 138, 0.55);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.28em;
+  transition: color var(--t-state) var(--ease), text-decoration-color var(--t-state) var(--ease);
+}
+.folio-prose a:hover,
+.folio-prose a:focus-visible,
+.folio-link:hover,
+.folio-link:focus-visible {
+  color: var(--gilt);
+  text-decoration-color: var(--gilt);
+}
+.folio-prose h3 {
+  margin-top: 2.2em;
+  font-size: var(--step-2);
+  line-height: var(--lead-2);
+  letter-spacing: var(--track-heading);
+  color: var(--ink);
+}
+/* (1.3rem, not em: the draft notice over a legal page's lists sets its words
+   on this same edge, and has to be able to say what it is. See
+   .folio-pending-notice.) */
+.folio-prose ul,
+.folio-prose ol {
+  display: grid;
+  gap: 0.7em;
+  padding-left: 1.3rem;
+}
+.folio-prose ul {
+  list-style: disc;
+}
+.folio-prose ol {
+  list-style: decimal;
+}
+.folio-prose li::marker {
+  color: var(--gilt);
+}
+.folio-prose .folio-first {
+  font-size: var(--step-2);
+  line-height: var(--lead-2);
+  color: var(--ink);
+}
+.folio-note {
+  max-width: 58ch;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+.folio-note a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: rgba(232, 185, 138, 0.5);
+  text-underline-offset: 0.28em;
+}
+.folio-note a:hover,
+.folio-note a:focus-visible {
+  color: var(--gilt);
+}
+/* A numbered run: the numeral in the margin, in the face's light figures. */
+.folio-steps {
+  counter-reset: step;
+  display: grid;
+}
+.folio-step {
+  position: relative;
+  display: grid;
+  gap: 0.6rem 2rem;
+  padding: 2.25rem 0;
+  border-top: 1px solid var(--rule);
+  counter-increment: step;
+}
+.folio-step:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.folio-step::before {
+  content: counter(step, decimal-leading-zero);
+  font-size: var(--step-3);
+  font-weight: 300;
+  line-height: var(--lead-3);
+  /* (Lining: a numbering is read as a number. In the face's own figures
+     "01" was a letter and a figure.) */
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--gilt);
+}
+.folio-step h3 {
+  font-size: var(--step-3);
+  line-height: var(--lead-3);
+  letter-spacing: var(--track-heading);
+  color: var(--ink);
+  text-wrap: balance;
+}
+.folio-step p {
+  max-width: 54ch;
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink-2);
+}
+@media (min-width: 640px) {
+  .folio-step {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+  }
+  .folio-step > * {
+    grid-column: 2;
+  }
+  .folio-step::before {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+  }
+}
+/* A ledger: what a thing is, down the left; what is true of it, down the right. */
+.folio-ledger {
+  display: grid;
+  border-top: 1px solid var(--rule);
+}
+.folio-ledger > div {
+  display: grid;
+  gap: 0.25rem 2rem;
+  padding: 1.05rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.folio-ledger dt {
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-4);
+}
+.folio-ledger dd {
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink);
+}
+@media (min-width: 640px) {
+  .folio-ledger > div {
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+    align-items: baseline;
+  }
+}
+/* Figures: the film's own, in a row that breaks to two. */
+.folio-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2.75rem 2rem;
+}
+@media (min-width: 900px) {
+  .folio-figures[data-n="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .folio-figures[data-n="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.folio-figure dt {
+  font-family: var(--font-text);
+  font-size: var(--fig);
+  font-weight: 300;
+  line-height: 0.92;
+  letter-spacing: var(--track-display);
+  font-variation-settings: "opsz" 200;
+  font-variant-numeric: var(--figure-nums) proportional-nums;
+  color: var(--ink);
+}
+.folio-figure dt small {
+  /* A step of the scale (it was 0.26 of the figure: 31.67 px beside the
+     scale's 31.25, the forensic audit's "two sizes half a pixel apart"). */
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  font-weight: 400;
+  letter-spacing: 0;
+  font-variation-settings: "opsz" 30;
+  color: var(--ink-3);
+}
+@media (min-width: 900px) {
+  .folio-figure dt small {
+    font-size: var(--step-3);
+    line-height: var(--lead-3);
+  }
+}
+.folio-figure dd {
+  margin-top: 0.9rem;
+  max-width: 22ch;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+/* A list of things to go to: a name, a line about it, and a hairline that
+   draws in under the row it is pointed at. */
+.folio-index {
+  border-top: 1px solid var(--rule);
+}
+.folio-index > li > a,
+.folio-index > li > div {
+  position: relative;
+  display: grid;
+  gap: 0.35rem 2rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.folio-index > li > a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--gilt);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--t-move) var(--ease);
+}
+.folio-index > li > a:hover::after,
+.folio-index > li > a:focus-visible::after {
+  transform: scaleX(1);
+}
+.folio-index-name {
+  font-size: var(--step-3);
+  line-height: var(--lead-3);
+  letter-spacing: var(--track-heading);
+  color: var(--ink);
+  transition: color var(--t-state) var(--ease);
+}
+.folio-index > li > a:hover .folio-index-name,
+.folio-index > li > a:focus-visible .folio-index-name {
+  color: var(--gilt);
+}
+.folio-index-line {
+  max-width: 52ch;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+.folio-index-meta {
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-4);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+@media (min-width: 900px) {
+  .folio-index > li > a,
+  .folio-index > li > div {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr) auto;
+    align-items: baseline;
+  }
+  .folio-index.is-two > li > a,
+  .folio-index.is-two > li > div {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+/* A plan, or any drawing on paper: ivory, as a sheet is, with a hairline. */
+.folio-paper {
+  overflow: hidden;
+  border-radius: 2px;
+  background: #f6f1e7;
+  box-shadow: 0 0 0 1px rgba(242, 237, 228, 0.16), 0 28px 60px -30px rgba(0, 0, 0, 0.7);
+}
+.folio-paper img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.folio-caption {
+  margin-top: 1rem;
+  max-width: 62ch;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+/* A pair of actions under a block. */
+.folio-actions {
+  display: flex;
+  margin-top: 2.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem 2.75rem;
+}
+
+/* A plain list, ruled between. */
+.folio-list {
+  border-top: 1px solid var(--rule);
+}
+.folio-list > li {
+  padding: 0.95rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.folio-list.is-small > li {
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+/* Rows and columns. The first column is what the row is; figures are set
+   tabular and ranged right, as a ledger rules them. On a phone a table wider
+   than the page scrolls inside its own frame, never the page. */
+.folio-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.folio-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.folio-table caption {
+  caption-side: bottom;
+  padding-top: 1.1rem;
+  text-align: left;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+.folio-table thead th {
+  padding: 0 1.5rem 0.9rem 0;
+  border-bottom: 1px solid rgba(242, 237, 228, 0.3);
+  font-size: var(--step-0);
+  font-weight: 400;
+  line-height: var(--lead-0);
+  letter-spacing: var(--track-label);
+  color: var(--gilt);
+  white-space: nowrap;
+}
+.folio-table tbody th,
+.folio-table tbody td {
+  padding: 1.05rem 1.5rem 1.05rem 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+  font-size: var(--step-1);
+  font-weight: 400;
+  line-height: var(--lead-1);
+  color: var(--ink-2);
+}
+.folio-table tbody th {
+  color: var(--ink);
+  white-space: nowrap;
+}
+.folio-table .is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+/* A column of a few words keeps to one line, and takes its content's width:
+   "Up to 12 months" stood on two lines in a narrow column beside a wide one
+   with room to spare (the forensic audit of 2026-10-09, #77). */
+.folio-table .is-keep {
+  white-space: nowrap;
+}
+.folio-table th:last-child,
+.folio-table td:last-child {
+  padding-right: 0;
+}
+.folio-table tbody tr {
+  transition: background-color var(--t-state) var(--ease);
+}
+@media (hover: hover) {
+  .folio-table tbody tr:hover {
+    background: rgba(242, 237, 228, 0.03);
+  }
+}
+/* ON A PHONE A ROW IS A BLOCK. Five columns in 342 pixels were five columns
+   of two words each, a layout's name broken over three lines and the last
+   column off the side (seen at 390x844). There a row is what it is about, set
+   as a small heading, and under it each of its figures beside its column's
+   name. The header row is kept for a screen reader and not drawn. */
+@media (max-width: 639px) {
+  .folio-table-wrap {
+    overflow-x: visible;
+  }
+  .folio-table,
+  .folio-table tbody,
+  .folio-table tbody tr,
+  .folio-table tbody th,
+  .folio-table tbody td,
+  .folio-table caption {
+    display: block;
+  }
+  .folio-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .folio-table {
+    border-top: 1px solid rgba(242, 237, 228, 0.3);
+  }
+  .folio-table tbody tr {
+    padding: 1.15rem 0 1.05rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .folio-table tbody th,
+  .folio-table tbody td {
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+  .folio-table tbody th {
+    margin-bottom: 0.45rem;
+    font-size: var(--step-2);
+    line-height: var(--lead-2);
+  }
+  .folio-table tbody td {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 1rem;
+    padding: 0.16rem 0;
+    font-size: var(--step-0);
+    line-height: var(--lead-0);
+  }
+  .folio-table tbody td::before {
+    content: attr(data-label);
+    color: var(--ink-4);
+  }
+  .folio-table .is-num {
+    text-align: left;
+  }
+}
+.folio-table small {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-4);
+  white-space: normal;
+}
+/* Questions and their answers. */
+.folio-qa {
+  border-top: 1px solid var(--rule);
+}
+.folio-qa > div {
+  padding: 2rem 0 2.1rem;
+  border-bottom: 1px solid var(--rule);
+}
+.folio-qa dt {
+  max-width: 34ch;
+  font-size: var(--step-3);
+  line-height: var(--lead-3);
+  letter-spacing: var(--track-heading);
+  color: var(--ink);
+  text-wrap: balance;
+}
+.folio-qa dd {
+  max-width: 62ch;
+  margin-top: 0.85rem;
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+/* Somebody's own words, at length. */
+.folio-quote {
+  position: relative;
+  max-width: 34em;
+  padding-left: clamp(1.25rem, 3vw, 2.75rem);
+  border-left: 1px solid rgba(232, 185, 138, 0.6);
+}
+.folio-quote blockquote {
+  font-size: var(--step-3);
+  line-height: var(--lead-3);
+  letter-spacing: var(--track-heading);
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.folio-quote figcaption {
+  display: flex;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+}
+.folio-quote figcaption span:first-child {
+  color: var(--gilt);
+}
+.folio-quote figcaption span + span {
+  color: var(--ink-3);
+}
+.folio-quotes {
+  display: grid;
+  gap: clamp(3.5rem, 9vh, 6rem);
+}
+/* A plan, whole: it opens at its full size, and says so when pointed at.
+   NEVER TALLER THAN THE FRAME IT IS READ IN. A plan that is nearly square, set
+   at the page's full width, was a frame and three-quarters tall: nobody saw
+   it whole, and that is the one thing a plan on a page is for. Its width is
+   held to what its own proportions allow under the header. */
+.folio-figure-paper {
+  max-width: calc((100vh - var(--fbar) - 4.5rem) * var(--paper-ratio, 1.4));
+  max-width: calc((100svh - var(--fbar) - 4.5rem) * var(--paper-ratio, 1.4));
+}
+.folio-figure-paper a.folio-paper {
+  position: relative;
+  display: block;
+  cursor: zoom-in;
+}
+/* What can be done with a sheet, said under it in the page's own quiet
+   action (it was a dark chip over the sheet's corner, a thing found nowhere
+   else on the site: the forensic audit of 2026-10-09, #64). */
+.folio-paper-closer {
+  margin-top: 0.35rem;
+}
+
+/* THE SHEET, LOOKED AT CLOSELY (components/folio/PlanViewer.tsx): the
+   browser's own modal, the whole window, on the page's own dark. The sheet
+   lies in the middle of the room over the controls' line and is moved and
+   brought closer there; nothing of the page shows round it. */
+.plan-viewer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #0e0b08;
+  color: var(--ink);
+  overflow: hidden;
+}
+.plan-viewer::backdrop {
+  background: #0e0b08;
+}
+.plan-viewer-room {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.plan-viewer-stage {
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.plan-viewer-stage.is-held {
+  cursor: grabbing;
+}
+.plan-viewer-stage img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  background: #f6f1e7;
+  transform-origin: center;
+  will-change: transform;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.plan-viewer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 2.5rem;
+  padding: 0.6rem var(--edge) calc(0.6rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--rule);
+  background: #0e0b08;
+}
+.plan-viewer-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 2.5rem;
+}
+.plan-viewer-bar .cta-quiet {
+  color: var(--ink);
+}
+.plan-viewer-bar .cta-quiet:disabled {
+  color: var(--ink-3);
+  opacity: 0.45;
+  cursor: default;
+}
+/* A part of a plan, enlarged. */
+.folio-detail .folio-paper {
+  width: 100%;
+  background-repeat: no-repeat;
+}
+/* A plan beside what to look for on it. */
+.folio-plan {
+  display: grid;
+  gap: 2.5rem;
+}
+@media (min-width: 1024px) {
+  .folio-plan {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 4fr);
+    gap: clamp(2.5rem, 5vw, 6rem);
+    align-items: start;
+  }
+  /* An upright plan beside what is said of it: the plan takes the width its
+     height allows, and the text has the rest. */
+  .folio-plan.is-upright {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .folio-plan.is-upright .folio-figure-paper {
+    width: min(58vw, calc((100svh - var(--fbar) - 4.5rem) * var(--paper-ratio, 1)));
+  }
+  /* PLANS OF DIFFERENT PROPORTIONS, SHOWN AS ONE SET (/gallery): each whole
+     on a mount of one proportion (7:5, the middle of the three sheets'), in
+     the mount's own paper, so the three pictures are one size and what
+     stands beside each begins on one edge. The mount takes the width its
+     height allows on the screen. */
+  .folio-plan.is-mounted {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .folio-plan.is-mounted .folio-figure-paper {
+    width: min(58vw, calc((100svh - var(--fbar) - 4.5rem) * 1.4));
+  }
+  .folio-plan.is-mounted a.folio-paper {
+    aspect-ratio: 7 / 5;
+  }
+  .folio-plan.is-mounted .folio-paper img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+/* A paragraph that stands in for a heading: one sentence about the thing. */
+.folio-standfirst {
+  max-width: 34ch;
+  font-size: var(--step-2);
+  line-height: var(--lead-2);
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.folio-standfirst.is-small {
+  max-width: 52ch;
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink-2);
+}
+/* Names run on in a line, a hairline between: the institutions near a site.
+
+   THE HAIRLINE NEVER BEGINS A LINE (the forensic audit of 2026-10-09, #76:
+   "when the list wraps, the rule starts the next line ... Break before the
+   item, not before the rule"). Every name carries its rule before it, the
+   first as well, and the list is set to the left by the rule's own room
+   (`--run-rule`) with that much of its left side cut away: a name that
+   begins a line has its rule in the part that is not drawn, and its first
+   letter on the edge the list was always set on. */
+.folio-run {
+  --run-rule: 2.7rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0;
+  max-width: calc(68ch + var(--run-rule));
+  margin-left: calc(-1 * var(--run-rule));
+  clip-path: inset(-1rem -1rem -1rem var(--run-rule));
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink-2);
+}
+.folio-run li::before {
+  content: "";
+  display: inline-block;
+  width: 1.1rem;
+  height: 1px;
+  margin: 0 0.8rem;
+  background: rgba(232, 185, 138, 0.55);
+  vertical-align: 0.3em;
+}
+/* A value of several lines, each with a smaller figure after it. */
+.folio-stack {
+  display: grid;
+  gap: 0.3rem;
+}
+.folio-ledger small,
+.folio-stack small {
+  margin-left: 0.6rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-4);
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+/* Three of a kind side by side: three layouts, three offices. */
+.folio-trio {
+  display: grid;
+  gap: 3.5rem 3rem;
+}
+@media (min-width: 900px) {
+  .folio-trio {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(2.5rem, 4.5vw, 6rem);
+  }
+}
+.folio-trio-name {
+  font-size: var(--step-3);
+  line-height: var(--lead-3);
+  letter-spacing: var(--track-heading);
+  color: var(--ink);
+}
+.folio-trio-name a {
+  transition: color var(--t-state) var(--ease);
+}
+.folio-trio-name a:hover,
+.folio-trio-name a:focus-visible {
+  color: var(--gilt);
+}
+.folio-trio .folio-kicker {
+  margin-bottom: 0.3rem;
+}
+.folio-trio-name + .folio-kicker {
+  margin-top: 0.4rem;
+}
+.folio-trio-line {
+  max-width: 34ch;
+  margin-top: 0.75rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+/* In a column a third of the page wide a ledger's term stands over its value. */
+.folio-trio .folio-ledger > div {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.15rem;
+}
+.folio-trio .folio-ledger dd {
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+}
+/* A role, or any named thing with a ledger under it. */
+.folio-roles {
+  display: grid;
+  gap: 3.5rem;
+}
+.folio-role-name {
+  margin-bottom: 1.1rem;
+  font-size: var(--step-3);
+  line-height: var(--lead-3);
+  letter-spacing: var(--track-heading);
+  color: var(--ink);
+}
+/* Dated entries, newest first. */
+.folio-entries {
+  display: grid;
+  gap: 4rem;
+}
+/* A map, or a run of photographs, in a sheet. */
+.folio-map {
+  height: min(72vh, 46rem);
+  overflow: hidden;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(242, 237, 228, 0.16);
+}
+.folio-photos {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 900px) {
+  .folio-photos {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.folio-photo {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--ground-raised);
+}
+
+/* ── pending (components/experience/Pending.tsx) ─────────────────────────── */
+/* A fact a legal page is still owed. Loud on purpose: the one filled, ruled
+   box on a sheet, in capitals, in the middle of the sentence it is missing
+   from. */
+.folio-pending {
+  margin: 0 0.15em;
+  padding: 0.12em 0.45em;
+  border-radius: 1px;
+  background: rgba(232, 185, 138, 0.16);
+  box-shadow: 0 0 0 1px rgba(232, 185, 138, 0.5);
+  font-size: 0.8em;
+  letter-spacing: var(--track-label);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: #f4d7b4;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+/* ONE TEXT EDGE with the lists under it. The notice's words began 1.4rem
+   inside a 2px rule and a list's 1.3em inside nothing: 919.5 px against
+   916 px in one column at 1920 (the forensic audit of 2026-10-09, #104).
+   The rule is counted in the notice's indent now, and both are 1.3rem. */
+.folio-pending-notice {
+  max-width: 62ch;
+  margin-bottom: 2.75rem;
+  padding: 1.1rem 0 1.2rem calc(1.3rem - 2px);
+  border-left: 2px solid var(--gilt);
+  background: linear-gradient(to right, rgba(232, 185, 138, 0.07), rgba(232, 185, 138, 0));
+}
+/* A LINK IN A FORM'S SMALL PRINT, under a finger: the phrase is 18px tall
+   in its line, and its box is padded to 44 without moving a line (an inline
+   box's own padding is not counted in the line's height). The forensic audit
+   of 2026-10-09, #117. */
+@media (pointer: coarse) {
+  .folio-hint a {
+    padding-block: 13px;
+  }
+}
+.folio-pending-notice-head {
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  letter-spacing: var(--track-label);
+  color: var(--gilt);
+}
+.folio-pending-notice p + p {
+  margin-top: 0.5rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+
+/* ── a page with no picture behind it ────────────────────────────────────── */
+/* The not-found page outside the canvas: its plate stands on the sheets' own
+   ground, with a hairline of gilt where a picture's horizon would be. */
+.folio-bare .folio-plate {
+  min-height: 62vh;
+  min-height: 62svh;
+  background: var(--ground);
+}
+.folio-bare .folio-plate::before {
+  background: linear-gradient(to bottom, rgba(232, 185, 138, 0.07), rgba(232, 185, 138, 0) 55%);
+}
+.folio-home {
+  position: absolute;
+  top: 0;
+  left: var(--edge);
+  z-index: 2;
+  display: flex;
+  height: 62px;
+  align-items: center;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  letter-spacing: var(--track-label);
+  color: var(--ink);
+}
+.folio-home a:hover,
+.folio-home a:focus-visible {
+  color: var(--gilt);
+}
+
+/* ── the form ────────────────────────────────────────────────────────────── */
+/* Lines to be written on: a label, a hairline, and the house's gilt under the
+   line being written. Nothing is boxed. A field's text is never under 16px,
+   so a phone does not zoom into it. */
+.folio-form {
+  position: relative;
+  display: grid;
+  gap: 2.4rem;
+  max-width: 46rem;
+}
+.folio-form-row {
+  display: grid;
+  gap: 2.4rem 2.5rem;
+}
+@media (min-width: 700px) {
+  .folio-form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+.folio-field {
+  display: grid;
+  gap: 0.35rem;
+}
+.folio-field label,
+.folio-fieldset legend {
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+}
+.folio-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.folio-fieldset legend {
+  margin-bottom: 0.7rem;
+  padding: 0;
+}
+.folio-optional {
+  margin-left: 0.5rem;
+  color: var(--ink-4);
+}
+.folio-field input,
+.folio-field textarea {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0 0.75rem;
+  border: 0;
+  border-bottom: 1px solid rgba(242, 237, 228, 0.32);
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-text);
+  font-size: max(1rem, var(--step-2));
+  line-height: var(--lead-2);
+  color: var(--ink);
+  color-scheme: dark;
+  outline: none;
+  transition: border-color var(--t-state) var(--ease), box-shadow var(--t-state) var(--ease);
+}
+/* ONE SIZE FOR WHAT IS WRITTEN (the forensic audit of 2026-10-09, #111: a
+   name and a telephone at one size and the message under them at another,
+   "and the message field shows the browser's grey resize handle in its
+   corner"). The message is the same line as the others, three of them to
+   begin with, and it grows as it is written (enquiry-form.tsx; where the
+   browser can size a field by its content it does that itself): there is
+   nothing to drag. */
+.folio-field textarea {
+  min-height: calc(3lh + 1.25rem + 1px);
+  overflow: hidden;
+  resize: none;
+  field-sizing: content;
+}
+.folio-field input::placeholder,
+.folio-field textarea::placeholder {
+  color: rgba(242, 237, 228, 0.42);
+}
+.folio-field input:hover,
+.folio-field textarea:hover {
+  border-bottom-color: rgba(242, 237, 228, 0.6);
+}
+.folio-field input:focus-visible,
+.folio-field textarea:focus-visible {
+  border-bottom-color: var(--gilt);
+  box-shadow: 0 1px 0 0 var(--gilt);
+}
+.folio-field input[aria-invalid="true"] {
+  border-bottom-color: #f2a38c;
+}
+.folio-hint {
+  max-width: 44ch;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-4);
+}
+.folio-hint a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: rgba(232, 185, 138, 0.5);
+  text-underline-offset: 0.28em;
+}
+.folio-hint a:hover,
+.folio-hint a:focus-visible {
+  color: var(--gilt);
+}
+.folio-error {
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: #f5b4a0;
+}
+.folio-error.is-block {
+  padding-left: 1rem;
+  border-left: 1px solid #f2a38c;
+}
+/* A choice among a few: rows, each a name and a line, with a ring that the
+   chosen one fills. The radio itself is there for the keyboard and a screen
+   reader, and not drawn. */
+.folio-choices {
+  border-top: 1px solid var(--rule);
+}
+.folio-choice {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr);
+  gap: 0.1rem 0.9rem;
+  align-items: baseline;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+}
+.folio-choice input,
+.folio-chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.folio-choice-mark {
+  position: relative;
+  top: 0.12em;
+  grid-row: 1 / span 2;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid rgba(242, 237, 228, 0.5);
+  border-radius: 50%;
+  transition: border-color var(--t-state) var(--ease);
+}
+.folio-choice-mark::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--gilt);
+  transform: scale(0);
+  transition: transform var(--t-move) var(--ease);
+}
+.folio-choice:has(input:checked) .folio-choice-mark {
+  border-color: var(--gilt);
+}
+.folio-choice:has(input:checked) .folio-choice-mark::after {
+  transform: scale(1);
+}
+.folio-choice-name {
+  font-size: var(--step-2);
+  line-height: var(--lead-2);
+  letter-spacing: var(--track-body);
+  color: var(--ink);
+  transition: color var(--t-state) var(--ease);
+}
+.folio-choice-line {
+  grid-column: 2;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-4);
+}
+.folio-choice:hover .folio-choice-name,
+.folio-choice:has(input:checked) .folio-choice-name {
+  color: var(--gilt);
+}
+@media (min-width: 700px) {
+  .folio-choice {
+    grid-template-columns: 1.6rem minmax(0, 5fr) minmax(0, 6fr);
+  }
+  .folio-choice-mark {
+    grid-row: auto;
+  }
+  .folio-choice-line {
+    grid-column: 3;
+  }
+}
+/* A choice among a few words: the words in a row, the chosen one underlined
+   in gilt. FOUR ON A LINE, OR TWO AND TWO (the forensic audit of 2026-10-09,
+   #110): wrapped as words wrap, three stood on a line and the fourth dropped
+   alone under them. Two columns wherever the set shares its row with a field
+   (half the form's width holds three and a bit) and on a phone; one line of
+   four where it has the form's width to itself. */
+.folio-chips {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 0.4rem 1.75rem;
+}
+@media (min-width: 700px) {
+  .folio-form > .folio-fieldset > .folio-chips {
+    grid-template-columns: repeat(4, max-content);
+  }
+}
+.folio-chip {
+  position: relative;
+  cursor: pointer;
+}
+.folio-chip span {
+  display: inline-block;
+  padding: 0.5rem 0 0.6rem;
+  border-bottom: 1px solid transparent;
+  font-size: max(1rem, var(--step-1));
+  line-height: var(--lead-1);
+  color: var(--ink-4);
+  transition: color var(--t-state) var(--ease), border-color var(--t-state) var(--ease);
+}
+.folio-chip:hover span {
+  color: var(--ink);
+}
+.folio-chip input:checked + span {
+  border-bottom-color: var(--gilt);
+  color: var(--ink);
+}
+/* THE DAY OF A VISIT (components/folio/VisitDay.tsx; the forensic audit of
+   2026-10-09, #109). A line like the form's other lines, which says the day
+   in words, and under it — when it is pressed — the month, drawn: the days a
+   table of numerals, the chosen one gilt over a gilt hairline, as a chosen
+   word is. Nothing of the browser's: no "dd-mm-yyyy", no icon, no blue. */
+.visit-day {
+  position: relative;
+}
+.visit-day-line {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0 0.75rem;
+  border-bottom: 1px solid rgba(242, 237, 228, 0.32);
+  font-size: max(1rem, var(--step-2));
+  line-height: var(--lead-2);
+  text-align: left;
+  color: var(--ink);
+  /* A line to be written on: its rule is its focus, as the other fields'. */
+  outline: none;
+  transition: border-color var(--t-state) var(--ease), box-shadow var(--t-state) var(--ease);
+}
+.visit-day-line .is-open-day {
+  color: var(--ink-4);
+}
+.visit-day-line:hover {
+  border-bottom-color: rgba(242, 237, 228, 0.6);
+}
+.visit-day-line:focus-visible,
+.visit-day.is-open .visit-day-line {
+  border-bottom-color: var(--gilt);
+  box-shadow: 0 1px 0 0 var(--gilt);
+}
+.visit-day-mark {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.25rem;
+  border-right: 1px solid var(--ink-4);
+  border-bottom: 1px solid var(--ink-4);
+  transform: translateY(-0.28rem) rotate(45deg);
+  transition: transform var(--t-move) var(--ease), border-color var(--t-state) var(--ease);
+}
+.visit-day.is-open .visit-day-mark {
+  border-color: var(--gilt);
+  transform: translateY(0) rotate(225deg);
+}
+.visit-day-month {
+  max-width: 21rem;
+  margin-top: 1rem;
+}
+.visit-day-head {
+  display: flex;
+  align-items: center;
+}
+.visit-day-head p {
+  flex: 1;
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink);
+}
+.visit-day-turn {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  outline-offset: -4px;
+  transition: color var(--t-state) var(--ease);
+}
+.visit-day-turn:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+.visit-day-arrow {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-top: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  transform: translateX(-0.12rem) rotate(45deg);
+}
+.visit-day-arrow.is-back {
+  transform: translateX(0.12rem) rotate(225deg);
+}
+.visit-day-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.visit-day-grid th {
+  padding: 0.35rem 0 0.5rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--step--1);
+  line-height: var(--lead--1);
+  font-weight: 400;
+  text-align: center;
+  color: var(--ink-4);
+}
+.visit-day-grid td {
+  padding: 0;
+}
+.visit-day-grid tbody tr:first-child td {
+  padding-top: 0.35rem;
+}
+.visit-day-grid td button {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 2.75rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  text-align: center;
+  color: var(--ink-2);
+  /* Its neighbours touch it: the ring stands inside. */
+  outline-offset: -3px;
+  transition: color var(--t-state) var(--ease);
+}
+/* A day that cannot be asked for: fainter than any strength of the text, as a
+   field's placeholder is, so it is not taken for one that can. */
+.visit-day-grid td button:disabled {
+  cursor: default;
+  color: rgba(242, 237, 228, 0.42);
+}
+.visit-day-grid td button::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0.5rem;
+  width: 1.1rem;
+  height: 1px;
+  margin-left: -0.55rem;
+}
+.visit-day-grid td button[aria-current="date"]::after {
+  background: rgba(242, 237, 228, 0.32);
+}
+.visit-day-grid td button[aria-pressed="true"] {
+  color: var(--gilt);
+}
+.visit-day-grid td button[aria-pressed="true"]::after {
+  background: var(--gilt);
+}
+.visit-day-clear {
+  min-height: 2.75rem;
+  margin-top: 0.5rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-decoration-color: rgba(232, 185, 138, 0.5);
+  text-underline-offset: 0.28em;
+  transition: color var(--t-state) var(--ease), text-decoration-color var(--t-state) var(--ease);
+}
+.visit-day-clear:focus-visible {
+  color: var(--gilt);
+  text-decoration-color: var(--gilt);
+}
+@media (hover: hover) {
+  .visit-day-turn:hover:not(:disabled),
+  .visit-day-grid td button:hover:not(:disabled),
+  .visit-day-clear:hover {
+    color: var(--gilt);
+  }
+}
+.folio-form-foot {
+  display: grid;
+  gap: 1.1rem;
+  margin-top: 0.4rem;
+  justify-items: start;
+}
+button.folio-submit {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+button.folio-submit:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+.folio-form-alt {
+  margin-top: 2rem;
+}
+.folio-form-done {
+  max-width: 34rem;
+  padding-left: clamp(1.25rem, 3vw, 2.75rem);
+  border-left: 1px solid var(--gilt);
+}
+.folio-form-done p + p {
+  margin-top: 1rem;
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink-2);
+}
+
+/* ── the windows ─────────────────────────────────────────────────────────── */
+.folio-window {
+  position: relative;
+  display: flex;
+  min-height: 82vh;
+  align-items: center;
+  padding: 16vh var(--edge);
+  pointer-events: none;
+}
+.folio-window > * {
+  pointer-events: auto;
+}
+.folio-window::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* The sheets above and below run into the picture and out of it; between
+     them the picture is the picture. What the line stands on is its own
+     (below), as a plate's title's is. */
+  background: linear-gradient(to bottom, #15110c 0%, rgba(21, 17, 12, 0.5) 12%, rgba(21, 17, 12, 0) 30%, rgba(21, 17, 12, 0) 70%, rgba(21, 17, 12, 0.5) 88%, #15110c 100%);
+  pointer-events: none;
+}
+.folio-window {
+  overflow: clip;
+}
+.folio-window-copy {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+.folio-window-copy::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: calc(-1 * var(--edge));
+  right: -46%;
+  top: -12rem;
+  bottom: -12rem;
+  background: linear-gradient(
+    to right,
+    rgba(14, 11, 8, 0.78) 0%,
+    rgba(14, 11, 8, 0.78) 66%,
+    rgba(14, 11, 8, 0.6) 78%,
+    rgba(14, 11, 8, 0.3) 90%,
+    rgba(14, 11, 8, 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    rgba(0, 0, 0, 0.2) 3.5rem,
+    rgba(0, 0, 0, 0.66) 7rem,
+    rgba(0, 0, 0, 0.96) 10.25rem,
+    #000 11.5rem,
+    #000 calc(100% - 11.5rem),
+    rgba(0, 0, 0, 0.96) calc(100% - 10.25rem),
+    rgba(0, 0, 0, 0.66) calc(100% - 7rem),
+    rgba(0, 0, 0, 0.2) calc(100% - 3.5rem),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    rgba(0, 0, 0, 0.2) 3.5rem,
+    rgba(0, 0, 0, 0.66) 7rem,
+    rgba(0, 0, 0, 0.96) 10.25rem,
+    #000 11.5rem,
+    #000 calc(100% - 11.5rem),
+    rgba(0, 0, 0, 0.96) calc(100% - 10.25rem),
+    rgba(0, 0, 0, 0.66) calc(100% - 7rem),
+    rgba(0, 0, 0, 0.2) calc(100% - 3.5rem),
+    transparent 100%
+  );
+  pointer-events: none;
+}
+/* ON A PHONE A WINDOW IS SET AS A PLATE IS: the picture, and the words under
+   it at the opening's foot.
+
+   The line used to stand in the middle of the opening on a density twelve
+   rems deep above it and below, the frame's whole width: on a screen 390 px
+   wide that is most of the opening, and it was laid over the middle of the
+   picture — where the subject is. The forensic audit of 2026-10-09 saw the
+   three things that came of it: the founder's motto over a portrait "cropped
+   at the neck: a jacket, a nameplate and no face" (#71), "a full screen of
+   empty marble floor" on /properties (#67), and the density itself stopping
+   nine pixels short of the screen's right edge, "a bright stripe of
+   un-dimmed picture" down the band (#72) — the block was as wide as its
+   words, and the density reached only an edge's width past it.
+
+   So: the block is the frame's width (the density reaches both edges); it
+   stands at the foot; its density begins a little above its first line and
+   runs out upward, as a plate's does; and the rig stands the subject above
+   it (WorldCanvas, WINDOW_RISE).
+
+   (A phone's alone, as the plate's is: on a tablet held upright the block is
+   narrower than the frame, and a flat density as wide as the block is a
+   panel with an edge.) */
+@media (max-width: 767px) {
+  .folio-window {
+    align-items: flex-end;
+    padding-bottom: 12vh;
+  }
+  .folio-window-copy {
+    width: 100%;
+  }
+  .folio-window-copy::before {
+    right: calc(-1 * var(--edge));
+    top: -5rem;
+    bottom: -12vh;
+    background: rgba(14, 11, 8, 0.8);
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      rgba(0, 0, 0, 0.06) 0.7rem,
+      rgba(0, 0, 0, 0.2) 1.4rem,
+      rgba(0, 0, 0, 0.42) 2.1rem,
+      rgba(0, 0, 0, 0.66) 2.85rem,
+      rgba(0, 0, 0, 0.85) 3.55rem,
+      rgba(0, 0, 0, 0.96) 4.3rem,
+      #000 4.7rem,
+      #000 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      rgba(0, 0, 0, 0.06) 0.7rem,
+      rgba(0, 0, 0, 0.2) 1.4rem,
+      rgba(0, 0, 0, 0.42) 2.1rem,
+      rgba(0, 0, 0, 0.66) 2.85rem,
+      rgba(0, 0, 0, 0.85) 3.55rem,
+      rgba(0, 0, 0, 0.96) 4.3rem,
+      #000 4.7rem,
+      #000 100%
+    );
+  }
+}
+.folio-window blockquote,
+.folio-window .folio-window-line {
+  max-width: 20ch;
+  color: var(--ink);
+}
+.folio-window .folio-window-gloss {
+  margin-top: 1.1em;
+  max-width: 34ch;
+  color: var(--ink);
+}
+.folio-window figcaption,
+.folio-window .folio-window-by {
+  margin-top: 1.4rem;
+  max-width: 44ch;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  letter-spacing: var(--track-label);
+  color: var(--gilt);
+}
+
+/* And on a tablet held upright the words stand at the opening's foot too,
+   on the flag they keep there: the rig stands the subject over them on every
+   upright screen (WorldCanvas, WINDOW_RISE), and in the opening's middle they
+   were printed across it. */
+@media (min-width: 768px) and (orientation: portrait) {
+  .folio-window {
+    align-items: flex-end;
+    padding-bottom: 14vh;
+  }
+}
+
+/* A line that is not in the Latin script (the Managing Director's motto, in
+   Telugu). The display face has no Telugu, and its tight leading and negative
+   tracking are a Latin display line's: set in a face that has the script, a
+   step down, with the room its vowel signs need above and below the line. */
+.folio-window blockquote[lang="te"] {
+  max-width: 24ch;
+  font-family: "Noto Serif Telugu", "Nirmala UI", "Gautami", "Noto Sans Telugu", var(--font-text);
+  font-size: calc(var(--d2) * 0.74);
+  font-variation-settings: normal;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+/* Two lists side by side on a wide frame: each under a small heading. */
+.folio-pair {
+  display: grid;
+  gap: 3.5rem;
+}
+@media (min-width: 1024px) {
+  .folio-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(3rem, 7vw, 9rem);
+    align-items: start;
+  }
+}
+.folio-sub {
+  margin-bottom: 1.1rem;
+  font-size: var(--step-0);
+  line-height: var(--lead-0);
+  letter-spacing: var(--track-label);
+  color: var(--gilt);
+}
+/* A short run of single words (the company's values): a line of them, with a
+   hairline between, as a title page sets a list of names. */
+/* (Its rules as .folio-run's: none begins a line.) */
+.folio-values {
+  --run-rule: 3.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0;
+  margin-left: calc(-1 * var(--run-rule));
+  clip-path: inset(-1rem -1rem -1rem var(--run-rule));
+}
+.folio-values li {
+  white-space: nowrap;
+}
+.folio-values li::before {
+  content: "";
+  display: inline-block;
+  width: 1.5rem;
+  height: 1px;
+  margin: 0 0.85rem;
+  background: rgba(232, 185, 138, 0.6);
+  vertical-align: 0.3em;
+}
+
+/* ── the way on ──────────────────────────────────────────────────────────── */
+.folio-next {
+  position: relative;
+  display: block;
+  background: var(--ground);
+  padding: clamp(4rem, 14vh, 10rem) var(--edge) clamp(4.5rem, 15vh, 10.5rem);
+}
+/* It fills the frame's width, so the ring stands inside its edge: outside,
+   three of its four sides would be off the screen. */
+.folio-next:focus-visible {
+  outline-offset: -10px;
+}
+.folio-next::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--edge);
+  right: var(--edge);
+  height: 1px;
+  background: var(--rule);
+}
+.folio-next-title {
+  display: block;
+  margin-top: 0.35em;
+  max-width: 18ch;
+  color: var(--ink);
+  transition: color var(--t-move) var(--ease);
+}
+.folio-next-line {
+  display: block;
+  margin-top: 1.1em;
+  max-width: 42ch;
+  font-size: var(--step-1);
+  line-height: var(--lead-1);
+  color: var(--ink-3);
+}
+.folio-next-arrow {
+  display: inline-block;
+  margin-left: 0.3em;
+  color: var(--gilt);
+  transition: transform var(--t-move) var(--ease);
+}
+.folio-next:hover .folio-next-title,
+.folio-next:focus-visible .folio-next-title {
+  color: var(--gilt);
+}
+.folio-next:hover .folio-next-arrow,
+.folio-next:focus-visible .folio-next-arrow {
+  transform: translateX(0.35em);
+}
+
+/* ── the header over a folio ─────────────────────────────────────────────── */
+/* On the sheets' own dark, so a line scrolling under the mark is not read
+   through it; over a page's plate, air, as over the film. Which it is over is
+   the page's to say (`data-folio`, FolioClient.tsx). The solid bar is the
+   default and the air the exception, so a page that has no plate, or has not
+   run its script yet, never has controls standing on its text. */
+.site-header:not(.is-film) {
+  border-bottom: 1px solid rgba(242, 237, 228, 0.09);
+  /* (Opaque. At 0.97 a line of reading text was still a ghost through it.) */
+  background: #15110c;
+  transition: background-color var(--t-move) var(--ease), border-color var(--t-move) var(--ease);
+}
+html:has([data-folio-plate]):not([data-folio="sheet"]) .site-header:not(.is-film) {
+  border-bottom-color: transparent;
+  background: transparent;
+}
+
+/* ── a page's colophon (SiteFooter.tsx, PageColophon) ────────────────────── */
+.folio-colophon {
+  background: var(--ground);
+  padding: 0 var(--edge) 2.5rem;
+}
+.folio-colophon-sign {
+  border-top: 1px solid var(--rule);
+  padding: clamp(4.5rem, 15vh, 10rem) 0 clamp(3.5rem, 11vh, 7rem);
+}
+.folio-colophon-offices {
+  display: grid;
+  gap: 2.25rem 3rem;
+  border-top: 1px solid var(--rule);
+  padding: clamp(2.75rem, 7vh, 4.5rem) 0;
+}
+.folio-colophon-map {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2.25rem 2rem;
+  border-top: 1px solid var(--rule);
+  padding: clamp(2.75rem, 7vh, 4.5rem) 0;
+}
+@media (min-width: 768px) {
+  .folio-colophon-offices {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .folio-colophon-map {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+/* (How the row is laid out is both colophons': globals.css, .colophon-legal.) */
+.folio-colophon-legal {
+  border-top: 1px solid var(--rule);
+  padding-top: 1.75rem;
+  font-size: var(--step--1);
+  line-height: var(--lead--1);
+  color: var(--ink-4);
+}
+
+/* ── the page's motion: what is read develops as it comes into the frame ── */
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  .folio [data-reveal] {
+    opacity: 0;
+    transform: translateY(1.1rem);
+    transition:
+      opacity 1s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 90ms),
+      transform 1.1s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 90ms);
+  }
+  .folio [data-reveal][data-in] {
+    opacity: 1;
+    transform: none;
+  }
+  /* A hairline that draws itself across. */
+  .folio [data-reveal="rule"] {
+    opacity: 1;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 1.3s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 90ms);
+  }
+  .folio [data-reveal="rule"][data-in] {
+    transform: scaleX(1);
+  }
+}
+
+/* ── the rail on a page ──────────────────────────────────────────────────── */
+/* IN THE MARGIN, not on the content's edge. On the film the frame's edge is
+   the picture's and the rail keeps it, under the header's controls. On a page
+   a sheet's text and its hairlines run out to that edge, and the dots stood
+   on them: here the rail takes the margin outside it. And the names, which
+   on a page open over reading text rather than over a picture, come up on the
+   sheet's own dark, dense enough that nothing is read through them. */
+.rail.folio-stage {
+  --rail-margin: max(0.5rem, calc(var(--edge) * 0.4));
+  right: var(--rail-margin);
+}
+.rail.folio-stage .rail-shade {
+  right: calc(var(--rail-margin) * -1);
+  background: linear-gradient(
+    to left,
+    rgba(21, 17, 12, 0.95) 0%,
+    rgba(21, 17, 12, 0.95) 58%,
+    rgba(21, 17, 12, 0.6) 80%,
+    rgba(21, 17, 12, 0) 100%
+  );
+}
+
+/* ── on paper ────────────────────────────────────────────────────────────── */
+/* A page that is printed (and a plot's page is: its brochure is this page in
+   print, api/brochure) is the page's own matter and none of the site's
+   furniture: no header standing on every sheet, no rail, no colophon of
+   links. And everything on it is THERE — a line that waits to be scrolled
+   into view before it develops has nobody to scroll it on a printed sheet,
+   and would be a blank. */
+@media print {
+  .site-header,
+  .rail,
+  .folio-colophon,
+  .folio-cue,
+  .folio-next {
+    display: none !important;
+  }
+  .folio [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .folio-plate {
+    min-height: 0;
+    margin-top: 0;
+  }
+}

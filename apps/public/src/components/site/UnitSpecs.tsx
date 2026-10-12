@@ -46,7 +46,7 @@ function SpecItem({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="t-eyebrow mb-1.5 text-[#F2EDE4]/[0.62]">{label}</span>
       <span
         className="text-step-0 text-[#F2EDE4]"
-        style={{ fontVariantNumeric: 'tabular-nums' }}
+        style={{ fontVariantNumeric: 'lining-nums tabular-nums' }}
       >
         {value}
       </span>

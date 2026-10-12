@@ -43,6 +43,16 @@ export default async function LeadPage({ params }: { params: { leadId: string } 
     const unitsOfInterest = interestsRaw
       .filter(i => i.unitId && i.unitNumber)
       .map(i => ({ id: i.unitId!, label: `${i.projectName} - ${i.unitNumber}` }));
+    // The layouts asked about, whether or not a plot was named: an enquiry
+    // from a layout's own page names the layout and no plot, and it was
+    // shown nowhere on this page.
+    const layoutsOfInterest = Array.from(
+      new Set(interestsRaw.map(i => i.projectName).filter((n): n is string => Boolean(n))),
+    );
+    // What a website enquiry sent, whole (the intake writes it to
+    // source_detail, a fact a line). For every other source that column is
+    // who referred, and stays beside the source as it was.
+    const sentFromSite = lead.source === 'website' && Boolean(lead.sourceDetail);
 
     return (
       <div className="max-w-6xl mx-auto p-6 space-y-8">
@@ -51,7 +61,7 @@ export default async function LeadPage({ params }: { params: { leadId: string } 
             <h1 className="text-3xl font-bold tracking-tight">{lead.name}</h1>
             <p className="text-muted-foreground mt-1 text-sm font-medium">
               {lead.phone} • Source: <span className="capitalize">{lead.source.replace('_', ' ')}</span>
-              {lead.sourceDetail && ` (${lead.sourceDetail})`}
+              {lead.sourceDetail && !sentFromSite && ` (${lead.sourceDetail})`}
             </p>
           </div>
         </header>
@@ -63,6 +73,13 @@ export default async function LeadPage({ params }: { params: { leadId: string } 
               <h2 className="text-lg font-semibold tracking-tight mb-6">Pipeline Stage</h2>
               <StageStepper leadId={lead.id} currentStage={lead.stage} />
             </section>
+
+            {sentFromSite && (
+              <section className="bg-card border rounded-xl p-6 shadow-sm">
+                <h2 className="text-lg font-semibold tracking-tight mb-4">The enquiry, as it was sent</h2>
+                <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{lead.sourceDetail}</p>
+              </section>
+            )}
 
             <section className="bg-card border rounded-xl p-6 shadow-sm">
               <h2 className="text-lg font-semibold tracking-tight mb-6">Event Timeline</h2>
@@ -97,6 +114,12 @@ export default async function LeadPage({ params }: { params: { leadId: string } 
             <section className="bg-card border rounded-xl p-6 shadow-sm">
               <h2 className="text-lg font-semibold tracking-tight mb-4">Lead Profile</h2>
               <dl className="space-y-4 text-sm">
+                <div>
+                  <dt className="text-muted-foreground">Layouts asked about</dt>
+                  <dd className="font-medium text-foreground">
+                    {layoutsOfInterest.length > 0 ? layoutsOfInterest.join(', ') : 'None named'}
+                  </dd>
+                </div>
                 <div>
                   <dt className="text-muted-foreground">Asset Interest</dt>
                   <dd className="font-medium capitalize text-foreground">

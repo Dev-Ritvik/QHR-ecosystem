@@ -55,7 +55,8 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { StationAnchor } from './interiorPath';
 import { hallEnv, hallKTX2 } from './HallModel';
-import { PROBE_DEFINES, warmHallPrograms } from './hallProbe';
+import { KEY_DEFINES, PROBE_DEFINES, warmHallPrograms } from './hallProbe';
+import { WALNUT_MEAN, WALNUT_SHEET, walnutSheets } from './hallWalnut';
 import { trackHallMaterial, untrackHallMaterials } from './hallLight';
 import { cssFamily, glowMaterial, spaced, type StationDetails } from './StationDressing';
 
@@ -122,8 +123,50 @@ export const MODEL_LIGHT = {
  *  a lamp is what made it gold. */
 export const MODEL_BRASS = { colour: '#7b6540', roughness: 0.46, key: 0.5 } as const;
 
-/** The hall's walnut panels (hallWalnut.ts): the tray wears their veneer. */
-const PANEL = /^wallpanel/;
+/**
+ * THE TRAY'S VENEER: the hall's quarter-cut walnut (hallWalnut.ts), laid at
+ * half the size the room's framing wears it. The forensic audit of 2026-10-09
+ * (#37): "One procedural grain at one scale is used on a three-metre wall
+ * panel, a 60 cm board and a table top, so the grain is cartoon-large on the
+ * small objects. Expected: grain scaled to each object, with the boards in a
+ * finer veneer than the wall." The tray wore the wall panel's whole sheet, six
+ * crown-cut leaves across seventy centimetres. A model's stand is made of
+ * straight-grained stock, and a small object's grain is small.
+ */
+export const TRAY_VENEER = 0.5;
+
+/**
+ * THE STAND'S WOOD UNDER THE CHANDELIER (linear, a multiplier on the sheet).
+ * The tray and the board take the chandelier's key as well as the room, which
+ * the wall's panelling does not, and at the sheet's own tone they printed a
+ * honey oak a stop over the walnut behind them (129, 101, 67 against the
+ * panel's 88, 58, 34 on a 1920 frame at the third table): a pale board under
+ * ivory plots, which is the model with its contrast taken out. Dialled on the
+ * running build until the board stands at the panelling's own value (86, 62,
+ * 37); a little out of the green and the blue, because the key is a warmer
+ * white than the room's.
+ *
+ * One tone for all three stands (the forensic audit of 2026-10-09, #39:
+ * "Three boards of the same design are three different woods ... Expected:
+ * one timber and one finish for all three").
+ */
+export const MODEL_WOOD = [0.47, 0.4, 0.34] as const;
+
+/** Lay a box in veneer, in metres: the grain along its length (x), on every
+ *  face. */
+export function layTrayVeneer(g: THREE.BufferGeometry, scale = TRAY_VENEER): void {
+  const pos = g.getAttribute('position');
+  const nor = g.getAttribute('normal');
+  const uv = g.getAttribute('uv');
+  const sheet = WALNUT_SHEET.straight;
+  for (let i = 0; i < pos.count; i += 1) {
+    // across the grain: the face's own other axis
+    const across = Math.abs(nor.getY(i)) > 0.5 ? pos.getZ(i) : pos.getY(i);
+    const along = Math.abs(nor.getX(i)) > 0.5 ? pos.getZ(i) : pos.getX(i);
+    uv.setXY(i, across / (sheet.across * scale), along / (sheet.along * scale));
+  }
+  uv.needsUpdate = true;
+}
 
 const KEY_PARS = /* glsl */ `
 uniform vec3 uModelKeyDir;
@@ -152,10 +195,14 @@ function surface(
   params: THREE.MeshStandardMaterialParameters,
   room: number,
   key: KeyUniforms,
+  /** Its light from the room in the key's colour (hallProbe.ts, KEY_LIT): the
+   *  wood, so the three stands are one timber wherever they stand, and the
+   *  plaster, so a block's sides are the ivory of its top. */
+  keyLit = false,
 ): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial(params);
   mat.name = name;
-  mat.defines = { ...(mat.defines ?? {}), ...PROBE_DEFINES, ESTATE_FOCUS: '' };
+  mat.defines = { ...(mat.defines ?? {}), ...PROBE_DEFINES, ...(keyLit ? KEY_DEFINES : {}), ESTATE_FOCUS: '' };
   mat.envMap = hallEnv.texture ?? hallEnv.stand;
   mat.envMapIntensity = room;
   mat.onBeforeCompile = (shader) => {
@@ -164,7 +211,7 @@ function surface(
       .replace('void main() {', `${KEY_PARS}\nvoid main() {`)
       .replace('#include <lights_fragment_end>', KEY_LIGHT);
   };
-  mat.customProgramCacheKey = () => 'plan-model';
+  mat.customProgramCacheKey = () => (keyLit ? 'plan-model-key' : 'plan-model');
   // It reflects the room, so it dims with the room's lights (hallLight.ts).
   trackHallMaterial(mat);
   return mat;
@@ -282,8 +329,6 @@ interface Built {
   plan: THREE.Group;
   materials: THREE.MeshStandardMaterial[];
   walnut: THREE.MeshStandardMaterial;
-  /** A wall panel's material: its map is the veneer once that has arrived. */
-  panel: THREE.MeshStandardMaterial | null;
 }
 
 export function StationModel({
@@ -389,16 +434,9 @@ export function StationModel({
         face.anisotropy = aniso;
         face.wrapS = face.wrapT = THREE.ClampToEdgeWrapping;
         const parts = parsePlanModel(file);
-        // A wall panel, for its veneer (a stand-in of the same colour until
-        // the sheet has streamed in: hallWalnut.ts).
-        const panels: THREE.MeshStandardMaterial[] = [];
-        root.traverse((o) => {
-          const m = o as THREE.Mesh;
-          if (!panels.length && m.isMesh && PANEL.test(m.name) && !Array.isArray(m.material)) {
-            panels.push(m.material as THREE.MeshStandardMaterial);
-          }
-        });
-        const panel = panels[0] ?? null;
+        // The hall's quarter-cut sheet (a stand-in of the same colour until it
+        // has streamed in: hallWalnut.ts).
+        const veneer = walnutSheets.straight;
 
         const key: KeyUniforms = {
           uModelKeyDir: { value: new THREE.Vector3(0, 1, 0) },
@@ -411,15 +449,22 @@ export function StationModel({
           uModelKeyColor: { value: key.uModelKeyColor.value.clone().multiplyScalar(MODEL_BRASS.key) },
         };
         const mats = {
-          tops: surface('MAT_PlanModel_Plaster', { map: face, roughness: 0.86, metalness: 0 }, L.plaster, key),
-          // (A cool tint on the blocks' sawn sides: they face the walnut and
-          // the room's lamps, and at their own ivory they printed salmon.)
-          sides: surface('MAT_PlanModel_Edge', { vertexColors: true, color: '#dfe6e6', roughness: 0.9, metalness: 0 }, L.plaster * 0.8, key),
-          board: surface('MAT_PlanModel_Board', { map: face, roughness: 0.4, metalness: 0 }, L.board, key),
-          walnut: surface('MAT_PlanModel_Walnut', { map: panel?.map ?? null, color: panel?.map ? '#ffffff' : '#5e4632', roughness: 0.4, metalness: 0 }, L.walnut, key),
+          tops: surface('MAT_PlanModel_Plaster', { map: face, roughness: 0.86, metalness: 0 }, L.plaster, key, true),
+          // (The blocks' sawn sides carried a cool tint, '#dfe6e6': they face
+          // the walnut and the room's lamps, and at their own ivory they
+          // printed salmon. That was the probe's mauve light, which the
+          // plaster no longer takes: hallProbe.ts, HALL_KEY_TINT.)
+          sides: surface('MAT_PlanModel_Edge', { vertexColors: true, color: '#e6e2d8', roughness: 0.9, metalness: 0 }, L.plaster * 0.8, key, true),
+          board: surface('MAT_PlanModel_Board', { map: face, roughness: 0.5, metalness: 0 }, L.board, key, true),
+          walnut: surface('MAT_PlanModel_Walnut', { map: veneer, color: veneer ? '#ffffff' : WALNUT_MEAN, roughness: 0.5, metalness: 0 }, L.walnut, key, true),
           brass: surface('MAT_PlanModel_Brass', { color: MODEL_BRASS.colour, roughness: MODEL_BRASS.roughness, metalness: 1 }, L.brass, brassKey),
           plaque: surface('MAT_PlanModel_Plaque', { map: plaque, roughness: 0.5, metalness: 0 }, L.walnut, key),
         };
+        // The stand's wood, at the panelling's value (MODEL_WOOD): the tray,
+        // and the board under the plan.
+        const tone = new THREE.Color().setRGB(MODEL_WOOD[0], MODEL_WOOD[1], MODEL_WOOD[2], THREE.LinearSRGBColorSpace);
+        mats.board.color.copy(tone);
+        mats.walnut.color.copy(veneer ? tone : tone.clone().multiply(new THREE.Color(WALNUT_MEAN)));
         const list = Object.values(mats);
         const geos: THREE.BufferGeometry[] = Object.values(parts);
         const mesh = (g: THREE.BufferGeometry, m: THREE.Material, n: string) => {
@@ -453,7 +498,9 @@ export function StationModel({
         const outerD = d + T.margin + T.rail;
         const midZ = (T.rail - T.margin) / 2;
         const trayTop = -0.001;
-        spin.add(box(outerW, T.thick, outerD, 0, trayTop - T.thick / 2, midZ, mats.walnut, 'model_tray'));
+        const tray = box(outerW, T.thick, outerD, 0, trayTop - T.thick / 2, midZ, mats.walnut, 'model_tray');
+        layTrayVeneer(tray.geometry);
+        spin.add(tray);
         // The bezel, standing proud of the tray's edge on all four sides.
         const by = trayTop + T.bezelProud / 2 - 0.004;
         const bh = T.bezelProud + 0.008;
@@ -504,7 +551,7 @@ export function StationModel({
 
         // The chandelier, from where the model stands.
         const toLamp = CHANDELIER.clone().sub(holo.getWorldPosition(new THREE.Vector3())).normalize();
-        built.current = { key, toLamp, spin, plan: planGroup, materials: list, walnut: mats.walnut, panel };
+        built.current = { key, toLamp, spin, plan: planGroup, materials: list, walnut: mats.walnut };
 
         // Compiled now, under the hall's light state, not on the frame the
         // station first comes into view.
@@ -544,12 +591,13 @@ export function StationModel({
     if (!b) return;
     // The tray turns with the table, in its own plane.
     b.spin.rotation.y = table && rest.current !== null ? table.rotation.y - rest.current : 0;
-    // The veneer, when the panels have theirs.
-    if (b.panel?.map && b.walnut.map !== b.panel.map) {
+    // The veneer, when the hall's sheet has arrived.
+    const sheet = walnutSheets.straight;
+    if (sheet && b.walnut.map !== sheet) {
       // (A first map changes the program; a new sheet in its place does not.)
       if (!b.walnut.map) b.walnut.needsUpdate = true;
-      b.walnut.map = b.panel.map;
-      b.walnut.color.set('#ffffff');
+      b.walnut.map = sheet;
+      b.walnut.color.setRGB(MODEL_WOOD[0], MODEL_WOOD[1], MODEL_WOOD[2], THREE.LinearSRGBColorSpace);
     }
     // The key, in the view space three's lights are in.
     b.key.uModelKeyDir.value.copy(keyView.current.copy(b.toLamp).transformDirection(camera.matrixWorldInverse));

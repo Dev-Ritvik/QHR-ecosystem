@@ -67,7 +67,7 @@ export function MapLocationFallback({
                   <span aria-hidden>{CATEGORY_GLYPHS[poi.properties.category] ?? '📌'}</span>
                   {poi.properties.name}
                 </span>
-                <span className="shrink-0 tabular-nums text-brand-300">
+                <span className="shrink-0 lining-nums tabular-nums text-brand-300">
                   {formatDistance(poi.properties.distanceM)}
                   {poi.properties.driveTimeMin != null && ` · ${poi.properties.driveTimeMin} min`}
                 </span>

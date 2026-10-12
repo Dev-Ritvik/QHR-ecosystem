@@ -15,7 +15,9 @@ import {
   HOLDINGS_WIDE,
   LAND_BOX,
   LAND_ND,
+  COVER_GRADE,
   COVER_SKY,
+  coverGrade,
   coverSkyStops,
   HOLDINGS_ND,
   HOLDINGS_WIDE_OPEN,
@@ -25,6 +27,7 @@ import {
   PHONE_SKY_ND,
   ROOM_ND,
   STATION_ND,
+  STATION_ND_MODEL,
   TABLE_BAND,
   TABLE_BAND_MODEL,
   approachFilter,
@@ -87,10 +90,23 @@ describe('the tables', () => {
     // The second table wore none, in a room taken down to 0.15 instead; the
     // client had the room brought up (2026-10-01), and its copy has a light
     // edge in its place.
-    stationFilter({ S1: 0, S2: 1, S3: 0 }, WIDE);
+    // (under a projected plan, in the dim room that goes with it)
+    stationFilter({ S1: 0, S2: 1, S3: 0 }, WIDE, undefined, false);
     expect(lensFilter.stops).toBe(STATION_ND.S2);
     expect(STATION_ND.S2).toBeGreaterThan(0.8);
     expect(STATION_ND.S2).toBeLessThan(STATION_ND.S3);
+    // Under a site model its room is lit like the others (hallLight,
+    // HALL_LEVEL_S2_MODEL: the forensic audit of 2026-10-09, #42), and its
+    // words have the edge the first table's have, for the same pilaster.
+    stationFilter({ S1: 0, S2: 1, S3: 0 }, WIDE);
+    expect(lensFilter.stops).toBe(STATION_ND_MODEL.S2);
+    expect(STATION_ND_MODEL.S2).toBeGreaterThan(STATION_ND.S2);
+    expect(STATION_ND_MODEL.S2).toBeLessThanOrEqual(2.4);
+    // the other tables are what they were, under either
+    stationFilter({ S1: 1, S2: 0, S3: 0 }, WIDE);
+    expect(lensFilter.stops).toBe(STATION_ND.S1);
+    stationFilter({ S1: 0, S2: 0, S3: 1 }, WIDE, undefined, false);
+    expect(lensFilter.stops).toBe(STATION_ND.S3);
   });
 
   it('is no denser at any table than its ivory copy needs', () => {
@@ -192,9 +208,12 @@ describe("the tables, on a frame that is not wide: the header's band comes down 
     // the count's line, 189 to 207px, is under the whole of it
     expect(band(207 / 664)).toBe(1);
     expect(lensFilter.topFull).toBeLessThanOrEqual(TABLE_BAND_MODEL.fullMax + 1e-9);
-    // and it is gone before the board
-    expect(band(0.42)).toBe(0);
-    expect(TABLE_BAND_MODEL.zeroMax).toBeLessThan(0.42);
+    // and it is all but gone at the board: a soft fall, not a line (the
+    // forensic audit of 2026-10-09, #55, "a hard horizontal line across the
+    // whole frame")
+    expect(band(0.42)).toBeLessThan(0.12);
+    expect(band(0.44)).toBe(0);
+    expect(lensFilter.topZero - lensFilter.topFull).toBeGreaterThan(0.1);
     // a projected plan keeps the caps it was measured for
     headerBandReach();
     settle(panes);
@@ -207,6 +226,11 @@ describe("the tables, on a frame that is not wide: the header's band comes down 
       tableBandFilter([{ id: 'station-1', weight: 1, top: 80 / 844, bottom: 180 / 844 }], 1 / 60, true);
     }
     expect(lensFilter.topFull).toBeCloseTo(180 / 844 + TABLE_BAND.margin, 3);
+    // and there it falls over the whole of the wall between the words and
+    // the board (which begins 42% of the way down): gone before it
+    expect(lensFilter.topZero).toBeCloseTo(180 / 844 + TABLE_BAND.margin + TABLE_BAND_MODEL.fall, 3);
+    expect(lensFilter.topZero).toBeLessThan(0.42);
+    expect(TABLE_BAND_MODEL.fall).toBeGreaterThan(3 * TABLE_BAND.fall);
     headerBandReach();
   });
 
@@ -353,18 +377,20 @@ describe("the cover's sky", () => {
     expect(lensFilter.second.stops).toBe(LAND_ND.stops);
     // the sky grad is still the first ellipse's
     expect(lensFilter.stops).toBe(COVER_SKY.stops);
-    // whole under the cover's line (71% of the way down, 430 units wide)
-    expect(secondAt(x(10), 1 - 0.74)).toBeGreaterThan(LAND_ND.stops * 0.95);
-    expect(secondAt(x(420), 1 - 0.8)).toBeGreaterThan(LAND_ND.stops * 0.8);
+    // whole under the cover's line (63.8% of the way down since the forensic
+    // audit of 2026-10-09, #31; 430 units wide)
+    expect(secondAt(x(10), 1 - 0.67)).toBeGreaterThan(LAND_ND.stops * 0.95);
+    expect(secondAt(x(420), 1 - 0.73)).toBeGreaterThan(LAND_ND.stops * 0.8);
     // and gone before the house
-    expect(secondAt(0.55, 1 - 0.76)).toBe(0);
+    expect(secondAt(0.55, 1 - 0.69)).toBe(0);
     holdingsFilter(0.05, aspect, 0.5);
     expect(lensFilter.second.stops).toBeCloseTo(LAND_ND.stops * 0.5, 9);
-    // then under the orbit's line, which stands a little higher and is narrower
+    // then under the orbit's line, which stands lower on the lawn (76% of the
+    // way down since the forensic audit of 2026-10-09, #119) and is narrower
     holdingsFilter(0.22, aspect, 0, 1);
     expect(lensFilter.second.stops).toBe(LAND_ND.stops);
     expect(1 - lensFilter.second.shape.y).toBeCloseTo((LAND_BOX.revolution.top + LAND_BOX.revolution.foot) / 2, 9);
-    expect(secondAt(x(10), 1 - 0.7)).toBeGreaterThan(LAND_ND.stops * 0.95);
+    expect(secondAt(x(10), 1 - 0.8)).toBeGreaterThan(LAND_ND.stops * 0.95);
     // wider on a phone on its side, where that line runs further across
     const desk = lensFilter.second.shape.z * aspect;
     holdingsFilter(0.22, 844 / 390, 0, 1, true);
@@ -376,6 +402,44 @@ describe("the cover's sky", () => {
     expect(lensFilter.second.stops).toBe(0);
     // never a filter a visitor could name
     expect(LAND_ND.stops).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("the cover's grad, in its own colour", () => {
+  it('is a slate over the title and warm at the horizon, on the cover and gone by the orbit', () => {
+    // The forensic audit of 2026-10-09 (#6): "a flat grey-brown overcast with
+    // almost no colour ... Expected: a cover sky with a readable light
+    // direction and some colour, while keeping the headline legible."
+    const [r, g, b] = COVER_GRADE.cool;
+    // cool: blue over green over red, and no lighter than the neutral grad it colours
+    expect(b).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(r);
+    expect(0.2126 * r + 0.7152 * g + 0.0722 * b).toBeLessThanOrEqual(1);
+    // a slate, not a blue: the client's rule against saturated blue
+    expect(b / r).toBeLessThan(1.8);
+    // warm where it lets go: red over green over blue, and no change of exposure
+    const [wr, wg, wb] = COVER_GRADE.warm;
+    expect(wr).toBeGreaterThan(wg);
+    expect(wg).toBeGreaterThan(wb);
+    expect(Math.abs(0.2126 * wr + 0.7152 * wg + 0.0722 * wb - 1)).toBeLessThan(0.03);
+    // the slate reaches down to the title's foot and no further than the grad itself
+    expect(COVER_GRADE.coolReach[1]).toBeGreaterThan(COVER_SKY.full);
+    expect(COVER_GRADE.coolReach[1]).toBeLessThanOrEqual(COVER_SKY.zero);
+    // the warmth is where the grad falls away: across its foot
+    expect(COVER_GRADE.warmBand[1]).toBeLessThanOrEqual(COVER_SKY.full);
+    expect(COVER_GRADE.warmBand[3]).toBeGreaterThanOrEqual(COVER_SKY.zero);
+    // whole on the film's first frame, by the place on the leg and not by the words
+    expect(coverGrade(0)).toBe(1);
+    holdingsFilter(0, 1920 / 945, 0, 0);
+    expect(lensFilter.sky).toEqual({ cool: 1, warm: 1 });
+    // ...and off before the orbit's clouds and the evening's gold are in the frame
+    expect(coverGrade(COVER_GRADE.off[1])).toBe(0);
+    expect(COVER_GRADE.off[1]).toBeLessThan(COVER_SKY.ride.from);
+    holdingsFilter(COVER_GRADE.off[1], 1920 / 945, 1, 0);
+    expect(lensFilter.sky).toEqual({ cool: 0, warm: 0 });
+    // a page that only holds the film's frame (the end of the leg) wears none
+    holdingsFilter(1);
+    expect(lensFilter.sky).toEqual({ cool: 0, warm: 0 });
   });
 });
 

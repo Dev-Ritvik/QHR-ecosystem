@@ -3,17 +3,19 @@
 // The film's stage: on a wide frame the copy, its grid, the header and the
 // lens's filters are all said in one unit — a pixel of the 1440x900 design —
 // so the composition measured at that size is the composition on every wide
-// frame. And the two grounds a reading page can stand its quietest text on.
+// frame. And the ground every other page is read on: since the folios, an
+// opaque sheet (app/folio.css), where it was a panel over the picture.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SHORT_QUERY, WIDE_QUERY, filmIsShort, filmIsWide } from './copyZone';
 import { COVER_SKY, COVER_SKY_SHORT, EDGE, HOLDINGS_BOX, LAND_BOX, LAND_ND, STAGE, holdingsFilter, lensFilter } from './lensFilter';
-import { READING_CEILING } from './readingLight';
+import { READING_STOPS, READING_TIME } from './readingLight';
 
 const read = (p: string) => readFileSync(join(__dirname, p), 'utf8').replace(/\r\n/g, '\n');
 const css = read('../../app/globals.css');
+const folio = read('../../app/folio.css');
 const config = read('../../../tailwind.config.ts');
 const page = read('../../app/(site)/(experience)/site-home/page.tsx');
 const header = read('../site/SiteHeader.tsx');
@@ -103,8 +105,14 @@ describe("the film's stage", () => {
 
   it('has the film, its header and its menu on it — and its copy at the frame\'s own edge, not in a column', () => {
     expect(page).toContain('<main className={`film-stage pb-40 ${TRACK_ROOT_TRANSPARENT}`}>');
-    expect(header).toContain("? 'film-stage bg-transparent'");
-    expect(header).toContain("(overFilm ? ' film-stage md:px-0 md:pt-[calc(152*var(--u))]' : ' md:hidden')");
+    // ONE HEADER, ON THE STAGE, FOR EVERY PAGE (2026-10-06): the film's header
+    // is the site's. It was two — the film's, and a navy bar with a row of
+    // links on a different grid for every other page.
+    expect(header).toContain(
+      "<header className={'site-header film-stage fixed inset-x-0 top-0 z-40' + (overFilm ? ' is-film' : '')}>",
+    );
+    expect(header).toContain('className="menu-panel film-stage fixed inset-0 z-30');
+    expect(header).not.toContain('backdrop-blur');
     expect(header).toContain('site-grid h-[var(--bar)]');
     // "All text and nav sit inside a narrow centered column (about 1,080 px
     // wide on a ~1,900 px screen), always at the same left position regardless
@@ -337,7 +345,30 @@ describe('the lens on the stage', () => {
     expect(canvas).toContain('filmIsShort(window.innerWidth, window.innerHeight),');
     expect(canvas).toContain('if (out && film) approachFilter(legS);');
     const stage = read('./InteriorStage.tsx');
-    expect(stage).toContain('stationFilter(stationWeights, wide, window.innerWidth / Math.max(1, window.innerHeight));');
+    expect(stage).toContain("stationFilter(stationWeights, wide, window.innerWidth / Math.max(1, window.innerHeight), stationStyle() === 'model');");
+  });
+});
+
+describe("the cover's line and its cue", () => {
+  it('stand on the lawn together, above the terrace, and the lens’s density stands under the line', () => {
+    // The forensic audit of 2026-10-09 (#31): "The paragraph's last line sits
+    // exactly on the pool terrace's rail, and 'Start here' stands on the
+    // terrace paving ... Expected: the paragraph a line higher, clear of the
+    // rail; the cue on plain ground." Measured at 1920x945: the rail runs
+    // from 79.3% of the way down the frame at its west corner to 84.6% under
+    // the line's last word.
+    const top = Number(/wide:top-\[([\d.]+)vh\] wide:max-w-\[calc\(430\*var\(--u\)\)\]/.exec(page)![1]) / 100;
+    const cueFoot = 1 - Number(/mt-7 wide:bottom-\[([\d.]+)vh\] wide:mt-0/.exec(page)![1]) / 100;
+    // three lines at a pitch of 3.55% of the frame: its last ends well over the rail
+    expect(top + 3 * 0.0355).toBeLessThan(0.793 - 0.03);
+    // the cue comes up under it, and ends over the rail's west corner
+    expect(cueFoot).toBeGreaterThan(top + 3 * 0.0355);
+    expect(cueFoot).toBeLessThan(0.846 - 0.015);
+    // and the half stop under the small type is under the line where it stands now
+    expect(LAND_BOX.cover.top).toBeLessThan(top);
+    expect(LAND_BOX.cover.top).toBeGreaterThan(top - 0.03);
+    expect(LAND_BOX.cover.foot).toBeGreaterThan(top + 3 * 0.0355);
+    expect(LAND_BOX.cover.foot).toBeLessThan(cueFoot);
   });
 });
 
@@ -353,37 +384,84 @@ describe("a reading page's ground", () => {
     return (rel(text) + 0.05) / (rel(ground) + 0.05);
   };
 
-  it("holds Start here's lit house under a ceiling its quietest line can stand on", () => {
-    const ground = 255 * READING_CEILING;
+  // SINCE THE FOLIOS (2026-10-06) NO PAGE STANDS READING TEXT ON THE PICTURE.
+  // These three tests held the three grounds a column of copy used to stand
+  // on: Start here's night under a ceiling, a surface's navy scrim, the
+  // header's translucent bar. Each is an opaque ground of the hall's own dark
+  // now, and what is held is that it IS opaque, and how quiet its quietest
+  // text may be on it.
+  const GROUND = 0.2126 * 0x15 + 0.7152 * 0x11 + 0.0722 * 0x0c;
+
+  it('opens Start here on the cover by day, and reads it on a sheet', () => {
+    // No stop of print and no night: its copy is not on the house any more.
+    expect(READING_STOPS).toBe(0);
+    expect(READING_TIME).toBe(0);
     const startHere = read('../../app/(site)/(experience)/start-here/page.tsx');
-    const strengths = [...startHere.matchAll(/text-\[#F2EDE4\]\/(\[0\.\d+\]|\d+)/g)].map((m) =>
-      m[1].startsWith('[') ? Number(m[1].slice(1, -1)) : Number(m[1]) / 100,
-    );
-    expect(strengths.length).toBeGreaterThanOrEqual(5);
-    for (const a of strengths) expect(ivoryOn(a, ground)).toBeGreaterThanOrEqual(4.5);
+    expect(startHere).toContain('<Folio>');
+    expect(startHere).toMatch(/<Plate\b/);
+    // nothing of the old page: no column of ivory at part strength on the picture
+    expect(startHere).not.toMatch(/text-\[#F2EDE4\]\//);
   });
 
-  it("puts a surface's quietest small text at AA over anything the world can show behind it", () => {
-    const surface = read('./Surface.tsx');
-    const m = /from-\[#0A1120\]\/\[(0\.\d+)\] via-\[#0A1120\]\/(\d+) to-\[#0A1120\]\/(\d+)/.exec(surface);
-    expect(m).not.toBeNull();
-    const lightest = Math.min(Number(m![1]), Number(m![2]) / 100, Number(m![3]) / 100);
-    const NAVY = 0.2126 * 10 + 0.7152 * 17 + 0.0722 * 32;
-    // a white wall under the lightest of the ground
-    const ground = 255 * (1 - lightest) + NAVY * lightest;
-    expect(ivoryOn(0.55, ground)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it("keeps the header's links at AA over a white page passing under its bar", () => {
-    const m = /bg-\[#0A1120\]\/(\d+) backdrop-blur-md/.exec(header);
-    expect(m).not.toBeNull();
-    const bar = Number(m![1]) / 100;
-    const NAVY = 0.2126 * 10 + 0.7152 * 17 + 0.0722 * 32;
-    const ground = 255 * (1 - bar) + NAVY * bar;
-    expect(ivoryOn(0.72, ground)).toBeGreaterThanOrEqual(4.5);
-    // and Enquire's gilt
+  it('reads every page on an opaque sheet of the hall\u2019s own dark, with its quietest text at AA', () => {
+    // the panel over the picture is gone, and its file with it
+    expect(existsSync(join(__dirname, './Surface.tsx'))).toBe(false);
+    expect(folio).toMatch(/\.folio,\n\.folio-stage \{\n  --ground: #15110c;/);
+    const sheet = folio.slice(folio.indexOf('\n.folio-sheet {'), folio.indexOf('}', folio.indexOf('\n.folio-sheet {')));
+    expect(sheet).toContain('background: var(--ground);');
+    // every strength of ivory the sheets set, against that ground: the four
+    // of the system (globals.css, THE SYSTEM; the forensic audit of
+    // 2026-10-09, #98, counted twelve), and whatever is still written out
+    const inks = [...css.matchAll(/--ink-(\d): rgba\(242, 237, 228, (0\.\d+)\);/g)].map((m) => Number(m[2]));
+    expect(inks).toEqual([0.9, 0.8, 0.72]);
+    expect([...folio.matchAll(/color: var\(--ink-[234]\);/g)].length).toBeGreaterThan(12);
+    const written = [...folio.matchAll(/^ *color: rgba\(242, 237, 228, (0\.\d+)\);/gm)].map((m) => Number(m[1]));
+    // (only what is not text to be read is still a number of its own)
+    for (const a of written) expect(a, 'a strength outside the four').toBeLessThan(0.6);
+    for (const a of [...inks, ...written]) {
+      // (the fields' placeholders are not text to be read: WCAG exempts them
+      // from nothing, so they are held too, at the 3:1 of an inactive hint)
+      expect(ivoryOn(a, GROUND), `ivory at ${a}`).toBeGreaterThanOrEqual(a < 0.5 ? 3 : 4.5);
+    }
+    // and the house's gilt, whole
     const GILT = 0.2126 * 232 + 0.7152 * 185 + 0.0722 * 138;
-    expect((rel(GILT) + 0.05) / (rel(ground) + 0.05)).toBeGreaterThanOrEqual(4.5);
+    expect((rel(GILT) + 0.05) / (rel(GROUND) + 0.05)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('gives the header a bar of that same dark over a sheet, opaque, and air over a plate', () => {
+    const bar = folio.slice(folio.indexOf('\n.site-header:not(.is-film) {'));
+    expect(bar.slice(0, bar.indexOf('}'))).toContain('background: #15110c;');
+    // air only where the page says it is over its plate
+    expect(folio).toContain(
+      'html:has([data-folio-plate]):not([data-folio="sheet"]) .site-header:not(.is-film) {\n  border-bottom-color: transparent;\n  background: transparent;\n}',
+    );
+    // and nothing frosted, anywhere on a page
+    expect(folio).not.toMatch(/backdrop-filter|blur\(/);
+  });
+
+  it('carries a plate\u2019s title on a density of its own, sized by the words, and darkens nothing else', () => {
+    // the frame keeps a foot the first sheet rises out of, a quarter of it at most, and the header's band
+    const plate = folio.slice(folio.indexOf('\n.folio-plate::before {'));
+    const frame = plate.slice(0, plate.indexOf('\n}'));
+    expect(frame).toMatch(/linear-gradient\(to top, #15110c 0%,[^;]*rgba\(21, 17, 12, 0\) 26%\)/);
+    expect(frame).not.toContain('radial-gradient');
+    // the density is the copy block's: from the frame's edge and foot, out past the block and above it
+    const copy = folio.slice(folio.indexOf('\n.folio-plate-copy::before {'));
+    const flag = copy.slice(0, copy.indexOf('\n}'));
+    expect(flag).toContain('left: calc(-1 * var(--edge));');
+    expect(flag).toContain('bottom: calc(-1 * var(--plate-foot));');
+    // gone to nothing at its right edge and above it: the rest of the frame is the picture
+    expect(flag).toMatch(/linear-gradient\(\s*to right,[^;]*rgba\(14, 11, 8, 0\) 100%\s*\)/);
+    expect(flag).toMatch(/mask-image: linear-gradient\(\s*to bottom,\s*transparent 0,/);
+    // and strong enough for the quietest line on the brightest wall: small
+    // gilt at 4.5:1 needs its ground under a luma of 80; ivory at half lights is 215
+    const strength = Number(/rgba\(14, 11, 8, (0\.\d+)\) 0%/.exec(flag)![1]);
+    const under = 215 * (1 - strength) + 11 * strength;
+    const GILT = 0.2126 * 232 + 0.7152 * 185 + 0.0722 * 138;
+    expect((rel(GILT) + 0.05) / (rel(under) + 0.05)).toBeGreaterThanOrEqual(4.5);
+    expect(ivoryOn(1, under)).toBeGreaterThanOrEqual(7);
+    // the page's script and its markup agree on what the block is
+    expect(read('../folio/Folio.tsx')).toContain('<div className="folio-plate-copy">');
   });
 });
 
@@ -428,20 +506,29 @@ describe('every line of the film at a strength its ground allows', () => {
     // (the audit of 2026-10-05, P1). Three figures in a row at the largest
     // step a chapter has, each over its label in the film's letterspaced
     // capitals; the statement under them, and its gloss under that.
-    const table = page.slice(page.indexOf('<dl className="mt-8 flex items-start'), page.indexOf('</dl>'));
+    const table = page.slice(page.indexOf('<dl className="order-1 flex items-start'), page.indexOf('</dl>'));
     const terms = [...table.matchAll(/<dt className="t-eyebrow mt-3 text-\[#F2EDE4\]">([^<]+)<\/dt>/g)].map((m) => m[1]);
     expect(terms.slice(0, 2)).toEqual(['Plots open', 'Plots in all']);
     expect([...table.matchAll(/<dd className="t-fig text-\[#F2EDE4\]">/g)]).toHaveLength(3);
     // ivory, not gilt: a figure is a fact
     expect(table).not.toContain('#E8B98A');
     expect(table).not.toContain('t-gilt');
-    // on a wide frame the figures come first, the statement second, the gloss third
-    expect(table).toContain('wide:order-1');
-    expect(page).toMatch(/<h2 className="t-d3 text-\[#F2EDE4\] wide:order-2 /);
-    expect(page).toMatch(/short:sr-only wide:order-3 /);
-    // old-style figures, as the face draws them
+    // the figures come first, the statement second, the gloss third: on EVERY
+    // frame (the forensic audit of 2026-10-09, #57: "on a phone and tablet the
+    // heading comes first. Expected: one order")
+    expect(table).toContain('<dl className="order-1 flex');
+    expect(page).toMatch(/<h2 className="order-2 mt-8 t-d3 text-\[#F2EDE4\] /);
+    expect(page).toMatch(/<p className="order-3 t-support /);
+    expect(page).not.toMatch(/wide:order-[123]/);
+    // old-style figures, as the face draws them — through the one token a
+    // display statistic's figures are set by (the forensic audit of
+    // 2026-10-09 asks for lining ones, #53: the client's to say, and one line)
     const fig = css.slice(css.indexOf('\n.t-fig {'));
-    expect(fig.slice(0, fig.indexOf('}'))).toMatch(/font-variant-numeric: oldstyle-nums/);
+    expect(fig.slice(0, fig.indexOf('}'))).toMatch(/font-variant-numeric: var\(--figure-nums\) proportional-nums/);
+    expect(css).toContain('  --figure-nums: oldstyle-nums;');
+    // and every figure that is not one is a lining figure: a field's, a column's
+    expect(css).toMatch(/input,\nselect,\ntextarea,\nbutton,\noptgroup \{\n  font-variant-numeric: inherit;/);
+    expect(css).not.toMatch(/font-variant-numeric: tabular-nums;/);
     // a table's count is a sentence in the text's own voice, in ivory
     expect(sources.StationText).toContain('<p className="t-body mt-1 flex items-baseline gap-8 text-[#F2EDE4] ');
   });
@@ -514,9 +601,14 @@ describe('every line of the film at a strength its ground allows', () => {
     // names clearly above addresses; links clearly secondary)" (P1).
     expect(colophon).toContain(`<p className="t-eyebrow t-gilt">{b.role === 'head_office' ? 'Head office' : 'Branch'}</p>`);
     expect(colophon).toContain('<p className="t-support mt-2 text-[#F2EDE4]">{b.name}</p>');
-    expect(colophon).toMatch(/<address className="t-small mt-2 [^"]*not-italic text-\[#F2EDE4\]\/85">/);
-    // the links: the small size at a lower strength than the offices
-    const link = /className="t-small flex min-h-\[44px\] items-center text-\[#F2EDE4\]\/\[(0\.\d+)\]/.exec(colophon);
+    expect(colophon).toMatch(/<address className="t-small mt-2 [^"]*not-italic text-\[#F2EDE4\]\/90">/);
+    // the links: the small size at a lower strength than the offices — every
+    // page of the site by its part, from the one list (the forensic audit of
+    // 2026-10-09, #58: the film's footer had a list of its own, six pages short)
+    expect(colophon).toContain('{SITE_PARTS.map((part) => (');
+    expect(colophon).toContain('<Link href={l.href} className="colophon-link">');
+    expect(colophon).toContain('{SITE_SMALL_PRINT.map((l) => (');
+    const link = /\.colophon-link \{[^}]*color: rgba\(242, 237, 228, (0\.\d+)\);/.exec(css);
     expect(Number(link![1])).toBeLessThan(0.85);
     // the address the offices read (the client, 2026-10-06), from one place
     expect(colophon).toContain('href={CONTACT_MAILTO}');
@@ -529,7 +621,7 @@ describe('every line of the film at a strength its ground allows', () => {
   });
 
   it("stands the colophon on the film's stage, and the sound control on the header's ground", () => {
-    expect(footer).toContain('<footer className="film-stage relative z-10">');
+    expect(footer).toContain('<footer id="visit" className="film-stage relative z-10">');
     // the control is drawn in the header's slot, not fixed in a corner of the picture
     expect(header).toContain('{overFilm ? <span id="film-sound" className="flex items-center" /> : null}');
     const sound = read('./AmbientSound.tsx');
@@ -553,12 +645,16 @@ describe('every line of the film at a strength its ground allows', () => {
     const lines = css.slice(css.indexOf('.menu-toggle-lines i:first-child {'), css.indexOf('.menu-toggle-lines.is-open i {'));
     expect(lines.match(/width: 100%;/g)?.length).toBe(2);
     expect(lines).not.toContain('62%');
-    // every ampersand in its standard form (P3)
-    expect(css).toMatch(/@font-face \{\s*font-family: 'Estate Ampersand';[^}]*unicode-range: U\+0026;/);
-    expect(css).toContain("--font-text: 'Estate Ampersand', var(--font-serif)");
+    // no decorative ampersand (P3) — and none borrowed from another face
+    // either (the forensic audit of 2026-10-09, #60): the site writes "and"
+    // (lib/units.test.ts), and the stack is the one face
+    expect(css).not.toContain('Estate Ampersand');
+    expect(css).toContain("--font-text: var(--font-serif), 'Playfair Display', Georgia, serif;");
     // and the curtain in the film's own dark, not the reading pages' navy (P3)
+    // — on every page since the folios: the navy went with the panels.
     const cover = read('./coverState.ts');
-    expect(cover).toMatch(/COVER_GROUND = \{ film: '#[0-9A-Fa-f]{6}', page: '#0A1120' \}/);
+    expect(cover).toMatch(/COVER_GROUND = \{ film: '#[0-9A-Fa-f]{6}', page: '#[0-9A-Fa-f]{6}' \}/);
+    expect(cover).not.toContain('#0A1120');
     const film = /film: '#([0-9A-Fa-f]{6})'/.exec(cover)![1];
     const [r, , b] = [0, 2, 4].map((i) => parseInt(film.slice(i, i + 2), 16));
     expect(r).toBeGreaterThan(b); // warm

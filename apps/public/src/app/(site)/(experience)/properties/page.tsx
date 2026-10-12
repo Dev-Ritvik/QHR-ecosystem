@@ -1,151 +1,194 @@
 // apps/public/src/app/(site)/(experience)/properties/page.tsx
 //
-// A PLACE (mapped to 'table'), so no Surface wrapper.
+// A FOLIO, read from the first table.
 //
 // Plot SIZES are published here because they are printed on the approved layout
-// plans and do not change. Plot-level AVAILABILITY is not, and the page says so
-// rather than showing a number that would be stale within a week.
+// plans and do not change. How many plots each layout has, and how many are
+// open, is read from the offices' register as the film reads it
+// (lib/published.ts). Which plots those are, and what they cost, is not here,
+// and the page says why.
 //
-// The projection database currently holds seed inventory for two unrelated
-// projects, not these three, so wiring this to live unit data would show a
-// buyer the wrong thing with the authority of a real listing. That is worse
-// than an honest gap, and it is why this reads from the layout plans instead.
+// NOT PER SIZE. The register's split of a layout's plots by size is a
+// placeholder until the client's plot register arrives, so no count stands
+// against a size: a size is offered by a layout, and the layout has a count.
+//
+// The areas are arithmetic on the printed dimensions (nine square feet to the
+// square yard), given because a buyer compares in square yards and the sheets
+// print feet.
+//
+// WHAT A ROAD'S WIDTH DECIDES IS THE ARTICLE'S (the forensic audit of
+// 2026-10-09, #86: three sentences of this page's "the road in front" stood
+// word for word in "How to read a layout plan"; #85: "Why the width is on this
+// page.", "Neither is published on this site."). This page keeps the table
+// and says where the reasoning is.
 
 import type { Metadata } from 'next';
+import { withShare } from '@/lib/share';
 import Link from 'next/link';
+import {
+  Actions,
+  Folio,
+  Gilt,
+  Go,
+  IndexList,
+  NextPage,
+  Note,
+  Plate,
+  Prose,
+  Sheet,
+  Table,
+  Window,
+} from '@/components/folio/Folio';
+import { pageAfter, pageTitle } from '@/components/site/siteMap';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
+import { LAYOUTS, plotArea } from '@/lib/layouts';
+import { countLine, publishedLayouts } from '@/lib/published';
 
-export const metadata: Metadata = {
-  title: 'Plots — Quality Homes Reality',
+export const metadata: Metadata = withShare('/properties', {
+  title: pageTitle('/properties'),
   description:
-    'Plot sizes across Kartikeya Water Front, Lucky Garden and VSR Gayatri Township, and how to check what is available.',
-};
+    'Every plot size across Kartikeya Water Front, Lucky Garden and VSR Gayatri Township, with its area and the road it stands on, off the approved plans.',
+});
 
-interface Inventory {
-  slug: string;
-  name: string;
-  where: string;
-  district: string;
-  sizes: string[];
-  roads: string;
-  approval: string;
-}
+const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
 
-const INVENTORY: Inventory[] = [
-  {
-    slug: 'kartikeya-water-front',
-    name: 'Kartikeya Water Front',
-    where: 'Poosapatirega',
-    district: 'Vizianagaram',
-    sizes: ['30′ × 50′', '30′ × 56′', '30′ × 60′'],
-    roads: '40′ and 30′ internal roads, blacktop with street lighting',
-    approval: 'VMRDA RERA layout',
-  },
-  {
-    slug: 'lucky-garden',
-    name: 'Lucky Garden',
-    where: 'Kumaram Village, Garividi',
-    district: 'Vizianagaram',
-    sizes: ['15′ × 60′', '18′ × 60′'],
-    roads: '20′ proposed internal roads',
-    approval: 'See the layout plan for the approval block',
-  },
-  {
-    slug: 'vsr-gayatri-township',
-    name: 'VSR Gayatri Township',
-    where: 'Bayyannapeta, near Allinagaram',
-    district: 'Srikakulam',
-    sizes: ['60′ × 30′'],
-    roads: '40′ internal roads throughout',
-    approval: 'SUDA approved · F.L.P. No. 10/2025/1178/DTCP/DPMS',
-  },
-];
+/** Every size on offer, smallest first, with the layout that offers it. */
+const SIZES = LAYOUTS.flatMap((l) =>
+  l.sizes.map((s) => ({ ...s, ...plotArea(s), layout: l })),
+).sort((a, b) => a.sqFt - b.sqFt || a.layout.name.localeCompare(b.layout.name));
 
-export default function PropertiesPage() {
+const yd = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+
+export default async function PropertiesPage() {
+  const next = pageAfter('/properties');
+  const live = await publishedLayouts();
   return (
     <>
       <RouteTelemetry routeId="properties" />
-      <main className="relative z-10 mx-auto w-full max-w-4xl px-6 py-16 md:py-24">
-        <p className="text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4]/[0.62]">
-          Plots
-        </p>
-        <h1 className="mt-3 font-serif text-step-3 text-[#F2EDE4] md:text-step-4">
-          What is on offer, and where
-        </h1>
-        <p className="mt-4 max-w-2xl text-step-0 text-[#F2EDE4]/70">
-          Sizes and road widths are taken from the approved layout plans, so they
-          are exact. Which individual plots remain is not published here — it
-          changes weekly, and a stale availability list is worse than none.
-        </p>
+      <Folio>
+        <Plate
+          kicker="The land"
+          title={
+            <>
+              {WORDS[SIZES.length] ?? SIZES.length} plot sizes, <Gilt>measured off the plans.</Gilt>
+            </>
+          }
+          lede="Sizes and road widths are taken from the approved layout plans, so they are exact."
+          cue={{ label: 'Every size', href: '#sizes' }}
+        />
 
-        <div className="mt-12 space-y-10">
-          {INVENTORY.map((i) => (
-            <section key={i.slug} className="border-t border-white/10 pt-8">
-              <h2 className="font-serif text-step-2 text-[#F2EDE4]">{i.name}</h2>
-              <p className="mt-1 text-step--1 text-[#F2EDE4]/55">
-                {i.where} &middot; {i.district} district
-              </p>
+        <Sheet
+          id="sizes"
+          rail="Every size"
+          first
+          layout="full"
+          kicker="Every size"
+          title={
+            <>
+              From 100 sq yd <Gilt>to 200.</Gilt>
+            </>
+          }
+        >
+          <Table
+            head={['Plot', 'Sq ft', 'Sq yd', 'Layout', 'On']}
+            numeric={[1, 2]}
+            rows={SIZES.map((s) => [
+              s.label,
+              s.sqFt.toLocaleString('en-IN'),
+              yd(s.sqYd),
+              <Link key="l" className="folio-link" href={`/projects/${s.layout.slug}`}>
+                {s.layout.name}
+              </Link>,
+              <>{s.layout.roadWidths.map((w) => `${w}′`).join(' and ')} roads</>,
+            ])}
+            caption="Frontage by depth, in feet, as each sheet prints it. Areas are worked from those figures."
+          />
+          <Note className="mt-10">
+            These are the regular plots. Where a layout meets its boundary the plots take the
+            boundary&rsquo;s line, each with a size of its own: read those off{' '}
+            <Link href="/gallery">the plan itself</Link>.
+          </Note>
+        </Sheet>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                {i.sizes.map((s) => (
-                  <span
-                    key={s}
-                    className="rounded border border-white/15 px-3 py-1.5 tabular-nums text-step--1 text-[#F2EDE4]/85"
-                  >
-                    {s}
-                  </span>
-                ))}
-              </div>
+        <Sheet
+          id="by-layout"
+          rail="By layout"
+          kicker="By layout"
+          title={
+            <>
+              Where each size <Gilt>is to be had.</Gilt>
+            </>
+          }
+          note="And how many plots the layout has, from the offices’ register."
+        >
+          <IndexList
+            items={LAYOUTS.map((l) => ({
+              href: `/projects/${l.slug}`,
+              name: l.name,
+              line: (
+                <>
+                  {l.sizes.map((s) => s.label).join(', ')}, on{' '}
+                  {l.roadWidths.map((w) => `${w} ft`).join(' and ')} roads.
+                </>
+              ),
+              meta: countLine(live.find((p) => p.slug === l.slug)),
+            }))}
+          />
+        </Sheet>
 
-              <dl className="mt-5 space-y-2 text-step-0">
-                <div className="flex flex-wrap gap-x-3">
-                  <dt className="text-[#F2EDE4]/60">Roads</dt>
-                  <dd className="text-[#F2EDE4]/80">{i.roads}</dd>
-                </div>
-                <div className="flex flex-wrap gap-x-3">
-                  <dt className="text-[#F2EDE4]/60">Approval</dt>
-                  <dd className="text-[#F2EDE4]/80">{i.approval}</dd>
-                </div>
-              </dl>
+        <Window gloss="Its width is printed on the plan, in the road itself.">
+          Read the road <Gilt>before the plot.</Gilt>
+        </Window>
 
-              <p className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-step--1">
-                <Link
-                  className="uppercase tracking-[0.3em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
-                  href={`/projects/${i.slug}`}
-                >
-                  The layout
-                </Link>
-                <Link
-                  className="uppercase tracking-[0.3em] text-[#F2EDE4]/60 underline-offset-4 hover:text-[#F2EDE4] hover:underline"
-                  href="/hall"
-                >
-                  See it raised
-                </Link>
-              </p>
-            </section>
-          ))}
-        </div>
+        <Sheet
+          id="the-road"
+          rail="The road in front"
+          kicker="The road in front"
+          title={
+            <>
+              Why the road&rsquo;s width <Gilt>is in the table.</Gilt>
+            </>
+          }
+        >
+          <Prose>
+            <p className="folio-first">
+              Every internal road on a sanctioned plan carries a stated width, and it is worth as
+              much attention as the plot.
+            </p>
+            <p>
+              <Link href="/knowledge/reading-a-layout-plan">How to read a layout plan</Link> sets
+              out what a road&rsquo;s width decides, and why two plots of the same area can differ
+              in what may be built on them.
+            </p>
+          </Prose>
+        </Sheet>
 
-        <section className="mt-14 border-t border-white/10 pt-8">
-          <h2 className="font-serif text-step-1 text-[#F2EDE4]">
-            Checking what is free
-          </h2>
-          <p className="mt-3 max-w-2xl text-step-0 text-[#F2EDE4]/70">
-            Ask the branch that holds the layout and they will tell you which
-            plot numbers are open that day, with the current price for the size
-            you want. No price is published on this site, because a figure that
-            drifts out of date does a buyer more harm than no figure at all.
-          </p>
-          <p className="mt-5">
-            <Link
-              href="/contact"
-              className="inline-block rounded border border-white/20 px-5 py-3 text-step--2 uppercase tracking-[0.3em] text-[#F2EDE4] transition hover:border-amber-200/60"
-            >
-              Ask about availability
-            </Link>
-          </p>
-        </section>
-      </main>
+        <Sheet
+          id="what-is-free"
+          rail="What is free"
+          raised
+          kicker="Which plots, and what price"
+          title={
+            <>
+              Ask the branch <Gilt>that holds the layout.</Gilt>
+            </>
+          }
+        >
+          <Prose>
+            <p className="folio-first">
+              They will tell you which plot numbers are open that day, with the current price for
+              the size you want.
+            </p>
+            <p>Both change from week to week, so the branch gives them for the day you ask.</p>
+          </Prose>
+          <Actions>
+            <Go href="/contact">Ask about availability</Go>
+            <Go href="/book-a-site-visit">Arrange a site visit</Go>
+          </Actions>
+        </Sheet>
+
+        <NextPage href={next.href} title={next.name} line={next.line} />
+      </Folio>
     </>
   );
 }

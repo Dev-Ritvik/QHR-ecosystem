@@ -67,39 +67,30 @@ const DEVTOOLS_HOOK = () => {
 };
 
 /**
- * Wait for the preloader to release the document.
+ * Wait for the SCENE: what the page is a picture of, built and drawn.
  *
- * IT HOLDS `overflow: hidden` UNTIL THE SCENE IS READY — BUT IT IS
- * `dynamic(ssr: false)`, SO IT IS NOT THERE YET WHEN THE PAGE FIRST PAINTS.
+ * The page no longer waits for it — a view opens on a still of itself and the
+ * scene dissolves in under it (stills.ts; the forensic audit of 2026-10-09,
+ * #1 and #2) — so nothing about the page says the scene has arrived: not the
+ * curtain, which lifts on the still, and not a scroll lock, which is gone. The
+ * document says it: `data-scene` is `wait` until the scene is live, and `none`
+ * where there will not be one (ExperienceCanvasHost, SceneMark).
  *
- * The obvious helper — wait for `overflow !== 'hidden'` — is therefore a
- * no-op: for the first several hundred milliseconds the inline style is `''`
- * because the cover has not mounted, so it resolves immediately having waited
- * for nothing at all. Measured: the lock is applied at 675 ms and released at
- * 2870 ms, and the naive check returned at 359 ms with ZERO meshes in the
- * scene. Every test using it was racing the load.
- *
- * So: wait for the lock to be APPLIED first, then for it to be released. The
- * apply-wait is bounded and failure-tolerant, because a page that never boots a
- * canvas — no WebGL, or a route with nothing 3D on it — never locks at all, and
- * that is not an error.
+ * The first wait is bounded and failure-tolerant: a page with no canvas at
+ * all never says anything, and that is not an error.
  */
 async function ready(page: Page) {
-  const locked = await page
-    .waitForFunction(
-      () => document.documentElement.style.overflow === 'hidden',
-      undefined,
-      { timeout: 8_000 },
-    )
+  const said = await page
+    .waitForFunction(() => Boolean(document.documentElement.dataset.scene), undefined, { timeout: 8_000 })
     .then(
       () => true,
       () => false,
     );
-  if (locked) {
+  if (said) {
     await page.waitForFunction(
-      () => document.documentElement.style.overflow !== 'hidden',
+      () => document.documentElement.dataset.scene !== 'wait',
       undefined,
-      { timeout: 45_000 },
+      { timeout: 60_000 },
     );
   }
   await page.waitForTimeout(500);
@@ -1104,12 +1095,16 @@ test.describe('degraded paths', () => {
       await page.locator('main a[href^="/projects/"]').count(),
       'the projects are still reachable',
     ).toBeGreaterThan(0);
-    // And the loader must not have locked the page shut waiting for a scene
-    // that will never arrive.
+    // And nothing is left waiting for a scene that will never arrive: the
+    // page is not locked, and the document says there is none.
     expect(
       await page.evaluate(() => document.documentElement.style.overflow),
-      'the scroll lock lifts even with no scene to wait for',
+      'the page scrolls with no scene to wait for',
     ).not.toBe('hidden');
+    expect(
+      await page.evaluate(() => document.documentElement.dataset.scene),
+      'the document says there is no scene',
+    ).toBe('none');
     await ctx.close();
   });
 
@@ -1410,7 +1405,8 @@ test.describe('the map table', () => {
 
     // BACK lands on the film again, and the film still works.
     await page.goBack();
-    await expect(page).toHaveURL(/localhost:3001\/($|#|\?)/);
+    // (Whatever port the suite was pointed at: PLAYWRIGHT_TEST_BASE_URL.)
+    await expect(page).toHaveURL(/localhost:\d+\/($|#|\?)/);
     expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
   });
 
@@ -1932,5 +1928,406 @@ test.describe("the film's last frame", () => {
       }
       await ctx.close();
     }
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// THE FOLIOS (2026-10-06): every page that is not the film, in the film's own
+// language — a plate, sheets, the film's header over it and its ending under
+// it — and the four pages of the plan of twenty-six that were not built.
+// ───────────────────────────────────────────────────────────────────────────
+
+/** Every page the site map names, and the three layouts' own. */
+const FOLIO_ROUTES = [
+  '/projects',
+  '/properties',
+  '/locations',
+  '/gallery',
+  '/downloads',
+  '/construction-updates',
+  '/about',
+  '/why-us',
+  '/testimonials',
+  '/branches',
+  '/careers',
+  '/start-here',
+  '/investment-guide',
+  '/knowledge',
+  '/knowledge/reading-a-layout-plan',
+  '/faqs',
+  '/book-a-site-visit',
+  '/contact',
+  '/hall',
+  '/privacy',
+  '/terms',
+  '/refund-policy',
+  '/cookie-policy',
+  '/sitemap',
+  '/projects/kartikeya-water-front',
+  '/projects/lucky-garden',
+  '/projects/vsr-gayatri-township',
+];
+
+/** The curtain gone as well as the scroll released: a plate is behind it. */
+async function curtainUp(page: Page) {
+  await ready(page);
+  await page
+    .waitForFunction(
+      () =>
+        !Array.from(document.querySelectorAll('div.fixed.inset-0')).some(
+          (el) => /z-\[(59|60)\]/.test(el.className) && getComputedStyle(el).opacity !== '0',
+        ),
+      undefined,
+      { timeout: 60_000 },
+    )
+    .catch(() => undefined);
+}
+
+test.describe('the folios', () => {
+  test('every page of the site is a folio: a plate, sheets, the film’s header and its ending', async ({ page }) => {
+    test.setTimeout(420_000);
+    const errors = watchErrors(page);
+    await page.setViewportSize(VIEWPORT);
+    for (const route of FOLIO_ROUTES) {
+      const res = await page.goto(route);
+      expect(res?.status(), route).toBe(200);
+      await consent(page);
+      // one title, on a plate, in the film's display type
+      const h1 = page.locator('main.folio [data-folio-plate] h1');
+      await expect(h1, route).toHaveCount(1);
+      await expect(h1, route).toBeVisible();
+      expect(await h1.evaluate((el) => el.classList.contains('t-d1')), route).toBe(true);
+      // read on sheets, each with a heading under the title
+      expect(await page.locator('main.folio section.folio-sheet').count(), route).toBeGreaterThan(0);
+      // the film's header, and the film's ending under the page
+      await expect(page.locator('header.site-header.film-stage'), route).toBeVisible();
+      await expect(page.locator('footer.folio-colophon'), route).toContainText('The land is best seen');
+      // nothing of the old pages
+      expect(await page.locator('#surface-title').count(), route).toBe(0);
+      await expect(page.locator('main'), route).not.toContainText(/unavailable/i);
+      // and no page scrolls sideways
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(over, `${route} overflows sideways by ${over}px`).toBeLessThanOrEqual(1);
+    }
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+
+  test('the four pages the plan named and the site did not have are pages', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    const titles: Record<string, RegExp> = {
+      '/projects': /three layouts/i,
+      '/book-a-site-visit': /walk it/i,
+      '/sitemap': /every page/i,
+      '/construction-updates': /on the ground/i,
+    };
+    for (const [route, title] of Object.entries(titles)) {
+      const res = await page.goto(route);
+      expect(res?.status(), route).toBe(200);
+      await consent(page);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
+    }
+    // and each is reachable: the menu lists it, or the page's own small print does
+    await page.goto('/about');
+    await page.getByRole('button', { name: /open menu/i }).click();
+    const menu = page.locator('.menu-panel');
+    for (const route of ['/projects', '/book-a-site-visit', '/construction-updates']) {
+      await expect(menu.locator(`a[href="${route}"]`), route).toBeVisible();
+    }
+    await page.keyboard.press('Escape');
+    await expect(page.locator('footer.folio-colophon a[href="/sitemap"]')).toHaveCount(1);
+  });
+
+  test('a page’s header is air over its plate and a bar of the sheets’ own dark over its sheets', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/about');
+    await consent(page);
+    await curtainUp(page);
+    const ground = () =>
+      page.evaluate(() => getComputedStyle(document.querySelector('header.site-header')!).backgroundColor);
+    expect(await ground(), 'over the plate').toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+    await page.evaluate(() => window.scrollTo(0, window.innerHeight * 1.6));
+    await page.waitForTimeout(900);
+    expect(await ground(), 'over a sheet').toBe('rgb(21, 17, 12)');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(900);
+    expect(await ground(), 'and air again at the top').toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+  });
+
+  test('a layout’s page carries its plan, its sizes, its approval and a form bound to it', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/projects/kartikeya-water-front');
+    await consent(page);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Kartikeya Water Front/);
+    // the plan, as a picture that opens at its full size
+    const plan = page.locator('#plan a.folio-paper');
+    await expect(plan).toHaveAttribute('href', '/gallery/kartikeya-layout.jpg');
+    await expect(plan.locator('img')).toHaveAttribute('alt', /layout plan of Kartikeya Water Front/i);
+    // three sizes, each with its area
+    const rows = page.locator('#plots table.folio-table tbody tr');
+    await expect(rows).toHaveCount(3);
+    await expect(rows.first()).toContainText('1,500');
+    await expect(rows.first()).toContainText('166.67');
+    // whose sanction
+    await expect(page.locator('#approval')).toContainText('VMRDA');
+    // the count the film prints, from the same register
+    const figures = await page.locator('#glance .folio-figure dt').allTextContents();
+    expect(figures.length).toBeGreaterThanOrEqual(3);
+    expect(Number(figures[0].replace(/\D/g, ''))).toBeGreaterThan(0);
+    // and a form that asks nothing about which layout: it is this one
+    await expect(page.locator('#ask form')).toBeVisible();
+    await expect(page.locator('#ask form input[name="layout"]')).toHaveCount(0);
+    // on to the next layout
+    await expect(page.locator('a.folio-next')).toHaveAttribute('href', '/projects/lucky-garden');
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+
+  test('a visit is asked for with a layout and a day, and nothing is chosen for the visitor', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/book-a-site-visit');
+    await consent(page);
+    const form = page.locator('#ask form');
+    await expect(form).toBeVisible();
+    // the three layouts and "not sure yet", which is the one checked
+    const choices = form.locator('input[name="layout"]');
+    await expect(choices).toHaveCount(4);
+    await expect(form.locator('input[name="layout"]:checked')).toHaveValue('');
+    // a layout can be chosen by its row
+    await form.locator('label.folio-choice', { hasText: 'Lucky Garden' }).click();
+    expect(await form.locator('input[name="layout"]:checked').inputValue()).toMatch(/^[0-9a-f-]{36}$/);
+    // a day, never one already gone
+    const date = form.locator('input[type="date"]');
+    const min = await date.getAttribute('min');
+    expect(min).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // typing works: a global gesture hijack would break exactly this
+    await form.locator('input[name="name"]').fill('E2E check');
+    await expect(form.locator('input[name="name"]')).toHaveValue('E2E check');
+    await expect(form.getByRole('button', { name: /ask for the visit/i })).toBeEnabled();
+    // (Not sent: an enquiry goes to the CRM, and a test has no business there.)
+  });
+
+  test('an address that is not a page is answered inside the house, as a 404', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    const res = await page.goto('/there-is-no-such-page');
+    expect(res?.status()).toBe(404);
+    await consent(page);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/isn’t here/);
+    await expect(page.locator('header.site-header')).toBeVisible();
+    await expect(page.locator('footer.folio-colophon')).toBeVisible();
+    await expect(page.locator('main a[href="/projects"]').first()).toBeVisible();
+    // a layout that does not exist, the same
+    const gone = await page.goto('/projects/a-layout-that-closed');
+    expect(gone?.status()).toBe(404);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/isn’t here/);
+  });
+
+  test('a page reads whole with JavaScript off: nothing waits for a script to be shown', async ({ browser }) => {
+    const ctx = await browser.newContext({ javaScriptEnabled: false, viewport: VIEWPORT });
+    const page = await ctx.newPage();
+    await page.goto('/investment-guide');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // the last section's text is visible without a reveal ever running
+    const last = page.locator('#sources .folio-index li').last();
+    await last.scrollIntoViewIfNeeded();
+    expect(await last.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    await ctx.close();
+  });
+
+  test('a phone gets the same pages: one column, nothing off the side, every row a finger wide', async ({ browser }) => {
+    test.setTimeout(240_000);
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await ctx.newPage();
+    for (const route of ['/about', '/projects', '/projects/lucky-garden', '/properties', '/book-a-site-visit', '/cookie-policy', '/sitemap']) {
+      await page.goto(route);
+      await consent(page);
+      await expect(page.getByRole('heading', { level: 1 }), route).toBeVisible();
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(over, `${route} overflows sideways by ${over}px`).toBeLessThanOrEqual(1);
+      // the title is inside the screen, whole
+      const box = await page.getByRole('heading', { level: 1 }).boundingBox();
+      expect(box!.x, route).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width, route).toBeLessThanOrEqual(390);
+    }
+    await ctx.close();
+  });
+
+  test("a phone showing its browser's bars has a band for every picture, and a tablet's density has no edge", async ({
+    browser,
+  }) => {
+    test.setTimeout(240_000);
+    // 390x664 is a phone as it is first seen. A short plate was three-quarters
+    // of that — the words and nothing else — so its picture was whatever
+    // showed through its title (on the small print, the founder's portrait),
+    // and the title's density ran out over 224 px of a 220 px band.
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: 664 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await ctx.newPage();
+    for (const route of ['/privacy', '/projects/kartikeya-water-front', '/contact', '/faqs']) {
+      await page.goto(route);
+      await consent(page);
+      await expect(page.getByRole('heading', { level: 1 }), route).toBeVisible();
+      const m = await page.evaluate(() => {
+        const plate = document.querySelector('[data-folio-plate]') as HTMLElement;
+        const copy = plate.querySelector('.folio-plate-copy') as HTMLElement;
+        const header = document.querySelector('.site-header') as HTMLElement;
+        const density = getComputedStyle(copy, '::before');
+        return {
+          plate: plate.getBoundingClientRect().height,
+          band: copy.getBoundingClientRect().top + window.scrollY - header.offsetHeight,
+          hand: parseFloat(density.top),
+          flat: !density.backgroundImage.includes('gradient'),
+          frame: window.innerHeight,
+        };
+      });
+      expect(m.plate, `${route}: the plate is a whole frame`).toBeGreaterThanOrEqual(m.frame - 1);
+      expect(m.band, `${route}: a band for the picture, over the words`).toBeGreaterThan(90);
+      expect(m.hand, `${route}: the density runs out over five rems`).toBeCloseTo(-80, 0);
+      expect(m.flat, `${route}: as wide as the frame, with no side to run out to`).toBe(true);
+    }
+    await ctx.close();
+
+    // 820x1180: a tablet held upright. Its block is narrower than its frame,
+    // and a flat density as wide as the block was a panel with a hard edge
+    // across the picture; there it is the wide frame's flag.
+    const tablet = await browser.newContext({ viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true });
+    const tp = await tablet.newPage();
+    for (const route of ['/about', '/projects']) {
+      await tp.goto(route);
+      await consent(tp);
+      await expect(tp.getByRole('heading', { level: 1 }), route).toBeVisible();
+      const t = await tp.evaluate(() => {
+        const copy = document.querySelector('[data-folio-plate] .folio-plate-copy') as HTMLElement;
+        return {
+          image: getComputedStyle(copy, '::before').backgroundImage,
+          width: copy.getBoundingClientRect().width,
+          frame: window.innerWidth,
+        };
+      });
+      expect(t.width, `${route}: the block is narrower than the frame`).toBeLessThan(t.frame * 0.9);
+      expect(t.image, `${route}: so its density runs out to nothing past it`).toContain('linear-gradient');
+    }
+    await tablet.close();
+  });
+});
+
+test.describe('the rail', () => {
+  test('on the film it has a dot a chapter and one for the way out, and says which you are in', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    const rail = page.locator('nav.rail');
+    await expect(rail).toBeVisible();
+    const sections = await page.locator('main [id][data-copy], main section[id], main header[id]').count();
+    const dots = rail.locator('li.rail-item');
+    const n = await dots.count();
+    expect(n).toBeGreaterThanOrEqual(8);
+    expect(sections).toBeGreaterThan(0);
+    // exactly one current, and at the top it is the first
+    await expect(rail.locator('a[aria-current="step"]')).toHaveCount(1);
+    expect(await dots.first().getAttribute('data-state')).toBe('current');
+    // the last is the way out
+    await expect(dots.last().locator('a')).toHaveAttribute('href', '#visit');
+    // every dot names a real anchor on the page
+    for (const href of await rail.locator('a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) {
+      expect(await page.locator(`${href}`).count(), `${href} is on the page`).toBe(1);
+    }
+  });
+
+  test('a press on the next dot glides there, and the marker arrives on it', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    const rail = page.locator('nav.rail');
+    const second = rail.locator('li.rail-item').nth(1);
+    await second.locator('a').click();
+    await expect
+      .poll(async () => second.getAttribute('data-state'), { timeout: 12_000 })
+      .toBe('current');
+    const pos = Number(await rail.evaluate((el) => getComputedStyle(el).getPropertyValue('--rail-pos')));
+    expect(pos).toBeGreaterThan(0.9);
+    expect(pos).toBeLessThan(1.25);
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+  });
+
+  test('a press on a far dot cuts there under the film’s own dark, into the hall', async ({ page }) => {
+    test.setTimeout(180_000);
+    const errors = watchErrors(page);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    const rail = page.locator('nav.rail');
+    const portrait = rail.locator('a[href="#portrait"]');
+    await expect(portrait).toHaveCount(1);
+    await portrait.click();
+    // it gets there: the portrait is the current stop, well down the film
+    await expect
+      .poll(async () => rail.locator('a[aria-current="step"]').getAttribute('href'), { timeout: 60_000 })
+      .toBe('#portrait');
+    // and the scene is the hall, not the forecourt seen through a wall
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const veil = document.querySelector<HTMLElement>('div.absolute.inset-0.z-\\[2\\]');
+            return veil ? Number(getComputedStyle(veil).opacity) : 0;
+          }),
+        { timeout: 30_000 },
+      )
+      .toBeLessThan(0.05);
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+
+  test('on a page it has a dot a section, and a press takes the page to that section', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/about');
+    await consent(page);
+    await curtainUp(page);
+    const rail = page.locator('nav.rail');
+    await expect(rail).toBeVisible();
+    const named = await page.locator('main.folio [data-rail][id]').count();
+    await expect(rail.locator('li.rail-item')).toHaveCount(named);
+    expect(named).toBeGreaterThanOrEqual(4);
+    const last = rail.locator('li.rail-item').last();
+    const href = await last.locator('a').getAttribute('href');
+    await last.locator('a').click();
+    await expect.poll(async () => last.getAttribute('data-state'), { timeout: 8_000 }).toBe('current');
+    // the section's top is under the header, near the top of the frame
+    const top = await page.locator(`${href}`).evaluate((el) => el.getBoundingClientRect().top);
+    expect(top).toBeGreaterThan(-40);
+    expect(top).toBeLessThan(260);
+    // and the address says where the page is
+    expect(new URL(page.url()).hash).toBe(href);
+  });
+
+  test('a keyboard reaches every dot, and each says what it is', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/why-us');
+    await consent(page);
+    const links = page.locator('nav.rail a');
+    const n = await links.count();
+    expect(n).toBeGreaterThanOrEqual(2);
+    for (let i = 0; i < n; i += 1) {
+      const name = (await links.nth(i).innerText()).trim();
+      expect(name.length, `dot ${i} has a name`).toBeGreaterThan(2);
+    }
+    await links.first().focus();
+    // focused by the keyboard, the names stand out beside the dots
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Shift+Tab');
+    await expect
+      .poll(async () => links.first().locator('.rail-label').evaluate((el) => getComputedStyle(el).opacity), { timeout: 3000 })
+      .toBe('1');
   });
 });

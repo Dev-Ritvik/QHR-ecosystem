@@ -28,29 +28,31 @@
 // do not have is the kind of claim a buyer disproves by scrolling.
 
 import type { Metadata } from 'next';
+import { withShare } from '@/lib/share';
 import Link from 'next/link';
 import { getPublishedProjects } from '@/lib/projection';
 import { ProjectCard } from '@/components/site/ProjectCard';
 import { StationText } from '@/components/site/StationText';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
-import { PublishSceneCards } from '@/components/experience/PublishSceneCards';
 import { CityLink } from '@/components/site/CityLink';
-import { chapters, TRACK_VH, type Chapter } from '@/components/experience/journey';
+import { chapters, JOURNEY_END, TRACK_VH, type Chapter } from '@/components/experience/journey';
 import { ChapterUrl } from '@/components/experience/ChapterUrl';
 import { ChapterFade } from '@/components/experience/ChapterFade';
 import { EnterLink } from '@/components/experience/EnterLink';
 import { WordReveal } from '@/components/experience/WordReveal';
 import { AmbientSound } from '@/components/experience/AmbientSound';
 import { StartCue } from '@/components/experience/StartCue';
+import { ChapterRail } from '@/components/experience/ChapterRail';
+import { RAIL_END, type RailStop } from '@/components/experience/railMath';
 
 // ISR: Background revalidation every hour, unless manually cleared by the webhook (T37)
 export const revalidate = 3600;
 
-export const metadata: Metadata = {
-  title: 'Plotted layouts in Vizianagaram & Srikakulam — Quality Homes Reality',
+export const metadata: Metadata = withShare('/', {
+  title: 'Plotted layouts in Vizianagaram and Srikakulam — Quality Homes Reality',
   description:
     'Approved plotted layouts across the northern coastal districts of Andhra Pradesh, from a developer twenty years in the field. Plans published in full; prices on request from the branch that holds the site.',
-};
+});
 
 /**
  * TRACK_VH — total scrollable height of the film, in viewport heights — is
@@ -139,12 +141,50 @@ function track(c: Chapter): React.CSSProperties {
   return {
     minHeight: `calc(${((c.to - c.from) * TRACK_VH + linger).toFixed(2)}vh + 100vh)`,
     marginBottom: `calc(-100vh - ${linger.toFixed(2)}vh)`,
+    ...anchor(c),
   };
+}
+
+/**
+ * WHERE A CHAPTER'S ANCHOR LANDS: where the chapter speaks.
+ *
+ * A chapter's section begins where the camera's move to it begins, and its
+ * copy comes up later, on the stretch of that move the words were set on
+ * (journey.ts, COPY_SPAN) — a tenth of a notch later for a table, nearly seven
+ * for the door. So the section's own top is a frame of the film with no words
+ * on it, and that is where every `#chapter` address put the page: MEASURED on
+ * the build of 2026-10-07 (c12/audit_p1.mjs, `anchors`), a jump to each of the
+ * nine anchors landed with nothing up at all, and `#city` landed on the
+ * founder's portrait with the portrait's line. The rail's own presses never
+ * went there (they land where the copy is whole: railStops, below), but a
+ * link from another page does, and a script does — an audit of the film made
+ * by one reported every chapter as an empty frame.
+ *
+ * The anchor is moved, not the copy: the section's scroll margin is taken
+ * NEGATIVE by the length of that wait, so the address lands two pixels past
+ * the frame on which the chapter's copy is whole — the frame a press on its
+ * dot lands on. (A negative margin is honoured for a link, for
+ * scrollIntoView and for a load with a fragment: measured the same day,
+ * c12/audit_probe.mjs.) The cover is the top of the page and keeps the
+ * header's 62px.
+ */
+function anchor(c: Chapter): React.CSSProperties {
+  if (c.id === 'hero') return {};
+  const wait = Math.max(0, c.copy.in[1] - c.from) * TRACK_VH;
+  return { scrollMarginTop: `calc(${(-wait).toFixed(2)}vh - 2px)` };
 }
 
 /** The stretch of scroll a chapter's copy is up for, for ChapterFade. */
 function copyOf(c: Chapter): string {
   return [...c.copy.in, ...c.copy.out].map((v) => v.toFixed(5)).join(',');
+}
+
+/** The stretch over which one of its lines goes EARLY (ChapterFade,
+ *  LEAVE_ATTR): from `a` to `b` notches after its copy is whole. A notch is
+ *  a third of the frame. */
+function leaveOf(c: Chapter, a: number, b: number): string {
+  const notch = 100 / 3 / TRACK_VH;
+  return [c.copy.in[1] + a * notch, c.copy.in[1] + b * notch].map((v) => v.toFixed(5)).join(',');
 }
 
 export default async function SiteHomePage() {
@@ -192,6 +232,37 @@ export default async function SiteHomePage() {
   const at = (id: string): Chapter =>
     beat.find((c) => c.id === id) ?? { id, from: 0, to: 0, copy: { in: [0, 0], out: [0, 0] } };
 
+  // THE RAIL'S STOPS (ChapterRail): the film's chapters in the order the camera
+  // reaches them, each named for what a visitor finds there, and the page's
+  // end. A press lands where that chapter's copy is whole (journey.ts,
+  // COPY_SPAN), which is also where the marker sits on its dot; the cover's is
+  // the top of the page. Built from the same list as everything else here, so
+  // a fourth table is a fourth dot with no other change.
+  const RAIL_NAMES: Record<string, string> = {
+    hero: 'Arrival',
+    revolution: 'The land',
+    holdings: 'The count',
+    approach: 'The door',
+    establish: 'The hall',
+    portrait: 'The portrait',
+    city: 'The districts',
+  };
+  const inside = list.length > 0;
+  const railStops: RailStop[] = [
+    ...beat
+      .filter((c) => inside || ['hero', 'revolution', 'holdings', 'approach'].includes(c.id))
+      .map((c) => {
+        const table = /^station-(\d+)$/.exec(c.id);
+        return {
+          id: c.id,
+          label: table ? String(stationProjects[Number(table[1]) - 1]?.name ?? 'A layout') : RAIL_NAMES[c.id] ?? c.id,
+          from: c.id === 'hero' ? 0 : c.from,
+          at: c.id === 'hero' ? 0 : c.copy.in[1] + 0.0004,
+        };
+      }),
+    { id: 'visit', label: 'The visit', from: JOURNEY_END, at: RAIL_END },
+  ];
+
   const hero = at('hero');
   const revolution = at('revolution');
   const holdings = at('holdings');
@@ -220,22 +291,13 @@ export default async function SiteHomePage() {
       {/* A sound layer, muted until asked for (its control is set in the
           header). */}
       <AmbientSound />
+      {/* Where you are in the film, and the way to any other part of it: a
+          dot a chapter down the frame's right edge. */}
+      <ChapterRail mode="film" stops={railStops} />
 
-      {/* Hands the published projects to the WebGL tree, which binds them to
-          the tables in the hall. Renders nothing itself — the canvas is
-          mounted by the layout above this page, so a store is the only path
-          between them. */}
-      <PublishSceneCards
-        cards={stationProjects.map((p: any) => ({
-          slug: p.slug,
-          name: p.name,
-          locality: p.locality ?? '',
-          city: p.city ?? '',
-          available: typeof p.availableUnits === 'number' ? p.availableUnits : null,
-          total: typeof p.totalUnits === 'number' ? p.totalUnits : null,
-          soldOut: Boolean(p.isSoldOut),
-        }))}
-      />
+      {/* (The published layouts are handed to the WebGL tree by the segment's
+          layout, for every page of it: the hall's tables are dressed wherever
+          a visitor is, and stay dressed when they leave the film.) */}
 
       {/* ── CHAPTER 1 · THE COVER ─────────────────────────────────────────
           The long-lens three-quarter of the entrance front, the top third of
@@ -262,7 +324,22 @@ export default async function SiteHomePage() {
           cue 37px from the frame's foot, the gilt line's feet out of the
           sky's grad). On a wide frame the pane takes that 62px back, so the
           first frame is the composed one and nothing rides. The title stands
-          where the orbit's line will, a tenth of the way down. */}
+          where the orbit's line will, a tenth of the way down.
+
+          THE LINE AND THE CUE STAND ON THE LAWN, TOGETHER, ABOVE THE TERRACE.
+          The forensic audit of 2026-10-09 (#31): "The paragraph's last line
+          sits exactly on the pool terrace's rail, and 'Start here' stands on
+          the terrace paving among the lit bollards ... Type that just touches
+          an object looks unplaced. Expected: the paragraph a line higher,
+          clear of the rail; the cue on plain ground." Measured on the frame
+          at 1920x945: the terrace's rail runs from 799 px down the frame at
+          its west corner to 749 where the line's last word ended, at 769; and
+          the cue, 66 px off the frame's foot, stood across the west rail.
+          The line is two of its own lines higher (63.8vh: its last word 47 px
+          clear of the rail), and the cue comes up under it (18vh off the
+          foot: its hairline ends 26 px over the rail's corner), so the two
+          are one block on one ground. In vh, as the picture is: the same on
+          every wide frame. */}
       <header id="hero" className="relative scroll-mt-[62px]" style={track(hero)}>
         <div className={`${PANE} justify-start pt-[calc(var(--bar)_+_2vh)] wide:-mt-[62px] wide:pt-0`} data-chapter-fade data-copy={copyOf(hero)}>
           <div className={`${BLOCK} wide:top-[max(10.5vh,var(--clear))]`}>
@@ -273,13 +350,13 @@ export default async function SiteHomePage() {
               <span className="t-gilt">we&nbsp;come&nbsp;from.</span>
             </h1>
           </div>
-          <div className={`${BLOCK} wide:top-[71vh] wide:max-w-[calc(430*var(--u))]`}>
+          <div className={`${BLOCK} wide:top-[63.8vh] wide:max-w-[calc(430*var(--u))]`}>
             <p className="t-support mt-5 max-w-[36ch] text-[#F2EDE4] short:sr-only wide:mt-0">
               Approved layouts in Vizianagaram and Srikakulam, sold direct by
               the developer. Every sanctioned plan published in full.
             </p>
           </div>
-          <div className={`${BLOCK} mt-7 wide:bottom-[7vh] wide:mt-0`}>
+          <div className={`${BLOCK} mt-7 wide:bottom-[18vh] wide:mt-0`}>
             <StartCue href="#revolution" />
           </div>
         </div>
@@ -305,8 +382,20 @@ export default async function SiteHomePage() {
               broker <span className="t-gilt">land.</span>
             </p>
           </div>
-          <div className={`${BLOCK} wide:top-[66.4vh] wide:max-w-[calc(330*var(--u))] short:max-w-[calc(520*var(--u))]`}>
-            <p className="t-support mt-5 max-w-[30ch] text-[#F2EDE4] wide:mt-0">
+          <div className={`${BLOCK} wide:top-[76vh] wide:max-w-[calc(330*var(--u))] short:max-w-[calc(520*var(--u))]`}>
+            {/* LOWER ON THE LAWN, AND GONE BEFORE THE HEDGE COMES (the forensic
+                audit of 2026-10-09, #119: "The two supporting lines sit
+                across the top of the hedge and shrubs at the foot of the
+                frame"). The camera is going down over this lawn: measured at
+                1920x945, the canal garden's hedge comes down the frame at 83
+                px for each hundredth of the film, and reached the line's
+                place (66.4vh) a third of a notch after the chapter had
+                spoken. It stands 90 px lower (76vh), which the hedge reaches
+                a notch later, and on a wide frame it goes before its title
+                does (ChapterFade, LEAVE_ATTR): whole for a notch after the
+                chapter has spoken, gone a third of a notch after that, at
+                12.8% of the film, as the hedge's foot comes to it. */}
+            <p className="t-support mt-5 max-w-[30ch] text-[#F2EDE4] wide:mt-0" data-leave={leaveOf(revolution, 1.0, 1.3)}>
               We develop it, and we are still here when the last plot sells.
             </p>
           </div>
@@ -327,9 +416,13 @@ export default async function SiteHomePage() {
           <dl> must. */}
       <section id="holdings" className="relative scroll-mt-[62px]" style={track(holdings)}>
         <div className={`${PANE} justify-center`} data-chapter-fade data-copy={copyOf(holdings)}>
-          {/* THE FIGURES FIRST ON A WIDE FRAME, the statement under them and its
-              gloss on one line under that (`order`: the markup keeps the
-              heading first). Where the crane all but rests (leg 0.6) the
+          {/* THE FIGURES FIRST, the statement under them and its gloss under
+              that (`order`: the markup keeps the heading first). ON EVERY
+              FRAME since the forensic audit of 2026-10-09 (#57: "On wide
+              screens the three figures stand above the chapter's heading ...
+              on a phone and tablet the heading comes first. Expected: one
+              order."): the figures are the event of the chapter wherever it
+              is read. Where the crane all but rests (leg 0.6) the
               lawn the evening sun still reaches is a bright strip across the
               left of the frame from 52 to 64% of the way down, and from 65%
               down the land is the trees' long shadows and the canal garden:
@@ -349,14 +442,14 @@ export default async function SiteHomePage() {
               where the shadows are. */}
           <div className={`${BLOCK} flex flex-col wide:top-[58.5vh] short:top-[calc(58.5vh+var(--bl)*8)] panoramic:left-[calc(var(--edge)_+_(100vw_-_200vh)_*_0.4)]`}>
             <p className="sr-only">The holdings</p>
-            <h2 className="t-d3 text-[#F2EDE4] wide:order-2 wide:mt-[calc(var(--bl)*9)] short:mt-[calc(var(--bl)*5)]">
+            <h2 className="order-2 mt-8 t-d3 text-[#F2EDE4] wide:mt-[calc(var(--bl)*9)] short:mt-[calc(var(--bl)*5)]">
               Every plot we hold,
               <br />
               <span className="t-gilt short:text-[#F2EDE4]">counted in full.</span>
             </h2>
             {/* (Ranged by their heads: on a phone a label takes two lines and
                 the figures must still stand on one line with each other.) */}
-            <dl className="mt-8 flex items-start gap-x-[calc(var(--bl)*9)] wide:order-1 wide:mt-0 wide:gap-x-[calc(var(--bl)*14)]">
+            <dl className="order-1 flex items-start gap-x-[calc(var(--bl)*9)] wide:gap-x-[calc(var(--bl)*14)]">
               <div className="flex flex-col-reverse">
                 <dt className="t-eyebrow mt-3 text-[#F2EDE4]">Plots open</dt>
                 <dd className="t-fig text-[#F2EDE4]">
@@ -382,7 +475,7 @@ export default async function SiteHomePage() {
                 <dd className="t-fig text-[#F2EDE4]">{list.length}</dd>
               </div>
             </dl>
-            <p className="t-support mt-8 max-w-[34ch] text-[#F2EDE4] short:sr-only wide:order-3 wide:mt-[calc(var(--bl)*5)] wide:max-w-none wide:whitespace-nowrap">
+            <p className="order-3 t-support mt-8 max-w-[34ch] text-[#F2EDE4] short:sr-only wide:mt-[calc(var(--bl)*5)] wide:max-w-none wide:whitespace-nowrap">
               Counted from the sanctioned layout plans, not from a brochure.
             </p>
           </div>
@@ -503,8 +596,13 @@ export default async function SiteHomePage() {
             <div className={`${PANE} justify-end pb-[8vh]`} data-chapter-fade data-copy={copyOf(portrait)}>
               <div className={`${BLOCK} wide:top-[20vh] wide:max-w-[calc(430*var(--u))]`}>
                 <p className="sr-only">At the top of the stairs</p>
+                {/* The gilt begins a line, as it does in every headline that
+                    has a line of it (the forensic audit of 2026-10-09, #56:
+                    "'same' is ivory and 'for twenty years.' is gilt on the
+                    same line"). */}
                 <p className="t-d3 text-[#F2EDE4]">
-                  The name on the sanction letters has been the same{' '}
+                  The name on the sanction letters has been the same
+                  <br />
                   <span className="t-gilt">for&nbsp;twenty&nbsp;years.</span>
                 </p>
                 <p className="mt-7">

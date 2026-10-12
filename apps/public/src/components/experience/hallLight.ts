@@ -126,6 +126,26 @@ export const HALL_WALK = 0.62;
  * table put the wall behind its copy a sixth up.
  */
 export const HALL_LEVEL_S2 = 0.34;
+/**
+ * AND UNDER A SITE MODEL. That level was found for a plan projected in light
+ * ("its plan is light in the air ... at 0.5 the title is a ghost"). The tables
+ * carry site models now (stationStyle.ts), which are solid things and want
+ * light: there is nothing on this table left to wash out. The forensic audit
+ * of 2026-10-09 (#42): "The left third of the frame is near black and the
+ * wall behind the model is a muddy grey, not ivory ... The client has sent
+ * back dark rooms three times; this is the darkest of the three tables.
+ * Expected: enough shade for the words and no more, falling off before the
+ * model." Measured on the clean plate, the wall behind the model: a luma of
+ * 119 at 0.34, 165 at 0.6, 186 at 0.8, 200 at 1.0. Just under 0.8 it is the
+ * ivory of the other two tables' rooms; the words keep their ground by the
+ * lens's edge, which is what every other table's words stand on
+ * (lensFilter.ts, STATION_ND_MODEL: at 0.8 and 2.3 stops the place line's
+ * last word, on the pilaster's foot, stood at 4.27:1 against the brightest
+ * tenth of its ground; a touch less light and a tenth of a stop more hold
+ * it at AA). The projected plan, if it is put back, keeps the level it was
+ * measured at.
+ */
+export const HALL_LEVEL_S2_MODEL = 0.78;
 /** The room on a reading page (readingLight.ts): the ivory room's own level,
  *  because those pages stand a column of copy across the plaster. */
 export const HALL_READING = HALL_DIM;
@@ -145,11 +165,31 @@ export const HALL_READING = HALL_DIM;
  */
 export const HALL_READING_ROOM = 0.07;
 
-/** The house lights on a reading page that holds the hall (the route with
- *  its query, fragment and trailing slash taken off). */
-export function hallReadingLevel(pathname: string): number {
-  const route = pathname.split('?')[0].split('#')[0].replace(/\/+$/, '');
-  return route === '/hall' ? HALL_READING_ROOM : HALL_READING;
+/**
+ * THE HALL BEHIND A PAGE, SINCE THE FOLIOS (2026-10-06): LIT.
+ *
+ * The two levels above were for copy standing on the plaster. No page stands
+ * its copy on the room now: a page opens on a plate, one title on a density of
+ * its own in the frame's lower-left quarter, and is read on opaque sheets
+ * (app/folio.css; readingLight.ts has the account). At a twentieth of its
+ * light the room behind a plate was a dark hall with five sconces in it — the
+ * look the client sent back from the film ("creepy vibes") — and three of the
+ * plates were frames of nothing at all.
+ *
+ * Seen at four levels on the running build with a title over each
+ * (`window.__estateHall.level`; _capture_tools/replay/c12/plate_dial.mjs): at
+ * 0.25 the ivory is still a grey room; at 0.5 it is the lit hall, its walls
+ * ivory, its lamps reading as lamps, the tables' models clear on their
+ * walnut; at 1.0 the plaster is at the top of the print and the sconces are
+ * lost in it. Half.
+ */
+export const HALL_PLATE = 0.5;
+
+/** The house lights behind a page that holds the hall. One level for every
+ *  page: each is a plate now (the route is kept in the signature, for the day
+ *  one of them needs its own). */
+export function hallReadingLevel(_pathname: string): number {
+  return HALL_PLATE;
 }
 
 /**
@@ -181,6 +221,7 @@ export function houseKeys(
   beats: readonly InteriorBeat[],
   hold: number,
   establishGone = 0,
+  s2 = HALL_LEVEL_S2_MODEL,
 ): [number, number][] {
   const keys: [number, number][] = [];
   const DOWN = /^(threshold|establish|withdraw|stair-foot|stair-rise|portrait|court|map)$/;
@@ -188,7 +229,7 @@ export function houseKeys(
   for (let i = 0; i < beats.length; i += 1) {
     const b = beats[i];
     if (b.station) {
-      const level = b.station === 'S2' ? HALL_LEVEL_S2 : 1;
+      const level = b.station === 'S2' ? s2 : 1;
       keys.push([b.at, level]);
       // Held while the copy is up — never past the next beat that sets a level.
       const next = beats.slice(i + 1).find((x) => x.station || SETS.test(x.id));

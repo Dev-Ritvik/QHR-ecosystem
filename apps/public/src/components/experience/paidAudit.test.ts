@@ -96,6 +96,13 @@ describe("the header's band outside", () => {
     expect(lensFilter.topZero).toBeGreaterThan(HEADER_BAND.zeroOutside + 0.06);
     for (let i = 0; i < 240; i += 1) headerBandReach(true, 1 / 60);
     expect(lensFilter.topZero).toBeCloseTo(HEADER_BAND.zeroOutside, 3);
+    // On a frame that stands upright the sky is a third of the picture, and
+    // the same stops fall over all of it (the forensic audit of 2026-10-09,
+    // #54: over a white sky the band's foot was "a visible edge").
+    expect(HEADER_BAND.zeroOutsideTall).toBeGreaterThan(HEADER_BAND.zeroOutside + 0.1);
+    expect(HEADER_BAND.zeroOutsideTall).toBeLessThanOrEqual(0.34);
+    for (let i = 0; i < 240; i += 1) headerBandReach(true, 1 / 60, true);
+    expect(lensFilter.topZero).toBeCloseTo(HEADER_BAND.zeroOutsideTall, 3);
     // and at once where no time is given (the hall's own reach)
     headerBandReach();
     expect(lensFilter.topZero).toBe(HEADER_BAND.zero);

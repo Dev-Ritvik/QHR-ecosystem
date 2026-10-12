@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { authedQuery } from '@/server/db';
 import { getRoleContext } from '@/server/session';
 import { writeAudit } from '@/server/audit';
+import { republishAfterStatusChange } from '@/server/publish';
 import { coreSchema as schema } from '@estate/db';
 import { transition, TransitionPayload } from '@estate/domain/src/unit-status/machine';
 import { findOrCreateClient } from './holds';
@@ -97,6 +98,8 @@ export async function createBooking(data: z.infer<typeof CreateBookingSchema>) {
         .update(schema.units)
         .set({ status: 'booked', statusChangedAt: new Date(), updatedAt: new Date() })
         .where(eq(schema.units.id, input.unitId));
+      // (And the site, which prints how many plots are open: publish.ts.)
+      await republishAfterStatusChange(tx, unit.projectId);
 
       // 7. Audit log — same transaction as the booking itself
       await writeAudit({
@@ -163,6 +166,7 @@ export async function cancelBooking(data: z.infer<typeof CancelBookingSchema>) {
         .update(schema.units)
         .set({ status: 'available', statusChangedAt: new Date(), updatedAt: new Date() })
         .where(eq(schema.units.id, unit.id));
+      await republishAfterStatusChange(tx, unit.projectId);
 
       await writeAudit({
         action: 'booking.cancel',
@@ -228,6 +232,7 @@ export async function defaultBooking(data: z.infer<typeof DefaultBookingSchema>)
         .update(schema.units)
         .set({ status: 'available', statusChangedAt: new Date(), updatedAt: new Date() })
         .where(eq(schema.units.id, unit.id));
+      await republishAfterStatusChange(tx, unit.projectId);
 
       await writeAudit({
         action: 'booking.default',
@@ -293,6 +298,7 @@ export async function convertBooking(data: z.infer<typeof ConvertBookingSchema>)
         .update(schema.units)
         .set({ status: 'registered', statusChangedAt: new Date(), updatedAt: new Date() })
         .where(eq(schema.units.id, unit.id));
+      await republishAfterStatusChange(tx, unit.projectId);
 
       await writeAudit({
         action: 'booking.convert',

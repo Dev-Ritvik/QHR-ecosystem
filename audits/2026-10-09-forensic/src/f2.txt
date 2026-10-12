@@ -1,0 +1,282 @@
+## C. The film, at the door and inside the hall
+
+@@ door-capitals | MEDIUM | isolated | gold-accents
+L: Film (/), the doorway, 53% of the scroll, both columns beside the door.
+E: The portico columns' capitals, the stone beside the door, the door handle.
+O: Each capital is a plain turned bowl with a thin square plate set diagonally on top, one corner pointing at the camera. The stone of the arch and soffit carries a woven, cloth-like texture at this range. The door handle is a plain brass block.
+V: Door zoom: bowl capital with a yellow band under it; crosshatched stone on the arch; a rectangular handle.
+W: This is the closest the camera ever comes to the house, and it is where the classical detail runs out.
+X: A proper capital (Tuscan or Ionic to match the house), stone that reads as stone at arm's length, a turned handle.
+F: 19-door-zoom.jpg
+
+@@ hall-entry-portrait-cut | MEDIUM | isolated | portrait-nameplate-crossed
+L: Film (/), first frame inside the hall, 57.5% of the scroll, top centre.
+E: The founder's portrait as the camera comes through the door.
+O: The first thing inside is the lower half of the founder's portrait, cut by the top of the frame, out of focus, under the header's dark band.
+V: Hall first-frame zoom, top-left panel: the face cropped at the eyes.
+W: The portrait is the room's centrepiece and the client is particular about it; its first appearance is a blurred half.
+X: A first frame that holds the portrait whole, or does not show it until it can.
+N: The camera's path is the client's approved one and is not to be re-cut on an audit's word; raise this with him before touching it.
+F: 20-hall-first-frame-zoom.jpg
+
+@@ hall-pink-balusters | HIGH | systemic | hall-star-frieze
+L: Film (/), the hall, most visible 67–79% of the scroll; every inner page whose picture shows the stair.
+E: The stair's balusters, their square plinths, and the column capitals.
+O: The balusters, plinths and capitals render pink beside ivory walls.
+V: Lit baluster faces average RGB 210, 194, 179 (red 17 above green); the wall beside them is 232, 228, 217 (red 4 above green). Stair zoom: rows of pink balusters on pink cubes.
+W: Pink plaster in an "ivory, old money" room is the hall's loudest colour error, and the camera passes within a metre of it twice.
+X: Balusters in the wall's own ivory or in painted white, with the same warmth as the walls.
+N: The hall's brightness is the client's order; this is about the tint of three materials, not the light level.
+F: 24-stair-pan-zoom.jpg, 20-hall-first-frame-zoom.jpg
+
+@@ hall-star-frieze | AI-SLOP | systemic | hall-pink-balusters
+L: Film (/), the hall, 58–62% and 80–84% of the scroll; the opening pictures of /about and of the seven pages that open on the portrait above the stair.
+E: The frieze under the cornice.
+O: The frieze is a row of six-pointed stars, pink-mauve, standing off the wall with a shadow under each.
+V: Frieze zoom: evenly spaced star cut-outs on both walls; on the portrait frame the "Who we are" link sits directly on them.
+W: A classical frieze carries triglyphs, swags, a key or a running moulding. A band of floating stars belongs to no order of architecture and reads as an ornament generated to fill a strip. It is in the background of the founder's portrait.
+X: A plain frieze or a real running ornament in the wall's own colour.
+F: 21-hall-frieze-stars-lamp-nameplate.jpg, 25-portrait-nameplate-lamp-zoom.jpg
+
+@@ hall-wainscot-slabs | HIGH | systemic | hall-wood-grain
+L: Film (/), the hall, every table (64–76%); the opening pictures of /projects, /properties, /gallery, /careers and the three layout pages.
+E: The dark wood panels along the lower walls.
+O: The wainscot is a set of flat dark slabs fixed proud of the wall with no frame, rail or moulding, hanging above the skirting with a gap. Several are half washed pale grey and half black where the baked light bleeds across them; the one behind the first table has a horizontal crease; they read red-mahogany at the third table and brown elsewhere.
+V: Hall first-frame zoom, lower-left panel: a slab split pale and black. Stair zoom, lower-right panel: a slab floating above the skirting. Tablet /gallery: one slab fills the left quarter of the frame as a flat brown rectangle.
+W: These panels are the background of all three layout tables, which is to say of the product.
+X: Framed panelling with stiles, rails and a dado, lit evenly, in one timber.
+N: An earlier audit's walnut wainscot was removed with its dark room at the client's word; what is on screen now is what remains, and it is unfinished.
+F: 20-hall-first-frame-zoom.jpg, 24-stair-pan-zoom.jpg, 68-tablet-gallery-plate.jpg
+
+@@ hall-wood-grain | AI-SLOP | systemic | hall-wainscot-slabs, boards-three-woods
+L: Film (/), the hall's tables (64–76%), and the layout pages' opening pictures.
+E: The wood grain on the wainscot, the model boards and the tables.
+O: One procedural grain at one scale is used on a three-metre wall panel, a 60 cm board and a table top, so the grain is cartoon-large on the small objects.
+V: Table 3 zoom: the same looping cathedral grain on the panel behind and on the board.
+W: Repeated texture at the wrong scale is a standard marker of generated material.
+X: Grain scaled to each object, with the boards in a finer veneer than the wall.
+F: 23-table3-zoom.jpg, 22-table2-zoom.jpg
+
+@@ table-rim-faceted | LOW | repeated |
+L: Film (/), the three tables (66%, 70%, 74%).
+E: The round table's rim and pedestal.
+O: The rim is visibly faceted and the turned pedestal has flat sides.
+V: Table 3 zoom, bottom panel.
+W: Round things that are not round are noticed at the size the tables are shown.
+X: Smooth rims and turnings.
+F: 23-table3-zoom.jpg
+
+@@ boards-three-woods | MEDIUM | repeated | hall-wood-grain
+L: Film (/), tables 1, 2 and 3 (66%, 70%, 74%).
+E: The three model boards.
+O: Three boards of the same design are three different woods: warm brown, near-black espresso, orange-brown.
+V: Desktop walk sheets 4 and 5; phone key frames.
+W: The three tables are meant to be one set; they look like three props from different sources.
+X: One timber and one finish for all three.
+F: 70-film-desktop-walk-5.jpg, 61-phone-film-key-frames.jpg
+
+@@ model-lucky-slab | MEDIUM | isolated | plan-images-broken
+L: Film (/), table 2 (70%); /projects/lucky-garden opening picture.
+E: The Lucky Garden site model.
+O: Half the model is one blank pale slab, and the plots carry pastel tints with nothing to explain them.
+V: Table 2 zoom, model panel.
+W: The model's largest feature is a blank. The tints come from the source sheet, which itself prints no key.
+X: The "future extension" shown as open ground in the board's own flock, and plots in one colour unless a key is on the plaque.
+F: 22-table2-zoom.jpg
+
+@@ model-gayatri-artifacts | AI-SLOP | isolated | plan-images-broken
+L: Film (/), table 3 (74%); /projects/vsr-gayatri-township opening picture.
+E: The VSR Gayatri Township site model.
+O: The green open-space block has a plus-shaped hole in it, and the white strips round the plots have lumpy, beaded edges.
+V: Table 3 zoom, model panel: a cross cut out of the green; bead-like bumps along the strips.
+W: Both are the marks of a drawing traced automatically (a symbol and a row of tree icons read as geometry), which is what "procedurally imperfect" looks like.
+X: Clean blocks: a whole green, straight verges.
+F: 23-table3-zoom.jpg
+
+@@ table2-dark-third | MEDIUM | repeated | station-band-hard-edge
+L: Film (/), table 2, 70% of the scroll, the frame's left third.
+E: The shading behind the table's name.
+O: The left third of the frame is near black and the wall behind the model is a muddy grey, not ivory.
+V: Table 2 frame at 70%; the frame after a chapter press shows the same.
+W: The client has sent back dark rooms three times; this is the darkest of the three tables.
+X: Enough shade for the words and no more, falling off before the model.
+N: Client's standing order: the hall's rooms stay bright.
+F: 22-table2-zoom.jpg, 03-link-press-chapter-dot-wait.jpg
+
+@@ stair-pan-empty | MEDIUM | repeated | pacing-tables
+L: Film (/), between the tables and the portrait, 67–69% and 75–79% of the scroll; phone at 76.6%.
+E: The camera's passes along the stair.
+O: For several notches the frame is filled with out-of-focus balusters and blank wall; on a phone one frame is nothing but wall and a sconce.
+V: Stair zoom; phone key frames, fourth frame.
+W: These are the frames between the product's three moments, and they show the hall's weakest surfaces closest.
+X: Passes that keep a subject in frame.
+N: The camera path is client-approved; an observation for him, not an instruction to re-cut.
+F: 24-stair-pan-zoom.jpg, 61-phone-film-key-frames.jpg
+
+@@ stair-stringer-gaps | MEDIUM | isolated |
+L: Film (/), the stair pan, 67% of the scroll, centre-left.
+E: The stair's outer stringer.
+O: A black wedge-shaped gap opens at every step between the stringer and the treads, and the baluster plinths stand on a soft, swollen cap.
+V: Stair zoom, upper-left panel.
+W: Gaps you can see through in a stone stair are modelling holes.
+X: A closed stringer with a crisp cap.
+F: 24-stair-pan-zoom.jpg
+
+@@ sconce-blue | LOW | repeated | picture-lamp
+L: Film (/), the hall (67–77%).
+E: The wall sconces' flames.
+O: The flames are pale blue-white while the light they throw on the wall is warm.
+V: Stair zoom, sconce panel.
+W: A lamp and its light in different colours.
+X: Warm flames.
+F: 24-stair-pan-zoom.jpg
+
+@@ portrait-nameplate-crossed | HIGH | repeated | hall-entry-portrait-cut, phone-about-crop
+L: Film (/), the portrait, 80–84% of the scroll, lower centre; phone at 82–84%.
+E: The founder's nameplate under the portrait.
+O: The stair's handrail crosses the nameplate. "K. BHASKARA RAO" is cut by the rail, and the line under it (his title) is hidden. On a phone the plate is dark behind the rail and becomes readable only as the chapter's words are fading.
+V: Portrait zoom, nameplate panel: the rail runs through the plate's lower half. Phone walk sheet 3, frames 112–116.
+W: The client's own note on this plate was that it must be easy to read and "must create respect". At the film's portrait moment it is half covered.
+X: A camera height or rail position at which the whole plate is clear while the chapter's words are up.
+N: The portrait, its lamp and lens are "fine, don't touch" by the client's word; the plate's legibility is his own request. Raise the conflict with him.
+F: 25-portrait-nameplate-lamp-zoom.jpg, 71-film-phone-walk-3.jpg
+
+@@ picture-lamp | MEDIUM | isolated | sconce-blue, nameplate-aliased
+L: Film (/), the portrait, 81% of the scroll, above the frame.
+E: The picture lamp and its light on the frame.
+O: The lamp is a flat bar with a pale-blue glowing line, while the light on the picture is amber. The pool of light on the frame has stepped, polygonal edges.
+V: Portrait zoom, picture-lamp panel.
+W: The lamp is in the centre of the film's most personal frame.
+X: A warm lamp with a soft, round fall of light.
+F: 25-portrait-nameplate-lamp-zoom.jpg
+
+@@ nameplate-aliased | LOW | isolated | aa-none
+L: Film (/), the portrait, 81% of the scroll.
+E: The nameplate's gilt moulding and the wall panel to its right.
+O: The plate's gilt edge is stair-stepped, and a row of dark dashes runs along the top inner edge of the wall panel at the right.
+V: Portrait zoom, nameplate and panel panels.
+W: Small, but on the one object the client asked to be dignified.
+X: Smooth edges; no stray marks on the panel.
+F: 25-portrait-nameplate-lamp-zoom.jpg
+
+@@ map-copy-on-stair | MEDIUM | isolated |
+L: Film (/), the map table, 87–90% of the scroll, left half.
+E: The list of the three layouts beside the map table.
+O: The list's lines run across the stair's saw-tooth outline, the map's pins carry no labels, the table's rim highlight is a dotted line, and the frame's corners are black.
+V: Map zoom, list and table panels.
+W: The closing statement of the film sits on a busy edge, and the map it points at cannot be read.
+X: The list on plain ground; pins that can be told apart.
+F: 26-map-table-zoom.jpg
+
+@@ carpets-two-colours | LOW | repeated |
+L: Film (/), the hall's first frames (57–60%) and stair passes.
+E: The stair carpet and the entrance rug.
+O: A saturated navy stair carpet stands against a red entrance rug in an ivory room.
+V: Hall first-frame zoom; /projects opening picture.
+W: Two saturated carpets fight the "ivory, old money" brief.
+X: One carpet colour, deeper and less saturated.
+F: 20-hall-first-frame-zoom.jpg, 32-all-opening-frames-desktop.jpg
+
+@@ hall-windows-cards | LOW | repeated |
+L: Film (/), the hall's first frames (58–60%).
+E: The arched windows high on the walls.
+O: The panes are flat slate-blue cards with no depth, glazing reflection or view.
+V: Desktop walk sheet 4, frames 41–42.
+W: Windows are where a room meets the world outside it; here they are stickers.
+X: Glass with a faint sky and a reflection of the room's lamps.
+F: 70-film-desktop-walk-4.jpg
+
+## D. The film's words, pacing and controls
+
+@@ pacing-tables | HIGH | systemic | stair-pan-empty
+L: Film (/), the whole scroll, every screen size (measured at one wheel notch, a third of the screen, per step).
+E: How long each chapter's words stay whole.
+O: The three layouts get the least reading time in the film. The first and second tables' names are whole for one notch each; the third table's name is never whole at any sampled notch (0.81 at most on a desktop, 0.58 on a tablet, 0.93 on a phone). The count ("344 / 407 / 3") holds for nine notches and the closing footer for nine.
+V: Per-notch record at 1920×945: cover 4, "We do not broker land" 3, the count 9, the door 5, "Each layout stands on its own table" 1, table 1: 1, table 2: 1, table 3: 0, portrait 2, map 3, footer 9. The same pattern at 1366×657, 820×1180 and on the phone.
+W: A buyer scrolling at an ordinary pace cannot read the name, place and count of the layouts the site exists to sell.
+X: Longer windows for the three tables' words. This is a change to when the words fade, not to the camera.
+N: The client's rule is that the camera never stops or slows. The words' windows can be widened without touching it.
+F: 70-film-desktop-walk-5.jpg, 71-film-phone-walk-2.jpg
+
+@@ figures-oldstyle | MEDIUM | systemic | numerals-mixed
+L: Film (/), the count, 22–34% of the scroll; /about, /projects and the three layout pages' first sections.
+E: The large figures: 344, 407, 3; 20, 5,000, 12, 8; 113, 113, 3, 40.
+O: The display figures are set in old-style numerals, so the zero is the height of a small letter, the 3 and 4 hang below the line and the 6 and 8 rise above it. "407" reads as "4o7" and a row of four figures looks vertically misaligned.
+V: Figures zoom: "407" with a small round zero; "3", "407", "344", "6" on four different heights.
+W: Old-style figures belong in running text. As stand-alone statistics at 120 px they look like a font error, and these are the site's headline numbers.
+X: Lining figures for display statistics and tables.
+N: This is set deliberately in the stylesheet; it is a choice to revisit, not a bug.
+F: 16-old-style-figures.jpg
+
+@@ header-band-hard-edge | MEDIUM | repeated | station-band-hard-edge
+L: Film (/), 15–17% of the scroll on a tablet (820×1180) and a phone; top of the frame.
+E: The dark band under the header.
+O: Over a bright sky the band under the header ends in a visible edge: a dark grey strip across a near-white sky.
+V: Tablet frame at 15.8%: a grey band about a tenth of the frame deep over a bleached sky.
+W: A shade that can be seen as a shape is a panel, which the site's own rules forbid.
+X: A band that follows the sky's brightness, or a sky that is not bleached under it.
+F: 66-tablet-film-header-band-white-sky.jpg
+
+@@ station-band-hard-edge | MEDIUM | repeated | header-band-hard-edge, table2-dark-third
+L: Film (/), tables 1 and 2 on a phone (66% and 71% of the scroll), about a quarter of the way down the frame.
+E: The shade behind the table's name on a phone.
+O: The dark band behind the name ends in a hard horizontal line across the whole frame, with the bright wall directly under it.
+V: Phone key frames 2 and 3.
+W: It reads as a dark box across the top of the picture.
+X: A soft fall-off over a longer distance.
+F: 61-phone-film-key-frames.jpg
+
+@@ headline-colour-midline | LOW | isolated |
+L: Film (/), the portrait chapter, 81% of the scroll.
+E: The headline "The name on the sanction letters has been the same for twenty years."
+O: The gilt half of the headline begins in the middle of the third line: "same" is ivory and "for twenty years." is gilt on the same line. Every other headline changes colour at a line break.
+V: Portrait frame at 81.5%.
+W: The two-tone headline is the site's signature device; one of them breaks its own rule.
+X: The colour change at the line break.
+F: 70-film-desktop-walk-5.jpg
+
+@@ figures-above-heading | LOW | isolated |
+L: Film (/), the count, 22–34% of the scroll, wide screens.
+E: The order of the count's parts.
+O: On wide screens the three figures stand above the chapter's heading, with the explanation under it; on a phone and tablet the heading comes first.
+V: Sunset frames; tablet figures frame.
+W: The same chapter reads in two orders on two devices.
+X: One order.
+F: 15-sunset-three-frames.jpg, 67-tablet-film-figures.jpg
+
+@@ footer-two-designs | SYSTEMIC | systemic | names-differ
+L: The foot of the film (/) against the foot of every other page.
+E: The closing footer.
+O: The site has two different footers. The film's has a 134 px sign-off, office labels in tracked capitals, 13 px links and twelve page links in two rows with four legal links. Every other page's has a 63 px sign-off, office labels in small sentence-case gilt, 16 px links and eighteen page links in four titled columns with five legal links.
+V: Measured: sign-off 134.4 px against 63 px; "HEAD OFFICE" 10.75 px capitals in #F1D0A6 against "Head office" 16 px in #E8B98A; link text 13.44 px against 16 px; the film's footer has no link to the layouts, the offices, the hall, the enquiry page or the sitemap.
+W: The footer is the one component every visitor sees on every page, and on the home page it is a different component.
+X: One footer, or the film's footer as an evident variation of the same one (same labels, same link set, same names).
+N: The film's last frame was composed for its twelve links; changing the set means re-checking that frame.
+F: 27-footer-film-vs-inner.jpg
+
+@@ address-orphan | LOW | systemic | short-last-lines
+L: Every footer; /about, /branches, /contact.
+E: The Vizianagaram office's address.
+O: The address breaks so that its last line is "– 535002" alone, beginning with the dash.
+V: Footer comparison, office panel; the same in the film's footer.
+W: A line that starts with a dash is a small typesetting error repeated on every page.
+X: Keep the town and its PIN together; no dash before a PIN at a line start.
+F: 27-footer-film-vs-inner.jpg
+
+@@ ampersand-substitute | LOW | systemic |
+L: Every page's footer ("Privacy & data choices"); page titles; /locations; the legal pages.
+E: The ampersand.
+O: The "&" is deliberately taken from a different font installed on the visitor's device (Georgia, Times New Roman, Noto Serif or another), so it is larger and heavier than the letters round it and differs from device to device.
+V: Footer zoom: an oversized swash "&" in a 13 px line. The stylesheet maps that one character to local fonts.
+W: One character in another typeface is the definition of an accidental font substitution, even when it is on purpose.
+X: The typeface's own ampersand, or the word "and".
+F: 27-footer-film-vs-inner.jpg
+
+@@ menu-enquire-thrice | LOW | isolated | header-shift
+L: The open menu, every page.
+E: The ways to enquire offered on one screen.
+O: "Enquire" appears three times on the open menu: in the header, in the fourth column and in the row at the foot.
+V: Menu screenshot.
+W: Repetition where a single clear action would do.
+X: Once.
+F: 52-menu-open.jpg

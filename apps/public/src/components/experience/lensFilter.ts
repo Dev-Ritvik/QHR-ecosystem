@@ -53,6 +53,9 @@ export const lensFilter = {
   /** A second ellipse, for a frame whose copy stands in two places (the
    *  cover: its title in the sky, its small type on the land). Same rule. */
   second: { stops: 0, shape: new Vector4(0.2, 0.3, 0.3, 0.2), inner: 0.45 },
+  /** The cover's grad has a colour (COVER_GRADE): how much of its slate, at
+   *  the top of the frame, and of the warmth at its foot, 0..1 each. */
+  sky: { cool: 0, warm: 0 },
 };
 
 /**
@@ -97,6 +100,19 @@ export const lensFilter = {
  * leg 0.6 the header stood on the sunset at 156 to 184 with no band at all.
  * `evening` and `night` are its stops at those hours. The hall keeps the
  * reach it was measured at (`zero`).
+ *
+ * AND LONGER AGAIN ON A FRAME THAT STANDS UPRIGHT (`zeroOutsideTall`). That
+ * 16% was judged on wide frames, where the sky is the top fifth of the
+ * picture. A phone or a tablet held upright shows the top third of it as sky,
+ * and on the orbit that third is the sun's own glare, which the plate holds
+ * as white: there the band was a grey strip a tenth of the frame deep across
+ * a white sky, with its foot in plain sight (the forensic audit of 2026-10-09,
+ * #54: "the band under the header ends in a visible edge: a dark grey strip
+ * across a near-white sky ... A shade that can be seen as a shape is a panel
+ * ... Expected: a band that follows the sky's brightness"). The same stops,
+ * falling over the whole of that sky, are the grad a photographer sets on it:
+ * tried on the running build at 820x1180 at 16% and 30% and 40% of the frame,
+ * and 30% is where the foot is no longer seen and the land is still untouched.
  */
 export const HEADER_BAND = {
   day: 1.6,
@@ -106,6 +122,7 @@ export const HEADER_BAND = {
   full: 0.07,
   zero: 0.24,
   zeroOutside: 0.16,
+  zeroOutsideTall: 0.3,
   ceiling: 0.4,
 } as const;
 
@@ -232,6 +249,14 @@ export function headerBandApproach(legS: number): number {
  * ground under 80, which is what part of the old density was buying.
  */
 export const STATION_ND: Readonly<Record<string, number>> = { S1: 2.1, S2: 1.2, S3: 1.8, S4: 1.0, portrait: 1.4 };
+/**
+ * UNDER A SITE MODEL the second table's room is lit like the others
+ * (hallLight.ts, HALL_LEVEL_S2_MODEL: the forensic audit of 2026-10-09, #42),
+ * so its words need what the first table's do: its place line runs off the
+ * walnut door onto the foot of an ivory pilaster. Where a table is not named
+ * here its stops are STATION_ND's.
+ */
+export const STATION_ND_MODEL: Readonly<Record<string, number>> = { S2: 2.4 };
 
 /**
  * AND HALF A STOP UNDER THE ESTABLISHING COPY, as under the cover's (HERO_ND).
@@ -261,6 +286,7 @@ export function stationFilter(
   weights: Readonly<Record<string, number>>,
   wide: boolean,
   aspect: number = STAGE.aspect,
+  model = true,
 ): void {
   if (!wide) {
     lensFilter.stops = 0;
@@ -268,7 +294,7 @@ export function stationFilter(
   }
   let stops = 0;
   for (const [id, w] of Object.entries(weights)) {
-    stops = Math.max(stops, (STATION_ND[id] ?? 0) * w);
+    stops = Math.max(stops, ((model ? STATION_ND_MODEL[id] : undefined) ?? STATION_ND[id] ?? 0) * w);
   }
   // The establishing shot's half stop, under its copy in the lower left
   // (ESTABLISH_ND): the tables' edge takes over when it is the denser.
@@ -325,9 +351,21 @@ export const TABLE_BAND = { margin: 0.015, fall: 0.05, fullMax: 0.25, zeroMax: 0
  * under the cap, on the wall as the room lights it: measured at 390x664 in
  * the bright room, the count at 3.66:1 at the first table and, at the third,
  * whose place takes two lines, on the pilaster at 1.45:1. Over a model the
- * band may follow the copy a third of the way down, and is gone by 38%.
+ * band may follow the copy a third of the way down.
+ *
+ * AND IT FALLS OVER THE WALL BETWEEN THE WORDS AND THE BOARD, not in a
+ * twentieth of the frame (`fall`). The forensic audit of 2026-10-09 (#55):
+ * "The dark band behind the name ends in a hard horizontal line across the
+ * whole frame, with the bright wall directly under it ... It reads as a dark
+ * box across the top of the picture. Expected: a soft fall-off over a longer
+ * distance." Under the words' last line there are eighteen hundredths of a
+ * tall phone's frame before the board begins (measured at 390x844: the count
+ * ends at 21 to 23%, the boards begin at 42 to 46%), and the fall has all of
+ * it: gone at 40% there. On a short phone, where the words end a third of the
+ * way down, it is capped at 44%, and what is left of it at the board's top
+ * edge is a tenth of the density.
  */
-export const TABLE_BAND_MODEL = { fullMax: 0.33, zeroMax: 0.38 } as const;
+export const TABLE_BAND_MODEL = { fullMax: 0.33, zeroMax: 0.44, fall: 0.17 } as const;
 const tableBand = { on: 0, foot: 0 };
 
 /** `model`: the tables carry site models, not projected plans (the cap). */
@@ -344,7 +382,7 @@ export function tableBandFilter(panes: readonly CopyPane[], dt: number, model = 
   tableBand.on += (on - tableBand.on) * (1 - Math.exp(-Math.max(0, dt) / 0.2));
   const e = tableBand.on < 0.004 ? 0 : tableBand.on;
   const full = Math.max(HEADER_BAND.full, Math.min(cap.fullMax, tableBand.foot + TABLE_BAND.margin));
-  const zero = Math.max(HEADER_BAND.zero, Math.min(cap.zeroMax, full + TABLE_BAND.fall));
+  const zero = Math.max(HEADER_BAND.zero, Math.min(cap.zeroMax, full + (model ? TABLE_BAND_MODEL.fall : TABLE_BAND.fall)));
   lensFilter.topFull = HEADER_BAND.full + (full - HEADER_BAND.full) * e;
   lensFilter.topZero = HEADER_BAND.zero + (zero - HEADER_BAND.zero) * e;
 }
@@ -356,14 +394,15 @@ export function tableBandFilter(panes: readonly CopyPane[], dt: number, model = 
  * the hall at the end of the way out by the door, and a reach that stepped
  * from the hall's to its own would lift a strip of the picture in one frame.
  */
-export function headerBandReach(outside = false, dt = Infinity): void {
+export function headerBandReach(outside = false, dt = Infinity, tall = false): void {
   tableBand.on = 0;
   lensFilter.topFull = ld('bandFull', HEADER_BAND.full);
   if (!outside) {
     lensFilter.topZero = HEADER_BAND.zero;
     return;
   }
-  const want = ld('bandZero', HEADER_BAND.zeroOutside);
+  // (`tall`: a frame that is not wide, where the sky is a third of the picture)
+  const want = ld('bandZero', tall ? HEADER_BAND.zeroOutsideTall : HEADER_BAND.zeroOutside);
   lensFilter.topZero += (want - lensFilter.topZero) * (1 - Math.exp(-Math.max(0, dt) / 0.35));
 }
 
@@ -462,6 +501,57 @@ export const COVER_SKY = {
   ride: { from: 0.225, to: 0.275, stops: 0.7 },
 } as const;
 /**
+ * AND THE GRAD HAS A COLOUR. The forensic audit of 2026-10-09 (#6): "The
+ * opening frame's sky is a flat grey-brown overcast with almost no colour,
+ * darkened further by the band under the header. The film's best skies come
+ * later; the frame everyone sees first has its dullest ... Mean colour of the
+ * sky's upper band: RGB 109, 104, 97, saturation 0.11 ... Expected: a cover
+ * sky with a readable light direction and some colour, while keeping the
+ * headline legible. (The cover's camera angle and the type's position are
+ * approved; this is about the sky's grade only.)"
+ *
+ * WHY IT WAS GREY. The cover looks DOWN on the house: its frame's top edge is
+ * four degrees over the horizon, so the upper third is not the plate's sky at
+ * all but the foot of it, the pale haze every far thing dissolves into
+ * (187, 174, 157 in the plate: a beige at a saturation of 0.16), and that
+ * haze under a stop and a half of NEUTRAL density is a grey-brown. The
+ * plate's blue begins eight degrees up, out of the frame.
+ *
+ * So the grad the lens already wears for the title is the one a landscape
+ * photographer would have chosen for a pale sky in the first place: a
+ * graduated SLATE, cool where it is densest at the top of the frame and clear
+ * by the tree line (`cool`: the gain on each channel where it is whole, and
+ * how far down the frame it reaches, as fractions of the height); and where
+ * it lets go, the haze at the horizon is left its own warmth and a little
+ * more, most on the side the sun is on, the right of this frame (`warm`, its
+ * band down the frame, and `side`: where across the frame it begins and how
+ * much of it the far side keeps). Cool over warm is what the eye reads as a
+ * sky; warmer to one side is where the light comes from. Measured on the
+ * frame: the upper band 98, 98, 95 before, 86, 94, 104 after: a slate at a
+ * saturation of 0.17, a tenth darker under the title than the neutral grad
+ * left it.
+ *
+ * It is the DAY's, and the cover's: ridden off (`off`, leg progress) as the
+ * camera leaves the cover for the orbit, where the plate's own clouds and the
+ * evening's gold come into the frame and want no filter's colour over them.
+ * A slate, not a blue: the client's rule against saturated blue stands.
+ */
+export const COVER_GRADE = {
+  cool: [0.74, 0.91, 1.22] as const,
+  coolReach: [0.04, 0.38] as const,
+  warm: [1.1, 1.0, 0.86] as const,
+  warmBand: [0.2, 0.3, 0.33, 0.47] as const,
+  side: [0.25, 0.35] as const,
+  off: [0.03, 0.13] as const,
+} as const;
+
+/** How much of the cover's coloured grad is on at this point of the exterior
+ *  leg, 0..1. */
+export function coverGrade(legS: number): number {
+  return 1 - smooth(COVER_GRADE.off[0], COVER_GRADE.off[1], legS);
+}
+
+/**
  * (1.45 stops, full to 32% of the height and gone by 46%, since the audit of
  * 2026-10-05 set the cover's title at the display's largest size: it begins a
  * tenth of the way down a wide frame and ends at 31.8%, and at 1.3 its gilt
@@ -492,12 +582,14 @@ export const COVER_SKY_SHORT = { full: 0.37, zero: 0.5 } as const;
  * for as long as it is up.
  */
 export const LAND_ND = { stops: 0.9, inner: 0.5, pad: 1.7 } as const;
-/** The two lines' boxes (site-home: the cover's at 71vh, 430 units wide; the
- *  orbit's at 66.4vh, 330 wide — 520 on a short frame). */
+/** The two lines' boxes (site-home: the cover's at 63.8vh, 430 units wide, two
+ *  of its lines higher since the forensic audit of 2026-10-09, #31; the
+ *  orbit's at 76vh, 330 wide — 520 on a short frame; 66.4vh until the same
+ *  audit's #119). */
 export const LAND_BOX = {
-  cover: { left: -30, right: 450, top: 0.7, foot: 0.84 },
-  revolution: { left: -30, right: 350, top: 0.655, foot: 0.79 },
-  revolutionShort: { left: -30, right: 540, top: 0.655, foot: 0.82 },
+  cover: { left: -30, right: 450, top: 0.628, foot: 0.768 },
+  revolution: { left: -30, right: 350, top: 0.751, foot: 0.886 },
+  revolutionShort: { left: -30, right: 540, top: 0.751, foot: 0.916 },
 } as const;
 
 
@@ -530,6 +622,11 @@ export function holdingsFilter(
 ): void {
   const c = Math.min(1, Math.max(0, cover));
   const r = Math.min(1, Math.max(0, revolution));
+  // The cover's grad in its own colour (COVER_GRADE): by the place on the
+  // leg, like the grad itself, and not by the words.
+  const grade = coverGrade(legS);
+  lensFilter.sky.cool = grade * ld('coverCool', 1);
+  lensFilter.sky.warm = grade * ld('coverWarm', 1);
   const land = ld('landStops', LAND_ND.stops) * Math.max(c, r);
   lensFilter.second.stops = land < 0.004 ? 0 : land;
   if (land > 0) {

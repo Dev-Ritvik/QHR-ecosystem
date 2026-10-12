@@ -191,7 +191,7 @@ function Card({
                   letterSpacing: '0.16em',
                   textTransform: 'uppercase',
                   color: '#E8B98A',
-                  fontVariantNumeric: 'tabular-nums',
+                  fontVariantNumeric: 'lining-nums tabular-nums',
                 }}
               >
                 {card.available} available

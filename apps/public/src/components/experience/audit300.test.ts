@@ -14,7 +14,7 @@ import { TREE_KINDS, treeSeed, treeVariation, varyTrees } from './exteriorTrees'
 import { CONTACT_SHADOW, FOOTPRINTS, groundObjects } from './exteriorContact';
 import { HAZE_FOOT_DEG, HORIZON_SKIRT, dressHaze, hazeUniforms, horizonSkirt } from './exteriorHaze';
 import { HAZE_BAND_DEG, SKY_HAZE_BINS, setSkyHaze, skyHazeRing } from './skyHaze';
-import { EVENING_PROBE } from './ExteriorModel';
+import { HOUR_STEP } from './exteriorWater';
 
 const read = (p: string) => readFileSync(join(__dirname, p), 'utf8').replace(/\r\n/g, '\n');
 
@@ -169,16 +169,22 @@ describe('the land dissolves into the sky behind it', () => {
 });
 
 describe('the pool at sunset, and what stands on the terrace', () => {
-  it("gives the water an evening's photograph between the day's and the night's", () => {
+  it("gives the water the hour's own photograph, through the evening and the night", () => {
     // "At sunset the pool is a flat teal surface": the morning's probe was put
-    // out to fifteen per cent as evening fell and nothing took its place.
-    expect(EVENING_PROBE.take).toBeGreaterThan(EVENING_PROBE.whole);
-    expect(EVENING_PROBE.whole).toBeGreaterThan(EVENING_PROBE.from);
-    expect(EVENING_PROBE.gain).toBeGreaterThan(1);
-    expect(EVENING_PROBE.ease).toBeGreaterThan(0.5);
+    // out to fifteen per cent as evening fell and nothing took its place. The
+    // audit's answer was an evening's probe between the day's and the night's,
+    // shown at a gain of 1.6. The forensic audit of 2026-10-09 (#17) found
+    // what three photographs are across a film: "three different things in
+    // three chapters", and at the door frame a pool twice as bright as its
+    // sky. The water still picks up the sunset: from a probe taken AGAIN as
+    // the hour moves, several times across the evening, at no gain.
+    expect(HOUR_STEP).toBeGreaterThan(0.05);
+    expect(HOUR_STEP).toBeLessThanOrEqual(0.25);
     const src = read('ExteriorModel.tsx');
-    expect(src).toContain('st.eveningCapture ??= beginPoolProbe(gl, scene, st.at, st.water);');
-    expect(src).toContain("const want = night ? 'night' : evening ? 'evening' : 'day';");
+    expect(src).toContain('Math.abs(s.hour.evening - now.evening) < HOUR_STEP && Math.abs(s.hour.night - now.night) < HOUR_STEP');
+    // between takes, its strength is the sky's own: never more than what is above it
+    expect(src).toContain('waterUniforms[kind].uProbeGain.value = sky / s.hour.sky;');
+    expect(src).not.toMatch(/EVENING_PROBE|POOL_PROBE_GAIN/);
   });
 
   it('lays a margin of shade under each planter and block, once', () => {
