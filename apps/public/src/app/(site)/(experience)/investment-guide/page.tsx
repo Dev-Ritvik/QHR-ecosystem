@@ -56,7 +56,8 @@ export const metadata: Metadata = withShare('/investment-guide', {
 const SOURCES = [
   {
     href: 'https://en.wikipedia.org/wiki/Alluri_Sitarama_Raju_International_Airport',
-    name: 'Alluri Sitarama Raju International Airport (Bhogapuram)',
+    // (a space that does not break: the town in brackets never stands alone on a line)
+    name: 'Alluri Sitarama Raju International Airport\u00a0(Bhogapuram)',
     line: 'An overview: where it is, who runs it, what its first phase is built for.',
   },
   {

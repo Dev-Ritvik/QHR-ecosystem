@@ -52,6 +52,48 @@ describe('a page’s card', () => {
     expect(read('(site)/(experience)/site-home/page.tsx')).toContain("export const metadata: Metadata = withShare('/', {");
   });
 
+  it('is the layouts’ too: each its model on its table, and no card drawn by a route of its own', () => {
+    // (Their card was a starter kit's: a grey sheet in a sans-serif that said
+    // ESTATE where the company's name belongs, and could not load its font on
+    // Windows. The forensic re-audit, 17 October 2026.)
+    const layout = read('(site)/(experience)/projects/[projectSlug]/page.tsx');
+    expect(layout).toContain('return withShare(`/projects/${projectSlug}`, { title, description });');
+    // and described as the page opens: by its sheet's summary, the page's own lede
+    expect(layout).toMatch(/const description =\n {4}sheet\?\.summary \|\|/);
+    expect(layout).toContain('lede={layout?.summary ??');
+    const drawn: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const full = join(dir, name);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (/^(opengraph|twitter)-image\.(tsx?|jsx?)$/.test(name)) drawn.push(full.slice(APP.length + 1));
+      }
+    };
+    walk(APP);
+    expect(drawn).toEqual([]);
+    for (const slug of ['kartikeya-water-front', 'lucky-garden', 'vsr-gayatri-township']) {
+      const href = `/projects/${slug}`;
+      expect(shareImage(href)).toMatch(/^\/share\/place-(table|window|study)\.jpg$/);
+      expect(existsSync(join(PUBLIC, shareImage(href))), href).toBe(true);
+    }
+  });
+
+  it('says something of its own: no two pages share a description', () => {
+    // (/gallery and /downloads said the same sentence: the forensic re-audit, 17 October 2026.)
+    const seen = new Map<string, string>();
+    const twice: string[] = [];
+    for (const f of pages(join(APP, '(site)/(experience)'))) {
+      const src = readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
+      const m = /withShare\('[^']*', \{[\s\S]*?description:\s*'((?:[^'\\]|\\.)*)'/.exec(src);
+      if (!m) continue;
+      const page = f.slice(APP.length + 1);
+      if (seen.has(m[1])) twice.push(`${seen.get(m[1])} and ${page}`);
+      else seen.set(m[1], page);
+    }
+    expect(seen.size).toBeGreaterThan(20);
+    expect(twice).toEqual([]);
+  });
+
   it('has a picture published for every page of the site, and for the film', () => {
     const hrefs = ['/', ...SITE_PARTS.flatMap((p) => p.pages.map((l) => l.href)), ...SITE_SMALL_PRINT.map((l) => l.href)];
     expect(hrefs.length).toBeGreaterThan(20);

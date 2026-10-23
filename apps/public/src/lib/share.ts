@@ -5,7 +5,9 @@
 // The forensic audit of 2026-10-09 (#95): "25 of 28 pages, including the home
 // page, have no share image or share title, so a link pasted into WhatsApp
 // shows no picture … For a site sold by sharing a link, the shared card is the
-// first impression." Only a layout's own page had one (its opengraph-image).
+// first impression." Only a layout's own page had one, drawn by a route left
+// from the starter kit (a grey sheet that said ESTATE): gone, and the layouts'
+// pages are carded as every other page is.
 //
 // Every page's card is now made the same way, from what the page already
 // says of itself: its title, its description, and ITS OWN OPENING PICTURE —

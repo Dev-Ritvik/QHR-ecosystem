@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BEATS, FILM_SHARE, UPRIGHT_LENS, lensAt, uprightLensAt } from './cameraPath';
+import { BEATS, FILM_SHARE, UPRIGHT_LENS, UPRIGHT_TABLET_LENS, lensAt, uprightLensAt } from './cameraPath';
 import { HEADER_BAND, headerBandReach, lensFilter } from './lensFilter';
 import { ld, ldColour, ldQuery, lookdevOn } from './lookdev';
 import { SKY_HAZE_BINS, setSkyHaze, skyHazeReady, skyHazeToward } from './skyHaze';
@@ -62,6 +62,20 @@ describe("an upright screen's lens, outside", () => {
     expect(widened(threeQuarter.fov, uprightLensAt(threeQuarter.at).widen)).toBeCloseTo(52, 0);
     // and the cover on a phone is a real wide shot, not the long lens's slice
     expect(widened(hero.fov, UPRIGHT_LENS.hero.widen)).toBeGreaterThan(40);
+  });
+
+  it('holds the whole front on a phone, and a tablet keeps the lens it had (the forensic audit, #114)', () => {
+    // a phone: wider, and aimed at the house rather than off it
+    expect(uprightLensAt(0, 390)).toEqual(UPRIGHT_LENS.hero);
+    expect(UPRIGHT_LENS.hero.widen).toBeGreaterThan(1.75);
+    expect(UPRIGHT_LENS.hero.offset).toBe(0);
+    // a tablet held upright: the paid audit's, which held it already
+    expect(uprightLensAt(0, 820)).toEqual(UPRIGHT_TABLET_LENS.hero);
+    expect(UPRIGHT_TABLET_LENS.hero).toEqual({ widen: 1.75, offset: 0.2 });
+    // and between them, between
+    const mid = uprightLensAt(0, 690);
+    expect(mid.widen).toBeGreaterThan(UPRIGHT_TABLET_LENS.hero.widen);
+    expect(mid.widen).toBeLessThan(UPRIGHT_LENS.hero.widen);
   });
 
   it('is none from the crane on, and never steps', () => {

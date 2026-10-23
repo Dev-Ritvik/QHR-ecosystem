@@ -14,7 +14,12 @@
 //
 //   a plot's two sides   30′ × 50′     a prime after each figure, a
 //                                      multiplication sign with a space each
-//                                      side: as the sheets mark a plot.
+//                                      side: as the sheets mark a plot. Spaces
+//                                      that do not break: a size is one thing,
+//                                      and a line that ended "30′ ×" with
+//                                      "56′" on the next was two (seen on
+//                                      /start-here at 1920). Written through
+//                                      plotSize, never by hand.
 //   a length             40 ft         a figure, a space, "ft": a road's
 //                                      width, in a sentence or a table. Not
 //                                      "40-foot", not "40 feet", not "40′"
@@ -40,9 +45,9 @@ export function ft(n: number): string {
   return `${n} ft`;
 }
 
-/** A plot by its two sides, as its sheet marks it. */
+/** A plot by its two sides, as its sheet marks it: one unbroken size. */
 export function plotSize(a: number, b: number): string {
-  return `${a}′ × ${b}′`;
+  return `${a}′\u00a0×\u00a0${b}′`;
 }
 
 /** An address with its PIN: the PIN kept on the line its town is on. */

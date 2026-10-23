@@ -14,10 +14,13 @@ import {
   PIN_MIN,
   PIN_RADIUS,
   districtOf,
+  placeLabels,
   placePins,
   reliefAt,
   type MapMeta,
 } from './mapTablePlan';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /** A made-up land: sea below the diagonal, Vizianagaram west, Srikakulam east,
  *  a ridge of hills across the top. */
@@ -113,5 +116,65 @@ describe('the pins', () => {
     expect(len(byUnits[2].slug)).toBeLessThan(len(byUnits[0].slug));
     for (const p of pins) expect(p.length).toBeGreaterThanOrEqual(PIN_MIN);
     for (const p of pins) expect(p.href).toBe(`/projects/${p.slug}`);
+  });
+});
+
+describe("the pins' names (the forensic audit of 2026-10-09, #49)", () => {
+  const frame = { width: 1920, height: 945, gap: 7, margin: 8, top: 94 };
+  const plate = { w: 180, h: 20 };
+  const box = (p: { x: number; y: number }) => ({ l: p.x, t: p.y, r: p.x + plate.w, b: p.y + plate.h });
+  const meet = (a: ReturnType<typeof box>, b: ReturnType<typeof box>) =>
+    Math.min(a.r, b.r) > Math.max(a.l, b.l) && Math.min(a.b, b.b) > Math.max(a.t, b.t);
+
+  it('stand over their heads where there is room', () => {
+    const [at] = placeLabels([{ x: 960, y: 500 }], [plate], frame);
+    expect(at.x).toBeCloseTo(960 - plate.w / 2, 6);
+    expect(at.y).toBeCloseTo(500 - frame.gap - plate.h, 6);
+  });
+
+  it('never stand on each other, nor on another pin, and keep inside the frame', () => {
+    // three pins as the film's 89% has them, and as a phone's map has them
+    for (const [pts, f] of [
+      [[{ x: 930, y: 490 }, { x: 1030, y: 550 }, { x: 1230, y: 450 }], frame],
+      [[{ x: 105, y: 672 }, { x: 157, y: 710 }, { x: 257, y: 655 }], { ...frame, width: 390, height: 844, top: 84 }],
+      [[{ x: 600, y: 400 }, { x: 640, y: 405 }, { x: 680, y: 398 }], frame],
+    ] as const) {
+      const sizes = pts.map(() => ({ ...plate, w: f.width < 500 ? 150 : plate.w }));
+      const at = placeLabels(pts, sizes, f);
+      const boxes = at.map((p, i) => ({ l: p.x, t: p.y, r: p.x + sizes[i].w, b: p.y + sizes[i].h }));
+      for (let i = 0; i < boxes.length; i += 1) {
+        for (let j = i + 1; j < boxes.length; j += 1) expect(meet(boxes[i], boxes[j]), `${i} and ${j}`).toBe(false);
+        pts.forEach((p, j) => {
+          if (j === i) return;
+          const head = { l: p.x - 5, t: p.y - 5, r: p.x + 5, b: p.y + 5 };
+          expect(meet(boxes[i], head), `name ${i} on pin ${j}`).toBe(false);
+        });
+        expect(boxes[i].l).toBeGreaterThanOrEqual(f.margin);
+        expect(boxes[i].r).toBeLessThanOrEqual(f.width - f.margin);
+        expect(boxes[i].t).toBeGreaterThanOrEqual(f.top);
+      }
+    }
+    expect(box({ x: 0, y: 0 }).r).toBe(plate.w);
+  });
+
+  it('end at a pin by the frame\u2019s edge, over it, and not run off the frame', () => {
+    const [at] = placeLabels([{ x: 1900, y: 500 }], [plate], frame);
+    expect(at.x + plate.w).toBeLessThanOrEqual(frame.width - frame.margin);
+    expect(at.x + plate.w).toBeCloseTo(1910, 6);
+    expect(at.y).toBeCloseTo(500 - frame.gap - plate.h, 6);
+  });
+
+  it('are drawn by the table, and styled as the hall\u2019s plates', () => {
+    const table = readFileSync(join(__dirname, 'MapTable.tsx'), 'utf8');
+    expect(table).toContain('placeLabels(pts, nameSizes.current');
+    expect(table).toContain("el.className = 'map-pin-name'");
+    // in the film only: a page's still frame has the table wherever its place puts it
+    expect(table).toContain('mapStage.named && st && st.r - st.l >= PIN_NAMES.minWidth');
+    const stage = readFileSync(join(__dirname, 'InteriorStage.tsx'), 'utf8');
+    expect(stage).toContain("mapStage.named = mode !== 'still';");
+    const css = readFileSync(join(__dirname, '..', '..', 'app', 'globals.css'), 'utf8');
+    expect(css).toMatch(/\.map-pin-name \{[^}]*background: #15110c;[^}]*color: var\(--gilt\);/);
+    // and the rim's highlight is drawn a pixel wide (MAP_SPECULAR)
+    expect(table).toContain(".replace('#include <lights_physical_fragment>', MAP_SPECULAR_AA)");
   });
 });

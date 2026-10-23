@@ -32,6 +32,7 @@
 
 import type { PerspectiveCamera } from 'three';
 import type { InteriorBeat } from './interiorPath';
+import { ld, lookdevOn } from './lookdev';
 import { stationStyle } from './stationStyle';
 
 export interface PhoneFrame {
@@ -54,13 +55,26 @@ const NONE: PhoneFrame = { widen: 1, rise: 0, shift: 0 };
 // the front shifts it back; 0.3 pushed it off the left edge at the film's
 // last frame), with the court's approach already on the same framing so the
 // chapter holds still as it arrives.
+//
+// AND THE PORTRAIT'S PLATE OUT OF THE MAP'S FRAME (the forensic audit of
+// 2026-10-09, #118: "A thin strip of the nameplate's gilt letters shows at the
+// very top of the frame, under the header, for three notches ... Expected: in
+// or out"). The court and the map stood their fronts low enough (-0.22, -0.3)
+// that the founder's plate, high on the landing behind the table, stayed in
+// the frame's top edge for the whole of the chapter: under the header's band
+// its letters still printed at a luma of 64. Brought up to -0.1 and -0.2 (set
+// on the running build at 390x844), the plate has left the frame by the time
+// the camera settles on the court (the strip's brightest pixel 20 from 87.5%
+// to the film's end, against 64), and the table stands a little higher under
+// the list, still clear of it. It crosses the frame's edge once, on the way
+// in, as anything the camera leaves behind does.
 export const PHONE_FRAMING: Record<string, PhoneFrame> = {
   establish: { widen: 1.2, rise: 0.12, shift: 0 },
   'stair-foot': { widen: 1.15, rise: 0.06, shift: 0 },
   'stair-rise': { widen: 1.3, rise: 0.12, shift: 0 },
   portrait: { widen: 1.35, rise: 0.14, shift: 0 },
-  court: { widen: 1.55, rise: -0.22, shift: 0.2 },
-  map: { widen: 1.75, rise: -0.3, shift: 0.2 },
+  court: { widen: 1.55, rise: -0.1, shift: 0.2 },
+  map: { widen: 1.75, rise: -0.2, shift: 0.2 },
   // The tables (site models only: see frameOf). Set on the phone's own frames
   // (390x844): at 1.5 / 0.3 the model still ran off the right edge, at 1.85 /
   // 0.37 the third did; at 2.0 each stands whole, its name plaque legible, with
@@ -150,14 +164,21 @@ export function phoneWeight(aspect: number): number {
   return smooth(1, 0.75, aspect);
 }
 
+/** Look-dev (?debug=1): a beat's phone frame tried on the running build before
+ *  it is written into PHONE_FRAMING (`phone:<beat>:widen`, `:rise`, `:shift`). */
+function tuned(id: string, f: PhoneFrame): PhoneFrame {
+  if (!lookdevOn()) return f;
+  return { widen: ld(`phone:${id}:widen`, f.widen), rise: ld(`phone:${id}:rise`, f.rise), shift: ld(`phone:${id}:shift`, f.shift) };
+}
+
 function frameOf(b: InteriorBeat, width: number): PhoneFrame {
   if (TABLE_BEAT.test(b.id)) {
     if (stationStyle() === 'hologram') return NONE;
-    const phone = PHONE_FRAMING[b.id] ?? NONE;
+    const phone = tuned(b.id, PHONE_FRAMING[b.id] ?? NONE);
     const t = tabletWeight(width);
     return t <= 0 ? phone : t >= 1 ? TABLET_TABLES : mix(phone, TABLET_TABLES, t);
   }
-  return PHONE_FRAMING[b.id] ?? NONE;
+  return tuned(b.id, PHONE_FRAMING[b.id] ?? NONE);
 }
 
 /** The phone frame at `s` of the interior leg, on an upright screen `width`

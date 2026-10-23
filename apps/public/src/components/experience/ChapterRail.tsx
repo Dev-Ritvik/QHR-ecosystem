@@ -35,6 +35,19 @@
 // One rAF, coalesced from the scroll event; the marker is a custom property on
 // the element, so scrolling costs no render. React state changes only when the
 // current stop does.
+//
+// AND ON AN UPRIGHT FRAME IT STEPS OUT OF THE PICTURE AT REST (the forensic
+// audit of 2026-10-09, #113: "The dots run down over the house on the cover and
+// over the building's right side on a tablet, and at the film's end the
+// telephone number runs into the dots' ring at the right edge ... Expected:
+// dots clear of the picture's subject and of text"). A phone's frame has no
+// edge to spare: the house, the site models and the sign-off all reach the
+// right side of it. So on the film, once the page has been still for a moment
+// (`RAIL_REST_MS`), the rail is marked as resting, and on a frame that stands
+// upright it fades out of the picture (globals.css, THE RAIL); the first
+// movement brings it back, saying where you are as you go. It is still there to
+// be touched: a touch where it stands opens the names, as the first touch
+// always has, and that brings it back too. A wide frame keeps it in view.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -61,11 +74,17 @@ interface PageProps {
 /** One notch — a third of a viewport — as a fraction of the film's track. */
 const NOTCH = 100 / 3 / TRACK_VH;
 
+/** How long the film must be still before the rail rests, ms; and, the first
+ *  time, how long it is shown on arrival, so a visitor sees that it is there. */
+export const RAIL_REST_MS = 1600;
+export const RAIL_FIRST_MS = 4000;
+
 export function ChapterRail(props: FilmProps | PageProps) {
   const nav = useRef<HTMLElement>(null);
   const [stops, setStops] = useState<RailStop[]>(props.mode === 'film' ? props.stops : []);
   const [current, setCurrent] = useState(0);
   const [open, setOpen] = useState(false);
+  const [resting, setResting] = useState(false);
   // DRAWN ON THE DOCUMENT, NOT IN THE PAGE. The page's content and its footer
   // are two stacking contexts of the same order, the footer the later: a rail
   // that lived in the page was under the footer where the two met — there to
@@ -162,6 +181,22 @@ export function ChapterRail(props: FilmProps | PageProps) {
     };
   }, [filmStops, resolve, pageKey, mounted]);
 
+  // ── at rest (the film only): see the head of this file ──────────────────
+  useEffect(() => {
+    if (!film) return;
+    let timer = window.setTimeout(() => setResting(true), RAIL_FIRST_MS);
+    const moved = () => {
+      setResting(false);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setResting(true), RAIL_REST_MS);
+    };
+    window.addEventListener('scroll', moved, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', moved);
+      window.clearTimeout(timer);
+    };
+  }, [film]);
+
   // ── a touch screen: the first touch opens the names ─────────────────────
   useEffect(() => {
     if (!open) return;
@@ -255,6 +290,7 @@ export function ChapterRail(props: FilmProps | PageProps) {
       // like everything else on that picture, and takes the frame's edge.)
       className={'rail' + (film ? ' film-stage' : ' folio-stage') + (open ? ' is-open' : '')}
       data-rail-mode={props.mode}
+      data-rail-resting={resting && !open ? '' : undefined}
       style={{ ['--rail-n' as string]: stops.length }}
     >
       <span aria-hidden className="rail-shade" />

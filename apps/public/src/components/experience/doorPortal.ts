@@ -83,8 +83,12 @@ export function portalWanted(): boolean {
 }
 
 /** The hall's own front wall and door leaves: the exterior's stand in the
- *  same place, and through the doorway the room is seen from outside them. */
-export const HALL_FRONT = ['int_doors', 'int_door_arch', 'int_wall_front'] as const;
+ *  same place, and through the doorway the room is seen from outside them.
+ *  The panelled leaves (hallPanelling, panelHall) face the room only and are
+ *  not seen from outside; their brass knobs are turned whole, and stood in the
+ *  open doorway as two dark dots on the rug (the forensic re-audit, 17 October
+ *  2026, at the film's 53%), so they go with the wall. */
+export const HALL_FRONT = ['int_doors', 'int_door_arch', 'int_wall_front', 'door_knob_0', 'door_knob_1'] as const;
 
 /** Register a root of the hall for the life of a component. */
 export function registerHallRoot(root: THREE.Object3D): () => void {

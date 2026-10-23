@@ -48,7 +48,8 @@ const OPTIONAL = [
   {
     name: 'PostHog (ph_*)',
     group: 'Analytics',
-    purpose: 'Product analytics — which pages and projects hold attention.',
+    // (its last two words held together: "attention." stood alone on a tablet's line)
+    purpose: 'Product analytics — which pages and projects hold attention.',
     life: 'Up to 12 months',
   },
   {

@@ -52,6 +52,33 @@ const NAMEPLATE_GAIN: Record<string, number> = { plate_gilt: 1.15, plate_field: 
  *  portrait. */
 const NAMEPLATE_DEFINES = { ...PROBE_DEFINES, ESTATE_FOCUS: '' };
 
+/**
+ * THE PLATE'S TOP EDGE IS IN THE FRAME'S SHADE (the forensic audit of
+ * 2026-10-09, #48: "The plate's gilt edge is stair-stepped"). The plate hangs
+ * five centimetres under the frame's foot, and from the film's portrait beat
+ * its top faces (two centimetres of gilt, under a pixel) are seen edge on. The
+ * room's probe lit them with what is over them in the probe, the ceiling and
+ * its lamps, and they printed as a broken line of pale dashes along the top of
+ * the gilt (43 pixels brighter than the gilt in the band, measured at the
+ * film's 81.5%; a ray through them found the plate). What is over them is the
+ * frame's foot, so they are shaded as faces under it are: a quarter of their
+ * light where they face up (`share`, of the light they would have; `from`,
+ * `to`: the cosine with the vertical over which they go into it). The front of
+ * the gilt, the lettering and the portrait are as they were. Measured after: 1.
+ */
+export const PLATE_TOP_SHADE = { share: 0.25, from: 0.5, to: 0.9 } as const;
+const PLATE_TOP_GLSL = /* glsl */ `
+{
+  vec3 plateUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+  outgoingLight *= 1.0 - ${(1 - PLATE_TOP_SHADE.share).toFixed(2)} * smoothstep(${PLATE_TOP_SHADE.from.toFixed(2)}, ${PLATE_TOP_SHADE.to.toFixed(2)}, dot(normal, plateUp));
+}
+#include <opaque_fragment>
+`;
+function shadeTopEdge(shader: { fragmentShader: string }): void {
+  shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', PLATE_TOP_GLSL);
+}
+const plateTopKey = () => 'portrait-plate-top-shade';
+
 export const FOUNDER = {
   /** The founder's name as it should be lettered, or null until supplied.
    *  Given by the client on 2026-09-18. */
@@ -255,6 +282,8 @@ export function PortraitNameplate() {
           roughness={0.34}
           metalness={1}
           defines={NAMEPLATE_DEFINES}
+          onBeforeCompile={shadeTopEdge}
+          customProgramCacheKey={plateTopKey}
         />
       </mesh>
       <mesh position={[0, 0, backZ + plate.depth / 2]} name="portrait_plate_bead">
@@ -265,6 +294,8 @@ export function PortraitNameplate() {
           roughness={0.28}
           metalness={1}
           defines={NAMEPLATE_DEFINES}
+          onBeforeCompile={shadeTopEdge}
+          customProgramCacheKey={plateTopKey}
         />
       </mesh>
       {plateTexture ? (

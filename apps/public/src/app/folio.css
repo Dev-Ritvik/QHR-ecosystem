@@ -77,13 +77,73 @@
     --d3: max(1.5rem, calc(42 * var(--u)));
     --fig: max(3.25rem, calc(116 * var(--u)));
     --end: max(3.5rem, calc(128 * var(--u)));
-    --support: max(1.0625rem, calc(22 * var(--u)));
+    /* A page's lede and a window's gloss are read: the reading text's own
+       size, as they are on a phone. In the frame's unit they ran beside the
+       reading text without being it — 0.6 px over it at 1920x945 once the
+       reading type stepped up there (#74), and under it, 17 px to 19.9, on a
+       laptop's short frame (the forensic re-audit, 17 October 2026: two sizes
+       a fraction apart again, #97's fault). */
+    --support: var(--step-1);
   }
 }
 @media (min-width: 768px) and (orientation: portrait) {
   .folio,
   .folio-stage {
     --edge: 2.5rem;
+  }
+}
+/* THE READING TYPE ON A WIDE FRAME (the forensic audit of 2026-10-09, #74:
+   "On a wide screen the content column is 925 px in a 1920 px frame and many
+   screens are more than half empty dark ground: a heading at the left, a few
+   lines at the right ... Expected: larger type"). The reading type keeps the
+   visitor's own size, as above, up to a laptop's frame; past 1,600 px across
+   the same scale steps up with the frame, to an eighth larger at 1,920 and no
+   further: running text 18 px there, its heads and standfirsts with it, each
+   at the leading it has at every size. A measure is said in characters, so a
+   column widens with its type and a spread holds more of the frame. In rems
+   still, so a visitor's own size still counts. */
+@media (min-width: 1600px) and (orientation: landscape) {
+  .folio,
+  .folio-stage {
+    --step--1: clamp(0.8rem, calc(0.8rem + (100vw - 1600px) * 0.005), 0.9rem);
+    --step-0: clamp(1rem, calc(1rem + (100vw - 1600px) * 0.00625), 1.125rem);
+    --step-1: clamp(1.25rem, calc(1.25rem + (100vw - 1600px) * 0.0078125), 1.40625rem);
+    --step-2: clamp(1.5625rem, calc(1.5625rem + (100vw - 1600px) * 0.009765625), 1.7578rem);
+    --step-3: clamp(1.9531rem, calc(1.9531rem + (100vw - 1600px) * 0.01220703), 2.1973rem);
+  }
+}
+/* A NAME UNDER A SECTION'S HEAD. A name, a question, a step and a quotation
+   are a step under the section's head (`t-d3`) — which is display type, in the
+   frame's unit, while they are reading type. On a frame that is short for its
+   width the head follows the frame down and they do not: at 1366x657 a head
+   measured 30.66 px and the names under it 30.89, at 1280x593 the names were
+   the larger, and on a phone a head of 26.91 stood over names of 26.07 (the
+   forensic re-audit, 17 October 2026). There a name takes the step below its
+   own, and a quotation the head's own size: nothing new is added to the
+   scale, and at 1920x945, on a tablet and on any tall frame nothing moves.
+   (Past 1,600 px across the names grow with the frame's width (#74) and the
+   head with its height, so a very wide frame comes down to them sooner: the
+   third clause, for a screen 1080 pixels high under more than one bar. And a
+   window near square has its frame's unit set by its width: the fourth.) */
+.folio,
+.folio-stage {
+  --name: var(--step-3);
+  --quote: var(--step-3);
+}
+@media (orientation: portrait) and (max-width: 453px), (orientation: landscape) and (max-height: 803px), (orientation: landscape) and (min-width: 1700px) and (max-height: 880px), (orientation: landscape) and (max-width: 946px) {
+  .folio,
+  .folio-stage {
+    --name: var(--step-2);
+    --quote: var(--d3);
+  }
+}
+/* (A phone on its side, or a laptop's frame 640 px high or less (1280x593,
+   a screen 720 high under its bars): the head is at or near its floor, and
+   the names are two steps under their own.) */
+@media (orientation: landscape) and (max-height: 640px) {
+  .folio,
+  .folio-stage {
+    --name: var(--step-1);
   }
 }
 
@@ -403,8 +463,11 @@
   display: grid;
   gap: 2.25rem;
 }
+/* (20ch: room for a district's name on one line, "Vizianagaram district.",
+   which at 16 left "district." alone on a third line under every layout's
+   "Getting there": #75.) */
 .folio-head h2 {
-  max-width: 16ch;
+  max-width: 20ch;
   color: var(--ink);
 }
 .folio-head .folio-kicker {
@@ -449,11 +512,20 @@
    block of running text on a sheet, a plate or a colophon is broken with its
    last lines in view, and every heading and every option's label is set in
    lines of one length. At no weight (`:where`): a rule that says otherwise
-   for its own block still does. */
-:where(.folio, .folio-colophon) :where(p, li, dd, dt, figcaption, blockquote, summary, .folio-next-line, .folio-next-title) {
+   for its own block still does. (And a table's cells, which are running text
+   too: three of /cookie-policy's ended on "page.", "attention." and "here."
+   on a phone, and one at 1366x657 — the forensic re-audit, 17 October 2026.) */
+:where(.folio, .folio-colophon) :where(p, li, dd, dt, td, figcaption, blockquote, summary, .folio-next-line, .folio-next-title) {
   text-wrap: pretty;
 }
 :where(.folio, .folio-colophon) :where(h1, h2, h3, h4, label, legend) {
+  text-wrap: balance;
+}
+/* An index's names are headings in all but their tag: a layout's name or a
+   page's question, two or three lines in a narrow column ("Kartikeya Water /
+   Front", "I want to speak to / someone", seen at 1920 once the reading type
+   steps up there). Set as a heading is. */
+:where(.folio, .folio-colophon) .folio-index-name {
   text-wrap: balance;
 }
 
@@ -557,7 +629,7 @@
 }
 .folio-step::before {
   content: counter(step, decimal-leading-zero);
-  font-size: var(--step-3);
+  font-size: var(--name);
   font-weight: 300;
   line-height: var(--lead-3);
   /* (Lining: a numbering is read as a number. In the face's own figures
@@ -566,7 +638,7 @@
   color: var(--gilt);
 }
 .folio-step h3 {
-  font-size: var(--step-3);
+  font-size: var(--name);
   line-height: var(--lead-3);
   letter-spacing: var(--track-heading);
   color: var(--ink);
@@ -653,7 +725,7 @@
 }
 @media (min-width: 900px) {
   .folio-figure dt small {
-    font-size: var(--step-3);
+    font-size: var(--name);
     line-height: var(--lead-3);
   }
 }
@@ -694,7 +766,7 @@
   transform: scaleX(1);
 }
 .folio-index-name {
-  font-size: var(--step-3);
+  font-size: var(--name);
   line-height: var(--lead-3);
   letter-spacing: var(--track-heading);
   color: var(--ink);
@@ -823,9 +895,15 @@
 }
 /* A column of a few words keeps to one line, and takes its content's width:
    "Up to 12 months" stood on two lines in a narrow column beside a wide one
-   with room to spare (the forensic audit of 2026-10-09, #77). */
-.folio-table .is-keep {
-  white-space: nowrap;
+   with room to spare (the forensic audit of 2026-10-09, #77). Where the table
+   is a table: on a phone a row is a block (below) and a cell has the screen's
+   width to wrap in, and held to one line there "Deleted when you close the
+   browser" ran 13 px off the screen and widened the whole page (seen at
+   390x844). */
+@media (min-width: 640px) {
+  .folio-table .is-keep {
+    white-space: nowrap;
+  }
 }
 .folio-table th:last-child,
 .folio-table td:last-child {
@@ -916,7 +994,7 @@
 }
 .folio-qa dt {
   max-width: 34ch;
-  font-size: var(--step-3);
+  font-size: var(--name);
   line-height: var(--lead-3);
   letter-spacing: var(--track-heading);
   color: var(--ink);
@@ -938,7 +1016,7 @@
   border-left: 1px solid rgba(232, 185, 138, 0.6);
 }
 .folio-quote blockquote {
-  font-size: var(--step-3);
+  font-size: var(--quote);
   line-height: var(--lead-3);
   letter-spacing: var(--track-heading);
   color: var(--ink);
@@ -1136,12 +1214,21 @@
   line-height: var(--lead-1);
   color: var(--ink-2);
 }
+/* AND A NAME OF TWO LINES KEEPS ITS SECOND UNDER ITS FIRST. Each name stands
+   in the rule's room (`padding-left`) with its rule hung back into it, so its
+   own lines all begin where its text does: a name that wraps began its second
+   line in the room that is cut away, and lost its first letters to it
+   ("ential School" on a phone: the forensic re-audit, 17 October 2026). The
+   rule and the name's width are as they were. */
+.folio-run li {
+  padding-left: var(--run-rule);
+}
 .folio-run li::before {
   content: "";
   display: inline-block;
   width: 1.1rem;
   height: 1px;
-  margin: 0 0.8rem;
+  margin: 0 0.8rem 0 calc(0.8rem - var(--run-rule));
   background: rgba(232, 185, 138, 0.55);
   vertical-align: 0.3em;
 }
@@ -1171,7 +1258,7 @@
   }
 }
 .folio-trio-name {
-  font-size: var(--step-3);
+  font-size: var(--name);
   line-height: var(--lead-3);
   letter-spacing: var(--track-heading);
   color: var(--ink);
@@ -1212,7 +1299,7 @@
 }
 .folio-role-name {
   margin-bottom: 1.1rem;
-  font-size: var(--step-3);
+  font-size: var(--name);
   line-height: var(--lead-3);
   letter-spacing: var(--track-heading);
   color: var(--ink);

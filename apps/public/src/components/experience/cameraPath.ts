@@ -36,6 +36,7 @@
 
 import * as THREE from 'three';
 import { FILM_SHARE } from './filmShares';
+import { ld, lookdevOn } from './lookdev';
 
 /**
  * THE ESTATE GREW, AND THE FILM GREW WITH IT.
@@ -796,24 +797,64 @@ export function lensAt(scroll: number): {
  * copy stands in; at the revolution's beats, back to exactly the lens they
  * had (tan 28 / tan 24, tan 26 / tan 23). Linear between beats, as the lens
  * is; a beat not listed is as it stands.
+ *
+ * THE COVER ON A PHONE, WHOLE (the forensic audit of 2026-10-09, #114: "The
+ * house is cut by the right edge of the screen: its right wing and part of
+ * the portico are out of frame ... Expected: the whole front in frame"). At
+ * 1.75, with a fifth of the wide frame's offset, a 390x844 screen lost the
+ * front's last bay and its corner. Tried on the running build at 390x844: the
+ * aim's offset all the way in (0) and the lens a little wider (1.9) hold the
+ * front from corner to corner, the copy over it where it was. A tablet held
+ * upright already held the whole front at the old lens, and keeps it
+ * (UPRIGHT_TABLET_LENS).
  */
 export const UPRIGHT_LENS: Readonly<Record<string, { widen: number; offset: number }>> = {
-  hero: { widen: 1.75, offset: 0.2 },
+  hero: { widen: 1.9, offset: 0 },
   quarter: { widen: 1.194, offset: 1 },
   'three-quarter': { widen: 1.149, offset: 1 },
 };
 
+/** A tablet held upright's cover: the paid audit's upright lens, which holds
+ *  the whole front on a frame half as wide again for its height (seen at
+ *  820x1180). Between a phone's width and a tablet's, mixed (`uprightTablet`). */
+export const UPRIGHT_TABLET_LENS: Readonly<Record<string, { widen: number; offset: number }>> = {
+  hero: { widen: 1.75, offset: 0.2 },
+};
+
+/** How much of a tablet's upright lens a screen this wide (CSS px) takes: the
+ *  same widths as the hall's (phoneFraming.tabletWeight). */
+export function uprightTablet(width: number): number {
+  const t = Math.min(1, Math.max(0, (width - 640) / 100));
+  return t * t * (3 - 2 * t);
+}
+
 const UPRIGHT_NONE = { widen: 1, offset: 1 } as const;
 
-export function uprightLensAt(scroll: number): { widen: number; offset: number } {
+/** Look-dev (?debug=1): a beat's upright lens tried on the running build before
+ *  it is written into UPRIGHT_LENS (`upright:<beat>:widen`, `:offset`). */
+function uprightOf(id: string, width: number): { widen: number; offset: number } {
+  const phone = UPRIGHT_LENS[id] ?? UPRIGHT_NONE;
+  const tab = UPRIGHT_TABLET_LENS[id];
+  const t = tab ? uprightTablet(width) : 0;
+  const u =
+    t <= 0
+      ? phone
+      : { widen: phone.widen + (tab.widen - phone.widen) * t, offset: phone.offset + (tab.offset - phone.offset) * t };
+  if (!lookdevOn()) return u;
+  return { widen: ld(`upright:${id}:widen`, u.widen), offset: ld(`upright:${id}:offset`, u.offset) };
+}
+
+/** An upright screen's lens at this much of the exterior leg, on a screen
+ *  `width` CSS px wide (a phone's, unless it is wide enough to be a tablet's). */
+export function uprightLensAt(scroll: number, width = 0): { widen: number; offset: number } {
   const s = Math.min(1, Math.max(0, scroll));
   for (let i = 0; i < BEATS.length - 1; i += 1) {
     const a = BEATS[i];
     const b = BEATS[i + 1];
     if (s <= b.at) {
       const k = b.at === a.at ? 0 : (s - a.at) / (b.at - a.at);
-      const ua = UPRIGHT_LENS[a.id] ?? UPRIGHT_NONE;
-      const ub = UPRIGHT_LENS[b.id] ?? UPRIGHT_NONE;
+      const ua = uprightOf(a.id, width);
+      const ub = uprightOf(b.id, width);
       return { widen: ua.widen + (ub.widen - ua.widen) * k, offset: ua.offset + (ub.offset - ua.offset) * k };
     }
   }

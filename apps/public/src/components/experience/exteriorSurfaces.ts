@@ -93,6 +93,48 @@ export const ASHLAR = { from: 0.9, course: 0.38, stone: 0.92, joint: 0.008, dept
  */
 export const BOUNDARY = { coping: 2.3, fall: [0.45, 1.25], depth: 0.6 } as const;
 
+/**
+ * THE COMPOUND WALL AT THE FAR END OF THE PARK. Its coping's top is 54 cm
+ * across the wall and each pier stands 15 cm out of its face (the model,
+ * build_compound_wall). From the orbit the far run is a hundred metres off
+ * and seen six degrees from level: the coping's top is half a pixel high, and
+ * this frame cannot be multisampled, so it was drawn only where a pixel's
+ * centre fell on it — a bright dashed line along the wall's top, at a luma of
+ * 150 to 167 over its face at 88, and the piers' sides dotted uprights (the
+ * forensic re-audit, 17 October 2026, at the film's 17%, found by a ray
+ * through the dashes: #29's "dashed top", which the coping had cured at the
+ * cover and not that far off).
+ *
+ * So a face of the wall that is not its face — a coping's top, a pier's side
+ * or cap — is shaded as the wall's face beside it while it is narrower across
+ * the wall than a pixel or two (`from`, `to`, in pixels), and as itself once
+ * the camera is near enough to draw it: the eased arrises of the house
+ * (exteriorArris.ts), by the same reasoning. The runs lie along x and z, the
+ * two side runs at x = ±`x` (the model's WALL_X), so a fragment knows from
+ * where it stands which way the wall's face looks.
+ */
+export const BOUNDARY_FAR = { x: 72.0, coping: 0.54, proud: 0.15, from: 1.0, to: 2.0 } as const;
+
+const BOUNDARY_NORMAL = /* glsl */ `
+#include <normal_fragment_maps>
+#ifdef ESTATE_BOUNDARY
+{
+  // In the world's axes: the face's own normal (toward the eye), and across the wall.
+  vec3 bw = vAgeWorld;
+  vec3 bdx = dFdx(bw), bdy = dFdy(bw);
+  vec3 bFace = normalize(cross(bdx, bdy));
+  vec3 bAcross = abs(abs(bw.x) - ${BOUNDARY_FAR.x.toFixed(1)}) < 1.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+  if (abs(dot(bFace, bAcross)) < 0.5) {
+    // how far across the wall a pixel reaches on this face, and so how many pixels the face is
+    float bPerPx = max(max(abs(dot(bdx, bAcross)), abs(dot(bdy, bAcross))), 1.0e-5);
+    float bBreadth = bFace.y > 0.5 ? ${BOUNDARY_FAR.coping.toFixed(2)} : ${BOUNDARY_FAR.proud.toFixed(2)};
+    vec3 bWall = bAcross * (dot(cameraPosition - bw, bAcross) < 0.0 ? -1.0 : 1.0);
+    normal = normalize(mix((viewMatrix * vec4(bWall, 0.0)).xyz, normal, smoothstep(${BOUNDARY_FAR.from.toFixed(1)}, ${BOUNDARY_FAR.to.toFixed(1)}, bBreadth / bPerPx)));
+  }
+}
+#endif
+`;
+
 const STONE = /* glsl */ `
 #include <color_fragment>
 float estateGrime = 0.0;
@@ -369,6 +411,7 @@ export function dressSurfaces(root: THREE.Object3D): Record<Kind, number> {
           frag = frag
             .replace('#include <color_fragment>', STONE)
             .replace('#include <roughnessmap_fragment>', STONE_ROUGH)
+            .replace('#include <normal_fragment_maps>', BOUNDARY_NORMAL)
             .replace('#include <aomap_fragment>', STONE_BOUNCE);
         }
         if (kind === 'slate') frag = frag.replace('#include <color_fragment>', SLATE);

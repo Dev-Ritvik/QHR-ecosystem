@@ -469,6 +469,7 @@ export function InteriorStage({
     () => () => {
       hallLight.level = 1;
       mapStage.emphasis = 0;
+      mapStage.named = false;
       lensFilter.stops = 0;
       lensFilter.top = 0;
       codaFilterClear();
@@ -557,6 +558,8 @@ export function InteriorStage({
     // The map table's (MapTable.tsx): its pins are targets only while the film
     // is on it. /hall has no path, so there it is always on.
     mapStage.emphasis = mode === 'still' ? 1 : beatEmphasis(beats, s, 'map');
+    // The pins' names are the film's (mapTablePlan, `named`).
+    mapStage.named = mode !== 'still';
 
     // THE LENS SUBJECT (LensFocus): the station the camera is most on, or the
     // portrait once the climb begins. Squared, so the long lens only closes

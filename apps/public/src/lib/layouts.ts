@@ -39,7 +39,10 @@
 // are read live from the projection (the same register the film and the CRM
 // read), never typed into a page.
 //
-// Pure data. Nothing is imported.
+// Pure data. The one thing imported is how a plot's size is written
+// (units.plotSize: one unbroken size, as the sheets mark it).
+
+import { plotSize } from './units';
 
 export interface PlotSize {
   /** As the sheet prints it. */
@@ -93,9 +96,9 @@ export const LAYOUTS: readonly LayoutRecord[] = [
     summary:
       'Plots of three depths on a grid of blacktop roads, with a lake beside the road in and its pool, play area and court drawn into the plan.',
     sizes: [
-      { label: '30′ × 50′', feet: [30, 50] },
-      { label: '30′ × 56′', feet: [30, 56] },
-      { label: '30′ × 60′', feet: [30, 60] },
+      { label: plotSize(30, 50), feet: [30, 50] },
+      { label: plotSize(30, 56), feet: [30, 56] },
+      { label: plotSize(30, 60), feet: [30, 60] },
     ],
     roads: '40 ft and 30 ft internal roads, blacktop, with street lighting',
     roadWidths: [40, 30],
@@ -147,8 +150,8 @@ export const LAYOUTS: readonly LayoutRecord[] = [
     summary:
       'Long, narrow plots in rows off 20 ft roads, with the land beside them held back for a future extension.',
     sizes: [
-      { label: '15′ × 60′', feet: [15, 60] },
-      { label: '18′ × 60′', feet: [18, 60] },
+      { label: plotSize(15, 60), feet: [15, 60] },
+      { label: plotSize(18, 60), feet: [18, 60] },
     ],
     roads: '20 ft internal roads, marked on the sheet as proposed',
     roadWidths: [20],
@@ -161,7 +164,7 @@ export const LAYOUTS: readonly LayoutRecord[] = [
     features: [],
     onTheSheet: [
       'The future extension, drawn beside the plotted rows and left unplotted',
-      'A schedule of plot areas in sq yd: the regular 15′ × 60′ plots at 100, each odd-shaped plot with its own figure',
+      `A schedule of plot areas in sq yd: the regular ${plotSize(15, 60)} plots at 100, each odd-shaped plot with its own figure`,
       'Some plots drawn joined in pairs or split in two, and numbered so',
       'Plots marked in four colours. The sheet as published prints no key to them: the branch will say what each records',
     ],
@@ -186,7 +189,7 @@ export const LAYOUTS: readonly LayoutRecord[] = [
     district: 'Srikakulam',
     summary:
       'One plot size throughout, every plot on a 40 ft road, with the public open space set along one side.',
-    sizes: [{ label: '60′ × 30′', feet: [60, 30] }],
+    sizes: [{ label: plotSize(60, 30), feet: [60, 30] }],
     roads: '40 ft internal roads throughout',
     roadWidths: [40],
     approval: {
@@ -216,7 +219,8 @@ export const LAYOUTS: readonly LayoutRecord[] = [
           'Sri Sivani Polytechnic College',
           'Ambedkar University',
           'Sri Venkateswara College of Engineering and Technology',
-          'Kesava Reddy Residential and Non-Residential School',
+          // (its last two words held together: "School" stood alone on a phone's line)
+          'Kesava Reddy Residential and Non-Residential School',
           'RGVKT IIIT campus',
           'Sri Kinjarapu Errannaidu Agricultural College',
           'N.E.R Schools',

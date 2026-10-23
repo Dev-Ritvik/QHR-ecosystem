@@ -80,8 +80,18 @@ export const MAP_SUN: readonly [number, number, number] = (() => {
  * not in front of the camera. Written every frame by MapTable; the lens reads
  * it for the colophon that comes up over the film's last frame
  * (lensFilter.codaFilter).
+ *
+ * `named`: whether the pins carry their names (MapTable, PIN_NAMES): in the
+ * film only, where the camera comes to the table to look at it. A page's
+ * still has the table where its place puts it, often far off or behind the
+ * stair, and there the names stood over whatever was in front of it (seen on
+ * /faqs and /contact at 390x664). Written every frame by InteriorStage.
  */
-export const mapStage: { emphasis: number; screen: ScreenBox | null } = { emphasis: 0, screen: null };
+export const mapStage: { emphasis: number; screen: ScreenBox | null; named: boolean } = {
+  emphasis: 0,
+  screen: null,
+  named: false,
+};
 
 /** District ids in the meta map. */
 export const DISTRICT = { sea: 0, vizianagaram: 1, srikakulam: 2, other: 3 } as const;
@@ -210,6 +220,92 @@ export function placePins(projects: PinProject[], meta: MapMeta): Pin[] {
     }
     const chosen = placed ?? fallback;
     if (chosen) out.push(chosen);
+  }
+  return out;
+}
+
+/**
+ * THE PINS' NAMES, ON THE SCREEN (the forensic audit of 2026-10-09, #49: "the
+ * map's pins carry no labels ... Expected: the list on plain ground; pins that
+ * can be told apart"). Each pin carries its layout's name on a small plate
+ * (MapTable, the pins' names), and this says where each plate stands: over its
+ * pin's head if it can (centred, or ending or starting at the head), else
+ * beside it, else under it — the first of those that covers none of the other
+ * plates, the other pins' heads and what is outside the frame (and the
+ * header's height at its top), or the one that covers least. Pixels, origin
+ * top left. Plates are placed from the top of the frame down, so the one
+ * nearest the header has the first choice.
+ */
+export interface LabelPoint {
+  x: number;
+  y: number;
+}
+export interface LabelSize {
+  w: number;
+  h: number;
+}
+export interface LabelFrame {
+  width: number;
+  height: number;
+  /** Between a pin's head and its plate. */
+  gap: number;
+  /** Kept clear at the frame's sides and foot. */
+  margin: number;
+  /** Kept clear at the frame's top: the header. */
+  top: number;
+}
+
+interface Rect {
+  l: number;
+  t: number;
+  r: number;
+  b: number;
+}
+
+const overlap = (a: Rect, b: Rect) =>
+  Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l)) * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
+
+export function placeLabels(points: readonly LabelPoint[], sizes: readonly LabelSize[], frame: LabelFrame): LabelPoint[] {
+  const out: LabelPoint[] = points.map(() => ({ x: 0, y: 0 }));
+  const placed: Rect[] = [];
+  const head = 5;
+  const heads = points.map((p) => ({ l: p.x - head, t: p.y - head, r: p.x + head, b: p.y + head }));
+  const inside: Rect = { l: frame.margin, t: frame.top, r: frame.width - frame.margin, b: frame.height - frame.margin };
+  const order = points.map((_, i) => i).sort((a, b) => points[a].y - points[b].y);
+  for (const i of order) {
+    const p = points[i];
+    const { w, h } = sizes[i] ?? { w: 0, h: 0 };
+    const g = frame.gap;
+    // in order of preference: over the head, then beside it, then under it
+    const over = p.y - g - h;
+    const under = p.y + g;
+    const candidates: LabelPoint[] = [
+      { x: p.x - w / 2, y: over },
+      { x: p.x + head * 2 - w, y: over },
+      { x: p.x - head * 2, y: over },
+      { x: p.x + g, y: p.y - h / 2 },
+      { x: p.x - g - w, y: p.y - h / 2 },
+      { x: p.x - w / 2, y: under },
+      { x: p.x + head * 2 - w, y: under },
+      { x: p.x - head * 2, y: under },
+    ];
+    let best = candidates[0];
+    let bestCost = Infinity;
+    for (const c of candidates) {
+      const box: Rect = { l: c.x, t: c.y, r: c.x + w, b: c.y + h };
+      let cost = 0;
+      for (const q of placed) cost += overlap(box, q);
+      heads.forEach((q, j) => {
+        if (j !== i) cost += overlap(box, q);
+      });
+      cost += (w * h - overlap(box, inside)) * 4;
+      if (cost < bestCost - 1e-6) {
+        best = c;
+        bestCost = cost;
+      }
+    }
+    out[i] = best;
+    placed.push({ l: best.x, t: best.y, r: best.x + w, b: best.y + h });
   }
   return out;
 }

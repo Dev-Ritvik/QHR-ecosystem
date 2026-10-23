@@ -28,6 +28,7 @@
 
 import type { Metadata } from 'next';
 import { withShare } from '@/lib/share';
+import { plotSize } from '@/lib/units';
 import { Folio, Gilt, Go, NextPage, Plate, Sheet, Step, Steps, Window } from '@/components/folio/Folio';
 import { pageAfter, pageTitle } from '@/components/site/siteMap';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
@@ -66,7 +67,7 @@ const CLAIMS: Claim[] = [
   {
     title: 'Sizes stated exactly',
     body:
-      'Plot dimensions and road widths come off the approved plan, so 30′ × 60′ means thirty feet by sixty, and the road in front of your plot is the width the sanction gives it.',
+      `Plot dimensions and road widths come off the approved plan, so ${plotSize(30, 60)} means thirty feet by sixty, and the road in front of your plot is the width the sanction gives it.`,
     proof: { label: 'Compare the sizes', href: '/properties' },
   },
   {

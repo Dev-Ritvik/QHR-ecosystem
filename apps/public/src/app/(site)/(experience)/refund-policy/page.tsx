@@ -105,7 +105,7 @@ export default function RefundPolicyPage() {
               Escalation route inside the company, and the external forum available to you:{' '}
               <Pending>GRIEVANCE AND ESCALATION ROUTE</Pending>. Nothing in this policy limits
               rights you have under the Real Estate (Regulation and Development) Act 2016 or
-              consumer protection law.
+              consumer protection&nbsp;law.
             </p>
           </Prose>
           <Note className="mt-10">

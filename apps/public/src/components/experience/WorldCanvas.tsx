@@ -494,7 +494,7 @@ function CameraRig({
         offset = lensAt(s).frameOffset;
         // An upright screen's lens outside (cameraPath, UPRIGHT_LENS): the aim's
         // offset comes in here, the field opens where the lens is set (below).
-        if (upright > 0) offset *= 1 + (uprightLensAt(s).offset - 1) * upright;
+        if (upright > 0) offset *= 1 + (uprightLensAt(s, size.width).offset - 1) * upright;
       }
     } else {
       // A STILL'S MOVE ENDS AT ITS PAGE'S WINDOW (plateBand.ts, pageMove), on
@@ -824,7 +824,7 @@ function CameraRig({
     applyShift(cam, aspect, rise, shift);
     // And outside, an upright screen's wider field (cameraPath, UPRIGHT_LENS).
     if (lens && p.path && journeyState.leg === 'exterior' && doorFov === null && k > 0) {
-      widen = 1 + (uprightLensAt(journeyState.legProgress).widen - 1) * k;
+      widen = 1 + (uprightLensAt(journeyState.legProgress, size.width).widen - 1) * k;
     }
 
     if (lens) {

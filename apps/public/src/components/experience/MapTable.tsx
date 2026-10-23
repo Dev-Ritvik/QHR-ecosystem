@@ -42,11 +42,15 @@ import {
   MAP_TEXTURES,
   MAP_TOP,
   mapStage,
+  placeLabels,
   placePins,
+  type LabelPoint,
+  type LabelSize,
   type MapMeta,
   type Pin,
   type PinProject,
 } from './mapTablePlan';
+import { journeyState } from './journey';
 import { useBeaconFocus } from '@/components/site/CityLink';
 import { clicksSuppressed } from './stationControls';
 import { HANDOFF_MS, cancelDive, startDive } from './dive';
@@ -70,6 +74,69 @@ const BRASS = '#d2ad6c';
 const STEM_R = 0.0024;
 const HEAD_R = 0.0095;
 const MAX_PINS = 4;
+
+/**
+ * THE PINS' NAMES (the forensic audit of 2026-10-09, #49: "the map's pins
+ * carry no labels ... Expected: the list on plain ground; pins that can be
+ * told apart"). The list beside the table names the layouts and the pins were
+ * three brass heads alike, told apart only by pointing at one. So each pin
+ * carries its layout's name, on a plate of the hall's own kind (gilt capitals
+ * on the dark of the station tables' name plates), set over its head or beside
+ * it (mapTablePlan.placeLabels), in the page and not in the picture, so it is
+ * as sharp as the list's type and the same size as the film's other capitals.
+ * Not a link (the pin is one, and so is the list's name) and not read out
+ * twice: the film's layer is hidden from a screen reader, and the list is what
+ * it reads. In the film only (mapStage.named): a page's still frame has the
+ * table where its place puts it. Up with the film on the table (`from`, `to`, of the map beat's
+ * emphasis), gone as the colophon comes up (`coda`, of the coda's progress:
+ * measured at 390x844, the sign-off's first line enters the frame at 0.24
+ * and reaches the table's band after 0.3; going from 0 they were half gone
+ * where the film comes to rest on the table), and only while the top stands
+ * wide enough in the frame (`minWidth`, of the frame's width) to be read as a
+ * map. `gap`: pixels between a head and its plate.
+ */
+export const PIN_NAMES = { from: 0.55, to: 0.9, coda: [0.12, 0.3] as const, minWidth: 0.16, gap: 7 } as const;
+
+/**
+ * THE RIM'S HIGHLIGHT IS A LINE, NOT A ROW OF SPARKS (the forensic audit of
+ * 2026-10-09, #49: "the table's rim highlight is a dotted line"). The top's
+ * edge rolls through a quarter circle in three centimetres, and from where the
+ * film looks at it the roll printed as a row of bright points (78 of them in
+ * the rim's front at the film's 89%).
+ *
+ * Mostly the grain's doing. The rim wears the top's own maps, laid from
+ * above (lathe, `planar`), and that laying has no direction on a face that
+ * stands upright: down the roll the map's coordinates do not change, the
+ * frame three builds for a normal map from how they change is a guess, and
+ * the walnut's relief came out as a scatter of normals a pixel apart. So the
+ * grain's relief is kept to where the rim faces up (`grain`: the cosine with
+ * the vertical at which it starts to fade, and at which it is whole); the roll
+ * is shaded by its own turning, which is smooth. MEASURED on the running
+ * build: 60 bright points along the front of the rim, 2 with the grain kept
+ * to the top.
+ *
+ * And the car's cure (ExteriorModel, CAR_SPECULAR) for what is left: how fast
+ * the normal turns across a pixel is how much rougher the surface is drawn
+ * there, so a pixel holds the whole highlight. Capped, as a GGX variance, so
+ * the lacquer seen close is still a lacquer.
+ */
+export const MAP_SPECULAR = { cap: 0.18, grain: [0.55, 0.85] as const } as const;
+const MAP_GRAIN_ON_TOP = /* glsl */ `
+#include <normal_fragment_maps>
+{
+  vec3 upView = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+  float onTop = smoothstep(${MAP_SPECULAR.grain[0].toFixed(2)}, ${MAP_SPECULAR.grain[1].toFixed(2)}, abs(dot(nonPerturbedNormal, upView)));
+  normal = normalize(mix(nonPerturbedNormal, normal, onTop));
+}
+`;
+const MAP_SPECULAR_AA = /* glsl */ `
+#include <lights_physical_fragment>
+{
+  vec3 rollDx = dFdx(normal), rollDy = dFdy(normal);
+  float rollTurn = min(2.0 * 0.25 * (dot(rollDx, rollDx) + dot(rollDy, rollDy)), ${MAP_SPECULAR.cap.toFixed(2)});
+  material.roughness = sqrt(clamp(material.roughness * material.roughness + rollTurn, 0.0, 1.0));
+}
+`;
 
 // ── the key light, added to three's standard material ────────────────────────
 
@@ -136,10 +203,11 @@ interface Keyed {
   uKeyLocal?: { value: THREE.Vector3 };
 }
 
-/** Put the table's sun on a standard material. */
+/** Put the table's sun on a standard material. `grain`: its normal map is laid
+ *  from above, and only holds where it faces up (MAP_SPECULAR). */
 function keyed(
   mat: THREE.MeshStandardMaterial,
-  opts: { shadow?: THREE.Texture | null; pins?: boolean },
+  opts: { shadow?: THREE.Texture | null; pins?: boolean; grain?: boolean },
   key: string,
 ): Keyed {
   const u: Keyed = {
@@ -166,7 +234,9 @@ function keyed(
     }
     shader.fragmentShader = shader.fragmentShader
       .replace('void main() {', `${KEY_PARS}\nvoid main() {`)
-      .replace('#include <lights_fragment_end>', KEY_LIGHT);
+      .replace('#include <lights_fragment_end>', KEY_LIGHT)
+      .replace('#include <lights_physical_fragment>', MAP_SPECULAR_AA);
+    if (opts.grain) shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', MAP_GRAIN_ON_TOP);
   };
   mat.customProgramCacheKey = () => `map-table-${key}`;
   return u;
@@ -415,6 +485,11 @@ export function MapTable({ projects, onOpen, tier = 'high' }: MapTableProps) {
       envMapIntensity: ROOM_LIGHT * 1.4,
     });
     body.name = 'map_body';
+    // Its roll too (MAP_SPECULAR): the apron's lip and the pedestal's beads.
+    body.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <lights_physical_fragment>', MAP_SPECULAR_AA);
+    };
+    body.customProgramCacheKey = () => 'map-table-body';
     const brass = new THREE.MeshStandardMaterial({ color: BRASS, roughness: 0.26, metalness: 1 });
     brass.name = 'map_pin';
     const contact = new THREE.ShaderMaterial({
@@ -433,7 +508,7 @@ export function MapTable({ projects, onOpen, tier = 'high' }: MapTableProps) {
     });
     const keys = [
       keyed(relief, { shadow: maps.shadow, pins: true }, 'relief'),
-      keyed(rim, { shadow: maps.shadow }, 'rim'),
+      keyed(rim, { shadow: maps.shadow, grain: true }, 'rim'),
       keyed(brass, {}, 'pin'),
     ];
     return { relief, rim, body, brass, contact, keys, relief_u: keys[0] };
@@ -518,6 +593,44 @@ export function MapTable({ projects, onOpen, tier = 'high' }: MapTableProps) {
     },
     [camera, onOpen],
   );
+
+  // THE PINS' NAMES (PIN_NAMES). Plain DOM in the canvas's own box: drawn over
+  // the picture, under everything the page puts over the film, and clipped by
+  // its frame.
+  const size = useThree((st) => st.size);
+  const names = useRef<HTMLElement[]>([]);
+  const nameSizes = useRef<LabelSize[]>([]);
+  useEffect(() => {
+    const host = gl.domElement.parentElement;
+    if (!host || !pins.length) return;
+    const layer = document.createElement('div');
+    // (`film-stage`: the film's own capitals, sized in the frame's unit.)
+    layer.className = 'map-pin-names film-stage';
+    layer.setAttribute('aria-hidden', 'true');
+    const els = pins.map((p) => {
+      const el = document.createElement('span');
+      el.className = 'map-pin-name';
+      el.textContent = p.name;
+      layer.appendChild(el);
+      return el;
+    });
+    host.appendChild(layer);
+    names.current = els;
+    const measure = () => {
+      nameSizes.current = els.map((el) => ({ w: el.offsetWidth, h: el.offsetHeight }));
+    };
+    measure();
+    void document.fonts?.ready.then(measure);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      layer.remove();
+      names.current = [];
+      nameSizes.current = [];
+    };
+  }, [gl, pins]);
+  const namePoint = useMemo(() => new THREE.Vector3(), []);
+  const namePoints = useRef<LabelPoint[]>([]);
 
   const m4 = useMemo(() => new THREE.Matrix4(), []);
   const q = useMemo(() => new THREE.Quaternion(), []);
@@ -627,6 +740,53 @@ export function MapTable({ projects, onOpen, tier = 'high' }: MapTableProps) {
     if (heads) {
       heads.instanceMatrix.needsUpdate = true;
       if (heads.instanceColor) heads.instanceColor.needsUpdate = true;
+    }
+
+    // The pins' names: over their heads, while the film is on the table.
+    const els = names.current;
+    if (els.length && els.length === pins.length) {
+      const st = mapStage.screen;
+      const ramp = (a: number, b: number, x: number) => {
+        const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+        return t * t * (3 - 2 * t);
+      };
+      const up =
+        mapStage.named && st && st.r - st.l >= PIN_NAMES.minWidth
+          ? ramp(PIN_NAMES.from, PIN_NAMES.to, mapStage.emphasis) *
+            (1 - ramp(PIN_NAMES.coda[0], PIN_NAMES.coda[1], journeyState.coda))
+          : 0;
+      if (up <= 0.002) {
+        for (const el of els) {
+          if (el.style.visibility !== 'hidden') {
+            el.style.visibility = 'hidden';
+            el.style.opacity = '0';
+          }
+        }
+      } else {
+        const pts = namePoints.current;
+        pts.length = pins.length;
+        for (let i = 0; i < pins.length; i += 1) {
+          const p = pins[i];
+          const lift = 0.012 * (hover.current[i] ?? 0);
+          namePoint
+            .set(MAP_TABLE.x + p.x, MAP_TABLE.topY + p.base + p.length + lift + HEAD_R, MAP_TABLE.z + p.z)
+            .project(camera);
+          pts[i] = { x: ((namePoint.x + 1) / 2) * size.width, y: ((1 - namePoint.y) / 2) * size.height };
+        }
+        const at = placeLabels(pts, nameSizes.current, {
+          width: size.width,
+          height: size.height,
+          gap: PIN_NAMES.gap,
+          margin: 8,
+          top: Math.min(96, size.height * 0.1),
+        });
+        for (let i = 0; i < els.length; i += 1) {
+          const el = els[i];
+          el.style.visibility = 'visible';
+          el.style.opacity = up.toFixed(3);
+          el.style.transform = `translate3d(${at[i].x.toFixed(1)}px, ${at[i].y.toFixed(1)}px, 0)`;
+        }
+      }
     }
   });
 

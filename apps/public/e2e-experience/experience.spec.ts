@@ -1679,12 +1679,14 @@ test.describe("the film's stage", () => {
       expect(c.lines, `${name}: the headline's lines`).toBe(2);
       // IN THE SKY: the title a tenth of the way down on every wide frame —
       // FROM THE PAGE'S FIRST PIXEL, where it used to ride up 62px over the
-      // first fifth of a notch — its supporting line on the shaded lawn at
-      // 71%, and the one cue at the frame's foot.
+      // first fifth of a notch — and its supporting line and the one cue as
+      // one block on the lawn above the terrace: the line from 64%, the cue
+      // ending at about 81%. (They stood at 71% on the terrace's rail and at
+      // the frame's foot on its paving: the forensic audit of 2026-10-09, #31.)
       expect(c.top, `${name}: the title's top`).toBeCloseTo(0.105, 2);
-      expect(c.ledeTop, `${name}: the supporting line's top`).toBeCloseTo(0.71, 2);
-      expect(c.bottom, `${name}: the cue at the foot`).toBeGreaterThan(0.88);
-      expect(c.bottom, `${name}: the cue at the foot`).toBeLessThan(0.95);
+      expect(c.ledeTop, `${name}: the supporting line's top`).toBeCloseTo(0.638, 2);
+      expect(c.bottom, `${name}: the cue under the line, over the terrace`).toBeGreaterThan(0.79);
+      expect(c.bottom, `${name}: the cue under the line, over the terrace`).toBeLessThan(0.83);
       expect(c.overflow, `${name}: no sideways scroll`).toBeLessThanOrEqual(0);
     }
   });
@@ -1835,17 +1837,19 @@ test.describe("the film's last frame", () => {
   }) => {
     const { ctx, page } = await open(browser, { width: 390, height: 844 }, true);
 
-    // A frame and a twentieth before the end: the camera at rest, the table
-    // in the upper part of the frame, the sign-off whole beneath it. (It was
+    // A frame and a half before the end: the camera at rest, the table in
+    // the upper part of the frame, the sign-off whole beneath it. (It was
     // seven-eighths while the colophon carried a label over the sign-off and
     // its links in capitals; three-quarters after the paid audit of
     // 2026-10-04 took both away. The audit of 2026-10-05 made the sign-off
     // the largest type on the site — three lines on a phone — and gave each
-    // office a role and a name over its address: the colophon is three-tenths
-    // of a frame longer. Measured on that build at 390x844: the coda at rest
-    // from 1.1 frames before the end, the sign-off's top at the table's foot
-    // at 0.95.)
-    const poster = await frameAt(page, 1.05);
+    // office a role and a name over its address: a frame and a twentieth.
+    // The forensic audit of 2026-10-09 (#58) gave the film's colophon the
+    // four parts and eighteen pages every page's has: half a frame longer
+    // again. Measured on that build at 390x844, a notch at a time: the
+    // sign-off whole under the lit table from 1.78 to 1.44 frames before the
+    // end, its lines reaching the table, and the lens closing, from 1.28.)
+    const poster = await frameAt(page, 1.55);
     expect(poster.coda, 'the coda has run').toBe(1);
     expect(poster.table, 'the table is in the frame').not.toBeNull();
     const table = poster.table!;
@@ -2095,10 +2099,26 @@ test.describe('the folios', () => {
     // a layout can be chosen by its row
     await form.locator('label.folio-choice', { hasText: 'Lucky Garden' }).click();
     expect(await form.locator('input[name="layout"]:checked').inputValue()).toMatch(/^[0-9a-f-]{36}$/);
-    // a day, never one already gone
-    const date = form.locator('input[type="date"]');
-    const min = await date.getAttribute('min');
-    expect(min).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // a day, never one already gone: a month the site draws, in place of the
+    // browser's own field (the forensic audit of 2026-10-09, #109). No day is
+    // chosen for the visitor; today is marked and every day before it is
+    // shut; a chosen day goes as the browser's field sent it.
+    const day = form.locator('.visit-day input[type="hidden"]');
+    await expect(day).toHaveValue('');
+    await form.locator('button.visit-day-line').click();
+    const month = form.locator('.visit-day-month');
+    await expect(month).toBeVisible();
+    const today = month.locator('button[aria-current="date"]');
+    await expect(today).toHaveCount(1);
+    const iso = (await today.getAttribute('data-day'))!;
+    const before = await month
+      .locator('button[data-day]')
+      .evaluateAll((bs, t) => bs.filter((b) => (b as HTMLButtonElement).dataset.day! < t).map((b) => (b as HTMLButtonElement).disabled), iso);
+    expect(before.every(Boolean), 'every day before today is shut').toBe(true);
+    await expect(today).toBeEnabled();
+    await month.locator('button[data-day]:not([disabled])').last().click();
+    expect(await day.inputValue()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect((await day.inputValue()) >= iso, 'the day chosen is not one already gone').toBe(true);
     // typing works: a global gesture hijack would break exactly this
     await form.locator('input[name="name"]').fill('E2E check');
     await expect(form.locator('input[name="name"]')).toHaveValue('E2E check');
@@ -2182,13 +2202,20 @@ test.describe('the folios', () => {
         const density = getComputedStyle(copy, '::before');
         return {
           plate: plate.getBoundingClientRect().height,
+          short: plate.classList.contains('is-short'),
+          min: getComputedStyle(plate).minHeight,
           band: copy.getBoundingClientRect().top + window.scrollY - header.offsetHeight,
           hand: parseFloat(density.top),
           flat: !density.backgroundImage.includes('gradient'),
           frame: window.innerHeight,
         };
       });
-      expect(m.plate, `${route}: the plate is a whole frame`).toBeGreaterThanOrEqual(m.frame - 1);
+      // A page that tells opens on a whole frame; a page that is used (a
+      // form, a list, the small print) on a short one, its words under their
+      // band of picture and its business after them, with no frame's height
+      // held for it (the forensic audit of 2026-10-09, #68).
+      if (m.short) expect(m.min, `${route}: a short plate holds no frame's height`).toBe('0px');
+      else expect(m.plate, `${route}: the plate is a whole frame`).toBeGreaterThanOrEqual(m.frame - 1);
       expect(m.band, `${route}: a band for the picture, over the words`).toBeGreaterThan(90);
       expect(m.hand, `${route}: the density runs out over five rems`).toBeCloseTo(-80, 0);
       expect(m.flat, `${route}: as wide as the frame, with no side to run out to`).toBe(true);
@@ -2313,8 +2340,11 @@ test.describe('the rail', () => {
 
   test('a keyboard reaches every dot, and each says what it is', async ({ page }) => {
     await page.setViewportSize(VIEWPORT);
-    await page.goto('/why-us');
+    // (A page of several sections: /why-us, five claims in one since the
+    // forensic audit's #85, has no rail, as a page of one section has none.)
+    await page.goto('/investment-guide');
     await consent(page);
+    await expect(page.locator('nav.rail')).toBeVisible();
     const links = page.locator('nav.rail a');
     const n = await links.count();
     expect(n).toBeGreaterThanOrEqual(2);

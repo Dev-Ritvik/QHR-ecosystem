@@ -40,8 +40,11 @@ export const metadata: Metadata = withShare('/faqs', {
 });
 
 const [K, L, G] = LAYOUTS;
+// (Each size as the layouts write it, "30′ × 50′" with spaces that do not
+// break: units.plotSize. The spaces were once stripped here, and the answer
+// read "30′×50′", the one page off the site's own style.)
 const sizes = (l: (typeof LAYOUTS)[number]) => {
-  const s = l.sizes.map((x) => x.label.replace(/\s/g, ''));
+  const s = l.sizes.map((x) => x.label);
   return s.length > 1 ? `${s.slice(0, -1).join(', ')} and ${s[s.length - 1]}` : s[0];
 };
 

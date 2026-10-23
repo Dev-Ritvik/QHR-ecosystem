@@ -339,7 +339,18 @@ export default async function SiteHomePage() {
           clear of the rail), and the cue comes up under it (18vh off the
           foot: its hairline ends 26 px over the rail's corner), so the two
           are one block on one ground. In vh, as the picture is: the same on
-          every wide frame. */}
+          every wide frame.
+
+          AND THE LINE STANDS ON THE CUE, NOT FROM THE TOP. Hung from 63.8vh,
+          the line grew down into the cue wherever its type was larger than
+          the frame's unit makes it: the type has a floor (17 px), and on a
+          short laptop's frame (1280x593) the line set at that floor took four
+          lines in its 430 units and its last ran over "Start here" (seen on
+          the forensic audit's other wide sizes). So it is set from the foot:
+          its last line the cue's height and a gap over the cue (17 baselines
+          over the cue's 18vh, which at 1920x945 is exactly where it stood),
+          and its measure never under nineteen and a half of its own sizes, so
+          it keeps the design's three lines at the floor too. */}
       <header id="hero" className="relative scroll-mt-[62px]" style={track(hero)}>
         <div className={`${PANE} justify-start pt-[calc(var(--bar)_+_2vh)] wide:-mt-[62px] wide:pt-0`} data-chapter-fade data-copy={copyOf(hero)}>
           <div className={`${BLOCK} wide:top-[max(10.5vh,var(--clear))]`}>
@@ -350,7 +361,7 @@ export default async function SiteHomePage() {
               <span className="t-gilt">we&nbsp;come&nbsp;from.</span>
             </h1>
           </div>
-          <div className={`${BLOCK} wide:top-[63.8vh] wide:max-w-[calc(430*var(--u))]`}>
+          <div className={`${BLOCK} wide:bottom-[calc(18vh_+_var(--bl)*17)] wide:max-w-[max(calc(430*var(--u)),calc(var(--support)*19.5))]`}>
             <p className="t-support mt-5 max-w-[36ch] text-[#F2EDE4] short:sr-only wide:mt-0">
               Approved layouts in Vizianagaram and Srikakulam, sold direct by
               the developer. Every sanctioned plan published in full.

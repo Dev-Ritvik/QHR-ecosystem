@@ -1706,8 +1706,16 @@ html[data-still='none'] .scene-curtain {
    its distance under the word (it is hung from the box's foot, so it is
    lifted by half of what the box grew). */
 @media (pointer: coarse) {
-  .cta-enquire,
-  .menu-toggle {
+  /* (Two classes each: the menu control's own rule, further down this sheet,
+     sets its height in baselines and won over one, so the control measured
+     33.6 px on a phone; and the mark's link is the tile's own 40 px, which
+     stays the tile it is, in the middle of a 44 px box.) */
+  .cta-enquire.tap-target,
+  .menu-toggle.tap-target {
+    min-height: 44px;
+  }
+  .site-header a.tap-target {
+    min-width: 44px;
     min-height: 44px;
   }
   .cta-enquire::before {
@@ -1992,6 +2000,17 @@ html[data-menu-open] .rail,
   opacity: 0;
   visibility: hidden;
 }
+/* AT REST ON AN UPRIGHT FRAME (ChapterRail, `resting`; the forensic audit of
+   2026-10-09, #113): an upright frame has no edge the house, the site models or
+   the sign-off leave free, so once the film has been still for a moment the
+   rail fades out of the picture, and the first movement brings it back. Still
+   there to be touched (a touch opens the names, and they bring it back), and to
+   be reached by keyboard. */
+@media (orientation: portrait) {
+  .rail[data-rail-resting]:not(:focus-within) {
+    opacity: 0;
+  }
+}
 .rail-list {
   position: relative;
   margin: 0;
@@ -2176,4 +2195,45 @@ html[data-menu-open] .rail,
   .rail-dot::before {
     transition: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   THE MAP'S PINS, NAMED (components/experience/MapTable.tsx, PIN_NAMES; the
+   forensic audit of 2026-10-09, #49: "the map's pins carry no labels ...
+   Expected: pins that can be told apart").
+   ---------------------------------------------------------------------------
+
+   Each pin's layout, on a plate of the hall's own kind: the film's capitals in
+   gilt on the dark of the station tables' name plates, with their hairline.
+   A plate is solid (the land under a pin is pale plaster and the sea is
+   lacquer: no one colour of type stands on both), and small: the film's
+   smallest capitals. Placed each frame over its pin's head or beside it
+   (mapTablePlan.placeLabels), and faded with the film's arrival on the table
+   and its leaving. Never pressed: the pin and the list are the links. */
+.map-pin-names {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.map-pin-name {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* the tracking's own trailing space is given back on the right */
+  padding: var(--bl, 4px) calc(var(--bl, 4px) * 1.5 - var(--track-caps)) var(--bl, 4px) calc(var(--bl, 4px) * 1.5);
+  border: 1px solid rgba(232, 185, 138, 0.34);
+  background: #15110c;
+  color: var(--gilt);
+  font-family: var(--font-text);
+  font-size: var(--step--2);
+  font-weight: 500;
+  line-height: 1;
+  /* the site's one tracking for capitals (--track-caps), as every label has */
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+  visibility: hidden;
+  opacity: 0;
+  will-change: transform, opacity;
 }

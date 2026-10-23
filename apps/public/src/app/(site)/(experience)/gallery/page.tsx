@@ -31,7 +31,7 @@ import { LAYOUTS } from '@/lib/layouts';
 export const metadata: Metadata = withShare('/gallery', {
   title: pageTitle('/gallery'),
   description:
-    'Approved layout plans for Kartikeya Water Front, Lucky Garden and VSR Gayatri Township.',
+    'The approved layout plans of Kartikeya Water Front, Lucky Garden and VSR Gayatri Township, as sheets to read closely.',
 });
 
 type Layout = (typeof LAYOUTS)[number];

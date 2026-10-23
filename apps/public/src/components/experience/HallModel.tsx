@@ -26,6 +26,7 @@ import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { guardAnisotropy } from './materialGuards';
 import { finishHall } from './hallFinish';
 import { plainFrieze, refurnishHall } from './hallJoinery';
+import { closeStrings } from './hallStair';
 import { roundTables } from './hallTables';
 import { stockWalnut } from './hallWalnut';
 import { panelHall } from './hallPanelling';
@@ -1312,6 +1313,9 @@ export function HallModel({
     // The tables' rims and pedestals, turned true (hallTables.ts). Nothing to
     // undo: each takes a geometry made once from the parse's own and kept.
     roundTables(root);
+    // The stair's caps brought proud of its step ends, so its strings are
+    // closed (hallStair.ts). The same: a geometry made once and kept.
+    closeStrings(root);
     const joinery = refurnishHall(root);
     // The frieze, plain (hallJoinery.ts): after the finishes above, because
     // its strips wear the wall's own finished material and its bake.

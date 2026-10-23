@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { BOUNCE_UNDER_COVER, BOUNDARY, GABLE_BOUNCE, dressSurfaces } from './exteriorSurfaces';
+import { BOUNCE_UNDER_COVER, BOUNDARY, BOUNDARY_FAR, GABLE_BOUNCE, dressSurfaces } from './exteriorSurfaces';
 
 function mesh(name: string) {
   return new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.MeshStandardMaterial({ name }));
@@ -84,5 +84,36 @@ describe('the estate stone', () => {
     expect(frag).toContain('#ifdef ESTATE_BOUNDARY');
     // and its dribbles are shorter than the wall is high
     expect(BOUNDARY.fall[1]).toBeLessThan(BOUNDARY.coping);
+  });
+
+  it("shades the far wall's coping and piers as its face while they are under a pixel across", () => {
+    const root = new THREE.Group();
+    const wall = mesh('MAT_Stone_Boundary');
+    const house = mesh('MAT_Stone_Wall_AO');
+    root.add(wall, house);
+    dressSurfaces(root);
+    const frag = compiled(wall);
+    // the model's measures (build_compound_wall): side runs at x = ±72, a
+    // coping 0.54 across over a wall 0.4 thick, piers 0.7 thick
+    expect(BOUNDARY_FAR.x).toBe(72);
+    expect(BOUNDARY_FAR.coping).toBeCloseTo(0.27 * 2, 6);
+    expect(BOUNDARY_FAR.proud).toBeCloseTo(0.35 - 0.2, 6);
+    // after the normal map, on the boundary's material alone
+    expect(frag).toMatch(/#include <normal_fragment_maps>\s*#ifdef ESTATE_BOUNDARY/);
+    expect(frag).toContain(`abs(abs(bw.x) - ${BOUNDARY_FAR.x.toFixed(1)}) < 1.5`);
+    // the wall's own face and the coping's front are never touched
+    expect(frag).toContain('if (abs(dot(bFace, bAcross)) < 0.5) {');
+    expect(frag).toContain(`smoothstep(${BOUNDARY_FAR.from.toFixed(1)}, ${BOUNDARY_FAR.to.toFixed(1)}, bBreadth / bPerPx)`);
+    expect(compiled(house)).toContain('#ifdef ESTATE_BOUNDARY');
+    expect((house.material as THREE.Material).defines ?? {}).not.toHaveProperty('ESTATE_BOUNDARY');
+    // At the film's 17% the far run is 100 m off and 5.9 degrees under the
+    // eye: a pixel of the 945-row frame is 6.7 cm there (40-degree lens), and
+    // the coping's top is 0.54 x sin 5.9 = 5.5 cm of it: under `from`, so the
+    // wall's face. From the cover's terrace wall, 30 m off and 20 degrees
+    // under, it is 9 px: its own.
+    const px = (dist: number, deg: number) =>
+      (BOUNDARY_FAR.coping * Math.sin((deg * Math.PI) / 180)) / ((2 * dist * Math.tan((20 * Math.PI) / 180)) / 945);
+    expect(px(100, 5.9)).toBeLessThan(BOUNDARY_FAR.from);
+    expect(px(30, 20)).toBeGreaterThan(BOUNDARY_FAR.to);
   });
 });

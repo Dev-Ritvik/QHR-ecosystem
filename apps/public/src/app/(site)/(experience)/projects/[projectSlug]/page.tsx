@@ -128,6 +128,7 @@ import {
   getUnitsByProjectId,
 } from '@/lib/projection';
 import { num } from '@/lib/published';
+import { withShare } from '@/lib/share';
 import { EnquiryForm } from '../../../enquiry-form';
 
 type Row = NonNullable<Awaited<ReturnType<typeof getProjectBySlug>>>;
@@ -201,11 +202,22 @@ export async function generateMetadata({
   // These two were the only titles with a bar in them.)
   const title = where ? `${project.name}, ${where} — ${SITE_NAME}` : `${project.name} — ${SITE_NAME}`;
 
+  // What the page itself opens with (its lede, below): the sheet's summary,
+  // then the projection's narrative. (The narrative alone wrote its sizes as
+  // "30x50 to 30x60 feet", the one place the site still did after #90: in
+  // the description a search result and a shared card show.)
   const description =
+    sheet?.summary ||
     (typeof project.narrative === 'string' && project.narrative.trim()) ||
     (where ? `${project.name}, an approved plotted development at ${where}.` : undefined);
 
-  return { title, description, alternates: { canonical: `/projects/${projectSlug}` } };
+  // Shared with its own picture, as every page is (lib/share.ts): the layout's
+  // model on its table. (It had a card of its own drawn by a route of the
+  // starter kit: a grey sheet in a sans-serif, "Available Units", and the
+  // word ESTATE where the company's name belongs — and that route could not
+  // load its font on Windows, so locally the card was a broken picture. The
+  // forensic re-audit, 17 October 2026, #95.)
+  return withShare(`/projects/${projectSlug}`, { title, description });
 }
 
 const yd = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));

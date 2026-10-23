@@ -74,7 +74,8 @@ describe('sizes and areas', () => {
   it('labels every size as its own figures, in feet', () => {
     for (const l of LAYOUTS) {
       expect(l.sizes.length).toBeGreaterThan(0);
-      for (const s of l.sizes) expect(s.label).toBe(`${s.feet[0]}′ × ${s.feet[1]}′`);
+      // (one unbroken size: the spaces either side of the sign do not break)
+      for (const s of l.sizes) expect(s.label).toBe(`${s.feet[0]}′ × ${s.feet[1]}′`);
       expect(l.roadWidths.length).toBeGreaterThan(0);
       // the widths a page prints as figures are in the sentence a page prints as words
       for (const w of l.roadWidths) expect(l.roads, l.slug).toContain(`${w} ft`);

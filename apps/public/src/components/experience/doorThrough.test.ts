@@ -564,7 +564,8 @@ describe('the frame the sets change on', () => {
 
   it('carries the occlusion, the bloom and the vignette across with the print', () => {
     const lens = read('LensFocus.tsx');
-    expect(lens).toContain("const toHall = journeyState.leg === 'interior' ? 1 : passageLight.grade;");
+    // (and a page that stands in the hall has the room's occlusion outright)
+    expect(lens).toContain("const toHall = journeyState.leg === 'interior' || stillHall ? 1 : passageLight.grade;");
     expect(lens).toContain('aoLook.radius + (AO_HALL.radius - aoLook.radius) * toHall');
     const fx = read('PostFX.tsx');
     expect(fx).toContain('const g = hall ? 0 : passageLight.grade;');

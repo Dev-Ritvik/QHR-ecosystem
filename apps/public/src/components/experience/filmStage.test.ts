@@ -128,8 +128,9 @@ describe("the film's stage", () => {
     expect(film).not.toMatch(/className=[^\n]*max-w-6xl/);
     expect(film).not.toMatch(/wide:max-w-\[\d+vw\]/);
     expect(film).not.toMatch(/col-span-12/);
-    // every measure a count of the stage's unit
-    const measures = film.match(/wide:max-w-\[calc\(\d+\*var\(--u\)\)\]/g) ?? [];
+    // every measure a count of the stage's unit (the cover's line with a floor
+    // of its own size under it: max(...), the unit's count first)
+    const measures = film.match(/wide:max-w-\[(?:max\()?calc\(\d+\*var\(--u\)\)/g) ?? [];
     expect(measures.length).toBeGreaterThanOrEqual(6);
   });
 
@@ -357,7 +358,13 @@ describe("the cover's line and its cue", () => {
     // rail; the cue on plain ground." Measured at 1920x945: the rail runs
     // from 79.3% of the way down the frame at its west corner to 84.6% under
     // the line's last word.
-    const top = Number(/wide:top-\[([\d.]+)vh\] wide:max-w-\[calc\(430\*var\(--u\)\)\]/.exec(page)![1]) / 100;
+    // (the line is set from the cue's foot now: 17 baselines over it, which at
+    // 1920x945, a baseline 4.2 px, puts its top where 63.8vh did)
+    const lineOver = /wide:bottom-\[calc\(18vh_\+_var\(--bl\)\*([\d.]+)\)\] wide:max-w-\[max\(calc\(430\*var\(--u\)\),calc\(var\(--support\)\*19\.5\)\)\]/.exec(page);
+    expect(lineOver).not.toBeNull();
+    const bl = 4.2 / 945;
+    const top = 1 - (0.18 + Number(lineOver![1]) * bl) - 3 * 0.0355;
+    expect(top).toBeCloseTo(0.638, 2);
     const cueFoot = 1 - Number(/mt-7 wide:bottom-\[([\d.]+)vh\] wide:mt-0/.exec(page)![1]) / 100;
     // three lines at a pitch of 3.55% of the frame: its last ends well over the rail
     expect(top + 3 * 0.0355).toBeLessThan(0.793 - 0.03);

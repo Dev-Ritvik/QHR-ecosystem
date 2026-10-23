@@ -44,7 +44,8 @@ const files = [
 describe('how a measurement is written', () => {
   it('writes each kind one way', () => {
     expect(ft(40)).toBe('40 ft');
-    expect(plotSize(30, 50)).toBe('30′ × 50′');
+    // one size, unbroken: the spaces either side of the sign do not break
+    expect(plotSize(30, 50)).toBe('30′\u00a0×\u00a050′');
     // the PIN keeps to its town's line: a space that does not break, and no dash
     expect(withPin('Ring Road, Vizianagaram', '535002')).toBe('Ring Road, Vizianagaram 535002');
   });

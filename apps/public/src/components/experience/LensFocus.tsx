@@ -662,8 +662,16 @@ export const LensFocus = forwardRef<LensFocusEffect, { active?: boolean; stillHa
     // MEASURED, every crease of the stair five to twenty per cent lighter from
     // one frame to the next. So it goes over with the print (passageLight.grade),
     // and is the room's by the time the camera is at the sill.
+    // A PAGE THAT STANDS IN THE HALL has the room's occlusion too, as it has
+    // the room's lens (`inside`, above). It had the estate's: two and a half
+    // metres of reach at 1.25, in a room. Its sampling noise lay over the
+    // plaster as a woven grain, hidden while those pages were out of focus
+    // and plain once #69 brought them into it (the forensic re-audit, 17
+    // October 2026: /about's plate at 1366x657, the cornice beside the
+    // portrait; the film's own frame of that wall, under the room's
+    // occlusion, is clean).
     const ao = u.get('aoStrength')!;
-    const toHall = journeyState.leg === 'interior' ? 1 : passageLight.grade;
+    const toHall = journeyState.leg === 'interior' || stillHall ? 1 : passageLight.grade;
     const aoOn = !active ? 0 : aoLook.strength + (AO_HALL.strength - aoLook.strength) * toHall;
     u.get('aoRadius')!.value = aoLook.radius + (AO_HALL.radius - aoLook.radius) * toHall;
     // Followed, and through the door held to it: the passage is authored to

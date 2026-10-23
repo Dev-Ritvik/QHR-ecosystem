@@ -29,6 +29,7 @@ import Link from 'next/link';
 import { Detail, Folio, Gilt, NextPage, Plate, Prose, Sheet, Window } from '@/components/folio/Folio';
 import { RouteTelemetry } from '@/components/telemetry/RouteTelemetry';
 import { layoutBySlug } from '@/lib/layouts';
+import { plotSize } from '@/lib/units';
 
 export const metadata: Metadata = withShare('/knowledge/reading-a-layout-plan', {
   title: 'How to read a layout plan — Quality Homes Reality',
@@ -111,7 +112,7 @@ export default function ReadingALayoutPlanPage() {
               focus={[47, 30]}
               zoom={2.3}
               ratio={16 / 10}
-              alt="Part of the Kartikeya Water Front plan: two 40 ft roads meeting, with plots of 30′ × 56′ and 30′ × 50′ either side"
+              alt={`Part of the Kartikeya Water Front plan: two 40 ft roads meeting, with plots of ${plotSize(30, 56)} and ${plotSize(30, 50)} either side`}
               caption="Kartikeya Water Front. The width is printed in each road. Two at 40 ft meet here, and the plots on that corner are plain to see."
             />
           </div>
@@ -130,7 +131,7 @@ export default function ReadingALayoutPlanPage() {
         >
           <Prose>
             <p>
-              Plots are marked in feet &mdash; 30′ × 50′, 30′ × 60′, 60′ × 30′. The first figure is
+              Plots are marked in feet &mdash; {plotSize(30, 50)}, {plotSize(30, 60)}, {plotSize(60, 30)}. The first figure is
               normally the frontage. Two plots of identical area can differ considerably in what
               you can build, because frontage and depth drive the setbacks.
             </p>

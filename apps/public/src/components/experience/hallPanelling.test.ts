@@ -22,6 +22,7 @@ import {
   wainscot,
 } from './hallPanelling';
 import { WALNUT_SHEET, type WalnutStock } from './hallWalnut';
+import { HALL_FRONT } from './doorPortal';
 
 const W = WAINSCOT;
 
@@ -383,6 +384,9 @@ describe('panelHall', () => {
     expect(Math.abs(knobs[0].position.x)).toBeCloseTo(DOOR.joint / 2 + DOOR.knob.inset, 5);
     expect(knobs[0].position.x).toBeCloseTo(-knobs[1].position.x, 5);
     expect(knobs[0].position.z).toBeCloseTo(7.631 - 0.0575 - DOOR.frame, 5);
+    // and both go with the front wall when the room is seen through the
+    // open front door (they stood in the doorway as two dark dots)
+    for (const k of knobs) expect(HALL_FRONT as readonly string[]).toContain(k.name);
 
     built.dispose();
     expect(root.children.length).toBe(before);
