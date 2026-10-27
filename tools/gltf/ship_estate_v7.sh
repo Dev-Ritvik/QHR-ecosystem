@@ -17,6 +17,13 @@ WORK="${WORK:-C:/dev/Blender/_v7out}"
 
 if [ -z "${SKIP_BUILD:-}" ]; then
   python "$ROOT/tools/gltf/make_estate_textures_v7.py" "$ROOT/assets/materials/_v7"
+  # AFTER the procedural textures, whose turf it replaces: the lawn from a
+  # photograph of grass (the meadow HDRI the user supplied on 2026-10-27, in
+  # "Royal audit", not in the repo). Without it the synthesised turf stands.
+  LAWN_HDRI="${LAWN_HDRI:-$ROOT/Royal audit/189_hdrmaps_com_free_2K.exr}"
+  if [ -f "$LAWN_HDRI" ]; then
+    python "$ROOT/tools/gltf/make_lawn_hdri_v7.py" "$LAWN_HDRI" "$ROOT/assets/materials/_v7"
+  fi
   # AFTER the procedural textures, whose flat leaf clusters it replaces: the
   # foliage cards rendered from modelled leaves (albedo + normal per species).
   "$BLENDER" --background --python "$ROOT/tools/blender/render_foliage_v7.py" -- "$ROOT/assets/materials/_v7" "" 1024 96

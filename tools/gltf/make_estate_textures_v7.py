@@ -167,6 +167,9 @@ tlf = periodic_noise(N, 2.2, 1, 6)
 # checkerboard of 12-18 m squares across the whole lawn, the plainest "game"
 # tell in the hero. The mowing bands are drawn at runtime (ExteriorModel,
 # the lawn shader), in world space, fading with distance; this map is turf.
+# (And since 2026-10-27 a stand-in: make_lawn_hdri_v7.py lays a photographed
+# turf over these three maps, at this mean colour, when the meadow HDRI is
+# there; ship_estate_v7.sh runs it next.)
 colour_map((104, 132, 64), 0.07 * tmid + 0.09 * turf + 0.075 * tlf, "v7_lawn_basecolor.png")
 report["lawn_tilt95"] = normal_map(1.2 * turf, 0.35, "v7_lawn_normal.png")
 grey_map(0.9 + 0.05 * turf, "v7_lawn_roughness.png")

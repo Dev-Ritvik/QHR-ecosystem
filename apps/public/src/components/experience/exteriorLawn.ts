@@ -6,8 +6,11 @@
 // flat green plane whose mowing stripes were baked into a 6 m tile. A tile
 // cannot know how far away it is, so at the 40-120 m the film sees the lawn
 // from, the bands aliased into a checkerboard of 12-18 m squares, and nothing
-// else in the ground varied at all. The texture now carries turf only
-// (make_estate_textures_v7.py); this draws what a real estate lawn has:
+// else in the ground varied at all. The texture now carries turf only, and
+// since 2026-10-27 a photographed one: a meadow's grass seen from above, cut
+// from the HDRI the user supplied and quilted into a seamless tile at the
+// approved turf's mean colour (tools/gltf/make_lawn_hdri_v7.py). This draws
+// what a real estate lawn has over it:
 //
 //   MOWING BANDS in world space, 1.6 m wide, parallel to the entrance axis.
 //   View-dependent, as they are on a real lawn: blades in alternate bands lean

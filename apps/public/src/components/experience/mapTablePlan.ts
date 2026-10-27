@@ -235,6 +235,12 @@ export function placePins(projects: PinProject[], meta: MapMeta): Pin[] {
  * header's height at its top), or the one that covers least. Pixels, origin
  * top left. Plates are placed from the top of the frame down, so the one
  * nearest the header has the first choice.
+ *
+ * And failing all of those, over or under the head SLID ALONG ITS ROW, the
+ * head still under the plate: on a short phone the plates stand in the strip
+ * between the map's note and the table's foot (the second forensic audit,
+ * 2026-10-24, #9), and a plate set centred under the first head could close
+ * every place the next one had.
  */
 export interface LabelPoint {
   x: number;
@@ -251,8 +257,12 @@ export interface LabelFrame {
   gap: number;
   /** Kept clear at the frame's sides and foot. */
   margin: number;
-  /** Kept clear at the frame's top: the header. */
+  /** Kept clear at the frame's top: the header, and on a frame that is not
+   *  wide the chapter's copy under it. */
   top: number;
+  /** Where the clear part of the frame ends on the right, if short of its
+   *  margin: the chapter rail's column. */
+  right?: number;
 }
 
 interface Rect {
@@ -265,12 +275,20 @@ interface Rect {
 const overlap = (a: Rect, b: Rect) =>
   Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l)) * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
 
+/** Places along a row a plate may be slid to, over or under its head. */
+const SLIDES = 8;
+
 export function placeLabels(points: readonly LabelPoint[], sizes: readonly LabelSize[], frame: LabelFrame): LabelPoint[] {
   const out: LabelPoint[] = points.map(() => ({ x: 0, y: 0 }));
   const placed: Rect[] = [];
   const head = 5;
   const heads = points.map((p) => ({ l: p.x - head, t: p.y - head, r: p.x + head, b: p.y + head }));
-  const inside: Rect = { l: frame.margin, t: frame.top, r: frame.width - frame.margin, b: frame.height - frame.margin };
+  const inside: Rect = {
+    l: frame.margin,
+    t: frame.top,
+    r: Math.min(frame.width - frame.margin, frame.right ?? Infinity),
+    b: frame.height - frame.margin,
+  };
   const order = points.map((_, i) => i).sort((a, b) => points[a].y - points[b].y);
   for (const i of order) {
     const p = points[i];
@@ -289,6 +307,10 @@ export function placeLabels(points: readonly LabelPoint[], sizes: readonly Label
       { x: p.x + head * 2 - w, y: under },
       { x: p.x - head * 2, y: under },
     ];
+    for (let k = 1; k < SLIDES; k += 1) {
+      const x = p.x + head * 2 - w + ((w - head * 4) * k) / SLIDES;
+      candidates.push({ x, y: over }, { x, y: under });
+    }
     let best = candidates[0];
     let bestCost = Infinity;
     for (const c of candidates) {

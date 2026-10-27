@@ -67,7 +67,9 @@ CENTRE_X = 2.95             # windows either side of the centre door, clear of t
 ARCH_W, ARCH_SILL, ARCH_SPRING = 1.4, 1.45, 3.55      # ground floor, r = 0.7
 RECT_W, RECT_SILL, RECT_HEAD = 1.3, 5.65, 7.75         # upper floor
 DOOR_W, DOOR_TOP = 2.6, 4.0
-COLUMNS_X = (-4.15, -1.75, 1.75, 4.15)
+# Two, at the portico's corners (the user, 2026-10-26, "remove these 2 front
+# facing pillars": the inner pair at +/-1.75 either side of the door is gone).
+COLUMNS_X = (-4.15, 4.15)
 PORTICO_FRONT = -11.25      # front face of the portico entablature
 COLUMN_Y = -10.85
 
@@ -179,6 +181,21 @@ def build_materials():
         M["flags"] = principled("MAT_Stone_Flags", tex=t("v7_flags"), normal_strength=0.8)
     else:
         M["gravel"] = M["flags"] = M["paving"]
+    # THE DRIVE IS POLISHED STONE (the user, 2026-10-26, of the forecourt: "make
+    # this ... area smooth currently it is coarse I want it smooth and polished").
+    # The carriage ring, the apron, the avenue and the walks round the podium
+    # and to the canal were the gravel scan above. They are the pool terrace's
+    # own polished stone now, in large slabs, smooth and with a sheen of the sky
+    # on them; tinted a warm grey a stop under the house's limestone, so the
+    # drive is never the pale slab beside the house the paid audit took the
+    # terrace for (ExteriorModel.tsx, MAT_Stone_Terrace). The garden walks in
+    # the parterre stay raked gravel.
+    if os.path.exists(f"{TEX}/v7_terrace_basecolor.png"):
+        M["drive"] = principled("MAT_Drive_Polished", tex={"base": f"{TEX}/v7_terrace_basecolor.png",
+                                                           "normal": f"{TEX}/v7_terrace_normal.png"},
+                                tint=(0.7, 0.66, 0.6), rough=0.16, spec=0.6, normal_strength=0.25)
+    else:
+        M["drive"] = M["paving"]
     M["roof"] = principled("MAT_Roof_Slate", tex={"base": f"{SLATE}/p4c_basecolor.png", "rough": f"{SLATE}/p4c_roughness.png",
                                                   "normal": f"{SLATE}/normal.png"}, normal_strength=0.7)
     # THE FLAT IS LEAD (the paid audit of 2026-10-04, pass 4: "does this
@@ -450,7 +467,10 @@ TILE = {"MAT_Stone_Wall": 3.0, "MAT_Stone_Trim": 2.0, "MAT_Stone_Rustic": 3.0, "
         "MAT_Stone_Steps": 2.0, "MAT_Roof_Slate": 3.0, "MAT_Roof": 2.0, "MAT_Lawn": 6.0,
         "MAT_Stone_Terrace": 2.4, "MAT_Helipad_Deck": 4.0,
         # The scans' own size on the ground (Poly Haven: 3 m a tile).
-        "MAT_Gravel": 3.0, "MAT_Stone_Flags": 3.0}
+        "MAT_Gravel": 3.0, "MAT_Stone_Flags": 3.0,
+        # (The terrace's tiles laid at twice their size: slabs of a carriage
+        # drive, two metres a side.)
+        "MAT_Drive_Polished": 4.0}
 
 
 def box_uv(ob, _unused):
@@ -1113,12 +1133,14 @@ def build_portico(M, col, gold_bm):
         top = FLOOR_Z - 0.15 * (k + 1)
         front = PORTICO_FRONT - 0.15 - 0.42 * (k + 1)
         add_box(st, -FX, FX, PORTICO_FRONT - 0.15, front, max(0.0, top - 0.15), top)
-    # Cheek walls with urns
+    # Cheek walls. (Each carried an urn; the user had the two taken off,
+    # 2026-10-26: "Remove the decor props inside the 2 red circles". The urns
+    # stand on the podium's dies either side of the steps instead:
+    # podium_balustrade.)
     for s in (-1, 1):
         x0, x1 = s * (FX + 0.02), s * (FX + 0.62)
         add_box(bm, x0, x1, PORTICO_FRONT - 0.15, PORTICO_FRONT - 1.95, 0.0, 0.78)
         add_box(bm, x0 - s * 0.05, x1 + s * 0.05, PORTICO_FRONT - 0.1, PORTICO_FRONT - 2.0, 0.78, 0.88)
-        add_lathe(bm, [(r * 1.3, zz * 1.3) for r, zz in URN], 20, s * (FX + 0.32), PORTICO_FRONT - 1.05, 0.88)
     # Columns.
     #
     # A BASE WITH NO UNDERCUT. Under its torus the base had a drum two
@@ -1631,7 +1653,7 @@ def build_hardscape(M, col):
     kerb_run(7.0, 17.48, -12.28, -12.12)
     kerb_run(TERRACE["x1"], -3.8, 12.12, 12.28)
     kerb_run(3.8, 17.48, 12.12, 12.28)
-    finish("drive_forecourt", pav, [M["gravel"]], col)
+    finish("drive_forecourt", pav, [M["drive"]], col)
     finish("hardscape_kerbs", kerb, [M["trim"]], col)
 
 
@@ -1647,6 +1669,47 @@ def build_fountain(M, col, gold_bm):
     add_lathe(water, [(0.0, 0.0), (0.92, 0.0), (0.0, 0.0)], 32, 0, fy, 2.82)
     finish("fountain_stone", stone, [M["trim"]], col)
     ob = finish("fountain_water", water, [M["water"]], col)
+
+
+def fountain_fish(col):
+    """THE FOUNTAIN'S FISH (the user, 2026-10-26: "Add a animation where the
+    goldfish in the fountain outside the mansion must dolphin leap every time
+    the user scrolls", then a blue halfmoon betta as the fish). The client's
+    generated model (tripo_assets_v7.py, fish_betta), sixty centimetres long,
+    put down in the forecourt fountain's lower basin under its water: the site
+    finds it by name, hides it and makes it leap (FountainFish.tsx).
+
+    TURNED SO ITS NOSE IS +X IN ITS OWN MESH, its middle at the origin, so
+    the site can steer it without knowing which way the generator stood it:
+    the head is the end of the body with the less height to it, the betta's
+    tail and fins being three times the head's. None when the library or the
+    model is not there."""
+    lib = tripo_mesh("fish_betta")
+    if lib is None:
+        return None
+    me = lib.copy()
+    me.name = "fountain_fish"
+    ys = [v.co.y for v in me.vertices]
+    y0, y1 = min(ys), max(ys)
+    L = y1 - y0
+
+    def tall(lo, hi):
+        zs = [v.co.z for v in me.vertices if lo <= v.co.y <= hi]
+        return (max(zs) - min(zs)) if zs else 0.0
+
+    head_low = tall(y0, y0 + 0.25 * L) < tall(y1 - 0.25 * L, y1)
+    # (nose to -y turns +90 degrees to +x; nose to +y, -90)
+    me.transform(Matrix.Rotation(math.radians(90.0 if head_low else -90.0), 4, "Z"))
+    xs = [v.co.x for v in me.vertices]
+    ys = [v.co.y for v in me.vertices]
+    zs = [v.co.z for v in me.vertices]
+    me.transform(Matrix.Translation((-(min(xs) + max(xs)) / 2, -(min(ys) + max(ys)) / 2, -(min(zs) + max(zs)) / 2)))
+    ob = bpy.data.objects.new("fountain_fish", me)
+    col.objects.link(ob)
+    # In the lower basin, under its water (0.44) and over its floor (0.18).
+    ob.location = (0.0, FOUNTAIN_Y - 2.0, 0.3)
+    print("FISH nose", "+x (was -y)" if head_low else "+x (was +y)", "length", round(max(xs) - min(xs), 3))
+    return ob
 
 
 def build_canal(M, col):
@@ -2104,10 +2167,24 @@ def build_vegetation(M, col):
     # belt's, two-fifths grown, is a real tree's branching and leaf at the
     # size of an ornamental one. The frangipani stands in where the scans
     # have not been made.
+    #
+    # THE CANAL'S ROWS ARE THE CLIENT'S OWN TREE NOW (the user, 2026-10-26:
+    # "Replace the trees behind the mansion with the new trees in C:\dev\estate\
+    # Royal audit\tree 3d model.glb", with a photograph of a globe-headed tree
+    # on a clean stem): generated, sized and lightened by tripo_assets_v7.py
+    # (tree_globe). The first twelve of `fr` are those rows; the six by the
+    # drive keep the young mango. Where the model has not been made the rows
+    # are the mango as they were.
     small = ph_tree(M, "mango")
+    globe = tripo_mesh("tree_globe")
     if small is not None:
         srng = random.Random(23)
-        scatter(col, small, "veg_tree_garden", [(x, y, r, srng.uniform(0.36, 0.5)) for x, y, r, _ in fr], shape=0.1)
+        garden = [(x, y, r, srng.uniform(0.36, 0.5)) for x, y, r, _ in fr]
+        if globe is not None:
+            grng = random.Random(29)
+            scatter(col, globe, "veg_tree_canal", [(x, y, r, grng.uniform(0.92, 1.08)) for x, y, r, _ in garden[:12]], shape=0.06)
+            garden = garden[12:]
+        scatter(col, small, "veg_tree_garden", garden, shape=0.1)
     else:
         scatter(col, frangi, "veg_frangipani", fr)
     # Bougainvillea in the parterre beds.
@@ -2121,10 +2198,15 @@ def build_vegetation(M, col):
                 for j in range(3):
                     sh.append((bx + rng.uniform(-2.2, 2.2), by + rng.uniform(-2.5, 2.5), rng.uniform(0, 6.28), rng.uniform(0.8, 1.05)))
     # And the new beds: colour against the stone at the foot of the house, and
-    # roses in the west parterre's quadrants.
+    # roses in the west parterre's quadrants. (None where the path from the
+    # pool crosses the west bed, POOL_GATE: drawn and then left out, so every
+    # other shrub keeps the random numbers it had.)
     for sx in (-1, 1):
         for k in range(9):
-            sh.append((sx * (15.3 + rng.uniform(-1.2, 1.2)), -10.6 + 2.6 * k, rng.uniform(0, 6.28), rng.uniform(0.7, 0.95)))
+            b = (sx * (15.3 + rng.uniform(-1.2, 1.2)), -10.6 + 2.6 * k, rng.uniform(0, 6.28), rng.uniform(0.7, 0.95))
+            if sx < 0 and POOL_GATE[0] - 1.0 < b[1] < POOL_GATE[1] + 1.0:
+                continue
+            sh.append(b)
         for k in range(3):
             sh.append((sx * (9.0 + 1.5 * k), -10.2 + rng.uniform(-0.8, 0.8), rng.uniform(0, 6.28), rng.uniform(0.7, 0.9)))
     for sx in (-1, 1):
@@ -2243,6 +2325,34 @@ TERRACE = {"x0": -36.0, "x1": -17.0, "y0": -12.6, "y1": 12.6, "top": 0.5}
 POOL = {"x0": -32.8, "x1": -21.4, "y0": -6.6, "y1": 6.6,
         "water": 0.455, "floor": -1.55, "catch": -34.3}
 HELIPAD = (-56.0, 34.0, 9.0)
+
+
+# The pool ladder's rail, as (y, z) in the plane of one rail: from the deck
+# 30 cm behind the north coping (whose back edge is at y 7.05), up, bowed over
+# the coping and down the wall into the water, its foot turned back to the
+# wall below the last tread.
+LADDER_RAIL = ((7.35, 0.5), (7.35, 1.2), (7.31, 1.31), (7.2, 1.39), (7.04, 1.43), (6.88, 1.42),
+               (6.74, 1.35), (6.63, 1.22), (6.52, 1.02), (6.5, 0.6), (6.5, -0.55), (6.53, -0.64), (6.6, -0.67))
+
+
+def add_tube(bm, pts, radius, segs=10, mi=0):
+    """A round bar along a path in space (the pool ladder's rails), its ends
+    capped. Each ring is square to the path; the faces look out."""
+    pts = [Vector(p) for p in pts]
+    rings = []
+    for i, p in enumerate(pts):
+        t = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+        a = Vector((1.0, 0.0, 0.0)) if abs(t.x) < 0.9 else Vector((0.0, 1.0, 0.0))
+        u = t.cross(a).normalized()
+        v = t.cross(u).normalized()
+        rings.append([bm.verts.new(p + (u * math.cos(2 * math.pi * k / segs) + v * math.sin(2 * math.pi * k / segs)) * radius)
+                      for k in range(segs)])
+    for r0, r1 in zip(rings, rings[1:]):
+        for k in range(segs):
+            k2 = (k + 1) % segs
+            face(bm, [r0[k], r0[k2], r1[k2], r1[k]], mi)
+    face(bm, list(reversed(rings[0])), mi)
+    face(bm, rings[-1], mi)
 
 
 def lounger(teak, fabric, O, U, V, top, back):
@@ -2367,6 +2477,11 @@ def pool_terrace(M, col):
     # Steps down to the lawn on the south edge, and a second flight west.
     for k in range(3):
         add_box(stone, -29.0, -23.0, T["y0"] - 0.42 * (k + 1), T["y0"] - 0.42 * k, 0.0, top - 0.167 * (k + 1))
+    # THE WAY IN FROM THE HOUSE (podium_balustrade, POOL_GATE): a path of the
+    # terrace's stone through the opening in the podium's balustrade and over
+    # the bed under it, level with the deck, to the edge of the house's own
+    # terrace (its moulding's face at x -15.48, its top 5 cm under this).
+    add_box(stone, -17.05, -15.48, POOL_GATE[0], POOL_GATE[1], 0.0, top)
     # The pool box: walls from the coping down to the floor.
     add_box(shell, P["x0"], P["x1"], P["y0"], P["y1"], P["floor"] - 0.12, P["floor"])
     for x0, x1, y0, y1 in ((P["x0"] - 0.3, P["x0"], P["y0"], P["y1"]),
@@ -2408,8 +2523,13 @@ def pool_terrace(M, col):
         for x, d in ((P["x0"] + 0.02, -1), (P["x1"] - 0.02, 1)):
             add_box(lamp, x - 0.02 - 0.06 * (d > 0), x + 0.02 + 0.06 * (d < 0), y - 0.34, y + 0.34, wl - 0.62, wl - 0.38)
     # Glass balustrade along the west edge and returns along north and south.
+    # (And the south edge railed to the house, from the steps' east end to
+    # the podium's corner die: it stopped at the steps, and between them and
+    # the house the deck's edge stood open over the lawn. The user,
+    # 2026-10-26: "Extend the wall in the red circle".)
     rails = [((T["x0"] + 0.2, T["y0"] + 0.2), (T["x0"] + 0.2, T["y1"] - 0.2)),
              ((T["x0"] + 0.2, T["y0"] + 0.2), (-24.0, T["y0"] + 0.2)),
+             ((-22.8, T["y0"] + 0.2), (-17.9, T["y0"] + 0.2)),
              ((T["x0"] + 0.2, T["y1"] - 0.2), (-19.0, T["y1"] - 0.2))]
     for (ax, ay), (bx, by) in rails:
         dx, dy = bx - ax, by - ay
@@ -2430,6 +2550,15 @@ def pool_terrace(M, col):
         # forensic audit of 2026-10-09, #19)
         add_oriented_box(steel, Vector((ax, ay, 0)), Vector((ux, uy, 0)), Vector((px, py, 0)),
                          -0.06, L + 0.06, top + 1.0, top + 1.1, -0.07, 0.07)
+    # A LADDER INTO THE POOL (the user, 2026-10-26: "add a ladder to get
+    # inside the pool"), on the north side near its east end: two steel rails
+    # standing on the deck behind the coping, bowed over it and down the wall
+    # into the water, and three treads between them under the surface.
+    lx = -23.0
+    for dx in (-0.27, 0.27):
+        add_tube(steel, [(lx + dx, yy, zz) for yy, zz in LADDER_RAIL], 0.022, 10)
+    for tz in (0.2, -0.1, -0.4):
+        add_box(steel, lx - 0.25, lx + 0.25, P["y1"] - 0.22, P["y1"] - 0.04, tz - 0.03, tz)
     # Sun loungers and parasols on the east deck, facing the water.
     #
     # AS PEOPLE LEAVE THEM, not as a catalogue sets them. The review: "cloned
@@ -2627,12 +2756,25 @@ def motor_court(M, col):
             bm.free()
 
 
+# OPENINGS IN THE PODIUM'S BALUSTRADE (the user, 2026-10-26). On the west, a
+# way from the house's terrace to the pool's ("make an enterance pathway to the
+# pool"), between two of the pool deck's bollards: y from POOL_GATE[0] to [1],
+# and a path across the bed under it (pool_terrace). On the north, where the
+# walk from the canal ran into the balustrade and stopped ("Remove the fencing
+# here ... and make path to the backside of the mansion"): the walk's kerbs
+# and the podium's garden steps already left it room, and the balustrade now
+# does too, its dies either side at x = +/-REAR_GATE.
+POOL_GATE = (-10.0, -7.8)
+REAR_GATE = 4.2
+
+
 def podium_balustrade(M, col, gold_bm):
     """The podium walk gets the same balustrade the roof has, which is what ties
     the house to its terrace instead of letting it stand on a slab."""
     bm = new_bm()
     x, y, z = 17.4, 12.2, PODIUM_Z
-    runs = [((-x, -y), (-x, y)), ((x, -y), (x, y)), ((-x, y), (x, y)),
+    runs = [((-x, -y), (-x, POOL_GATE[0])), ((-x, POOL_GATE[1]), (-x, y)), ((x, -y), (x, y)),
+            ((-x, y), (-REAR_GATE, y)), ((REAR_GATE, y), (x, y)),
             ((-x, -y), (-7.6, -y)), ((7.6, -y), (x, -y))]
     for a, b in runs:
         balustrade_run(bm, a, b, z, 1.02, die_w=0.62, spacing=0.34, segs=8)
@@ -2644,6 +2786,12 @@ def podium_balustrade(M, col, gold_bm):
     for sx in (-1, 1):
         for sy in (-1, 1):
             add_lathe(bm, [(r * 0.85, zz * 0.85) for r, zz in URN], 20, sx * x, sy * y, z + 1.14)
+    # AND THE SAME URN ON THE TWO DIES EITHER SIDE OF THE STEPS, where the
+    # front runs end (the user, 2026-10-26: "Add the decoration prop from the
+    # pillar in the purple circle to the pillar in the yellow circle"). They
+    # stood bare beside the cheek walls' urns, which are gone (build_portico).
+    for sx in (-1, 1):
+        add_lathe(bm, [(r * 0.85, zz * 0.85) for r, zz in URN], 20, sx * 7.6, -y, z + 1.14)
     finish("podium_balustrade", bm, [M["trim"]], col)
 
 
@@ -2823,6 +2971,7 @@ def main():
         g2 = new_bm()
         build_fountain(M, col, g2)
         g2.free()
+        fountain_fish(col)
         build_canal(M, col)
         build_compound_wall(M, col)
         build_gardens(M, col)

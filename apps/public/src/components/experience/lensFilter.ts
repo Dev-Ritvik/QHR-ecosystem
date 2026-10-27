@@ -243,12 +243,19 @@ export function headerBandApproach(legS: number): number {
  *               and no lighter: the client asked for the shade to come down,
  *               and that is as far as it goes with every line still at AA.
  *   the third   on shaded plaster: 6.0:1 or better at 2.0, so 1.8 (5.1 there).
+ *               UNTIL THE HALL WAS PANELLED (the forensic audit of 2026-10-09,
+ *               #36): where the dark wainscot stood behind its place line
+ *               there is a lit pilaster now, and the second forensic audit
+ *               (2026-10-24, #8) measured "Srikakulam" on a p90 luma of 124
+ *               (3.6:1) at 1920x945 and at 1366x657. At 2.3 it stands on 95
+ *               (5.5:1) at both, its count on 84: the density it had before
+ *               it was lightened, which is what its copy needs again.
  *   the second  in a room at 0.34 (hallLight.HALL_LEVEL_S2) the wall behind
  *               its copy prints under 50 at 2.0 stops: 1.2 holds it under 70.
  * And the numeral over each block is ivory, not gilt: small gilt wants a
  * ground under 80, which is what part of the old density was buying.
  */
-export const STATION_ND: Readonly<Record<string, number>> = { S1: 2.1, S2: 1.2, S3: 1.8, S4: 1.0, portrait: 1.4 };
+export const STATION_ND: Readonly<Record<string, number>> = { S1: 2.1, S2: 1.2, S3: 2.3, S4: 1.0, portrait: 1.4 };
 /**
  * UNDER A SITE MODEL the second table's room is lit like the others
  * (hallLight.ts, HALL_LEVEL_S2_MODEL: the forensic audit of 2026-10-09, #42),
@@ -257,6 +264,19 @@ export const STATION_ND: Readonly<Record<string, number>> = { S1: 2.1, S2: 1.2, 
  * here its stops are STATION_ND's.
  */
 export const STATION_ND_MODEL: Readonly<Record<string, number>> = { S2: 2.4 };
+/**
+ * ON A PHONE HELD SIDEWAYS (copyZone.filmIsShort) the column is the same
+ * column and the picture is not the same picture: the frame is twice as wide
+ * as it is high, the words are larger against it, and the first table's place
+ * line stands on the lit pilaster where on a laptop it stands on the
+ * wainscot. Measured line by line at 844x390 (the second forensic audit,
+ * 2026-10-24, #8): "Vizianagaram" on a p90 luma of 123 (3.6:1) at STATION_ND's
+ * 2.1; at 2.6 on 95 (5.5:1) or under at the start, middle and end of its
+ * chapter. Only here: on every other frame the first table keeps the client's
+ * lighter shade (2026-10-01), which holds its words at 4.5:1 there. (The third
+ * table's 2.3 holds its own place line on 87 or under at 844x390.)
+ */
+export const STATION_ND_SHORT: Readonly<Record<string, number>> = { S1: 2.6 };
 
 /**
  * AND HALF A STOP UNDER THE ESTABLISHING COPY, as under the cover's (HERO_ND).
@@ -287,6 +307,7 @@ export function stationFilter(
   wide: boolean,
   aspect: number = STAGE.aspect,
   model = true,
+  short = false,
 ): void {
   if (!wide) {
     lensFilter.stops = 0;
@@ -294,7 +315,9 @@ export function stationFilter(
   }
   let stops = 0;
   for (const [id, w] of Object.entries(weights)) {
-    stops = Math.max(stops, ((model ? STATION_ND_MODEL[id] : undefined) ?? STATION_ND[id] ?? 0) * w);
+    const base =
+      (short ? STATION_ND_SHORT[id] : undefined) ?? (model ? STATION_ND_MODEL[id] : undefined) ?? STATION_ND[id] ?? 0;
+    stops = Math.max(stops, ld(`nd:${id}`, base) * w);
   }
   // The establishing shot's half stop, under its copy in the lower left
   // (ESTABLISH_ND): the tables' edge takes over when it is the denser.
@@ -849,11 +872,17 @@ export function phoneSkyFilter(panes: readonly CopyPane[], legS: number, dt: num
  * the middle of the first line, stands the court's map table, and its relief
  * left three words on a p90 luma of 107 to 123 (3.1 to 3.8:1, measured at
  * 390x844). At 2.4 the same words stand on 96 or under.
+ *
+ * The map's was 1.6, and on a phone showing its browser's bars (390x664) the
+ * table comes up under the list's last line, the note: on a p90 luma of 113,
+ * 4.2:1 (the second forensic audit, 2026-10-24, #8). At 2.0 it stands on 92
+ * (5.8:1). Its fall is as it was (PHONE_ROOM): gone a ninth of the frame
+ * under the note.
  */
 export const ROOM_ND: Readonly<Record<string, { stops: number; anchor: Anchor }>> = {
   establish: { stops: 2.4, anchor: 'bottom' },
   portrait: { stops: 1.4, anchor: 'bottom' },
-  city: { stops: 1.6, anchor: 'top' },
+  city: { stops: 2.0, anchor: 'top' },
 };
 export const PHONE_ROOM: GradGeometry = { reach: 0.62, rise: 0.12, margin: 0.03, fall: 0.12 };
 
@@ -867,7 +896,7 @@ const roomBottom: GradState = { stops: 0, extent: 0 };
 export function phoneRoomFilter(panes: readonly CopyPane[], dt: number): void {
   const of = (anchor: Anchor) => (id: string) => {
     const r = ROOM_ND[id];
-    return r && r.anchor === anchor ? r.stops : 0;
+    return r && r.anchor === anchor ? ld(`room:${id}`, r.stops) : 0;
   };
   rideGrad(roomTop, panes, of('top'), 'top', PHONE_ROOM, dt);
   rideGrad(roomBottom, panes, of('bottom'), 'bottom', PHONE_ROOM, dt);

@@ -87,7 +87,7 @@ export default function AboutPage() {
           kicker="In figures"
           title={
             <>
-              Twenty years, <Gilt>counted.</Gilt>
+              The company&rsquo;s <Gilt>own figures.</Gilt>
             </>
           }
         >

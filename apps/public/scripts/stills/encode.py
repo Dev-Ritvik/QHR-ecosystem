@@ -1,6 +1,6 @@
 """The stills, encoded and listed (scripts/stills/shoot.mjs has the account).
 
-    python scripts/stills/encode.py <rawDir> [--quality 78] [--keep-old] [--fresh]
+    python scripts/stills/encode.py <rawDir> [--quality 78] [--sharpen 70] [--keep-old] [--fresh]
 
 Reads <rawDir>/<key>.<cut>.png as the shooter wrote them, brings each down to
 its cut's width, writes public/stills/<v>/<key>.<cut>.webp and the list the
@@ -13,6 +13,16 @@ re-shoot of one page) is MERGED over the set already published: every still
 that was not re-shot is carried into the new folder as it is. `--fresh`
 carries nothing: the raw folder is the whole set (after a place is renamed or
 dropped, so that no still of a place that is gone is published).
+
+AS SHARP AS THE PICTURE THAT REPLACES IT (the second forensic audit,
+2026-10-24, #10: "as the still dissolves into the scene ... it comes up about a
+fifth sharper"). A still is shot at twice the screen's density and brought
+down, so its edges are averaged where the live frame's are drawn at the
+screen's own size, and then compressed. Measured at 1920x945 against the live
+frame at the camera's rest (c13/still_live), the live picture's edges were 1.3
+to 1.8 times the still's; with an unsharp mask of radius 0.8 at `--sharpen`
+70 after the resize, 1.07 to 1.4, and the two frames no further apart pixel
+for pixel. 0 turns it off.
 """
 import hashlib
 import io
@@ -21,7 +31,7 @@ import os
 import shutil
 import sys
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
 if not args:
@@ -39,6 +49,7 @@ def opt(name, fallback):
 
 
 QUALITY = int(opt('quality', '78'))
+SHARPEN = int(opt('sharpen', '70'))
 PUBLIC = os.path.join('public', 'stills')
 MANIFEST = os.path.join('src', 'components', 'experience', 'stills.manifest.json')
 
@@ -64,6 +75,8 @@ for name in sorted(os.listdir(RAW)):
     if im.width != w:
         h = round(im.height * w / im.width)
         im = im.resize((w, h), Image.LANCZOS)
+    if SHARPEN:
+        im = im.filter(ImageFilter.UnsharpMask(radius=0.8, percent=SHARPEN, threshold=0))
     buf = io.BytesIO()
     im.save(buf, 'WEBP', quality=QUALITY, method=6)
     blobs[(key, cut)] = buf.getvalue()

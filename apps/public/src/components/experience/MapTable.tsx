@@ -51,6 +51,7 @@ import {
   type PinProject,
 } from './mapTablePlan';
 import { journeyState } from './journey';
+import { copyZone, filmIsWide } from './copyZone';
 import { useBeaconFocus } from '@/components/site/CityLink';
 import { clicksSuppressed } from './stationControls';
 import { HANDOFF_MS, cancelDive, startDive } from './dive';
@@ -94,6 +95,14 @@ const MAX_PINS = 4;
  * where the film comes to rest on the table), and only while the top stands
  * wide enough in the frame (`minWidth`, of the frame's width) to be read as a
  * map. `gap`: pixels between a head and its plate.
+ *
+ * AND NEVER ON THE CHAPTER'S WORDS OR ITS DOTS (the second forensic audit,
+ * 2026-10-24, #9). On a frame that is not wide the map's list stands across
+ * the top, and on a short phone (390x664) the table comes up under its last
+ * line: the topmost plate, set over its head, crossed the note. So there the
+ * plates are kept below the copy's foot (copyZone) for as long as they are
+ * up, and on every frame left of the chapter rail's column (ChapterRail),
+ * where the third ran out under the dots.
  */
 export const PIN_NAMES = { from: 0.55, to: 0.9, coda: [0.12, 0.3] as const, minWidth: 0.16, gap: 7 } as const;
 
@@ -631,6 +640,11 @@ export function MapTable({ projects, onOpen, tier = 'high' }: MapTableProps) {
   }, [gl, pins]);
   const namePoint = useMemo(() => new THREE.Vector3(), []);
   const namePoints = useRef<LabelPoint[]>([]);
+  // The copy's foot while the plates are up, in pixels: held, not followed,
+  // so a plate does not jump when the words go first (PIN_NAMES).
+  const copyFoot = useRef(0);
+  // The rail's left edge in the canvas's box, read once a frame size.
+  const rail = useRef<{ w: number; h: number; left: number } | null>(null);
 
   const m4 = useMemo(() => new THREE.Matrix4(), []);
   const q = useMemo(() => new THREE.Quaternion(), []);
@@ -756,6 +770,7 @@ export function MapTable({ projects, onOpen, tier = 'high' }: MapTableProps) {
             (1 - ramp(PIN_NAMES.coda[0], PIN_NAMES.coda[1], journeyState.coda))
           : 0;
       if (up <= 0.002) {
+        copyFoot.current = 0;
         for (const el of els) {
           if (el.style.visibility !== 'hidden') {
             el.style.visibility = 'hidden';
@@ -763,6 +778,19 @@ export function MapTable({ projects, onOpen, tier = 'high' }: MapTableProps) {
           }
         }
       } else {
+        if (!filmIsWide(size.width, size.height)) {
+          const city = copyZone.panes.find((p) => p.id === 'city');
+          if (city) copyFoot.current = Math.max(copyFoot.current, city.bottom * size.height);
+        }
+        if (!rail.current || rail.current.w !== size.width || rail.current.h !== size.height) {
+          const nav = document.querySelector('nav.rail');
+          const host = gl.domElement.parentElement;
+          const r = nav?.getBoundingClientRect();
+          rail.current =
+            r && host && r.width > 0
+              ? { w: size.width, h: size.height, left: r.left - host.getBoundingClientRect().left }
+              : null;
+        }
         const pts = namePoints.current;
         pts.length = pins.length;
         for (let i = 0; i < pins.length; i += 1) {
@@ -778,7 +806,8 @@ export function MapTable({ projects, onOpen, tier = 'high' }: MapTableProps) {
           height: size.height,
           gap: PIN_NAMES.gap,
           margin: 8,
-          top: Math.min(96, size.height * 0.1),
+          top: Math.max(Math.min(96, size.height * 0.1), copyFoot.current + PIN_NAMES.gap * 2),
+          right: rail.current ? rail.current.left - PIN_NAMES.gap : undefined,
         });
         for (let i = 0; i < els.length; i += 1) {
           const el = els[i];

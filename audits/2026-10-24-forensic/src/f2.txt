@@ -1,0 +1,73 @@
+## Found today: the film
+
+@@ table3-copy-aa | MEDIUM | repeated | nameplate-still-crossed, map-pin-plate-on-note |
+T: The film's place lines under 4.5:1 against the hall's new pilaster
+L: Film (/): the third table (VSR Gayatri Township, 74–76% of the scroll) at 1920×945 and 1366×657; the first and third tables on a phone held sideways (844×390); the map chapter on a short phone (390×664).
+E: The tables' place and count lines, and the map's note.
+O: 14 line positions fall under the 4.5:1 contrast the film's copy is held to. At 1920×945 "Srikakulam" stands on the lit pilaster behind table 3 at 3.60:1 and 3.63:1, and "113 of 113 plots open" at 4.40:1. At 1366×657, "Srikakulam" 3.63:1 (twice), the count 4.40:1 and "Bayyannapeta, near Allinagaram" 4.47:1. At 844×390, table 1's "Vizianagaram" is 3.63 to 3.85:1 at all three positions, and table 3's place line 3.84 to 4.40:1. At 390×664 the map's note is 4.31:1. At 390×844 and 820×1180 every line passes.
+V: Each line measured on its own box against the clean frame (words hidden), at the brightest tenth of the ground, at the start, middle and end of its chapter's window, at six sizes: the film's own strict test (rests.mjs and pages_full.py). On 6 October the same test found nothing at nine sizes. Crop of table 3 at 1920: the place line over the pale pilaster.
+W: These lines say where each layout is. The hall's new panelling and light put a pale pilaster behind them where the dark wainscot used to be.
+X: Every line of the film at 4.5:1 or better at every size: a denser shade behind the place lines where they cross the pilaster, or the lines set clear of it.
+N: The test also lists "Skip to content" on every frame. That link is hidden until a keyboard reaches it and is not counted here.
+F: 23-table3-three-positions-1920.jpg, 23b-table3-place-line-on-the-pilaster-2x.jpg
+
+@@ map-pin-plate-on-note | MEDIUM | isolated | table3-copy-aa, map-list-on-string |
+T: A pin plate sits on the map's note on a short phone
+L: Film (/), the map chapter on a short phone (390×664), 84–87% of the scroll.
+E: The pins' name plates and the note above the map.
+O: The "VSR GAYATRI TOWNSHIP" plate's top edge runs into the note's last line ("district, not a place on the ground."), and the "KARTIKEYA WATER FRONT" plate runs out to the chapter dots at the right edge. At 390×844 the plates and the note stand apart.
+V: The 390×664 walk at 85.7%: the plate's border crosses the last line of the note.
+W: 390×664 is how a phone shows the page with its browser bars up. A label sitting on a line of text reads as a layout fault, in the chapter that closes the film.
+X: The plates clear of the note and of the dots at every phone height.
+F: 29-map-small-phone-pin-plate-on-note.jpg, 32-film-small-phone-walk-2.jpg
+
+@@ still-live-shift | LOW | systemic | press-words-first |
+T: The picture slides when the live scene replaces the still
+L: Every inner page's opening picture and the film's cover, when the live scene takes over from the still: about 13 s into a first visit at 20 Mbit/s, 23 s at 8 Mbit/s, sooner on a fast line.
+E: The picture under the words.
+O: The still and the live frame do not line up. As the still dissolves into the scene, the picture slides 3 to 11 px to the right on most pages (16 px on /knowledge) and up to 9 px vertically, and comes up about a fifth sharper. On /why-us the portico moves 10.8 px to the right between two frames of the same first visit.
+V: Each page's still file, placed as the page places it, against its live frame at 1920×945 (phase correlation on the picture's right half): a horizontal shift of 1 to 16 px on all 28 pages, always the same way. /why-us at 12.5 s and 15 s of a 20 Mbit/s visit: 10.8 px across and 0.7 px down, edges ×1.19 stronger. The film's cover moves 2 px.
+W: A picture that nudges and sharpens seconds after it arrived gives away that it was two pictures. It happens on every first visit, while the visitor is reading the title.
+X: Stills rendered from the live camera at the size and crop they are shown at, so that the dissolve changes nothing but life.
+F: 05-still-to-live-why-us-difference.jpg, 05b-still-to-live-portico-4x.jpg
+
+@@ press-words-first | LOW | isolated | still-live-shift |
+T: After a chapter press, its words arrive before its picture
+L: Film (/), the first 0.3 to 0.7 s after a press on a hall chapter's dot (tested on Lucky Garden at 20 Mbit/s).
+E: The chapter's words and the picture under them.
+O: The words arrive before their picture: at 0.3 s "Lucky Garden / Kumaram Village, Garividi · Vizianagaram / 118 of 181 plots open" stand over the misty garden of the cover. By 0.7 s the table's still is in, and the live hall follows at 16 to 22 s with no dark wait (9 Oct #3 is fixed).
+V: Frames 300 ms and 700 ms after the press.
+W: It is brief, but it is the first thing a visitor sees after choosing a layout.
+X: The words held back until the chapter's still is in.
+F: 03-press-lucky-garden-20mbit.jpg, 03b-press-300ms-words-over-the-garden.jpg
+
+@@ lightmap-seams | LOW | repeated | hood-end-specks, branches-tablet-slit, stair-rods-dashed |
+T: Dotted seams in the hall's baked light
+L: Film (/) and the hall's opening pictures: the stair's string and newel (73% of the scroll), a panel moulding behind table 1 (62%), the moulding behind "Who we are" at the portrait (83%).
+E: Thin faces in the hall's baked light.
+O: Faces narrower than a texel of the baked light read as dotted or dashed lines at 1:1. The stair string that was closed for 9 Oct #44 now carries a row of dark dots along its length, and a black slot 3 to 4 px wide runs down the side of the newel post. A panel moulding's inner edge is still dashed, fainter than on 9 October. At the portrait, a broken dark line runs right behind the "WHO WE ARE" link.
+V: 3× and 6× crops, 9 October beside today: the string's dots came with the closed string; the moulding's dashes are the ones the fix ledger found and left.
+W: Dotted lines on smooth plaster are a rendering tell, and one of them runs behind a link the visitor is asked to press.
+X: The thin faces given texels of their own in a re-bake, or left out of the baked light.
+N: The fix ledger left these because a re-bake touches the whole of the approved hall; it needs the client's agreement.
+F: 21-stair-rods-and-string-old-new-3x.jpg, 22-stair-newel-slot-and-string-dots-6x.jpg, 20-hall-column-and-panel-moulding-old-new-3x.jpg, 27-portrait-link-on-a-dashed-line-3x.jpg
+
+@@ stair-rods-dashed | LOW | isolated | lightmap-seams |
+T: Stair rods broken into white dashes
+L: Film (/), the stair pass, 72–74% of the scroll.
+E: The brass stair rods across the carpet.
+O: Each rod breaks into segments with bright white dashes along it, and a white fleck sits in the middle of one tread. The same on 9 October; it was not reported then.
+V: 3× crop of the carpet, 9 October beside today.
+W: Fine bright metal that breaks into dashes is the sparkle fault fixed on the car's sill (9 Oct #26).
+X: Continuous rods, with the car's treatment.
+F: 21-stair-rods-and-string-old-new-3x.jpg
+
+@@ pool-corner-slot | LOW | isolated | hood-end-specks |
+T: A black slot at the pool's corner on the cover
+L: Film (/), the cover (0%), the pool at the lower left.
+E: The pool's near corner and its far edge.
+O: At the near corner a black slot with a white block in it reads as a hole in the deck (about 20 × 12 px at 1920). Along the far edge the coping is doubled by a stepped dark line. Both were there on 9 October and were not reported.
+V: 5× crops of the cover, 9 October beside today.
+W: Small, but in the cover: the frame everyone sees first and the one that gets shared.
+X: The corner closed, or drawn as what it is (an overflow, a step); one coping line.
+F: 11-cover-pool-corner-and-far-edge-old-new-5x.jpg, 10-cover-1920.jpg

@@ -165,6 +165,23 @@ describe('the set of stills that is published', () => {
   });
 });
 
+describe('the still and the live picture under it are one frame (the second forensic audit, #10)', () => {
+  it('the camera holds its rest pose while a still or the dark is over it, and breathes in after', () => {
+    const canvas = src('WorldCanvas.tsx');
+    expect(canvas).toContain('sceneWarm.hold > 0 || stillShoot.current ? 0 :');
+    // both kinds of life wait on it: the handheld drift and the lean to the pointer
+    expect(canvas).toContain('* life;');
+    expect(canvas).toMatch(/const amp = \(journeyState\.leg === 'interior' \? HANDHELD \* 0\.35 : HANDHELD\) \* life;/);
+    expect(canvas).toMatch(/if \(!passage && pointer\.current\.lengthSq\(\) > 0 && life > 0\)/);
+  });
+
+  it('the stills are exposed at that rest pose', () => {
+    const shooter = src('../../../scripts/stills/shoot.mjs');
+    expect(shooter).toContain('window.__estateStillShoot = true;');
+    expect(src('WorldCanvas.tsx')).toContain('__estateStillShoot === true');
+  });
+});
+
 describe('the model a page asks for with its markup', () => {
   it('is the set its place is posed in', () => {
     for (const [place, pose] of Object.entries(POSES)) {

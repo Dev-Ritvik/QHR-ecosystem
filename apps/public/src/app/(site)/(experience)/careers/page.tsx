@@ -65,7 +65,7 @@ export default function CareersPage() {
           kicker="Open now"
           title={
             <>
-              Two roles, <Gilt>both in sales.</Gilt>
+              Two sales roles <Gilt>are open.</Gilt>
             </>
           }
           note="As the company lists them. Ask about pay and benefits when you apply."
@@ -99,7 +99,7 @@ export default function CareersPage() {
           kicker="How to apply"
           title={
             <>
-              A CV, <Gilt>and the role in the subject line.</Gilt>
+              Send a CV <Gilt>with the role named.</Gilt>
             </>
           }
         >

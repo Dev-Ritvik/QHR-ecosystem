@@ -71,6 +71,20 @@ ASSETS = {
     # near (the refinement brief: the far palms were the scripted pole).
     "palm_royal": {"height": 14.0, "tris": 8000, "lods": {"avenue": 2600}, "material": "MAT_Palm_Royal"},
     "palm_coconut": {"height": 10.5, "tris": 8000, "lods": {"far": 5000}, "material": "MAT_Palm_Coconut"},
+    # THE CANAL'S GLOBE-HEADED TREES (the user, 2026-10-26: "Replace the trees
+    # behind the mansion with the new trees in ... Royal audit\tree 3d
+    # model.glb"; saved here as tree_globe.glb). A crown as wide as the tree is
+    # tall on a clean stem, twelve of them in the two rows beside the canal,
+    # which the revolution passes twenty metres over: the palms' eight
+    # thousand, from a hundred and thirty-two.
+    "tree_globe": {"height": 5.2, "tris": 8000, "material": "MAT_Tree_Globe"},
+    # THE FOUNTAIN'S FISH (the user, 2026-10-26: "add this fish and do the
+    # animation", a blue halfmoon betta, saved here as fish_betta.glb), which
+    # leaps from the forecourt fountain as the visitor scrolls (the site,
+    # FountainFish.tsx). Sixty centimetres, the user's choice: a betta's own
+    # six is under a pixel from every camera of the film, and at sixty it is a
+    # blue glint some twenty pixels long. Seen no nearer than fifty metres.
+    "fish_betta": {"length": 0.6, "tris": 5000, "material": "MAT_Fish_Betta"},
 }
 
 

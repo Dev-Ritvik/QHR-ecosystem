@@ -92,7 +92,7 @@ export default function TestimonialsPage() {
           kicker="The company"
           title={
             <>
-              What buyers say, <Gilt>in their words.</Gilt>
+              Buyers <Gilt>in their own words.</Gilt>
             </>
           }
           lede={
@@ -113,7 +113,7 @@ export default function TestimonialsPage() {
             kicker="As they wrote them"
             title={
               <>
-                {WORDS[n] ?? n} {n === 1 ? 'buyer' : 'buyers'}, <Gilt>unedited.</Gilt>
+                {WORDS[n] ?? n} {n === 1 ? 'account' : 'accounts'} <Gilt>from buyers.</Gilt>
               </>
             }
             note={

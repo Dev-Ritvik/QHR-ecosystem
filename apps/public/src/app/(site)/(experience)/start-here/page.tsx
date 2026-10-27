@@ -83,7 +83,7 @@ export default async function StartHerePage() {
           kicker="What is open"
           title={
             <>
-              Three layouts, <Gilt>each approved.</Gilt>
+              The three <Gilt>approved layouts.</Gilt>
             </>
           }
           note="Each is shown by its approved drawing."
@@ -121,7 +121,7 @@ export default async function StartHerePage() {
           kicker="Or directly"
           title={
             <>
-              A telephone number, <Gilt>and a room.</Gilt>
+              Telephone <Gilt>or write.</Gilt>
             </>
           }
         >

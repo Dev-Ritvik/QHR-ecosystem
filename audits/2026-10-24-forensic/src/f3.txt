@@ -1,0 +1,62 @@
+## Found today: the pages
+
+@@ plate-props-close | AI-SLOP | repeated | branches-tablet-slit, titles-on-gilt-lettering |
+T: Two new opening pictures show their props too close
+L: /branches (the opening picture, and its picture band halfway down) and /terms (the opening picture), at every size; both pictures are also those pages' share cards.
+E: The new opening pictures that bring props close.
+O: /branches opens on two wall sconces on a blank wall, and its band fills half the screen with one of them: the brass is a flat ochre with no reflection of the room, and the flames are neutral white cones (their brightest pixels 201, 199, 195 and 216, 216, 211; a candle's core is warm). /terms opens on the palm avenue with the fronds at their nearest: faceted, flat-shaded leaves, a hard band of colour at the crown, and gate piers that are blank slabs.
+V: 2× crops of the sconces in the opening and in the band, and of the palms and piers; colour measured on the flames.
+W: Giving each page its own picture was the right fix for 9 Oct #66. Two of the new pictures show props at a distance their finish was not made for, and these are the pictures that travel when the pages are shared. Seriousness: medium.
+X: Views that keep these props at the distance they were made for, or props finished for the close-up: brass that reflects, a flame with a warm core, palms with leaf detail.
+N: The palms are among the five AI-generated models named on 9 October.
+F: 44-branches-band-sconce-1920.jpg, 44b-branches-opening-sconces-2x.jpg, 46-terms-opening-palms-and-piers-2x.jpg, 56-share-cards-all-pages.jpg
+
+@@ titles-on-gilt-lettering | LOW | repeated | map-pin-plate-on-note, plate-props-close |
+T: Page words set over the picture's own lettering
+L: /properties on a phone (390×844) and a tablet (820×1180), the opening picture; /about on a phone, the opening picture.
+E: The page's first words over lettering in the picture.
+O: On /properties the title "Six plot sizes, measured off the plans." is set across the plaque's engraved "VSR GAYATRI TOWNSHIP", so two sets of capitals cross. On /about the kicker "The company" stands against the founder's nameplate.
+V: Crops of both openings. Contrast holds (no failures in 267 to 283 lines of the opening pictures at five sizes); the composition does not.
+W: Two layers of lettering crossing look unplanned, and each makes the other harder to read.
+X: The picture's lettering kept clear of the page's words on upright screens.
+F: 47-properties-phone-title-on-plaque.jpg, 47b-properties-tablet-title-on-plaque.jpg, 48-about-phone-kicker-on-nameplate.jpg
+
+@@ branches-tablet-slit | LOW | isolated | lightmap-seams, plate-props-close |
+T: A black slit and striped shading in /branches' band on a tablet
+L: /branches on a tablet held upright (820×1180), the picture band halfway down.
+E: The wall panel at the foot of the band.
+O: A black slit runs the width of a wall panel where it meets its bottom rail, and a patch of diagonal stripes (a shadow fault) sits in the panel's corner.
+V: The band at 1:1, and the striped patch at 5×.
+W: A black line across a pale wall and striped shading both read as render errors.
+X: The panel closed onto its rail; the corner shaded smoothly.
+F: 45-branches-tablet-black-slit.jpg, 45b-branches-tablet-hatched-shadow-5x.jpg
+
+@@ heads-comma-pairs | AI-SLOP | systemic | film-copy-negation, signoff-twice |
+T: A quarter of the headings built in one mould
+L: All inner pages, the first- and second-level headings.
+E: How the headings are built.
+O: With the "this, not that" turns gone, one mould now carries the headings: a phrase, a comma, and a paired or counted phrase. 31 of the 123 distinct first- and second-level headings take it: "Twenty years, counted.", "Three layouts, counted.", "Three offices, three districts.", "Three addresses, one room.", "Three addresses, one telephone number.", "Two roles, both in sales.", "Two pieces, ten minutes.", "Which layout, and when.", "What we collect, and when.", "What it needs, and what it keeps.", "Whose sanction, and how to check it.", "The five, and where to check each." and 19 more.
+V: Headings read from all 28 pages at 1920×945.
+W: A shape used on a quarter of the headings reads as a formula. That kind of repetition is how readers recognise generated copy, and it makes the pages sound alike. Seriousness: low to medium.
+X: Most headings saying plainly what the section holds ("The offices", "How to apply"), with the mould kept for the few places it earns.
+F: 60-pages-desktop-01.jpg, 60-pages-desktop-02.jpg, 60-pages-desktop-05.jpg
+
+@@ signoff-twice | LOW | repeated | heads-comma-pairs |
+T: The sign-off line said twice on two pages
+L: /book-a-site-visit and /sitemap.
+E: The sign-off line "The land is best seen from the land."
+O: Every page closes on this line, which is the design. Two pages also use it higher up: as the quotation over /book-a-site-visit's picture band, and as the head note of /sitemap's last section, each a screen or two above the same line closing the page.
+V: The text of both pages at 1920×945 (at 3,719 and 5,667 px down /book-a-site-visit; at 4,113 and 5,160 px down /sitemap); page strips.
+W: The line works as a sign-off because it is said once, at the end.
+X: Another line in those two places.
+F: 60-pages-desktop-01.jpg, 60-pages-desktop-12.jpg
+
+@@ leading-two-at-reading-size | LOW | systemic | feet-two-ways |
+T: Two leadings at the reading size
+L: All inner pages: the standfirst under each title, against the running text.
+E: Line spacing at the reading size.
+O: The standfirst and the running text are the same size at two line spacings: 22.5 px on 32 and on 36 px at 1920×945; on a phone 18.06 px on 28 and on 28.89 px, two values under a pixel apart. Everywhere else one size has one leading, as the type clean-up intended.
+V: Computed styles of every text on the 28 pages at 1920×945 and 390×844.
+W: Two settings that look almost alike are the near-duplicates that 9 Oct #96 removed elsewhere.
+X: One leading for the size, or a standfirst one step larger so that the difference is meant.
+F: 60-pages-desktop-01.jpg

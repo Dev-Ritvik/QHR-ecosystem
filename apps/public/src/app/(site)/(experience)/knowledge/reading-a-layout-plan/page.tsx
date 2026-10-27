@@ -221,7 +221,7 @@ export default function ReadingALayoutPlanPage() {
           kicker="Then"
           title={
             <>
-              Read the marks, <Gilt>and ask for the key.</Gilt>
+              Ask what <Gilt>the marks mean.</Gilt>
             </>
           }
         >
@@ -261,7 +261,7 @@ export default function ReadingALayoutPlanPage() {
           kicker="Last"
           title={
             <>
-              Last, <Gilt>the approval block.</Gilt>
+              Find <Gilt>the approval block.</Gilt>
             </>
           }
         >

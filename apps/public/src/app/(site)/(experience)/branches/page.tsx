@@ -45,7 +45,7 @@ export default function BranchesPage() {
           kicker="The company"
           title={
             <>
-              Three offices, <Gilt>three districts.</Gilt>
+              An office <Gilt>in each district.</Gilt>
             </>
           }
           lede="Each office holds the layouts on its own ground. When you enquire, you reach the people who have walked that land."
@@ -136,7 +136,7 @@ export default function BranchesPage() {
           kicker="Write or call"
           title={
             <>
-              One number, <Gilt>one address to write to.</Gilt>
+              Call or write <Gilt>to the head office.</Gilt>
             </>
           }
         >

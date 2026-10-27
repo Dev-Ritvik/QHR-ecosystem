@@ -72,7 +72,7 @@ export default async function OnTheGroundPage() {
           kicker="The land"
           title={
             <>
-              On the ground, <Gilt>today.</Gilt>
+              Plots open <Gilt>today.</Gilt>
             </>
           }
           lede="How many plots each layout has and how many are open today, from the offices’ register. The roads and the plots themselves are best judged on a visit."
@@ -87,7 +87,7 @@ export default async function OnTheGroundPage() {
           kicker="In the register today"
           title={
             <>
-              Three layouts, <Gilt>counted.</Gilt>
+              The count <Gilt>at each layout.</Gilt>
             </>
           }
         >
@@ -166,7 +166,7 @@ export default async function OnTheGroundPage() {
           kicker="Go and see"
           title={
             <>
-              Take the plan, <Gilt>and walk it.</Gilt>
+              Walk the layout <Gilt>with its plan.</Gilt>
             </>
           }
         >

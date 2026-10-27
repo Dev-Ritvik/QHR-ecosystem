@@ -102,7 +102,7 @@ export default function WhyUsPage() {
           kicker="How we work"
           title={
             <>
-              The five, <Gilt>and where to check each.</Gilt>
+              Where to check <Gilt>each of them.</Gilt>
             </>
           }
         >

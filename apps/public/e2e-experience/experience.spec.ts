@@ -2022,7 +2022,8 @@ test.describe('the folios', () => {
       '/projects': /three layouts/i,
       '/book-a-site-visit': /walk it/i,
       '/sitemap': /every page/i,
-      '/construction-updates': /on the ground/i,
+      // (its title says what it holds since the second forensic audit, #18)
+      '/construction-updates': /plots open today/i,
     };
     for (const [route, title] of Object.entries(titles)) {
       const res = await page.goto(route);

@@ -81,7 +81,7 @@ export default async function BookASiteVisitPage() {
           kicker="The visit"
           title={
             <>
-              Which layout, <Gilt>and when.</Gilt>
+              Ask for <Gilt>a visit.</Gilt>
             </>
           }
           note="The day you name is a request. The branch telephones to fix it."
@@ -96,7 +96,7 @@ export default async function BookASiteVisitPage() {
           kicker="On the day"
           title={
             <>
-              What to take, <Gilt>and what to look at.</Gilt>
+              What to do <Gilt>on the ground.</Gilt>
             </>
           }
         >
@@ -144,7 +144,7 @@ export default async function BookASiteVisitPage() {
           kicker="Where you will go"
           title={
             <>
-              Three sites, <Gilt>two branches.</Gilt>
+              The layouts <Gilt>you can walk.</Gilt>
             </>
           }
           note="Each layout is shown by the branch that holds it."

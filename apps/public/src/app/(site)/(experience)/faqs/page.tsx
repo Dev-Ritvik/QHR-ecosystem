@@ -174,7 +174,7 @@ export default function FaqsPage() {
           kicker="The website"
           title={
             <>
-              What it needs, <Gilt>and what it keeps.</Gilt>
+              Questions about <Gilt>this website.</Gilt>
             </>
           }
         >

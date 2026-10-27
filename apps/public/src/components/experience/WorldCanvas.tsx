@@ -124,6 +124,7 @@ import { mapStage } from './mapTablePlan';
 import { copyPresence, copyZone, filmIsShort, filmIsWide } from './copyZone';
 import { READING_STOPS, READING_TIME, isFilmRoute, readingLight } from './readingLight';
 import { ExteriorDoorway } from './DoorwayRig';
+import { FountainFish } from './FountainFish';
 import { lenisInstance } from './SmoothScroll';
 import { InteriorStage } from './InteriorStage';
 import { MapTable } from './MapTable';
@@ -163,6 +164,20 @@ const WINDOW_RISE = 0.14;
 const PARALLAX_REACH = 28;
 /** Handheld drift, metres, outside (a third of it inside). */
 const HANDHELD = 0.045;
+/**
+ * THE CAMERA RESTS UNDER A STILL (the second forensic audit, 2026-10-24, #10:
+ * "the picture slides when the live scene replaces the still", 1 to 16 px on
+ * every page, always the same way). A still is the view's rest pose
+ * (stills.ts), and the live camera under it was not at rest: it breathed (the
+ * handheld drift, a few centimetres) and it leaned toward the pointer (the
+ * parallax) — and the stills had been shot with the pointer parked in the
+ * frame's corner, so each was a camera leaning down and to the right. So
+ * while a still, or the dark, is over the canvas (sceneWarm.hold) the camera
+ * holds its rest pose, which is the still's; once it has gone the drift and
+ * the lean come in over this many seconds, from nothing and without a start.
+ * The dissolve changes nothing but life.
+ */
+const BREATH_IN_S = 2.5;
 
 
 /**
@@ -335,6 +350,13 @@ function CameraRig({
   const aimVel = useRef(new THREE.Vector3());
   const reducedMotion = useRef(
     typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  // How far the camera has come out of its rest pose, 0..1 (BREATH_IN_S). A
+  // still's own exposure (scripts/stills/shoot.mjs says so before the page
+  // loads) keeps it there.
+  const breath = useRef(0);
+  const stillShoot = useRef(
+    typeof window !== 'undefined' && (window as unknown as { __estateStillShoot?: boolean }).__estateStillShoot === true,
   );
   const fromPos = useRef(new THREE.Vector3());
   const toPos = useRef(new THREE.Vector3());
@@ -657,6 +679,11 @@ function CameraRig({
       }
     }
 
+    // Out of the rest pose only once nothing is held over the picture (BREATH_IN_S).
+    breath.current =
+      sceneWarm.hold > 0 || stillShoot.current ? 0 : Math.min(1, breath.current + Math.max(0, delta) / BREATH_IN_S);
+    const life = smooth01(breath.current);
+
     // Cursor parallax. A few centimetres of camera offset across the whole
     // viewport — deliberately tiny. The scene is a backdrop that text sits on,
     // and a camera that swings to the pointer makes the copy above it feel
@@ -665,7 +692,7 @@ function CameraRig({
     //
     // Off during a passage: a camera flying through a doorway that also leans
     // toward the cursor is two moves at once.
-    if (!passage && pointer.current.lengthSq() > 0) {
+    if (!passage && pointer.current.lengthSq() > 0 && life > 0) {
       // A STILL'S IS IN PROPORTION TO HOW FAR OFF ITS SUBJECT IS. These are
       // metres, sized for a house twenty-eight metres away, where they are the
       // fraction of a degree the note below means. A page's picture can be of
@@ -675,7 +702,7 @@ function CameraRig({
       // /downloads, composing it: the layout's name at the top edge of the
       // frame and a table's foot where the plan had been). The film's own
       // moves are as they were approved.
-      const reach = p.path ? 1 : Math.min(1, desired.current.distanceTo(look.current) / PARALLAX_REACH);
+      const reach = (p.path ? 1 : Math.min(1, desired.current.distanceTo(look.current) / PARALLAX_REACH)) * life;
       desired.current.x += pointer.current.x * PARALLAX * reach;
       desired.current.y += pointer.current.y * PARALLAX * 0.6 * reach;
       // And the aim turns a touch toward the hand (the third review: "bind
@@ -732,9 +759,9 @@ function CameraRig({
     // HANDHELD. A few centimetres of slow drift, never in phase on two axes,
     // so a camera at rest still breathes the way a held one does. Not during a
     // passage (its curves are the motion) and not under reduced motion.
-    if (!passage && !reducedMotion.current) {
+    if (!passage && !reducedMotion.current && life > 0) {
       const t = performance.now() / 1000;
-      const amp = journeyState.leg === 'interior' ? HANDHELD * 0.35 : HANDHELD;
+      const amp = (journeyState.leg === 'interior' ? HANDHELD * 0.35 : HANDHELD) * life;
       desired.current.x += amp * (Math.sin(t * 0.83) * 0.6 + Math.sin(t * 1.91 + 1.3) * 0.4);
       desired.current.y += amp * 0.7 * (Math.sin(t * 0.61 + 2.1) * 0.6 + Math.sin(t * 1.37 + 0.4) * 0.4);
       look.current.x += amp * 0.5 * Math.sin(t * 0.47 + 0.9);
@@ -1642,7 +1669,14 @@ function useLook(set: SceneSet) {
 // sits well into the warm haze and the land's far edge dissolves into the
 // sky's horizon; the house, whose far corner is under 80 m from every beat
 // but the crane, stays clear of it.
-const DAY_FOG: readonly [number, number] = [80, 270];
+// [80, 270] -> [140, 500] BY DAY ONLY (the user, 2026-10-26, of the band of
+// the cover behind its title: "decrease the fog here"). At 270 the belt behind
+// the house was a milky wall across the horizon; at 500 its trees and the land
+// to the horizon read, and the ground (to 330 m) still meets the sky in haze.
+// The evening's band is as it was: near comes back to 80 as the evening falls
+// (EVENING_FOG_NEAR), so the approach and the door are untouched.
+const DAY_FOG: readonly [number, number] = [140, 500];
+const EVENING_FOG_NEAR = 80;
 const EVENING_FOG_FAR = 210;
 /** Emissive strength of the curtained windows at full evening (see ExteriorLighting). */
 const WINDOW_EVENING_GLOW = 0.5;
@@ -2079,7 +2113,8 @@ function ExteriorLighting({
       // edge to 89%.
       const dayFar = ld('fogFar', DAY_FOG[1]);
       const eveFar = ld('fogFarEvening', EVENING_FOG_FAR);
-      fog.near = ld('fogNear', DAY_FOG[0]);
+      const dayNear = ld('fogNear', DAY_FOG[0]);
+      fog.near = dayNear + (ld('fogNearEvening', EVENING_FOG_NEAR) - dayNear) * Math.max(e, n);
       fog.far = dayFar + (eveFar - dayFar) * e;
       fog.far += (ld('fogFarNight', eveFar) - fog.far) * n;
       fog.color
@@ -3599,6 +3634,9 @@ export function WorldCanvas() {
                   they are the shipped geometry exactly; only a passage through
                   the doorway moves them. */}
               <ExteriorDoorway root={exteriorRoot} />
+              {/* The fountain's fish, which leaps when the visitor scrolls
+                  (fishLeap.ts). */}
+              <FountainFish root={exteriorRoot} />
             </group>
             ) : null}
             {/* ITS OWN SUSPENSE BOUNDARY, and that is a defect fix.

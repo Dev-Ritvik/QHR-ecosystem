@@ -72,7 +72,7 @@ import {
   stationFilter,
   tableBandFilter,
 } from './lensFilter';
-import { copyPresence, copyZone, filmIsWide } from './copyZone';
+import { copyPresence, copyZone, filmIsShort, filmIsWide } from './copyZone';
 import { stationStyle } from './stationStyle';
 
 /**
@@ -537,9 +537,16 @@ export function InteriorStage({
       establishNd.current += (stationWeights.establish - establishNd.current) * Math.min(1, delta * 6);
       stationWeights.establish = establishNd.current;
       // The page's own question (copyZone.filmIsWide): a column down the left
-      // of a wide frame, or across the top or foot of any other.
+      // of a wide frame, or across the top or foot of any other. (And a phone
+      // on its side, filmIsShort, has its own densities: STATION_ND_SHORT.)
       const wide = filmIsWide(window.innerWidth, window.innerHeight);
-      stationFilter(stationWeights, wide, window.innerWidth / Math.max(1, window.innerHeight), stationStyle() === 'model');
+      stationFilter(
+        stationWeights,
+        wide,
+        window.innerWidth / Math.max(1, window.innerHeight),
+        stationStyle() === 'model',
+        filmIsShort(window.innerWidth, window.innerHeight),
+      );
       if (wide) headerBandReach();
       else {
         // The grad that rides with the reframed chapters' copy, and the

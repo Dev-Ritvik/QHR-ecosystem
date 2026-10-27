@@ -125,7 +125,7 @@ export default function LocationsPage() {
           kicker="What is changing nearby"
           title={
             <>
-              The new airport, <Gilt>at Bhogapuram.</Gilt>
+              The new airport <Gilt>at Bhogapuram.</Gilt>
             </>
           }
         >

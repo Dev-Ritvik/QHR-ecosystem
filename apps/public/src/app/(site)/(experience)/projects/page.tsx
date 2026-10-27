@@ -78,7 +78,7 @@ export default async function ProjectsPage() {
           kicker="Today"
           title={
             <>
-              What is drawn, <Gilt>and what is open.</Gilt>
+              How many plots <Gilt>are open.</Gilt>
             </>
           }
         >

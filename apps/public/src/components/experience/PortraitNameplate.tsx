@@ -106,6 +106,12 @@ export const NAMEPLATE = {
 
 /** The lettering, in metres on the plate (cap heights), and its gilt. */
 export const LETTERING = { name: 0.118, title: 0.052, rule: 0.36 } as const;
+/** The size, in pixels, the lettering's optical cut is taken at: about the
+ *  film's own size for the name (see `letter`). */
+export const OPTICAL_PX = 14;
+/** And how much heavier than that cut it is set: a stroke of its own gilt
+ *  round each letter, as a share of the capital's height. */
+export const EMBOLDEN = 0.03;
 const GILT = { light: '#F6E2A6', mid: '#DDB65C', deep: '#A97E2C' } as const;
 
 function serifFamily(): string {
@@ -160,36 +166,52 @@ function drawPlate(canvas: HTMLCanvasElement, fieldHeight: number) {
   const family = serifFamily();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  /** One line of capitals, letter-spaced, centred, its caps `cap` metres high. */
+  /**
+   * One line of capitals, letter-spaced, centred, its caps `cap` metres high.
+   *
+   * CUT FOR THE SIZE IT IS SEEN AT (the second forensic audit, 2026-10-24,
+   * #1: "at the film's distance the H of BHASKARA loses its crossbar, so the
+   * name reads K. BIIASKARA RAO"). Playfair has an optical-size axis, and a
+   * canvas follows it as a page does: the name was set at the texture's 157 px,
+   * so it took the face's display cut, whose crossbars are hairlines — a
+   * forty-fifth of the cap, and a quarter of a pixel once the plate is
+   * minified to the film's fifteen-pixel capitals. So each line is set at
+   * OPTICAL_PX, about the size the film shows it at, and scaled up to fill the
+   * plate: the face's text cut, its crossbars and serifs drawn to hold at that
+   * size; and a little heavier (EMBOLDEN). Measured in the canvas: the H's
+   * crossbar 8.5% of the cap, from 2.2% (over a pixel at the film's size, from
+   * a third of one).
+   */
   const letter = (text: string, baseline: number, cap: number, tracking: number, weight: number, maxWidth: number) => {
-    // Playfair's capitals stand 0.708 of the em.
-    let size = (cap * px) / 0.708;
-    const measure = () => {
-      ctx.font = `${weight} ${size}px ${family}`;
-      const gap = size * tracking;
-      const widths = [...text].map((c) => ctx.measureText(c).width);
-      return { gap, widths, total: widths.reduce((a, b) => a + b, 0) + gap * (text.length - 1) };
-    };
-    let m = measure();
-    if (m.total > maxWidth) {
-      size *= maxWidth / m.total;
-      m = measure();
-    }
-    const capPx = size * 0.708;
-    let x = (W - m.total) / 2;
+    // Playfair's capitals stand 0.708 of the em; the line is laid out at the
+    // optical size and drawn at `k` times it.
+    let k = (cap * px) / 0.708 / OPTICAL_PX;
+    ctx.font = `${weight} ${OPTICAL_PX}px ${family}`;
+    const gap = OPTICAL_PX * tracking;
+    const widths = [...text].map((c) => ctx.measureText(c).width);
+    const total = widths.reduce((a, b) => a + b, 0) + gap * (text.length - 1);
+    if (total * k > maxWidth) k = maxWidth / total;
+    const cap0 = OPTICAL_PX * 0.708;
+    ctx.save();
+    ctx.translate((W - total * k) / 2, baseline);
+    ctx.scale(k, k);
     // Raised gilt: a shade under each letter, then the leaf.
     const chars = [...text];
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    let sx = x;
-    for (let i = 0; i < chars.length; i += 1) {
-      ctx.fillText(chars[i], sx + capPx * 0.03, baseline + capPx * 0.045);
-      sx += m.widths[i] + m.gap;
-    }
-    ctx.fillStyle = gilt(baseline - capPx, baseline);
-    for (let i = 0; i < chars.length; i += 1) {
-      ctx.fillText(chars[i], x, baseline);
-      x += m.widths[i] + m.gap;
-    }
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = cap0 * EMBOLDEN;
+    const draw = (dx: number, dy: number) => {
+      let x = 0;
+      for (let i = 0; i < chars.length; i += 1) {
+        ctx.fillText(chars[i], x + dx, dy);
+        ctx.strokeText(chars[i], x + dx, dy);
+        x += widths[i] + gap;
+      }
+    };
+    ctx.fillStyle = ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    draw(cap0 * 0.03, cap0 * 0.045);
+    ctx.fillStyle = ctx.strokeStyle = gilt(-cap0, 0);
+    draw(0, 0);
+    ctx.restore();
   };
 
   /** A rule with a lozenge at its middle, between the two lines. */
@@ -223,9 +245,9 @@ function drawPlate(canvas: HTMLCanvasElement, fieldHeight: number) {
   const block = LETTERING.name * px + gapAbove + gapBelow + LETTERING.title * px;
   const top = (H - block) / 2;
   const nameBase = top + LETTERING.name * px;
-  letter(first.toUpperCase(), nameBase, LETTERING.name, 0.085, 600, maxWidth);
+  letter(first.toUpperCase(), nameBase, LETTERING.name, 0.085, 650, maxWidth);
   rule(nameBase + gapAbove, LETTERING.rule);
-  letter(second.toUpperCase(), nameBase + gapAbove + gapBelow + LETTERING.title * px, LETTERING.title, 0.34, 500, maxWidth);
+  letter(second.toUpperCase(), nameBase + gapAbove + gapBelow + LETTERING.title * px, LETTERING.title, 0.34, 550, maxWidth);
 }
 
 export function PortraitNameplate() {

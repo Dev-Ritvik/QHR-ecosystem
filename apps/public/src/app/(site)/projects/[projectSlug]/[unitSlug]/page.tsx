@@ -186,7 +186,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ pro
         kicker="As the register has it"
         title={
           <>
-            Plot {unit.unitNumber}, <Gilt>in figures.</Gilt>
+            Plot {unit.unitNumber} <Gilt>in figures.</Gilt>
           </>
         }
         note="Plot numbers on this site are provisional. Confirm the number against the sanctioned plan with the branch before relying on it."

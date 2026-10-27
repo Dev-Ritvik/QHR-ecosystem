@@ -50,6 +50,15 @@
       "port": 3003
     },
     {
+      "name": "public-prod-3004",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd apps\\public && npx next start --port 3004 --hostname 0.0.0.0"
+      ],
+      "port": 3004
+    },
+    {
       "name": "public-stage-live",
       "runtimeExecutable": "cmd",
       "runtimeArgs": [

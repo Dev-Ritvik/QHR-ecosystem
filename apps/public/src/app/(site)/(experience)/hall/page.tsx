@@ -39,7 +39,7 @@ export default async function HallPage() {
           kicker="The presentation hall"
           title={
             <>
-              Three addresses, <Gilt>one room.</Gilt>
+              Every layout <Gilt>in one room.</Gilt>
             </>
           }
           lede="Each layout stands on its own table, raised from its sanctioned plan."

@@ -12,7 +12,9 @@
 // it rather than in a screenshot three chapters later.
 
 import { describe, expect, it } from 'vitest';
-import { FOUNDER, NAMEPLATE } from './PortraitNameplate';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { EMBOLDEN, FOUNDER, NAMEPLATE, OPTICAL_PX } from './PortraitNameplate';
 import { buildInteriorBeats, IMPERIAL_STAIR } from './interiorPath';
 
 /** Measured from the shipped hall, three-space metres. */
@@ -69,5 +71,19 @@ describe('the portrait nameplate', () => {
     expect(FOUNDER.title).toBe('Managing Director');
     expect(FOUNDER.company).toBe('Quality Homes Reality');
     expect(typeof FOUNDER.name === 'string' || FOUNDER.name === null).toBe(true);
+  });
+
+  it("letters the plate in the face's cut for the film's size, so the H keeps its crossbar (the second forensic audit, #1)", () => {
+    // Set at the texture's own 157 px the variable face took its display cut:
+    // the H's crossbar 2.2% of the cap, a third of a pixel at the film's
+    // distance ("K. BIIASKARA RAO"). At a text size it is 6.7%, and the stroke
+    // takes it to 8.5%.
+    expect(OPTICAL_PX).toBeGreaterThanOrEqual(10);
+    expect(OPTICAL_PX).toBeLessThanOrEqual(18);
+    expect(EMBOLDEN).toBeGreaterThan(0);
+    expect(EMBOLDEN).toBeLessThanOrEqual(0.04);
+    const src = readFileSync(join(__dirname, 'PortraitNameplate.tsx'), 'utf8');
+    expect(src).toContain('ctx.font = `${weight} ${OPTICAL_PX}px ${family}`;');
+    expect(src).toContain('ctx.scale(k, k);');
   });
 });

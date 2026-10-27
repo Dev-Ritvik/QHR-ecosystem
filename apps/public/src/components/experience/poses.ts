@@ -390,16 +390,25 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
   },
 
   // THREE LAMPS LIT ALONG THE WALL, each a pair of candles on a brass arm,
-  // between the pilasters of the left wall's upper storey. Its second frame is
-  // one of them, close. (/branches: three offices; "send one enquiry".)
+  // between the pilasters of the left wall's upper storey, seen across the
+  // hall from the right: the wall's corner, its panels and capitals, and the
+  // stair's rail coming round at the foot. Its second frame comes lower and
+  // nearer, the lamps still ten metres off. (/branches: three offices; "send
+  // one enquiry".)
+  //
+  // NOT CLOSE (the second forensic audit, 2026-10-24, #15). It opened on two
+  // of the lamps from five metres on a blank wall, and its band was one of
+  // them filling half the screen: brass that is a flat ochre and flames that
+  // are cones, at a distance they were never made for. From twelve and more
+  // they are what the film shows them as, three lamps lit along a wall.
   sconces: {
     set: 'interior',
-    position: [-5.6, 3.4, 1.2],
-    target: [-8.84, 4.3, -2.4],
-    to: { position: [-7.4, 4.0, -1.2], target: [-8.84, 4.32, -2.4] },
-    fov: 26,
-    frameOffset: 0.5,
-    phone: { widen: 1.5, at: 0.5 },
+    position: [4.0, 3.2, 5.5],
+    target: [-8.84, 4.6, -3.6],
+    to: { position: [1.2, 2.6, 3.2], target: [-8.84, 4.5, -4.4] },
+    fov: 30,
+    frameOffset: 2.0,
+    phone: { widen: 1.3, at: 0.5 },
     ease: 1.0,
   },
 
@@ -545,15 +554,23 @@ export const POSES: Readonly<Record<PlaceId, Pose>> = {
     ease: 1.2,
   },
 
-  // THE GATE: its two piers and the avenue of palms beyond them, the house a
-  // long way up it. (/terms: the terms on which you come in.)
+  // THE GATE: its two piers and the avenue of palms beyond them, rising into
+  // the evening toward the house. From eighty-five metres out and twelve up.
+  // (/terms: the terms on which you come in.)
+  //
+  // NOT UNDER THE PALMS (the second forensic audit, 2026-10-24, #15). From
+  // seventeen metres outside the gate the nearest crowns were twenty-four
+  // metres off and filled the top of the frame, faceted fronds and a hard band
+  // of colour at the crown, over piers that were blank slabs. The palms are
+  // the film's, made to be seen from far off; from here the nearest are ninety
+  // metres away and the piers are small at the frame's foot.
   gate: {
     set: 'exterior',
-    position: [1.5, 2.6, 232],
-    target: [0, 4, 100],
-    to: { position: [1.4, 2.6, 226], target: [0, 4, 100] },
-    fov: 34,
-    frameOffset: 16,
+    position: [6, 12, 300],
+    target: [0, 4, 150],
+    to: { position: [5.6, 11.6, 294], target: [0, 4, 150] },
+    fov: 26,
+    frameOffset: 14,
     phone: { widen: 1.3, at: 0.5 },
     ease: 1.2,
   },

@@ -4,6 +4,8 @@
 // while its chapter is on screen.
 
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   APPROACH_ND,
   CODA_FADE,
@@ -28,6 +30,7 @@ import {
   ROOM_ND,
   STATION_ND,
   STATION_ND_MODEL,
+  STATION_ND_SHORT,
   TABLE_BAND,
   TABLE_BAND_MODEL,
   approachFilter,
@@ -116,7 +119,28 @@ describe('the tables', () => {
     // small lines stand on the pilaster's foot and set its floor.
     expect(STATION_ND.S1).toBeLessThan(2.4);
     expect(STATION_ND.S1).toBeGreaterThanOrEqual(2.0);
-    expect(STATION_ND.S3).toBeLessThan(STATION_ND.S1);
+    // The third was lightened to 1.8 with the first, and the hall's panelling
+    // then put a lit pilaster behind its place line (the second forensic
+    // audit, 2026-10-24, #8: 3.6:1). It is back at the density it had before,
+    // and no denser.
+    expect(STATION_ND.S3).toBeGreaterThanOrEqual(2.2);
+    expect(STATION_ND.S3).toBeLessThanOrEqual(2.3);
+  });
+
+  it('is denser on a phone held sideways only where that frame puts a line on the pilaster', () => {
+    const short = 844 / 390;
+    stationFilter({ S1: 1, S2: 0, S3: 0 }, WIDE, short, true, true);
+    expect(lensFilter.stops).toBe(STATION_ND_SHORT.S1);
+    expect(STATION_ND_SHORT.S1).toBeGreaterThan(STATION_ND.S1);
+    expect(STATION_ND_SHORT.S1).toBeLessThanOrEqual(2.6);
+    // every other frame keeps the client's lighter shade
+    stationFilter({ S1: 1, S2: 0, S3: 0 }, WIDE, short, true, false);
+    expect(lensFilter.stops).toBe(STATION_ND.S1);
+    // and the other tables are what they are everywhere
+    stationFilter({ S1: 0, S2: 0, S3: 1 }, WIDE, short, true, true);
+    expect(lensFilter.stops).toBe(STATION_ND.S3);
+    const stage = readFileSync(join(__dirname, 'InteriorStage.tsx'), 'utf8');
+    expect(stage).toContain('filmIsShort(window.innerWidth, window.innerHeight),');
   });
 
   it('puts nothing on the lens on a frame that is not wide: there is no column beside the plan', () => {

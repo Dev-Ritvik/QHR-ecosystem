@@ -48,7 +48,7 @@ export default function SitemapPage() {
           kicker="Sitemap"
           title={
             <>
-              Every page, <Gilt>on one sheet.</Gilt>
+              Every page <Gilt>of the site.</Gilt>
             </>
           }
           lede="Every page in the order it is meant to be read, with a line about each."
@@ -62,7 +62,7 @@ export default function SitemapPage() {
           kicker="First"
           title={
             <>
-              The film, <Gilt>and where to step into it.</Gilt>
+              The film&rsquo;s <Gilt>chapters.</Gilt>
             </>
           }
         >
@@ -102,7 +102,7 @@ export default function SitemapPage() {
           kicker="Last"
           title={
             <>
-              The small print, <Gilt>in full.</Gilt>
+              The small <Gilt>print.</Gilt>
             </>
           }
         >

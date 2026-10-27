@@ -70,7 +70,7 @@ export default async function PropertiesPage() {
           kicker="The land"
           title={
             <>
-              {WORDS[SIZES.length] ?? SIZES.length} plot sizes, <Gilt>measured off the plans.</Gilt>
+              {WORDS[SIZES.length] ?? SIZES.length} plot sizes <Gilt>from the approved plans.</Gilt>
             </>
           }
           lede="Sizes and road widths are taken from the approved layout plans, so they are exact."

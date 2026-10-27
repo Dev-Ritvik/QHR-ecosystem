@@ -39,7 +39,7 @@ export default function PrivacyPage() {
           kicker="Privacy"
           title={
             <>
-              What we collect, <Gilt>and what you can do about it.</Gilt>
+              How we handle <Gilt>your information.</Gilt>
             </>
           }
           lede="Written plainly. Until you say otherwise the one record is what keeps your visit together, and you can withdraw or delete at any time."
@@ -78,7 +78,7 @@ export default function PrivacyPage() {
           rail="What we collect"
           title={
             <>
-              What we collect, <Gilt>and when.</Gilt>
+              What we <Gilt>collect.</Gilt>
             </>
           }
         >

@@ -38,11 +38,9 @@ const LIVE = [
 ];
 
 const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'];
-const TENS = ['', 'ten', 'twenty', 'thirty', 'forty', 'fifty', 'sixty'];
 
 export default function KnowledgePage() {
   const next = pageAfter('/knowledge');
-  const minutes = LIVE.reduce((n, a) => n + a.minutes, 0);
   return (
     <>
       <RouteTelemetry routeId="knowledge" />
@@ -66,8 +64,7 @@ export default function KnowledgePage() {
           kicker="Published"
           title={
             <>
-              {WORDS[LIVE.length] ?? LIVE.length} {LIVE.length === 1 ? 'piece' : 'pieces'},{' '}
-              <Gilt>{minutes % 10 === 0 && TENS[minutes / 10] ? TENS[minutes / 10] : minutes} minutes.</Gilt>
+              {WORDS[LIVE.length] ?? LIVE.length} {LIVE.length === 1 ? 'piece' : 'pieces'} <Gilt>to read now.</Gilt>
             </>
           }
         >

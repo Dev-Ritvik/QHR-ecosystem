@@ -1,0 +1,120 @@
+# n | slug | STATUS (FIXED, PARTLY, CLIENT, DECLINED) | how checked (measured, seen, ledger) | today | evidence
+1 | load-dark-wait | FIXED | measured | The curtain lifts on the still at 1.5–1.9 s at 8 and 20 Mbit/s (film, /about, /why-us, phone). | 01-load-8mbit-film-first-visit.jpg, 02-load-8mbit-about-first-visit.jpg
+2 | load-slow-line-empty | FIXED | measured | At 8 Mbit/s the cover's still is up from 2.5 s until the scene goes live at 23 s. | 01-load-8mbit-film-first-visit.jpg
+3 | load-press-wait | FIXED | measured | The chapter's still is up 0.7 s after a press at 20 Mbit/s; no dark wait. The words come 0.3 s early: [[press-words-first]]. | 03-press-lucky-garden-20mbit.jpg
+4 | load-404-curtain | FIXED | measured | Title and message at 0.3 s. | 04-404-first-five-seconds.jpg
+5 | aa-none | FIXED | seen | Smoothed edges in every before/after panel. | ba-01-cover-roof-and-facade.jpg, ba-04-orbit-palms-pediment.jpg
+6 | cover-flat-sky | FIXED | measured | The band behind the headline: RGB 94, 95, 94 then; 79, 91, 106 (a slate) now. | 10-cover-1920.jpg
+7 | pediment-wedge | FIXED | seen | Closed. | ba-06-approach-pediment-windows.jpg
+8 | cover-pediment-seam | FIXED | seen | No black line on the raking edge. | ba-01-cover-roof-and-facade.jpg
+9 | roof-balustrade-gap | FIXED | seen | The rear balustrade is continuous. | ba-01-cover-roof-and-facade.jpg
+10 | roof-lid | CLIENT | seen | Unchanged, by his decision ("fully flat"). | 10-cover-1920.jpg
+11 | gold-accents | FIXED | seen | The balls under the cornice and the column bands are gone; gilt on the roundel and finials reflects. | ba-07-approach-portico-car.jpg, ba-08-door-capitals.jpg
+12 | palms-black | FIXED | measured | Palm foliage saturation at 11% of the film: 0.25 then, 0.50 now; lit like the trees beside them. | ba-04-orbit-palms-pediment.jpg
+13 | fog-discontinuity | FIXED | seen | Palms, trees and wall fade with distance together. | ba-04-orbit-palms-pediment.jpg
+14 | sunset-green | FIXED | measured | The glow's hue at the same four steps: 38° then, 31° now. | 30-film-desktop-walk-2.jpg
+15 | stone-two-colours | FIXED | seen | Shaded stone is the lit stone, darker. | ba-04-orbit-palms-pediment.jpg
+16 | lawn-plastic | FIXED | seen | Mown bands and grain. | ba-07-approach-portico-car.jpg
+17 | pool-inconsistent | FIXED | seen | One water. A black slot at the near corner was missed by both passes: [[pool-corner-slot]]. | ba-03-orbit-11pct.jpg
+18 | bollards-daylight | FIXED | seen | Off by day. | ba-03-orbit-11pct.jpg
+19 | glass-rail-dotted | FIXED | seen | A continuous handrail. | ba-02-cover-pool-car-trees.jpg
+20 | loungers-primitives | FIXED | seen | Loungers with form; parasols on poles. | ba-03-orbit-11pct.jpg
+21 | colour-fringe | FIXED | seen | Gone. | ba-03-orbit-11pct.jpg
+22 | shrubs-blobs | FIXED | seen | A deep rose in sun and shade. | ba-01-cover-roof-and-facade.jpg
+23 | wall-lanterns-specks | PARTLY | seen | The brackets are gone; dark specks at the hood ends remain: [[hood-end-specks]]. | 12-cover-window-hood-ends-6x.jpg
+24 | window-curtain-card | FIXED | seen | A curtain, not a sheet. | ba-06-approach-pediment-windows.jpg
+25 | portico-banding | FIXED | seen | Clean entablature and steps. | ba-07-approach-portico-car.jpg
+26 | car-sparkle | FIXED | seen | Lines along the sill, not dots. | ba-07-approach-portico-car.jpg
+27 | fountain-flat | FIXED | seen | Water and basins read as such. | ba-03-orbit-11pct.jpg
+28 | motes-specks | FIXED | seen | Gone. | 30-film-desktop-walk-1.jpg
+29 | wall-dashed | FIXED | seen | A continuous coping. | ba-03-orbit-11pct.jpg
+30 | cover-edge-crops | PARTLY | seen | The palm and the hedge are out of frame; the fountain bowl is still cut at the bottom right, which needs the approved camera (the client's). | 10-cover-1920.jpg, 13-cover-zoom-2x.jpg
+31 | cover-copy-on-terrace | FIXED | seen | The paragraph and the cue stand on the lawn. | ba-02-cover-pool-car-trees.jpg
+32 | door-capitals | FIXED | seen | Plain capitals; a round knob. | ba-08-door-capitals.jpg
+33 | hall-entry-portrait-cut | CLIENT | seen | Unchanged: the first frame through the door cuts the portrait at the eyes. | ba-09-hall-first-frame.jpg
+34 | hall-pink-balusters | FIXED | seen | Ivory. | ba-09-hall-first-frame.jpg, ba-12-stair-pass.jpg
+35 | hall-star-frieze | FIXED | seen | A plain frieze. | 30-film-desktop-walk-3.jpg
+36 | hall-wainscot-slabs | FIXED | seen | Framed, raised panels. | ba-12-stair-pass.jpg
+37 | hall-wood-grain | FIXED | seen | One walnut at its own scale. | ba-10-table-2.jpg
+38 | table-rim-faceted | FIXED | seen | A turned rim. | ba-11-table-3.jpg
+39 | boards-three-woods | FIXED | seen | One timber. | ba-10-table-2.jpg, ba-11-table-3.jpg
+40 | model-lucky-slab | FIXED | seen | Open ground in green; one ivory for plots. | ba-10-table-2.jpg
+41 | model-gayatri-artifacts | FIXED | seen | No hole, no beading. | ba-11-table-3.jpg
+42 | table2-dark-third | FIXED | measured | Mean frame brightness at table 2: 74 then, 104 now. | ba-10-table-2.jpg
+43 | stair-pan-empty | CLIENT | seen | Unchanged: frames of blank wall and balusters between the tables. | 33-film-tablet-walk-2.jpg, 31-film-phone-walk-3.jpg
+44 | stair-stringer-gaps | FIXED | seen | The string is closed; it now carries a dotted seam: [[lightmap-seams]]. | ba-12-stair-pass.jpg, 22-stair-newel-slot-and-string-dots-6x.jpg
+45 | sconce-blue | FIXED | measured | Bluish pixels in the stair-pass flames: 238 then, 48 now. At close range on /branches the flames are neutral white: [[plate-props-close]]. | 44b-branches-opening-sconces-2x.jpg
+46 | portrait-nameplate-crossed | PARTLY | seen | The name clears the rail at one notch; the title is behind it, and the name reads "BIIASKARA": [[nameplate-still-crossed]]. | 25-nameplate-two-notches-1920-4x.jpg
+47 | picture-lamp | FIXED | seen | A warm tube. | ba-13-portrait-lamp-nameplate.jpg
+48 | nameplate-aliased | PARTLY | seen | The gilt edge is one line; the H's crossbar drops out at film distance: [[nameplate-still-crossed]]. | 24-nameplate-at-film-distance-4x.jpg
+49 | map-copy-on-stair | PARTLY | seen | Pins named, rim clean; the list still crosses the stair string: [[map-list-on-string]]. The corners were left. | 28-map-heading-and-list-old-new-2x.jpg
+50 | carpets-two-colours | FIXED | seen | One carpet ink. | 21-stair-rods-and-string-old-new-3x.jpg
+51 | hall-windows-cards | CLIENT | seen | Unchanged. | 30-film-desktop-walk-3.jpg
+52 | pacing-tables | CLIENT | measured | Unchanged notch for notch: table 3's words are never whole. | 30-film-desktop-walk-3.jpg, 31-film-phone-walk-3.jpg
+53 | figures-oldstyle | CLIENT | seen | Unchanged ("4o7"); lining figures are one setting away (--figure-nums in globals.css). | ba-05-count-figures.jpg
+54 | header-band-hard-edge | FIXED | seen | No edge on the tablet. | 33-film-tablet-walk-1.jpg
+55 | station-band-hard-edge | FIXED | seen | No shape behind a table's name on the phone. | 31-film-phone-walk-3.jpg
+56 | headline-colour-midline | FIXED | seen | The colour changes at the line break. | 30-film-desktop-walk-4.jpg
+57 | figures-above-heading | FIXED | seen | One order at every size. | 31-film-phone-walk-1.jpg
+58 | footer-two-designs | FIXED | seen | One footer. | ba-15-footer.jpg
+59 | address-orphan | PARTLY | measured | One format, except /about's office list: [[pin-dash-about]]. | 49-about-office-line-dashed-pin-1920.jpg
+60 | ampersand-substitute | FIXED | seen | "and" throughout. | 60-pages-desktop-01.jpg
+61 | menu-enquire-thrice | FIXED | seen | Once. | 50-states-desktop-consent-menu-privacy.jpg
+62 | plan-images-broken | CLIENT | seen | The same three files (dated 4 August): "FUTURE EXTENTION", the resort photograph, a child's photograph in a corner, one sheet on its side. | 55-gallery-gayatri-plan-sideways.jpg, 51-states-desktop-forms.jpg
+63 | plan-zoom-blur | CLIENT | seen | Unchanged scans in the article. | 60-pages-desktop-07.jpg
+64 | plan-full-size-raw | FIXED | ledger | A viewer, per the ledger; not exercised in this pass. | -
+65 | gallery-two-layouts | FIXED | seen | One mount style. | 60-pages-desktop-05.jpg
+66 | plate-reuse | FIXED | measured | 28 pages, 28 pictures. | 40-openings-desktop-1.jpg, 40-openings-desktop-2.jpg
+67 | plate-weak | FIXED | seen | The three named are fixed; two new pictures show props too close: [[plate-props-close]]. | 40-openings-desktop-1.jpg
+68 | plate-heights | FIXED | measured | Two heights by one rule. | 40-openings-desktop-1.jpg
+69 | layout-plate-blurred | FIXED | seen | In focus. | 40-openings-desktop-2.jpg
+70 | car-melted | CLIENT | seen | Gone from /why-us; still in the film's approach. | ba-07-approach-portico-car.jpg
+71 | phone-about-crop | FIXED | seen | The face whole. | 41-openings-phone-1.jpg
+72 | edge-strip | FIXED | ledger | Per the ledger; nothing visible at the edge on today's phone strips. | 61-pages-phone-01.jpg
+73 | header-collision | FIXED | seen | Words dissolve before the header on every page strip. | 60-pages-desktop-01.jpg
+74 | sheets-empty | FIXED | seen | The reading type steps up at 1920. | 60-pages-desktop-01.jpg
+75 | short-last-lines | FIXED | measured | None in running text at four sizes (the cookie table's group labels sit on their own line by design). | -
+76 | dash-lists-wrap | FIXED | seen | No rule begins a line. | 61-pages-phone-04.jpg
+77 | cookie-table-wrap | FIXED | seen | One line. | 60-pages-desktop-04.jpg
+78 | heading-stops | FIXED | measured | First and second levels stopped, third not, on all 28 pages. | -
+79 | numbering-three | FIXED | seen | One style. | 60-pages-desktop-14.jpg
+80 | closing-labels | FIXED | seen | "Next" and "Back to". | 60-pages-desktop-01.jpg
+81 | legal-drafts-live | CLIENT | measured | 25 placeholders (privacy 5, terms 9, refunds 11) under "Draft — not yet in force". | 60-pages-desktop-09.jpg, 60-pages-desktop-12.jpg
+82 | dpo-personal-email | FIXED | seen | The company's own address, by the client's rule. | 60-pages-desktop-09.jpg
+83 | counts-mismatch | CLIENT | seen | Unchanged: 113, 181 and 113 (407). | ba-05-count-figures.jpg
+84 | copy-antithesis | PARTLY | measured | Inner pages 37 then, 7 now; the film's three lines were not counted: [[film-copy-negation]]. | -
+85 | copy-self-reference | FIXED | measured | 38 then, 7 now. | -
+86 | copy-repeated | FIXED | measured | 54 then, 1 now (the head office's address). | -
+87 | content-unfinished | PARTLY | seen | The sections announcing their own absence are gone; photographs and approval references are the client's to supply. | -
+88 | testimonials-other-names | CLIENT | seen | A note now says which development each quote speaks of; dated accounts are the client's to supply. | 60-pages-desktop-14.jpg
+89 | telugu-fallback | DECLINED | seen | Left as it is by the user's choice (24 October). | -
+90 | units-mixed | PARTLY | measured | Road widths two ways: [[feet-two-ways]]. | 60-pages-desktop-11.jpg
+91 | names-differ | FIXED | seen | One name a page. | 50-states-desktop-consent-menu-privacy.jpg
+92 | generic-mission | CLIENT | seen | Unchanged, his words. | 60-pages-desktop-01.jpg
+93 | faq-developer-question | FIXED | seen | "Will this work on my phone?" | 61-pages-phone-03.jpg
+94 | honeypot-text | FIXED | measured | The field is hidden; no label in the page's text. | -
+95 | meta-gaps | FIXED | measured | 28 pages, no problems; 29 share cards. | 56-share-cards-all-pages.jpg
+96 | type-scale-sprawl | FIXED | measured | 19 styles in 13 sizes at 1920 (42 in 15 then). One near-duplicate leading: [[leading-two-at-reading-size]]. | -
+97 | body-two-sizes | FIXED | measured | One body size per screen. | -
+98 | colour-tokens | FIXED | measured | Seven text colours (16 then). | -
+99 | numerals-mixed | FIXED | seen | Lining in forms and tables. | 51-states-desktop-forms.jpg
+100 | motion-values | FIXED | measured | Two durations, one curve over 1,186 transitions. | -
+101 | logo-plate-unique | CLIENT | seen | The mark is his. | 10-cover-1920.jpg
+102 | header-shift | FIXED | seen | Still. | 50-states-desktop-consent-menu-privacy.jpg
+103 | menu-ghost | FIXED | seen | Opaque by 0.2 s. | 52-states-desktop-focus-and-menu-opening.jpg
+104 | notice-box-offset | FIXED | seen | On the grid. | 60-pages-desktop-09.jpg
+105 | consent-card | FIXED | seen | The site's own style. | 50-states-desktop-consent-menu-privacy.jpg, 53-states-phone.jpg
+106 | consent-autofocus | FIXED | measured | Focus on the card; no choice pre-selected. | -
+107 | consent-reopen | FIXED | seen | "Privacy and data choices." | 50-states-desktop-consent-menu-privacy.jpg
+108 | focus-states | FIXED | measured | One ring on every stop (2 px gilt, 4 px clear). | 52-states-desktop-focus-and-menu-opening.jpg
+109 | form-date-native | FIXED | seen | A drawn control ("Any day"). | 60-pages-desktop-01.jpg
+110 | form-time-wrap | FIXED | measured | Four options on one row at 1920. | 51-states-desktop-forms.jpg
+111 | form-field-sizes | FIXED | measured | One field size. | 51-states-desktop-forms.jpg
+112 | phone-rail-tap | FIXED | measured | A tap beside the dots does nothing; names opened on a dot close on choosing and stay closed. | 54-phone-finger-on-the-rail.jpg
+113 | phone-rail-over-content | FIXED | seen | The rail steps out when the film is still. | 54-phone-finger-on-the-rail.jpg
+114 | phone-hero-crop | FIXED | seen | Both corners of the front in frame. | 31-film-phone-walk-1.jpg
+115 | phone-station3-wrap | FIXED | seen | No rule begins a line. | 31-film-phone-walk-3.jpg
+116 | phone-footer-ragged | FIXED | seen | Even rows. | 61-pages-phone-01.jpg
+117 | phone-tap-targets | PARTLY | measured | Everything 44 px tall; three footer links narrower: [[footer-links-narrow]]. | 61-pages-phone-01.jpg
+118 | phone-nameplate-strip | FIXED | seen | No strip at the map chapter's top. | 31-film-phone-walk-4.jpg
+119 | revolve-copy-on-hedge | FIXED | seen | The caption stands on the lawn. | ba-03-orbit-11pct.jpg

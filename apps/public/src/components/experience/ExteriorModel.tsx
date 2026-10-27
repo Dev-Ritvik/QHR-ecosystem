@@ -1273,6 +1273,25 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   // almost none of it (a bed of small stones has no face to mirror with).
   MAT_Stone_Flags: { env: 0.9 },
   MAT_Gravel: { env: 0.35 },
+  // THE DRIVE, POLISHED (build_estate_v7.py, MAT_Drive_Polished; the user,
+  // 2026-10-26: "smooth and polished"): the terrace's stone, smooth, taking
+  // more of the sky than the flags do, so the forecourt has a polished sheen.
+  // DARK, AND HONED TO A SATIN. As the terrace's pale stone it was the second
+  // brightest thing in the cover after the house, and a mirror at dusk: the
+  // portico lantern lay on it as a hot streak behind the approach's words
+  // ("The door is open." 2.8:1, "Step inside" 2.3:1, where the gravel had
+  // held them at 5.6:1 and more; the strict test at 1920x945, 1536x730 and
+  // 390x844). At three-tenths of its colour and its polish taken to a
+  // satin (roughness 0.16 -> 0.5) it is a dark smooth stone the house stands
+  // on, the lantern a soft warm glow in it, and those lines at 6.5:1 or more.
+  MAT_Drive_Polished: { colour: 0.3, rough: 3.1, env: 1.3 },
+  // THE CANAL'S GENERATED TREES (tripo_assets_v7.py, tree_globe), as the
+  // generated palms above: a leaf is not metal, and takes little of the sky.
+  MAT_Tree_Globe: { metal: 0, rough: 1.25, env: 0.3, colour: 0.9 },
+  // THE FOUNTAIN'S FISH (tripo_assets_v7.py, fish_betta; FountainFish.tsx):
+  // a betta's scales take the sky, which is what catches the eye as it goes
+  // over the water.
+  MAT_Fish_Betta: { env: 1.4 },
   // Dark slate under dark water: the reflecting pool above. At 0.45 the shell
   // still read cyan through the sheet.
   MAT_Pool_Shell: { colour: 0.16, env: 1.2 },

@@ -1,0 +1,74 @@
+## From 9 October: still visible, partly fixed
+
+@@ nameplate-still-crossed | HIGH | repeated | table3-copy-aa, lightmap-seams | 9 Oct #46 and #48, partly fixed: the plate's gilt edge is one clean line, and the name now clears the rail at one notch.
+T: The founder's nameplate is never whole, and reads "BIIASKARA" at the film's distance
+L: Film (/), the portrait chapter: 81.5% and 82.9% of the scroll at 1920×945, 82.9% at 1366×657, 82.1% on a phone (390×844).
+E: The founder's nameplate under the portrait, "K. BHASKARA RAO / MANAGING DIRECTOR".
+O: While the chapter's words are up, the plate is never whole. At 81.5% the stair's balusters still stand across the name. At 82.9% the name is above the rail but the second line, his title, is behind the handrail, and the same at 1366×657. On a phone the balusters run through "MANAGING DIRECTOR". At the film's distance the H of BHASKARA also loses its crossbar, so at 1920 and 1366 the name reads "K. BIIASKARA RAO". On /about's opening picture, where the same plate is drawn larger, the lettering is correct.
+V: The plate enlarged 4× with hard pixels at 1920 (both notches) and 1366, the phone frame, and /about's opening for comparison. At film distance the crossbar is thinner than a pixel and drops out when the texture is filtered.
+W: The client asked for this plate to be easy to read and to "create respect". A founder's surname that reads wrong, under his own portrait, is the most personal mistake the site can make.
+X: Lettering that holds at the film's distance (a heavier cut for the name, or a plate texture whose smaller sizes keep the crossbar), and both lines clear of the rail at the notch where the chapter's words are whole.
+N: The portrait, its lamp and the camera are "fine, don't touch" by the client's word; the plate's legibility is his own request. The lettering's weight can be fixed without touching any of them; moving the rail or the camera needs his word.
+F: 24-nameplate-at-film-distance-4x.jpg, 25-nameplate-two-notches-1920-4x.jpg, 26-nameplate-phone-title-behind-rail.jpg, 26b-nameplate-1366-title-behind-rail.jpg, 26c-nameplate-on-about-opening-4x.jpg, ba-13-portrait-lamp-nameplate.jpg
+
+@@ film-copy-negation | AI-SLOP | repeated | heads-comma-pairs | 9 Oct #84, fixed on the inner pages (37 turns down to 7, four kept on purpose); the film's own copy was not counted.
+T: Three "this, not that" lines left in the film
+L: Film (/): the orbit (11–14% of the scroll), the count (22–34%), the map (87–90%).
+E: The film's own lines.
+O: Three of the film's lines are still built as "this, not that": "We do not broker land.", "Counted from the sanctioned layout plans, not from a brochure." and "A model of the two districts, not a survey: a pin marks a district, not a place on the ground."
+V: The film's text read from its source (site-home/page.tsx): 230 words, four sentences with a negation, three of them contrasts.
+W: These are the first page's headline lines; the voice the inner pages were cleared of is still the first thing a visitor reads. Seriousness: low to medium.
+X: The positive statement in each place: "We develop our own land.", "Counted from the sanctioned layout plans.", "A pin marks the district."
+N: These lines were written before the paid audits; whether the client chose them is not recorded. Ask before rewriting.
+F: 30-film-desktop-walk-1.jpg, 30-film-desktop-walk-4.jpg
+
+@@ map-list-on-string | LOW | isolated | map-pin-plate-on-note | 9 Oct #49, partly fixed: the pins carry their names and the rim's dotted highlight is gone.
+T: The map's list still crosses the stair string
+L: Film (/), the map chapter, 87–90% of the scroll, the left half, at 1920×945 and 1366×657.
+E: The list of the three layouts beside the map table.
+O: The list's lines still run across the pale stair string: "Water" and "Vizianagaram" stand on the string and the rest of each line on the dark stair, so every line crosses a light-dark edge as it did on 9 October. The string itself is now smooth, and contrast holds (no line under 4.5:1). What remains is the busy ground.
+V: 2× crops of the heading and the list, 9 October beside today: the same diagonal band behind the lines' right ends.
+W: This is the film's closing statement of what the company holds, read across the brightest edge in the frame.
+X: The list on one ground: set further left, or the string under it taken down.
+F: 28-map-heading-and-list-old-new-2x.jpg, ba-14-map-table.jpg
+
+@@ hood-end-specks | LOW | repeated | lightmap-seams, pool-corner-slot | 9 Oct #23, partly fixed: the brackets that read as lanterns are gone.
+T: Dark specks at the window hood ends on the cover
+L: Film (/), the cover (0%) and the orbit (11–17%), the first-floor window hoods.
+E: The ends of the window hoods.
+O: A dark speck of 4–6 px sits at the end of each hood, and a dark wedge at the left end of the pedimented hood. The fix ledger reads them as the hood's end face in shade and its shadow in the low sun; at 1:1 on the cover they still read as a row of dark marks across the facade.
+V: Three hoods enlarged 6× from today's cover.
+W: Small marks repeated along the most looked-at facade read as dirt or as a modelling fault.
+X: Ends that read as stone in shade: a lighter end face, or a softer shadow.
+N: Found and left by the fixer in Phase 6, on the reading that it is shade.
+F: 12-cover-window-hood-ends-6x.jpg, 10-cover-1920.jpg
+
+@@ pin-dash-about | LOW | isolated | feet-two-ways | 9 Oct #59, fixed everywhere but this list.
+T: /about's office list keeps a dash before the PIN
+L: /about, "Where it works", the list of offices, at every size.
+E: The three office addresses.
+O: /about still writes "Visakhapatnam – 530016", with a dash before the PIN, for all three offices; /branches, /contact, the footer and the legal pages write "Visakhapatnam 530016". At 1920×945 the "– 530016" falls alone onto the last line.
+V: 1920 crop of the list; the source puts `&ndash;` before the PIN (about/page.tsx, line 193).
+W: The 9 October fix gave the site one address format; this list was missed, and its stub line is the kind of loose end 9 Oct #75 removed.
+X: The site's format, with the PIN kept on the town's line.
+F: 49-about-office-line-dashed-pin-1920.jpg
+
+@@ feet-two-ways | LOW | repeated | pin-dash-about, leading-two-at-reading-size | 9 Oct #90, mostly fixed: six ways of writing a road width are down to two.
+T: Road widths written two ways
+L: /properties (the size table's last column) and /investment-guide, against the three layout pages, /projects, /locations, /faqs, the article on reading a plan, and /properties' own text.
+E: Road widths.
+O: Plot sizes are written one way everywhere (30′ × 50′). Road widths are written two ways: with the prime, "40′ and 30′ roads" (13 times, on /properties and in the guide), and with "ft", "40 ft", "20 ft", "30 ft", "33 ft" (35 times, on eight pages). /properties uses both.
+V: The text of all 28 pages, every road width counted.
+W: /properties is the page that compares the layouts; its table writes widths differently from the pages it links to and from its own paragraphs.
+X: One form for road widths across the site.
+F: 60-pages-desktop-11.jpg
+
+@@ footer-links-narrow | LOW | systemic |  | 9 Oct #117, fixed in height: every control on a phone is at least 44 px tall.
+T: Three footer links narrower than 44 px on a phone
+L: Every page on a phone (390×844), the footer's last row.
+E: The small-print links "Privacy", "Terms", "Cookies" and "Sitemap".
+O: They are 44 px tall but narrower: "Terms" 33.6 px, "Privacy" 40.0 px, "Cookies" 42.5 px ("Sitemap" 44.0). Nothing else on any page is under 44 px either way.
+V: Every control's box measured on all 28 pages at 390×844: these three on every page, and nothing else.
+W: Under the 44 × 44 px touch guidance (Apple; WCAG 2.5.5) but above WCAG 2.5.8's 24 px minimum: a polish item, not a failure.
+X: Each link's touch area 44 px wide with padding; the row's look unchanged.
+F: 61-pages-phone-01.jpg

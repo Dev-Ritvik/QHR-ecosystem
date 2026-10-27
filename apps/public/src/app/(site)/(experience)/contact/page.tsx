@@ -83,7 +83,7 @@ export default async function ContactPage() {
           kicker="Or an office directly"
           title={
             <>
-              Three addresses, <Gilt>one telephone number.</Gilt>
+              Each office&rsquo;s <Gilt>own address.</Gilt>
             </>
           }
         >

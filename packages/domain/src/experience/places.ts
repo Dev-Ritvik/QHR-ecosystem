@@ -146,7 +146,7 @@ export const SURFACE_ROUTES: Readonly<Record<string, PlaceId>> = {
   '/faqs': 'stair',
   // "One sheet a layout": a layout's own name, on the plate of its board.
   '/downloads': 'plaque',
-  // "The plans, full size": a model from over it, where it is a plan.
+  // "The plans at full size": a model from over it, where it is a plan.
   '/gallery': 'plan',
   // What buyers say: the terrace by the pool, its chairs and its shade — the
   // one place in the grounds that is somebody's.
@@ -169,7 +169,7 @@ export const SURFACE_ROUTES: Readonly<Record<string, PlaceId>> = {
   '/refund-policy': 'canal',
   // "What this site stores": the urn by the door, which is for keeping things.
   '/cookie-policy': 'urn',
-  // "Every page, on one sheet": the whole estate from over it, as a plan of
+  // "Every page of the site": the whole estate from over it, as a plan of
   // the site.
   '/sitemap': 'above',
 };

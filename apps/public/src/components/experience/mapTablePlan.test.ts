@@ -157,6 +157,25 @@ describe("the pins' names (the forensic audit of 2026-10-09, #49)", () => {
     expect(box({ x: 0, y: 0 }).r).toBe(plate.w);
   });
 
+  it("keep below the chapter's words and left of its dots on a short phone (the second forensic audit, #9)", () => {
+    // 390x664: the note's last line ends at 406 and the rail's column begins at 362
+    const f = { width: 390, height: 664, gap: 7, margin: 8, top: 406 + 14, right: 362 - 7 };
+    const pts = [{ x: 205, y: 426 }, { x: 150, y: 440 }, { x: 190, y: 472 }];
+    const sizes = [{ w: 188, h: 19 }, { w: 123, h: 19 }, { w: 200, h: 19 }];
+    const at = placeLabels(pts, sizes, f);
+    const boxes = at.map((p, i) => ({ l: p.x, t: p.y, r: p.x + sizes[i].w, b: p.y + sizes[i].h }));
+    for (let i = 0; i < boxes.length; i += 1) {
+      expect(boxes[i].t, `plate ${i} under the note`).toBeGreaterThanOrEqual(f.top);
+      expect(boxes[i].r, `plate ${i} clear of the dots`).toBeLessThanOrEqual(f.right);
+      for (let j = i + 1; j < boxes.length; j += 1) expect(meet(boxes[i], boxes[j]), `${i} and ${j}`).toBe(false);
+    }
+    // and the table says where those two edges are
+    const table = readFileSync(join(__dirname, 'MapTable.tsx'), 'utf8');
+    expect(table).toContain("copyZone.panes.find((p) => p.id === 'city')");
+    expect(table).toContain('top: Math.max(Math.min(96, size.height * 0.1), copyFoot.current + PIN_NAMES.gap * 2),');
+    expect(table).toContain("document.querySelector('nav.rail')");
+  });
+
   it('end at a pin by the frame\u2019s edge, over it, and not run off the frame', () => {
     const [at] = placeLabels([{ x: 1900, y: 500 }], [plate], frame);
     expect(at.x + plate.w).toBeLessThanOrEqual(frame.width - frame.margin);

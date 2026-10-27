@@ -19,6 +19,13 @@
 // What is shot is the canvas alone: the page's words, its header, the grain
 // and the still layer itself are hidden for the exposure (the lens's density
 // under the film's copy is the scene's own, and stays).
+//
+// AND THE CAMERA AT REST. A still is what the live camera shows under it, and
+// under a still the camera holds its rest pose: no handheld drift, no lean
+// toward the pointer (WorldCanvas, BREATH_IN_S). Here the page is told before
+// it loads that it is being exposed, and holds that pose throughout — the
+// stills were once shot with the pointer in the frame's corner, leaning every
+// one of them (the second forensic audit, 2026-10-24, #10).
 
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
@@ -141,6 +148,9 @@ for (const cut of CUTS) {
     isMobile: !!cut.mobile,
     hasTouch: !!cut.mobile,
     reducedMotion: 'no-preference',
+  });
+  await ctx.addInitScript(() => {
+    window.__estateStillShoot = true;
   });
   let answered = false;
 

@@ -355,7 +355,7 @@ export default async function ProjectDetailPage({
             kicker="At a glance"
             title={
               <>
-                How large, <Gilt>and how much is open.</Gilt>
+                The layout <Gilt>in numbers.</Gilt>
               </>
             }
           >
@@ -377,7 +377,7 @@ export default async function ProjectDetailPage({
             kicker="The sanctioned plan"
             title={
               <>
-                The whole layout, <Gilt>on one sheet.</Gilt>
+                The whole layout <Gilt>on one sheet.</Gilt>
               </>
             }
           >
@@ -410,7 +410,7 @@ export default async function ProjectDetailPage({
             kicker="The plots, mapped"
             title={
               <>
-                Every plot, <Gilt>where it lies.</Gilt>
+                Where each <Gilt>plot lies.</Gilt>
               </>
             }
           >
@@ -428,11 +428,11 @@ export default async function ProjectDetailPage({
             title={
               layout.sizes.length === 1 ? (
                 <>
-                  One size, <Gilt>and the road it stands on.</Gilt>
+                  The plot size <Gilt>and its roads.</Gilt>
                 </>
               ) : (
                 <>
-                  The sizes, <Gilt>and the roads they stand on.</Gilt>
+                  The plot sizes <Gilt>and their roads.</Gilt>
                 </>
               )
             }
@@ -517,7 +517,7 @@ export default async function ProjectDetailPage({
             kicker="Approval"
             title={
               <>
-                Whose sanction, <Gilt>and how to check it.</Gilt>
+                Check <Gilt>the sanction.</Gilt>
               </>
             }
           >

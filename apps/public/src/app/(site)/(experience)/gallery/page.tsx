@@ -59,7 +59,7 @@ export default function GalleryPage() {
           kicker="The land"
           title={
             <>
-              The plans, <Gilt>full size.</Gilt>
+              The plans <Gilt>at full size.</Gilt>
             </>
           }
           lede="The same three plans that stand on the tables in the hall — here as flat sheets you can read closely or take away."

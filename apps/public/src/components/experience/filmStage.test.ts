@@ -346,7 +346,10 @@ describe('the lens on the stage', () => {
     expect(canvas).toContain('filmIsShort(window.innerWidth, window.innerHeight),');
     expect(canvas).toContain('if (out && film) approachFilter(legS);');
     const stage = read('./InteriorStage.tsx');
-    expect(stage).toContain("stationFilter(stationWeights, wide, window.innerWidth / Math.max(1, window.innerHeight), stationStyle() === 'model');");
+    // (and a phone on its side has its own densities: lensFilter, STATION_ND_SHORT)
+    expect(stage).toMatch(
+      /stationFilter\(\s*stationWeights,\s*wide,\s*window\.innerWidth \/ Math\.max\(1, window\.innerHeight\),\s*stationStyle\(\) === 'model',\s*filmIsShort\(window\.innerWidth, window\.innerHeight\),\s*\);/,
+    );
   });
 });
 

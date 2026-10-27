@@ -67,7 +67,7 @@ export default function TermsPage() {
           raised
           title={
             <>
-              What the information here is, <Gilt>and is not.</Gilt>
+              The information <Gilt>on this site.</Gilt>
             </>
           }
         >
