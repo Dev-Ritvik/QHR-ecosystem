@@ -182,7 +182,7 @@ export const HOUR_STEP = 0.15;
  *           much brighter than a bare lambert the scene's sky makes it.
  */
 export const WATER = {
-  pool: { f0: 0.12, rough: 0.09, sun: 0.4, sat: 0.72, dusk: 0.5, body: 0.55 },
+  pool: { f0: 0.06, rough: 0.09, sun: 0.4, sat: 0.72, dusk: 0.5, body: 0.9, teal: 0.42 },
   canal: { f0: 0.16, rough: 0.08, sun: 0.4, sat: 0.8, dusk: 0.5, body: 1.0 },
   fountain: { f0: 0.14, rough: 0.08, sun: 0.4, sat: 0.85, dusk: 0.5, body: 1.0 },
   stone: [0.6, 0.55, 0.46] as readonly [number, number, number],
@@ -470,8 +470,10 @@ export const WATER_COLOUR = /* glsl */ `
   // A SLATE, WITH A LITTLE OF THE FILE'S TEAL LEFT IN IT. The file's water is
   // a resort's turquoise, and lit as paint it was the one saturated thing in
   // the dusk (the forensic audit, #17). What is under a reflecting pool's
-  // surface is its dark floor seen through two metres of water.
-  vec3 body = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.3) * uWaterBody;
+  // surface is its dark floor seen through two metres of water. AQUA AGAIN
+  // at the user's word (the concept built 1:1, 2026-10-27): more of the
+  // file's teal (WATER.pool.teal), over a pale floor, and less mirror.
+  vec3 body = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, ${WATER.pool.teal.toFixed(2)}) * uWaterBody;
   vec3 shallow = body * vec3(1.55, 1.55, 1.5);
   diffuseColor.rgb = mix(shallow, body * 0.5, deep);
   float fw = length(fwidth(vRipplePos.xz));

@@ -42,6 +42,7 @@ import {
   waterUniforms,
 } from './exteriorWater';
 import { ld } from './lookdev';
+import { journeyState } from './journey';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { attachLoaders } from './HallModel';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -51,6 +52,10 @@ import { dressLawn, sharpenTextures } from './exteriorLawn';
 import { dressFoliage, followSun } from './exteriorFoliage';
 import { dressPalmCrowns, replantBelt, varyTrees } from './exteriorTrees';
 import { dressHaze, horizonSkirt } from './exteriorHaze';
+import { plantJungle } from './exteriorJungle';
+import { SurveyPins, surveySheet } from './exteriorSurvey';
+import { LAYOUT, LayoutMarks, clearJunctions, layLayout, layoutAir, layoutFades, layoutSheet, wetTheRoads } from './exteriorLayout';
+import { CoverLeaves, coverLeavesMesh } from './coverLeaves';
 import { groundObjects } from './exteriorContact';
 import { dressWindows, roomLights } from './exteriorWindows';
 import { buildPoolMap, dressPools } from './nightPools';
@@ -941,8 +946,10 @@ export const EXTERIOR_BOUNDS = {
   // The delivered terrain spans +/-120m and undulates from y -2.97 to +0.97.
   // It was a flat 450m plane; the camera far plane and the fog are tuned
   // against this number, so it is measured rather than assumed.
-  // v7: flat inside the compound wall, a planted berm outside it, +/-330 m.
-  groundHalfSpan: 330,
+  // v7: flat inside the compound wall, a planted berm outside it, +/-330 m;
+  // since 2026-10-27 the country past the berm, rolling, out to +/-900 m
+  // (build_estate_v7.py COUNTRY_REACH).
+  groundHalfSpan: 900,
 } as const;
 
 /**
@@ -1284,7 +1291,9 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   // 390x844). At three-tenths of its colour and its polish taken to a
   // satin (roughness 0.16 -> 0.5) it is a dark smooth stone the house stands
   // on, the lantern a soft warm glow in it, and those lines at 6.5:1 or more.
-  MAT_Drive_Polished: { colour: 0.3, rough: 3.1, env: 1.3 },
+  // (0.3 and an env of 1.3 until the concept built 1:1, 2026-10-27, whose
+  // forecourt is a near-black stone round the fountain.)
+  MAT_Drive_Polished: { colour: 0.15, rough: 3.1, env: 1.0 },
   // THE CANAL'S GENERATED TREES (tripo_assets_v7.py, tree_globe), as the
   // generated palms above: a leaf is not metal, and takes little of the sky.
   MAT_Tree_Globe: { metal: 0, rough: 1.25, env: 0.3, colour: 0.9 },
@@ -1293,8 +1302,10 @@ const POLISH: Record<string, { colour?: number; rough?: number; env?: number; me
   // over the water.
   MAT_Fish_Betta: { env: 1.4 },
   // Dark slate under dark water: the reflecting pool above. At 0.45 the shell
-  // still read cyan through the sheet.
-  MAT_Pool_Shell: { colour: 0.16, env: 1.2 },
+  // still read cyan through the sheet. AND PALE AGAIN, at the user's word
+  // (the concept built 1:1, 2026-10-27): its pool is an aqua over a pale
+  // floor, the paid audit's dark mirror the client kept is set aside.
+  MAT_Pool_Shell: { colour: 0.5, env: 1.0 },
 };
 
 /**
@@ -2068,12 +2079,20 @@ export function ExteriorModel({
   const sunSearch = useRef(0);
   /** The horizon's skirt (exteriorHaze.ts): a ring round the eye. */
   const skirt = useRef<THREE.Mesh | null>(null);
+  const fades = useRef<ReturnType<typeof layoutFades>>({ arriving: [], leaving: [] });
   useFrame((state, delta) => {
     waterShared.uTime.value += delta;
     // It stands round the camera, wherever the camera is (in the estate's own
     // space: the root may stand anywhere in the scene's).
     const ring = skirt.current;
     if (ring?.parent) ring.parent.worldToLocal(ring.position.copy(state.camera.position));
+    // (And it stands higher up the hills over the layout: the founder's mist.)
+    const air = layoutAir(journeyState.leg, journeyState.legProgress, !!journeyState.film);
+    if (ring) ring.scale.y = 1 + (ld('layoutMist', LAYOUT.mist.lift) - 1) * air;
+    // (And what is that frame's only is drawn while its air is up, and what stands
+    // where it is laid until its air is whole.)
+    for (const m of fades.current.arriving) m.visible = air > 0;
+    for (const m of fades.current.leaving) m.visible = air < 1;
     // Looked for at most twice a second: a scene with no shadow-casting sun
     // (the dusk rollback) must not be traversed every frame.
     if ((!sun.current || !sun.current.parent) && (sunSearch.current -= delta) <= 0) {
@@ -2096,6 +2115,16 @@ export function ExteriorModel({
     // material with no tangents writes NaN, and one NaN fragment takes the
     // whole bloom chain — and therefore the whole screen — to black.
     const disarmed = guardAnisotropy(root);
+    // THE JUNGLE (exteriorJungle.ts; the concept built 1:1, 2026-10-27): the
+    // belt grown, the great banyans, the palms over the forest, its gaps and
+    // the roof of leaves beyond. FIRST, so every pass below dresses it as it
+    // dresses the belt (the lens's depth, the wind, the haze, each tree its
+    // own proportions) and the warm-up builds its programs with the rest.
+    const jungle = plantJungle(root);
+    // THE LAYOUT'S ROADS (exteriorLayout.ts; the founder's frame,
+    // 2026-10-28): laid in the drive's stone before the grade, so every pass
+    // below dresses them as it dresses the drive.
+    const laid = layLayout(root);
     const graded = applyGrade(root, grade);
     // Before the polish, so the lacquer is the material the polish reaches.
     const lacquered = lacquerCars(root);
@@ -2133,6 +2162,12 @@ export function ExteriorModel({
     // surfaces, so they chain onto the stone's and the lawn's own shaders.
     const pools = dressNightPools(root);
     const sharpened = sharpenTextures(root, Math.min(8, gl.capabilities.getMaxAnisotropy()));
+    // The layout's junctions cleared of the avenue's palms, lamps and kerb
+    // (exteriorLayout.ts): after the trees are varied, and before the air
+    // wraps the kerb's material.
+    const junctions = clearJunctions(root);
+    // ...and the roads wet, on the same terms (the forecourt left as it is).
+    wetTheRoads(root);
     // LAST of the shader passes: the air, toward the sky on each fragment's
     // own bearing (exteriorHaze.ts). It wraps whatever the others compile to.
     dressHaze(root);
@@ -2147,6 +2182,15 @@ export function ExteriorModel({
     groundObjects(root);
     // And where the land ends, air (exteriorHaze.ts, HORIZON_SKIRT).
     skirt.current = horizonSkirt(root);
+    fades.current = layoutFades(root);
+    // THE COVER'S SURVEY AND ITS NEAR LEAVES (the concept built 1:1,
+    // 2026-10-27; exteriorSurvey.ts, coverLeaves.ts): under the root, so the
+    // warm-up builds their programs with the rest.
+    if (!root.getObjectByName('survey_sheet')) root.add(surveySheet());
+    // And the layout's survey (exteriorLayout.ts), as the cover's is.
+    if (!root.getObjectByName('layout_sheet')) root.add(layoutSheet());
+    const leaves = coverLeavesMesh();
+    if (leaves && leaves.parent !== root) root.add(leaves);
 
     let meshes = 0;
     let tris = 0;
@@ -2210,6 +2254,10 @@ export function ExteriorModel({
       box.min.y.toFixed(2), box.max.y.toFixed(2),
     );
     // eslint-disable-next-line no-console
+    console.info('[exterior_jungle]', JSON.stringify(jungle));
+    // eslint-disable-next-line no-console
+    console.info('[exterior_layout]', JSON.stringify({ laid, junctions }));
+    // eslint-disable-next-line no-console
     console.info('[exterior_census]', JSON.stringify({
       url,
       ashlar: census.ashlar, rustic: census.rustic,
@@ -2252,5 +2300,12 @@ export function ExteriorModel({
     return () => onRoot?.(null);
   }, [root, onRoot]);
 
-  return <primitive object={root} />;
+  return (
+    <>
+      <primitive object={root} />
+      <SurveyPins />
+      <LayoutMarks />
+      <CoverLeaves />
+    </>
+  );
 }

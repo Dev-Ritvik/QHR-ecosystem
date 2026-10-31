@@ -46,6 +46,23 @@ export const BAND_M = 1.6;
  * the bands, it printed under two levels in 255.)
  */
 export const BAND_AMP = 0.085;
+/**
+ * THE MOWING STOPS AT THE WALL (the creative director's audit, 2026-10-27:
+ * outside the estate "a dead-flat green plane with a repetitive noise
+ * texture"). The bands were drawn on every metre of the one ground mesh, the
+ * country outside the compound with it, and nobody mows stripes into the
+ * fields round an estate. The compound wall in world x and z (build_estate_v7
+ * WALL_X, WALL_BACK, WALL_FRONT; world z is the build's -y), and how far past
+ * it, metres, the bands are gone.
+ */
+export const COMPOUND = { x: 72, z0: -84, z1: 214, fade: 10 } as const;
+
+/** The concept's lawn (built 1:1, 2026-10-27): how much of the sward's colour
+ *  is kept, and the warm olive it is printed through. */
+export const LAWN_CONCEPT = { sat: 0.62, tint: [0.46, 0.42, 0.3] as const } as const;
+/** And the forest's floor past the wall: reached over `fade` metres, a dark
+ *  leaf-litter brown-olive. */
+export const FOREST_FLOOR = { fade: 14, tint: [0.62, 0.55, 0.36] as const } as const;
 
 /**
  * THE SWARD'S OWN GRAIN, at three sizes: [features a metre across the cut,
@@ -134,9 +151,22 @@ export const LAWN_MAP_FRAGMENT = /* glsl */ `
     vec2 flatEye = toEye.xz / max(1e-3, length(toEye.xz));
     float lean = side * -flatEye.y;
     // Fade as a band narrows toward a pixel: past that it can only alias.
+    // And stop at the wall: outside it is the country (COMPOUND).
     float fine = fwidth(t);
-    float amp = ${BAND_AMP.toFixed(3)} * (1.0 - smoothstep(0.25, 0.6, fine));
+    float outside = max(max(abs(vLawnWorld.x) - ${COMPOUND.x.toFixed(1)}, ${COMPOUND.z0.toFixed(1)} - vLawnWorld.z),
+                        vLawnWorld.z - ${COMPOUND.z1.toFixed(1)});
+    float amp = ${BAND_AMP.toFixed(3)} * (1.0 - smoothstep(0.0, ${COMPOUND.fade.toFixed(1)}, outside))
+              * (1.0 - smoothstep(0.25, 0.6, fine));
     sampledDiffuseColor.rgb *= 1.0 + amp * lean;
+    // THE CONCEPT'S GROUND (built 1:1, 2026-10-27): a lawn at golden hour in a
+    // forest valley is a deep olive, not a park's green; and past the wall the
+    // ground is the forest's floor, leaf litter in the trees' shade.
+    sampledDiffuseColor.rgb = mix(vec3(dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), sampledDiffuseColor.rgb, ${LAWN_CONCEPT.sat.toFixed(2)})
+                            * vec3(${LAWN_CONCEPT.tint.map((v) => v.toFixed(2)).join(', ')});
+    float forestFloor = smoothstep(0.0, ${FOREST_FLOOR.fade.toFixed(1)}, outside);
+    sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb,
+      vec3(dot(sampledDiffuseColor.rgb, vec3(0.3, 0.5, 0.2))) * vec3(${FOREST_FLOOR.tint.map((v) => v.toFixed(2)).join(', ')}),
+      forestFloor);
     // The sward's grain (SWARD): tufts, the lie of the blades, the blades.
     {
       vec2 g = vLawnWorld.xz;

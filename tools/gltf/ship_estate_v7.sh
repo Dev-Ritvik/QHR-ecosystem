@@ -40,6 +40,22 @@ if [ -z "${SKIP_BUILD:-}" ]; then
   if [ -d "${PH_DIR:-C:/dev/Blender/_polyhaven}/jacaranda_tree" ]; then
     "$BLENDER" --background --python "$ROOT/tools/blender/ph_trees_v7.py" -- "${PH_DIR:-C:/dev/Blender/_polyhaven}" "$ROOT/assets/materials/_v7" "${PH_DIR:-C:/dev/Blender/_polyhaven}/ph_trees_web.blend" 96
   fi
+  # The trees grown from a branch hierarchy (grow_trees_v7.py, the refinement
+  # brief of 2026-10-27): the canal's globe, the belt's mango, banyan and
+  # tamarind and the coconut palm, each to its model in Royal audit; leaf
+  # atlases from the scans' photographed leaves, a tileable Poly Haven bark
+  # (PH_DIR/bark, not in the repo). Without them the canal's rows keep the
+  # Tripo globe, the belt its scans and the groves the Tripo coconut.
+  if [ -d "${PH_DIR:-C:/dev/Blender/_polyhaven}/bark" ]; then
+    "$BLENDER" --background --python "$ROOT/tools/blender/grow_trees_v7.py" -- "$ROOT/assets/materials/_v7" "C:/dev/Blender/_trees/grown_trees_web.blend"
+  fi
+  # The fountain's fish refined from the client's generated betta (the same
+  # brief; Royal audit, not in the repo). Without it the build places the
+  # Tripo library's copy.
+  FISH_SRC="${FISH_SRC:-$ROOT/Royal audit/betta fish 3d model.glb}"
+  if [ -f "$FISH_SRC" ]; then
+    "$BLENDER" --background --factory-startup --python "$ROOT/tools/blender/refine_fish_v7.py" -- "$FISH_SRC" "C:/dev/Blender/_fish/fish_web.blend"
+  fi
   # The client's generated models (Tripo, saved to <repo>/tripo; not in the
   # repo): each one that is there is sized, lightened and filed in a library
   # the build places from. Without them the scripted cars stand.
@@ -65,7 +81,10 @@ rm -rf "$WORK" && mkdir -p "$WORK/ex"
   python "$ROOT/tools/gltf/resize_estate_textures_v7.py" ex/scene.gltf
   python "$ROOT/tools/gltf/encode_ktx2.py" ex/scene.gltf
   gltf-transform copy ex/scene.gltf k.glb
-  gltf-transform draco k.glb exterior_estate_v7.glb )
+  # (Positions at 16 bits, not Draco's 14: the ground runs 1.8 km and at 14
+  # bits its vertices sat on an 11 cm grid, which brought the lawn up through
+  # the forecourt laid 4 cm over it. +0.13 MB.)
+  gltf-transform draco k.glb exterior_estate_v7.glb --quantize-position 16 )
 cp "$WORK/exterior_estate_v7.glb" "$ROOT/apps/public/public/models/exterior_estate_v7.glb"
 python "$ROOT/tools/gltf/estate_bounds_v7.py" "$WORK/b.glb" "$ROOT/apps/public/src/components/experience/estateBounds.ts"
 ls -la "$ROOT/apps/public/public/models/exterior_estate_v7.glb"

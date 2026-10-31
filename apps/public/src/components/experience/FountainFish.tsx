@@ -17,6 +17,7 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { FOUNTAIN } from './exteriorWater';
+import { TRANSLUCENCY, foliageUniforms } from './exteriorFoliage';
 import { FISH, FISH_NAME, chord, leapPose, surfaceTimes, type FishPose } from './fishLeap';
 
 interface Ring {
@@ -26,6 +27,56 @@ interface Ring {
 }
 
 const RING_COLOUR = '#e4eff1';
+
+// THE SUN THROUGH THE FINS (the refinement brief of 2026-10-27; tools/blender/
+// refine_fish_v7.py). The refined fish's colour map carries a mask in its
+// alpha, 1 the body and 0 the thinnest fin: a betta's fins are a few
+// millimetres of tissue, and over the water against the light they glow their
+// own blue. The leaves' light (exteriorFoliage's FOLIAGE_TRANSLUCENCY), from
+// the same sun and eased with the same evening, on the fin alone. The
+// material stays opaque: the alpha is read here and never drawn.
+const FIN_MASK = /* glsl */ `
+#include <map_fragment>
+#ifdef USE_MAP
+  float fishFin = 1.0 - sampledDiffuseColor.a;
+#else
+  float fishFin = 0.0;
+#endif
+`;
+
+const FIN_THROUGH = /* glsl */ `
+#include <lights_fragment_end>
+{
+  vec3 sunV = normalize((viewMatrix * vec4(uFoliageSunDir, 0.0)).xyz);
+  float back = pow(max(0.0, dot(geometryViewDir, -sunV)), 3.0);
+  float wrap = 0.25 * max(0.0, -dot(normal, sunV));
+  reflectedLight.directDiffuse += diffuseColor.rgb * uFoliageSunColor * ${TRANSLUCENCY.toFixed(3)} * uFoliageGlow * (back + wrap) * fishFin;
+}
+`;
+
+function lightTheFins(f: THREE.Object3D) {
+  f.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mat = mesh.material as THREE.MeshStandardMaterial & { __fins?: boolean };
+    if (!mat?.isMeshStandardMaterial || mat.__fins) return;
+    mat.__fins = true;
+    const prev = mat.onBeforeCompile;
+    mat.onBeforeCompile = (shader, renderer) => {
+      prev.call(mat, shader, renderer);
+      shader.uniforms.uFoliageSunDir = foliageUniforms.uSunDir;
+      shader.uniforms.uFoliageSunColor = foliageUniforms.uSunColor;
+      shader.uniforms.uFoliageGlow = foliageUniforms.uGlow;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', 'uniform vec3 uFoliageSunDir;\nuniform vec3 uFoliageSunColor;\nuniform float uFoliageGlow;\nvoid main() {')
+        .replace('#include <map_fragment>', FIN_MASK)
+        .replace('#include <lights_fragment_end>', FIN_THROUGH);
+    };
+    const key = mat.customProgramCacheKey.bind(mat);
+    mat.customProgramCacheKey = () => `${key()}|estate-fins`;
+    mat.needsUpdate = true;
+  });
+}
 
 export function FountainFish({ root }: { root: THREE.Object3D | null }) {
   const camera = useThree((s) => s.camera);
@@ -81,6 +132,7 @@ export function FountainFish({ root }: { root: THREE.Object3D | null }) {
       o.castShadow = false;
       o.receiveShadow = false;
     });
+    lightTheFins(f);
     lieUnder(f);
     fish.current = f;
 

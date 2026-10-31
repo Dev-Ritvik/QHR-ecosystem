@@ -49,6 +49,7 @@ import { passageLight } from './passageLight';
 import { COVER_GRADE, HEADER_BAND, lensFilter } from './lensFilter';
 import { READING_CEILING, READING_STOPS, readingLight } from './readingLight';
 import { ld } from './lookdev';
+import { journeyState } from './journey';
 
 /**
  * How far into evening the film is, 0..1, written each frame by
@@ -104,9 +105,11 @@ uniform vec4 ndShape2;
 uniform float ndStops2;
 uniform float ndInner2;
 uniform vec4 ndTop;
+uniform float ndTopGap;
 uniform float ndAll;
 uniform vec2 ndSky;
 uniform vec2 readCap;
+uniform vec4 uRays;
 
 // three's ACESFilmicToneMapping (Stephen Hill's fit), with the exposure taken
 // from this effect's own uniform instead of the renderer's.
@@ -156,6 +159,13 @@ vec3 toRgb(vec3 c) {
 // AND THE WHOLE FRAME (ndAll: stops): the lens closed down, for the colophon
 // that comes up over the film's last light (lensFilter.codaFilter). The same
 // rule: the densest of the three holds.
+//
+// (The band can stand open over the middle of the frame, ndTopGap, 0..1: the
+// layout's sky is the picture's, and the header stands at its two ends only.)
+float ndTopOpen(vec2 uv) {
+  return 1.0 - ndTopGap * smoothstep(0.16, 0.42, uv.x) * (1.0 - smoothstep(0.48, 0.84, uv.x));
+}
+
 float ndFilter(vec2 uv) {
   float d = ndAll;
   if (ndStops > 0.0) {
@@ -168,7 +178,7 @@ float ndFilter(vec2 uv) {
     vec2 q2 = (uv - ndShape2.xy) / ndShape2.zw;
     d = max(d, ndStops2 * (1.0 - smoothstep(ndInner2, 1.0, length(q2))));
   }
-  if (ndTop.x > 0.0) d = max(d, ndTop.x * (1.0 - smoothstep(ndTop.y, ndTop.z, 1.0 - uv.y)));
+  if (ndTop.x > 0.0) d = max(d, ndTop.x * ndTopOpen(uv) * (1.0 - smoothstep(ndTop.y, ndTop.z, 1.0 - uv.y)));
   return exp2(-d);
 }
 
@@ -214,7 +224,7 @@ vec3 shoulder(vec3 g, float ceiling, float on) {
 
 vec3 burnTop(vec3 g, vec2 uv) {
   if (ndTop.x <= 0.0) return g;
-  float k = (1.0 - smoothstep(ndTop.y, ndTop.z, 1.0 - uv.y)) * min(1.0, ndTop.x);
+  float k = (1.0 - smoothstep(ndTop.y, ndTop.z, 1.0 - uv.y)) * min(1.0, ndTop.x) * ndTopOpen(uv);
   if (k <= 0.0) return g;
   return shoulder(g, ndTop.w, k);
 }
@@ -237,6 +247,26 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   g = mix(g, g * g * (3.0 - 2.0 * g), contrast);
   l = dot(g, vec3(0.2126, 0.7152, 0.0722));
   g = mix(vec3(l), g, saturation);
+  // THE SUN'S SHAFTS, ON THE COVER (the concept built 1:1, 2026-10-27): light
+  // falling through the forest's crowns from beyond the frame's top right, a
+  // fan of soft streaks and the glow they come out of (uRays: strength, the
+  // source's place in the frame, how fast they fade from it). Laid on as
+  // light is, a screen over the print, and most where the print is already
+  // bright: in the haze between the trees, hardly at all on a dark crown.
+  // ONLY IN THE CORNER THEY FALL INTO, and by the ray's direction rather than
+  // its angle (no atan): measured on an integrated card at 2880x1620, the
+  // first version, drawn over the whole frame, cost six milliseconds a frame.
+  // (A wide frame's: on one that stands upright the title is where they fall.)
+  if (uRays.x > 0.0 && aspect > 1.05 && uv.x > 0.4 && uv.y > 0.28) {
+    vec2 p = vec2((uv.x - uRays.y) * aspect, uv.y - uRays.z);
+    float r = length(p);
+    vec2 d = p / max(r, 1.0e-4);
+    float s = 0.5 + 0.5 * sin(d.x * 47.0 + 1.3) * sin(d.y * 31.0 - 0.7);
+    s = s * s * s;
+    float fall = exp(-r * uRays.w);
+    float lit = uRays.x * fall * (s + 0.55 * fall * fall) * (0.35 + 0.65 * smoothstep(0.06, 0.55, l));
+    g = 1.0 - (1.0 - g) * (1.0 - clamp(lit, 0.0, 1.0) * vec3(1.0, 0.87, 0.64));
+  }
   g = burnTop(g, uv);
   // A reading page's highlights, held over the whole frame (readingLight.ts,
   // READING_CEILING): the same shoulder, coming down as the page's light does.
@@ -273,11 +303,33 @@ export interface FilmGradeSettings {
  * The shipped exterior print. Every number was set against the settled hero
  * and the four facade beats of the film on the production build; see FIXLOG.
  */
-export const FILM_GRADE: FilmGradeSettings = {
+/**
+ * THE APPROVED PRINT, which the evening returns to (the concept's day print,
+ * FILM_GRADE below, rides into it with filmState.evening): the exterior's print
+ * as it was before the concept was built, so the dusk at the door is as the
+ * client approved it.
+ */
+export const DUSK_PRINT = {
   exposure: 1.0,
+  whiteBalance: [1, 1, 1] as const,
   greenSat: 0.72,
   greenHue: 0.012,
   greenValue: 0.9,
+  highlightTint: [0.016, 0.006, -0.014] as const,
+  contrast: 0.06,
+} as const;
+
+export const FILM_GRADE: FilmGradeSettings = {
+  // THE CONCEPT'S PRINT (built 1:1, 2026-10-27): a golden hour in a forest
+  // valley, printed deep: a warm balance (the concept's whites are cream, not
+  // orange: a light one), its greens a touch toward olive and lower in value,
+  // the curve's S five times what it was, and the highlights a little warmer. Was exposure 1, greens 0.72 / +0.012 / 0.9,
+  // contrast 0.06, highlights (0.016, 0.006, -0.014), no white balance.
+  exposure: 1.0,
+  whiteBalance: [1.03, 1.0, 0.93],
+  greenSat: 0.7,
+  greenHue: -0.005,
+  greenValue: 0.78,
   // THE SHADOWS PRINT NEUTRAL. They leaned toward teal (-0.012, 0.002,
   // 0.016), "the planes the sky lights, against the planes the sun does": on
   // this house that is the shaded elevation against the lit one, and the
@@ -285,10 +337,11 @@ export const FILM_GRADE: FilmGradeSettings = {
   // at the corner". The shade's coolness is the sky's own now (WorldCanvas,
   // FILL_DAY), which a wall takes by how it stands; the print adds none.
   shadowTint: [0, 0, 0],
-  highlightTint: [0.016, 0.006, -0.014],
-  // Half of the first setting: with the sun's shadows working the curve alone
-  // takes the hero to p95/p05 = 15, and the extra S was pushing p05 into black.
-  contrast: 0.06,
+  highlightTint: [0.03, 0.012, -0.02],
+  // (0.06, half of the first setting, until the concept: "with the sun's
+  // shadows working the curve alone takes the hero to p95/p05 = 15". The
+  // concept's valley is darker in its shade than that, by design.)
+  contrast: 0.32,
   saturation: 1.02,
   ridesEvening: true,
 };
@@ -339,6 +392,14 @@ export const HALL_GRADE: FilmGradeSettings = {
 
 const GRADE_TMP = new Vector3();
 
+/**
+ * THE COVER'S SUN SHAFTS (the concept built 1:1, 2026-10-27): how strong, where
+ * their source stands in the frame (beyond its top right: x across, y up), how
+ * fast they fade from it, and over what part of the exterior leg they go (the
+ * camera has hardly begun its turn when they have).
+ */
+export const SUN_RAYS = { strength: 0.5, x: 1.04, y: 1.16, fall: 2.0, gone: [0.015, 0.11] as const } as const;
+
 export class FilmGradeEffect extends Effect {
   constructor(s: FilmGradeSettings = FILM_GRADE) {
     super('FilmGradeEffect', FRAGMENT, {
@@ -360,9 +421,11 @@ export class FilmGradeEffect extends Effect {
         ['ndStops2', new Uniform(0)],
         ['ndInner2', new Uniform(0.45)],
         ['ndTop', new Uniform(new Vector4(0, 0.07, 0.24, 0.4))],
+        ['ndTopGap', new Uniform(0)],
         ['ndAll', new Uniform(0)],
         ['ndSky', new Uniform(new Vector2(0, 0))],
         ['readCap', new Uniform(new Vector2(READING_CEILING, 0))],
+        ['uRays', new Uniform(new Vector4(0, SUN_RAYS.x, SUN_RAYS.y, SUN_RAYS.fall))],
       ]),
     });
   }
@@ -409,7 +472,34 @@ export const FilmGrade = forwardRef<FilmGradeEffect, { settings?: FilmGradeSetti
       // dims rather than cuts.
       readingLight.stops += (readingLight.want - readingLight.stops) * (1 - Math.exp(-Math.max(0, delta) / 0.35));
       const reading = Math.pow(2, -readingLight.stops);
-      effect.uniforms.get('exposure')!.value = settings.exposure * lift * passageLight.exposure * reading;
+      // THE CONCEPT'S DAY PRINT GIVES WAY TO THE APPROVED ONE as the evening
+      // falls (DUSK_PRINT): the exterior's print only.
+      let dayExposure = settings.exposure;
+      if (settings.ridesEvening && settings === FILM_GRADE && filmState.evening > 0) {
+        const e = Math.min(1, filmState.evening);
+        const u = effect.uniforms;
+        const toward = (name: string, from: number, to: number) => {
+          u.get(name)!.value = from + (to - from) * e;
+        };
+        dayExposure = settings.exposure + (DUSK_PRINT.exposure - settings.exposure) * e;
+        toward('contrast', settings.contrast, DUSK_PRINT.contrast);
+        toward('greenSat', settings.greenSat, DUSK_PRINT.greenSat);
+        toward('greenHue', settings.greenHue, DUSK_PRINT.greenHue);
+        toward('greenValue', settings.greenValue, DUSK_PRINT.greenValue);
+        const wb = settings.whiteBalance ?? [1, 1, 1];
+        (u.get('whiteBalance')!.value as Vector3).set(
+          wb[0] + (DUSK_PRINT.whiteBalance[0] - wb[0]) * e,
+          wb[1] + (DUSK_PRINT.whiteBalance[1] - wb[1]) * e,
+          wb[2] + (DUSK_PRINT.whiteBalance[2] - wb[2]) * e,
+        );
+        const ht = settings.highlightTint;
+        (u.get('highlightTint')!.value as Vector3).set(
+          ht[0] + (DUSK_PRINT.highlightTint[0] - ht[0]) * e,
+          ht[1] + (DUSK_PRINT.highlightTint[1] - ht[1]) * e,
+          ht[2] + (DUSK_PRINT.highlightTint[2] - ht[2]) * e,
+        );
+      }
+      effect.uniforms.get('exposure')!.value = dayExposure * lift * passageLight.exposure * reading;
       // The shadows' lean, off the sky's blue as the evening falls
       // (EVENING_SHADOW_TINT).
       if (settings.ridesEvening && filmState.evening > 0) {
@@ -453,6 +543,20 @@ export const FilmGrade = forwardRef<FilmGradeEffect, { settings?: FilmGradeSetti
       // ...and its ceiling, coming down with the same ease.
       const held = Math.min(1, Math.max(0, readingLight.stops / READING_STOPS));
       (effect.uniforms.get('readCap')!.value as Vector2).set(READING_CEILING, held < 0.004 ? 0 : held);
+      // The cover's shafts (SUN_RAYS): by day, outside, while the camera is
+      // still at the cover.
+      const out = journeyState.film && journeyState.leg === 'exterior' && settings.ridesEvening ? 1 : 0;
+      const t = journeyState.legProgress;
+      const g0 = SUN_RAYS.gone[0];
+      const g1 = SUN_RAYS.gone[1];
+      const k = Math.min(1, Math.max(0, (t - g0) / (g1 - g0)));
+      const rays = out * (1 - k * k * (3 - 2 * k)) * (1 - filmState.evening) * (1 - passageLight.grade);
+      (effect.uniforms.get('uRays')!.value as Vector4).set(
+        ld('rays', SUN_RAYS.strength) * rays,
+        ld('raysX', SUN_RAYS.x),
+        ld('raysY', SUN_RAYS.y),
+        ld('raysFall', SUN_RAYS.fall),
+      );
       effect.uniforms.get('ndStops')!.value = lensFilter.stops;
       effect.uniforms.get('ndAll')!.value = lensFilter.all;
       (effect.uniforms.get('ndSky')!.value as Vector2).set(lensFilter.sky.cool, lensFilter.sky.warm);
@@ -463,6 +567,7 @@ export const FilmGrade = forwardRef<FilmGradeEffect, { settings?: FilmGradeSetti
         lensFilter.topZero,
         HEADER_BAND.ceiling,
       );
+      effect.uniforms.get('ndTopGap')!.value = lensFilter.topGap;
       (effect.uniforms.get('ndShape')!.value as Vector4).copy(lensFilter.shape);
       effect.uniforms.get('ndStops2')!.value = lensFilter.second.stops;
       effect.uniforms.get('ndInner2')!.value = lensFilter.second.inner;

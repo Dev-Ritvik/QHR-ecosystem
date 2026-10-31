@@ -870,11 +870,91 @@ optgroup {
     color: #e8b98a;
   }
 }
+/* The hairline the words lead along, and the surveyor's rose at its end (the
+   concept built 1:1, 2026-10-27). */
+.start-cue-rule {
+  display: block;
+  width: calc(var(--bl) * 5);
+  height: 1px;
+  margin-left: calc(var(--bl) * -1.5);
+  background: rgba(242, 237, 228, 0.7);
+}
+.start-cue-compass {
+  display: block;
+  width: calc(var(--bl) * 10);
+  height: calc(var(--bl) * 10);
+  margin-left: calc(var(--bl) * -3);
+  overflow: visible;
+  filter: drop-shadow(0 0 3px rgba(10, 8, 6, 0.55));
+}
+.start-cue-rose {
+  transform-origin: 0 0;
+  transition: transform 900ms var(--ease);
+}
+@media (hover: hover) {
+  .start-cue:hover .start-cue-rose {
+    transform: rotate(45deg);
+  }
+}
+.start-cue:focus-visible .start-cue-rose {
+  transform: rotate(45deg);
+}
+/* THE LAYOUT'S CUE (the founder's frame, 2026-10-28: "START HERE with active
+   survey crosshairs"): a mouse before the words, its wheel turning, and a
+   surveyor's crosshair at the rule's end, its ring's ticks slowly turning. */
+.start-cue-mouse {
+  display: block;
+  width: calc(var(--bl) * 3.4);
+  height: calc(var(--bl) * 5.4);
+  overflow: visible;
+}
+.start-cue-wheel {
+  animation: cuewheel 2.4s ease-in-out infinite;
+}
+@keyframes cuewheel {
+  0%,
+  15% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(3px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+}
+.start-cue-crosshair {
+  display: block;
+  width: calc(var(--bl) * 10);
+  height: calc(var(--bl) * 10);
+  margin-left: calc(var(--bl) * -3);
+  overflow: visible;
+  filter: drop-shadow(0 0 3px rgba(10, 8, 6, 0.55));
+}
+.start-cue-ticks {
+  transform-origin: 0 0;
+  animation: cueticks 14s linear infinite;
+}
+@keyframes cueticks {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .start-cue-line i {
     animation: none;
     height: 100%;
     background: rgba(232, 185, 138, 0.75);
+  }
+  .start-cue-rose {
+    transition: none;
+  }
+  .start-cue-wheel,
+  .start-cue-ticks {
+    animation: none;
   }
 }
 
@@ -1913,46 +1993,118 @@ html[data-menu-open] [data-film] {
 .sound-toggle:focus-visible {
   color: #e8b98a;
 }
-/* The loudspeaker (AmbientSound.tsx): its waves when the sound is on, a
-   cross in their place when it is off. Still — the header has no moving part. */
-.sound-glyph {
+/* THE WAVEFORM AND THE SWITCH (AmbientSound.tsx; the concept built 1:1,
+   2026-10-27): a recording's envelope in hairlines, still while the sound is
+   off and breathing while it plays, and a switch that says which. */
+.sound-wave-bars {
+  display: flex;
+  align-items: center;
+  gap: max(1px, calc(1.2 * var(--u)));
+  height: max(16px, calc(19 * var(--u)));
+}
+.sound-wave-bars i {
   display: block;
-  width: max(20px, calc(22 * var(--u)));
-  height: auto;
-  overflow: visible;
+  width: 1px;
+  height: calc(var(--h) * 100%);
+  background: currentColor;
+  opacity: calc(0.45 + var(--h) * 0.5);
+  transform-origin: 50% 50%;
 }
-.sound-glyph .sound-wave,
-.sound-glyph .sound-mute {
-  transition: opacity var(--t-state) var(--ease);
+.sound-toggle.is-on .sound-wave-bars i {
+  animation: soundwave 1.6s ease-in-out infinite alternate;
+  animation-delay: calc(var(--i) * -137ms);
 }
-.sound-glyph .sound-wave {
-  opacity: 0;
+@keyframes soundwave {
+  0% { transform: scaleY(0.55); }
+  100% { transform: scaleY(1); }
 }
-.sound-glyph.is-on .sound-wave {
-  opacity: 1;
+.sound-switch {
+  position: relative;
+  display: block;
+  flex: none;
+  width: max(30px, calc(34 * var(--u)));
+  height: max(16px, calc(18 * var(--u)));
+  border-radius: 999px;
+  border: 1px solid rgba(242, 237, 228, 0.75);
+  background: rgba(242, 237, 228, 0.12);
+  box-shadow: 0 0 0 0.5px rgba(10, 8, 6, 0.35);
+  transition: background-color var(--t-state) var(--ease), border-color var(--t-state) var(--ease);
 }
-.sound-glyph.is-on .sound-mute {
-  opacity: 0;
+.sound-switch i {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: calc(max(16px, calc(18 * var(--u))) - 6px);
+  height: calc(max(16px, calc(18 * var(--u))) - 6px);
+  border-radius: 50%;
+  background: #f2ede4;
+  box-shadow: 0 1px 2px rgba(10, 8, 6, 0.45);
+  transform: translateY(-50%);
+  transition: left var(--t-move) var(--ease), background-color var(--t-state) var(--ease);
 }
-.sound-toggle { transition: color var(--t-state) var(--ease), opacity var(--t-move) var(--ease); }
-.sound-toggle.is-tucked { opacity: 0; pointer-events: none; }
-/* THE WORD, ONLY WHEN IT IS ASKED FOR (the paid audit of 2026-10-04: the
-   navigation "almost invisible unless needed"). The bars are the control; the
-   word beside them opens when the control is pointed at or focused, and is
-   always there for a screen reader (the button's own label). */
-.sound-label {
-  max-width: 0;
-  overflow: hidden;
+.sound-toggle.is-on .sound-switch {
+  background: rgba(242, 237, 228, 0.88);
+  border-color: rgba(242, 237, 228, 0.95);
+}
+.sound-toggle.is-on .sound-switch i {
+  left: calc(100% - (max(16px, calc(18 * var(--u))) - 6px) - 2px);
+  background: #fffdf8;
+}
+.sound-toggle:hover .sound-switch,
+.sound-toggle:focus-visible .sound-switch {
+  border-color: #e8b98a;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sound-toggle.is-on .sound-wave-bars i {
+    animation: none;
+  }
+  .sound-switch,
+  .sound-switch i {
+    transition: none;
+  }
+}
+
+/* WHERE, AND THE SOUND, UNDER THE CONTROLS (SiteHeader, `film-locator`; the
+   concept built 1:1): the co-ordinates in the film's small capitals' voice,
+   right on the controls' edge, and the sound control under them. A phone has
+   the sound control alone there. */
+.film-locator {
+  position: absolute;
+  top: calc(var(--bar) - max(6px, calc(8 * var(--u))));
+  right: var(--edge);
+  display: grid;
+  justify-items: end;
+  gap: max(6px, calc(8 * var(--u)));
+  pointer-events: none;
+}
+.film-locator > * {
+  pointer-events: auto;
+}
+.film-coords {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: var(--step--1);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: rgba(242, 237, 228, 0.9);
+  text-shadow: 0 0 8px rgba(10, 8, 6, 0.5), 0 0 1px rgba(10, 8, 6, 0.6);
   white-space: nowrap;
-  opacity: 0;
-  margin-left: calc(var(--bl) * -2.4);
-  transition: max-width var(--t-move) var(--ease), opacity var(--t-state) var(--ease), margin-left var(--t-move) var(--ease);
 }
-.sound-toggle:hover .sound-label,
-.sound-toggle:focus-visible .sound-label {
-  max-width: 9em;
-  opacity: 1;
-  margin-left: 0;
+.film-sound-slot {
+  display: flex;
+  align-items: center;
+}
+.film-sound-slot .sound-toggle {
+  gap: max(10px, calc(12 * var(--u)));
+  min-height: 0;
+  filter: drop-shadow(0 0 4px rgba(10, 8, 6, 0.45));
+}
+@media (max-width: 767px) {
+  .film-coords {
+    display: none;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -2194,6 +2346,348 @@ html[data-menu-open] .rail,
   .rail-shade,
   .rail-dot::before {
     transition: none;
+  }
+}
+
+/* ON THE FILM, A SURVEYOR'S SCALE (ChapterRail; the concept built 1:1 at the
+   user's word, 2026-10-27). The chapter's number over the rail, "01 /" in the
+   display face and the word under it in the film's capitals; the line ruled,
+   a long mark and a figure at every chapter (the camera's height there,
+   railElevation.ts) and four short marks between; the marker a lit bead that
+   rides the line. Off a wide frame the rail is the dots it always was: a
+   phone's edge has no room for figures. */
+.rail-chapter,
+.rail-ruler,
+.rail-figure {
+  display: none;
+}
+@media (min-width: 768px) {
+  .rail[data-rail-mode='film'] {
+    --rail-pitch: max(30px, calc(34 * var(--u, 1px)));
+    --rail-tick: max(9px, calc(11 * var(--u, 1px)));
+    --rail-bead: max(15px, calc(17 * var(--u, 1px)));
+    --rail-line-x: calc(var(--rail-dot) / 2);
+  }
+  .rail[data-rail-mode='film'] .rail-track {
+    background: rgba(242, 237, 228, 0.62);
+    box-shadow: 0 0 0 0.5px rgba(10, 8, 6, 0.32);
+    /* the line runs on past the last mark, as a scale's does */
+    height: calc((var(--rail-n) - 1) * var(--rail-pitch) + var(--rail-pitch) * 0.6);
+  }
+  .rail[data-rail-mode='film'] .rail-track i {
+    background: rgba(232, 185, 138, 0.9);
+  }
+  /* The four short marks between chapters: a ruled strip left of the line. */
+  .rail[data-rail-mode='film'] .rail-ruler {
+    display: block;
+    position: absolute;
+    top: calc(var(--rail-pitch) / 2);
+    right: var(--rail-line-x);
+    width: calc(var(--rail-tick) * 0.5);
+    height: calc((var(--rail-n) - 1) * var(--rail-pitch) + 1px);
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(242, 237, 228, 0.5) 0 1px,
+      transparent 1px calc(var(--rail-pitch) / 5)
+    );
+    filter: drop-shadow(0 0 0.5px rgba(10, 8, 6, 0.5));
+  }
+  /* Each chapter's mark: a long tick into the line, where the dot was. */
+  .rail[data-rail-mode='film'] .rail-dot::before {
+    width: var(--rail-tick);
+    height: 1px;
+    margin-right: var(--rail-line-x);
+    border-radius: 0;
+    background: rgba(242, 237, 228, 0.78);
+    box-shadow: 0 0 0 0.5px rgba(10, 8, 6, 0.4);
+  }
+  .rail[data-rail-mode='film'] .rail-item[data-state='past'] .rail-dot::before,
+  .rail[data-rail-mode='film'] .rail-item[data-state='current'] .rail-dot::before {
+    background: #e8b98a;
+  }
+  .rail[data-rail-mode='film'] .rail-item a:focus-visible .rail-dot::before {
+    transform: scaleX(1.45);
+    transform-origin: right center;
+  }
+  /* The figure beside each mark: small, set like a scale's, the current one
+     lit. They make way for the names when those are asked for. */
+  .rail[data-rail-mode='film'] .rail-figure {
+    display: flex;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: calc(var(--rail-line-x) + var(--rail-tick) + max(5px, calc(6 * var(--u, 1px))));
+    align-items: center;
+    font-family: var(--font-text);
+    font-size: var(--step--1);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    font-variant-numeric: lining-nums tabular-nums;
+    color: rgba(242, 237, 228, 0.86);
+    text-shadow: 0 0 6px rgba(10, 8, 6, 0.55), 0 0 1px rgba(10, 8, 6, 0.7);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--t-move) var(--ease), color var(--t-state) var(--ease);
+  }
+  .rail[data-rail-mode='film'] .rail-figure.is-in {
+    opacity: 1;
+  }
+  .rail[data-rail-mode='film'] .rail-item[data-state='current'] .rail-figure {
+    color: #fbf6ec;
+  }
+  .rail[data-rail-mode='film']:has(a:focus-visible) .rail-figure,
+  .rail[data-rail-mode='film'].is-open .rail-figure {
+    opacity: 0;
+  }
+  /* The bead: pale gilt, lit from inside, a hairline of dark round it so it
+     holds on a bright sky as on a dark wall. */
+  .rail[data-rail-mode='film'] .rail-marker {
+    top: calc(var(--rail-pitch) / 2 - var(--rail-bead) / 2);
+    right: calc(var(--rail-line-x) - var(--rail-bead) / 2);
+    width: var(--rail-bead);
+    height: var(--rail-bead);
+    border: 0;
+    background: radial-gradient(circle at 42% 38%, #fffaf0 0%, #f4e6cb 38%, #d9bb8c 100%);
+    box-shadow:
+      0 0 0 1px rgba(10, 8, 6, 0.45),
+      0 0 10px 2px rgba(246, 228, 196, 0.45),
+      0 0 22px 4px rgba(246, 228, 196, 0.18);
+  }
+  /* "01 /" over the rail, and the word under it beside the scale's head. */
+  .rail[data-rail-mode='film'] .rail-chapter {
+    display: grid;
+    position: absolute;
+    right: calc(var(--rail-line-x) - max(6px, calc(7 * var(--u, 1px))));
+    bottom: calc(100% - var(--rail-pitch) / 2 + max(10px, calc(12 * var(--u, 1px))));
+    justify-items: end;
+    text-align: right;
+    color: #fbf6ec;
+    text-shadow: 0 0 8px rgba(10, 8, 6, 0.5), 0 0 1px rgba(10, 8, 6, 0.6);
+    pointer-events: none;
+  }
+  .rail[data-rail-mode='film'] .rail-chapter-head {
+    font-family: var(--font-text);
+    font-variation-settings: 'opsz' 110;
+    font-size: var(--step-3);
+    line-height: 1;
+    font-weight: 400;
+    font-variant-numeric: lining-nums;
+    white-space: pre;
+    color: rgba(242, 237, 228, 0.82);
+  }
+  .rail[data-rail-mode='film'] .rail-chapter-n {
+    color: #fbf6ec;
+  }
+  .rail[data-rail-mode='film'] .rail-chapter-word {
+    position: relative;
+    margin-top: max(5px, calc(6 * var(--u, 1px)));
+    padding-right: max(14px, calc(17 * var(--u, 1px)));
+    font-family: var(--font-text);
+    font-size: max(10px, calc(10.24 * var(--u, 1px)));
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: var(--track-caps);
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: rgba(242, 237, 228, 0.92);
+  }
+  /* the scale's head: a ring on the line beside the word */
+  .rail[data-rail-mode='film'] .rail-chapter-word::after {
+    content: '';
+    position: absolute;
+    right: calc(max(6px, calc(7 * var(--u, 1px))) - max(4px, calc(5 * var(--u, 1px))));
+    bottom: calc(max(5px, calc(6 * var(--u, 1px))) * -0.1);
+    width: max(8px, calc(10 * var(--u, 1px)));
+    height: max(8px, calc(10 * var(--u, 1px)));
+    border: 1px solid rgba(242, 237, 228, 0.8);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(242, 237, 228, 0.9) 0 26%, transparent 30%);
+    box-shadow: 0 0 0 0.5px rgba(10, 8, 6, 0.4);
+  }
+}
+
+/* (A phone on its side has no room for the rail's head under the header's two
+   lines: the scale and its bead say where the film is.) */
+@media (max-height: 520px) and (orientation: landscape) {
+  .rail[data-rail-mode='film'] .rail-chapter {
+    display: none;
+  }
+}
+
+/* THE COVER'S SURVEY PINS (site-home; exteriorSurvey.ts, SurveyPins stands
+   each over its place on the ground and fades it with the survey's contours):
+   the film's small capitals on a hairline leader, the leader's end the place.
+   Not on a phone, whose cover has no ground to spare. */
+.survey-pins {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.survey-pin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-grid;
+  margin-top: -0.5em;
+  padding-left: max(20px, calc(24 * var(--u, 1px)));
+  font-family: var(--font-text);
+  font-size: max(10px, calc(10.24 * var(--u, 1px)));
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(242, 237, 228, 0.92);
+  text-shadow: 0 0 6px rgba(10, 8, 6, 0.7), 0 0 1px rgba(10, 8, 6, 0.8);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.survey-pin::before {
+  content: '';
+  position: absolute;
+  top: 0.5em;
+  left: 0;
+  width: max(14px, calc(17 * var(--u, 1px)));
+  height: 1px;
+  background: rgba(242, 237, 228, 0.75);
+  box-shadow: 0 0 2px rgba(10, 8, 6, 0.6);
+}
+.survey-pin-major {
+  font-size: max(11px, calc(12.8 * var(--u, 1px)));
+}
+.survey-pin small {
+  margin-top: 0.55em;
+  font-size: 0.66em;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: rgba(242, 237, 228, 0.78);
+}
+@media (max-width: 767px) {
+  .survey-pins {
+    display: none;
+  }
+}
+
+/* THE LAYOUT'S SURVEY (site-home, chapter three; exteriorLayout.ts,
+   LayoutMarks stands each word over its place along the line it names, each
+   crosshair over its point, and fades all of it with the drawing on the
+   ground). The founder's frame (2026-10-28): the film's small capitals in
+   ivory along the roads and the blocks, a block's title over its line of
+   figures in brackets, thin crosses on the ground, and the chapter's status
+   centred at the frame's foot over a rule. */
+.layout-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.layout-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-grid;
+  justify-items: center;
+  transform-origin: 0 0;
+  font-family: var(--font-text);
+  font-size: max(11px, calc(13.5 * var(--u, 1px)));
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(242, 237, 228, 0.92);
+  text-shadow: 0 0 6px rgba(10, 8, 6, 0.75), 0 0 1px rgba(10, 8, 6, 0.85);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.layout-label-small {
+  font-size: max(10px, calc(11 * var(--u, 1px)));
+  font-weight: 500;
+  color: rgba(242, 237, 228, 0.86);
+}
+.layout-label-title b {
+  font-size: max(14px, calc(21 * var(--u, 1px)));
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+.layout-label-title span {
+  margin-top: 0.5em;
+  font-size: max(11px, calc(14.5 * var(--u, 1px)));
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+.layout-label-far b {
+  font-size: max(12px, calc(15 * var(--u, 1px)));
+}
+.layout-mark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max(22px, calc(28 * var(--u, 1px)));
+  height: max(22px, calc(28 * var(--u, 1px)));
+  margin: calc(max(22px, calc(28 * var(--u, 1px))) / -2) 0 0 calc(max(22px, calc(28 * var(--u, 1px))) / -2);
+  opacity: 0;
+  will-change: transform, opacity;
+  background:
+    linear-gradient(rgba(242, 237, 228, 0.92), rgba(242, 237, 228, 0.92)) center / 1.5px 100% no-repeat,
+    linear-gradient(rgba(242, 237, 228, 0.92), rgba(242, 237, 228, 0.92)) center / 100% 1.5px no-repeat;
+  filter: drop-shadow(0 0 2px rgba(10, 8, 6, 0.7));
+  /* the middle left open, as a surveyor's cross is */
+  -webkit-mask: radial-gradient(circle, transparent 0 18%, #000 19%);
+  mask: radial-gradient(circle, transparent 0 18%, #000 19%);
+}
+.layout-hud {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, calc(46 * var(--u, 1px)));
+  display: grid;
+  justify-items: center;
+  gap: max(6px, calc(8 * var(--u, 1px)));
+  transform: translateX(-50%);
+  font-family: var(--font-text);
+  font-size: max(10px, calc(13 * var(--u, 1px)));
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(242, 237, 228, 0.92);
+  text-shadow: 0 0 6px rgba(10, 8, 6, 0.75), 0 0 1px rgba(10, 8, 6, 0.85);
+  opacity: 0;
+  will-change: opacity;
+}
+.layout-hud i {
+  display: block;
+  justify-self: stretch;
+  height: max(2px, calc(2.4 * var(--u, 1px)));
+  background: rgba(242, 237, 228, 0.88);
+  box-shadow: 0 0 3px rgba(10, 8, 6, 0.6);
+}
+.layout-hud span:nth-of-type(2) {
+  font-weight: 500;
+  color: rgba(242, 237, 228, 0.8);
+}
+/* and a crosshair off its right, on the ground's dark */
+.layout-hud .layout-hud-mark {
+  top: auto;
+  left: auto;
+  right: calc(max(22px, calc(28 * var(--u, 1px))) * -2.4);
+  bottom: 0;
+  margin: 0;
+  opacity: 1;
+}
+/* (not on a phone, upright or on its side: its frame has no ground to spare
+   beside the words, and the status would stand on the drawing's own lines) */
+@media (max-width: 767px), (max-height: 500px) {
+  .layout-label,
+  .layout-mark,
+  .layout-hud {
+    display: none;
   }
 }
 

@@ -109,8 +109,11 @@ const toLinear = (v: number) => {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 };
 
-/** The band read, in degrees above the plate's horizon. */
-export const HAZE_BAND_DEG = [0.5, 4] as const;
+/** The band read, in degrees above the plate's horizon. Since v11 (the hills,
+ *  2026-10-27) it straddles the horizon: from half a degree up the plate is the
+ *  hills' lower slopes, and the air in front of them is the valley's mist, which
+ *  is what the band just under the hills' feet holds. */
+export const HAZE_BAND_DEG = [-1.2, 0.8] as const;
 
 /**
  * Read the sky's foot from the equirectangular plate (its image, as loaded).

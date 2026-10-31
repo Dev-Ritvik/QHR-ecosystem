@@ -11,8 +11,9 @@ import { join } from 'node:path';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TREE_KINDS, treeSeed, treeVariation, varyTrees } from './exteriorTrees';
-import { CONTACT_SHADOW, FOOTPRINTS, groundObjects } from './exteriorContact';
-import { HAZE_FOOT_DEG, HORIZON_SKIRT, dressHaze, hazeUniforms, horizonSkirt } from './exteriorHaze';
+import { CAR_SHADOW, CONTACT_SHADOW, FOOTPRINTS, carFootprints, groundObjects } from './exteriorContact';
+import { EXTERIOR_FAR, HAZE_FOOT_DEG, HORIZON_SKIRT, dressHaze, hazeUniforms, horizonSkirt } from './exteriorHaze';
+import { EXTERIOR_BOUNDS } from './ExteriorModel';
 import { HAZE_BAND_DEG, SKY_HAZE_BINS, setSkyHaze, skyHazeRing } from './skyHaze';
 import { HOUR_STEP } from './exteriorWater';
 
@@ -154,11 +155,18 @@ describe('the land dissolves into the sky behind it', () => {
     const root = new THREE.Group();
     const skirt = horizonSkirt(root);
     expect(horizonSkirt(root)).toBe(skirt);
-    expect(HORIZON_SKIRT.radius).toBeLessThan(400); // CLIP.exterior.far
+    expect(HORIZON_SKIRT.radius).toBeLessThan(EXTERIOR_FAR); // CLIP.exterior.far
+    // and past the day fog's far (WorldCanvas DAY_FOG[1], 500 m): the land is
+    // whole haze where it meets the skirt, or the skirt draws a line under it
+    // (the creative director's audit, 2026-10-27)
+    expect(HORIZON_SKIRT.radius).toBeGreaterThan(500);
+    // and the land runs on behind the skirt from every camera in the film and
+    // on every page (the farthest out, the gate's, stands 300 m from the house)
+    expect(EXTERIOR_BOUNDS.groundHalfSpan - 300).toBeGreaterThan(HORIZON_SKIRT.radius);
     expect(HORIZON_SKIRT.over).toBeGreaterThan(0);
     expect(HORIZON_SKIRT.whole).toBeLessThan(0);
-    // under the land's end from the film's highest frame: thirty metres up, the ground gone at 400 m
-    expect(HORIZON_SKIRT.under).toBeLessThan((-Math.atan(30 / 330) * 180) / Math.PI);
+    // under the land's end from the film's highest frame: thirty metres up, the ground gone at the far plane
+    expect(HORIZON_SKIRT.under).toBeLessThan((-Math.atan(30 / EXTERIOR_FAR) * 180) / Math.PI);
     const mat = skirt.material as THREE.ShaderMaterial;
     expect(mat.depthWrite).toBe(false);
     expect(mat.transparent).toBe(true);
@@ -215,5 +223,44 @@ describe('the pool at sunset, and what stands on the terrace', () => {
       expect(maxX - minX).toBeCloseTo((f.half[0] + CONTACT_SHADOW.reach) * 2, 4);
     }
     expect((mesh.material as THREE.Material).depthWrite).toBe(false);
+    // and leaves the frame's alpha, which is the lens's depth, as it found it
+    const mat = mesh.material as THREE.Material;
+    expect(mat.blending).toBe(THREE.CustomBlending);
+    expect(mat.blendSrcAlpha).toBe(THREE.ZeroFactor);
+    expect(mat.blendDstAlpha).toBe(THREE.OneFactor);
+  });
+
+  it('shades the ground under each car, turned with it (the creative director: "the car appears to float")', () => {
+    const root = new THREE.Group();
+    // a car 2 m wide and 5 m long, stood at (5, 15) and turned a quarter
+    const car = new THREE.Mesh(new THREE.BoxGeometry(2, 1.6, 5).translate(0, 0.8, 0));
+    car.name = 'court_car_saloon_steps';
+    car.position.set(5, 0.01, 15);
+    car.rotation.y = Math.PI / 2;
+    root.add(car);
+    const [f] = carFootprints(root);
+    expect(carFootprints(root)).toHaveLength(1);
+    expect(f.at[0]).toBeCloseTo(5, 4);
+    expect(f.at[1]).toBeCloseTo(15, 4);
+    expect(f.y).toBeCloseTo(0.01, 4);
+    expect(f.half[0]).toBeCloseTo(1 * CAR_SHADOW.inset, 4);
+    expect(f.half[1]).toBeCloseTo(2.5 * CAR_SHADOW.inset, 4);
+    expect(Math.abs(f.yaw!)).toBeCloseTo(Math.PI / 2, 4);
+    // the shade's quad lies along the car: long in x once it is turned
+    const mesh = groundObjects(root)!;
+    const pos = mesh.geometry.getAttribute('position');
+    const last = (FOOTPRINTS.length) * 4;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (let k = 0; k < 4; k += 1) {
+      minX = Math.min(minX, pos.getX(last + k));
+      maxX = Math.max(maxX, pos.getX(last + k));
+      minZ = Math.min(minZ, pos.getZ(last + k));
+      maxZ = Math.max(maxZ, pos.getZ(last + k));
+    }
+    expect(maxX - minX).toBeCloseTo((f.half[1] + CAR_SHADOW.reach) * 2, 3);
+    expect(maxZ - minZ).toBeCloseTo((f.half[0] + CAR_SHADOW.reach) * 2, 3);
   });
 });

@@ -21,6 +21,16 @@
 // eight planters, the two blocks the steps' urns stand on, and the parterre's
 // urn. Footprints as measured on the model (centre, half-size, the height of
 // what it stands on); nothing is searched for at runtime.
+//
+// AND UNDER THE CARS (the creative director's audit, 2026-10-27: "the black car
+// appears to float slightly on the driveway"). A car stands on four hand-wide
+// patches of rubber with its body a span off the ground: the sun's shadow falls
+// to one side of it, and the ground under it, which sees almost no sky, goes
+// dark right to the tyres. The lens's contact shadow finds a sill but not the
+// ground in under it, and the bake was laid before the cars were. So each car
+// is given a shade of its own, the size of its body and turned with it, found
+// by name on the model as it stands (CAR_RE): a car can be moved in the build
+// without anything here being measured again.
 
 import * as THREE from 'three';
 
@@ -30,6 +40,11 @@ interface Footprint {
   y: number;
   /** Half its size on the plan. */
   half: readonly [number, number];
+  /** Turned about the vertical, radians (three's rotation.y). */
+  yaw?: number;
+  /** Its own reach and darkness, where they are not CONTACT_SHADOW's. */
+  reach?: number;
+  dark?: number;
 }
 
 const PLANTER_HALF = [0.42, 0.42] as const;
@@ -53,7 +68,64 @@ export const FOOTPRINTS: readonly Footprint[] = [
  *  the joint. */
 export const CONTACT_SHADOW = { reach: 0.34, dark: 0.74 } as const;
 
+/** The forecourt's cars (build_estate_v7.py: tripo_object, "court_car_..."). */
+const CAR_RE = /^court_car_/;
+/**
+ * A car's shade: drawn in from its body's outline by `inset` (the body
+ * overhangs its wheels), reaching `reach` past that, and `dark` under it.
+ */
+export const CAR_SHADOW = { inset: 0.86, reach: 0.75, dark: 0.82 } as const;
+
 const NAME = 'estate_contacts';
+
+/**
+ * Each car on the model, as a footprint in `root`'s space: its body's own
+ * box (in the car's frame, so turned with it), standing on the lowest point
+ * of its wheels.
+ */
+export function carFootprints(root: THREE.Object3D): Footprint[] {
+  root.updateMatrixWorld(true);
+  const toRoot = root.matrixWorld.clone().invert();
+  const found: Footprint[] = [];
+  const box = new THREE.Box3();
+  const part = new THREE.Box3();
+  const m = new THREE.Matrix4();
+  const pos = new THREE.Vector3();
+  const quat = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  const centre = new THREE.Vector3();
+  root.traverse((o) => {
+    if (!CAR_RE.test(o.name) || (o.parent && CAR_RE.test(o.parent.name))) return;
+    // The body's box in the car's own frame.
+    const toCar = o.matrixWorld.clone().invert();
+    box.makeEmpty();
+    o.traverse((c) => {
+      const mesh = c as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      mesh.geometry.computeBoundingBox();
+      part.copy(mesh.geometry.boundingBox!).applyMatrix4(m.multiplyMatrices(toCar, mesh.matrixWorld));
+      box.union(part);
+    });
+    if (box.isEmpty()) return;
+    const frame = m.multiplyMatrices(toRoot, o.matrixWorld);
+    frame.decompose(pos, quat, scale);
+    box.getCenter(centre).applyMatrix4(frame);
+    const yaw = new THREE.Euler().setFromQuaternion(quat, 'YXZ').y;
+    found.push({
+      at: [centre.x, centre.z],
+      // (its lowest point in the estate's space: the wheels on the drive)
+      y: new THREE.Box3().copy(box).applyMatrix4(frame).min.y,
+      half: [
+        ((box.max.x - box.min.x) / 2) * Math.abs(scale.x) * CAR_SHADOW.inset,
+        ((box.max.z - box.min.z) / 2) * Math.abs(scale.z) * CAR_SHADOW.inset,
+      ],
+      yaw,
+      reach: CAR_SHADOW.reach,
+      dark: CAR_SHADOW.dark,
+    });
+  });
+  return found;
+}
 
 /**
  * Lay the contact shadows under `root` (the estate's own space). Once: a root
@@ -62,24 +134,31 @@ const NAME = 'estate_contacts';
  */
 export function groundObjects(root: THREE.Object3D): THREE.Mesh | null {
   if (root.getObjectByName(NAME)) return null;
-  const R = CONTACT_SHADOW.reach;
   const position: number[] = [];
   const local: number[] = [];
   const half: number[] = [];
+  const shade: number[] = [];
   const index: number[] = [];
-  for (const f of FOOTPRINTS) {
+  for (const f of [...FOOTPRINTS, ...carFootprints(root)]) {
     const base = position.length / 3;
+    const R = f.reach ?? CONTACT_SHADOW.reach;
     const ex = f.half[0] + R;
     const ez = f.half[1] + R;
+    const c = Math.cos(f.yaw ?? 0);
+    const s = Math.sin(f.yaw ?? 0);
     for (const [sx, sz] of [
       [-1, -1],
       [1, -1],
       [1, 1],
       [-1, 1],
     ] as const) {
-      position.push(f.at[0] + sx * ex, f.y + 0.006, f.at[1] + sz * ez);
-      local.push(sx * ex, sz * ez);
+      const lx = sx * ex;
+      const lz = sz * ez;
+      // (turned as three turns a thing about y)
+      position.push(f.at[0] + c * lx + s * lz, f.y + 0.006, f.at[1] - s * lx + c * lz);
+      local.push(lx, lz);
       half.push(f.half[0], f.half[1]);
+      shade.push(R, f.dark ?? CONTACT_SHADOW.dark);
     }
     // facing up: counter-clockwise seen from above
     index.push(base, base + 2, base + 1, base, base + 3, base + 2);
@@ -88,6 +167,7 @@ export function groundObjects(root: THREE.Object3D): THREE.Mesh | null {
   g.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
   g.setAttribute('contactLocal', new THREE.Float32BufferAttribute(local, 2));
   g.setAttribute('contactHalf', new THREE.Float32BufferAttribute(half, 2));
+  g.setAttribute('contactShade', new THREE.Float32BufferAttribute(shade, 2));
   g.setIndex(index);
 
   const material = new THREE.MeshBasicMaterial({
@@ -98,28 +178,42 @@ export function groundObjects(root: THREE.Object3D): THREE.Mesh | null {
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -2,
+    // The colour darkened as by any shade, and the frame's alpha LEFT ALONE:
+    // it holds the scene's depth for the lens (LensFocus.installFocusDepth),
+    // and a normal blend wrote the shade's own alpha into it, so the lens read
+    // the ground under a shade as a few metres from the eye.
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.SrcAlphaFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendEquationAlpha: THREE.AddEquation,
+    blendSrcAlpha: THREE.ZeroFactor,
+    blendDstAlpha: THREE.OneFactor,
   });
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace(
         'void main() {',
-        'attribute vec2 contactLocal;\nattribute vec2 contactHalf;\nvarying vec2 vContactLocal;\nvarying vec2 vContactHalf;\nvoid main() {',
+        'attribute vec2 contactLocal;\nattribute vec2 contactHalf;\nattribute vec2 contactShade;\nvarying vec2 vContactLocal;\nvarying vec2 vContactHalf;\nvarying vec2 vContactShade;\nvoid main() {',
       )
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvContactLocal = contactLocal;\nvContactHalf = contactHalf;');
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\nvContactLocal = contactLocal;\nvContactHalf = contactHalf;\nvContactShade = contactShade;',
+      );
     shader.fragmentShader = shader.fragmentShader
-      .replace('void main() {', 'varying vec2 vContactLocal;\nvarying vec2 vContactHalf;\nvoid main() {')
+      .replace('void main() {', 'varying vec2 vContactLocal;\nvarying vec2 vContactHalf;\nvarying vec2 vContactShade;\nvoid main() {')
       .replace(
         '#include <color_fragment>',
         /* glsl */ `#include <color_fragment>
 	{
-		// distance from the foot's outline, 0 under it
+		// distance from the foot's outline, 0 under it; its reach and darkness
 		float d = length( max( abs( vContactLocal ) - vContactHalf, 0.0 ) );
-		float k = 1.0 - smoothstep( 0.0, ${R.toFixed(3)}, d );
-		diffuseColor.a *= ${CONTACT_SHADOW.dark.toFixed(3)} * k * k;
+		float k = 1.0 - smoothstep( 0.0, vContactShade.x, d );
+		diffuseColor.a *= vContactShade.y * k * k;
 	}`,
       );
   };
-  material.customProgramCacheKey = () => 'estate-contact-shadow';
+  material.customProgramCacheKey = () => 'estate-contact-shadow-2';
 
   const mesh = new THREE.Mesh(g, material);
   mesh.name = NAME;

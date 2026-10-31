@@ -47,6 +47,9 @@ export const lensFilter = {
    *  the tables' copy stands under it (tableBandFilter). */
   topFull: 0.07,
   topZero: 0.24,
+  /** How far the band stands open over the middle of the frame, 0..1: the
+   *  layout's sky (holdingsFilter). The header stands at the frame's two ends. */
+  topGap: 0,
   /** Stops over the WHOLE frame: the lens closed down (codaFilter). Like the
    *  band, it never adds to the others: at each point the densest holds. */
   all: 0,
@@ -430,16 +433,6 @@ export function headerBandReach(outside = false, dt = Infinity, tall = false): v
 }
 
 /**
- * HOW MUCH DENSER THE HOLDINGS' GRAD OPENS ON A WIDE FRAME: seven-tenths of a
- * stop over HOLDINGS_ND.open, given back as the evening settles. (Seven, not
- * four: on a 13-inch laptop's 1280x593 the small capitals cannot shrink with
- * the frame, reach half as far again across the picture, and at leg 0.40
- * stood on the haze between two trees — a p90 luma of 125 at the plain
- * opening.)
- */
-export const HOLDINGS_WIDE_OPEN = 0.7;
-
-/**
  * WHERE THE FILM'S COPY STANDS ON A WIDE FRAME SINCE THE AUDIT OF 2026-10-05:
  * off the frame's own left edge (globals.css, --edge: 5.2% of its width), in
  * blocks whose width is given in the frame's unit (a nine-hundredth of its
@@ -465,27 +458,37 @@ function onEdge(
 }
 
 /**
- * THE FIGURES' GROUND. The holdings' block is the figures now, at the display's
- * largest size, their labels, the statement and its gloss, from 58.5% of the
- * way down a wide frame to its foot — on the evening's land, which is dark
- * where the camera all but rests (leg 0.6) and is not yet where the block
- * comes up: the crane is still rising over the west lawn in the last of the
- * sun (measured on the restored path: see FIXLOG, 2026-10-06). The lens's
- * ellipse is drawn round that block, and ridden as it always was
- * (HOLDINGS_ND): denser while the land under it is lit, eased as the evening
- * takes it.
+ * THE LAYOUT'S SKY (the founder's frame, 2026-10-28). Chapter three's title
+ * stands where the cover's does, in the top left of the frame — over the
+ * forest's crowns and the mist between them, where the cover's stands over
+ * its sky — three lines of the display's size, down to four-tenths of the
+ * frame. So the lens wears the cover's kind of grad for it: from the top
+ * edge, leaning to the left (`lean`), whole down to the title's foot (`full`)
+ * and gone over the house's roofline (`zero`), on for as long as the
+ * chapter's words are (`from`, `to`: journey.ts, COPY_SPAN, a little before
+ * them). It takes the place of the holdings' ellipse round the figures at
+ * the frame's foot; the figures went with the dusk they stood on.
  */
-export const HOLDINGS_BOX = { left: -60, right: 700, top: 0.5, foot: 1 } as const;
-export const HOLDINGS_PAD = 1.5;
-/**
- * AND HOW MUCH OF THE HOLDINGS' DENSITY A WIDE FRAME TAKES. HOLDINGS_ND was
- * set for a heading in the horizon's glare, 40% of the way down the frame;
- * the figures stand on the land under it. With none, measured at 1920x945
- * along the chapter: the figures on a ground of 139 to 165 as the block
- * comes up (2.1 to 2.9:1) and their labels on 112 to 134; with a fifth of
- * it, one label at 4.35:1; with 0.35 every line at AA by a tenth and more.
- */
-export const HOLDINGS_WIDE = 0.42;
+export const LAYOUT_SKY = {
+  // (1.3 at first: the title at 2.87 to 2.98:1 on the four wide frames, the
+  // mist between the crowns at a p90 of 140; and narrower than the cover's,
+  // so the house's roofline beside the title is left its light)
+  stops: 1.6,
+  lean: { cx: 0.12, rx: 0.6 },
+  full: 0.4,
+  zero: 0.56,
+  from: [0.55, 0.59] as const,
+  to: [0.672, 0.71] as const,
+} as const;
+
+/** The layout's sky grad at this point of the exterior leg, in stops. */
+export function layoutSkyStops(legS: number): number {
+  return (
+    ld('layoutSky', LAYOUT_SKY.stops) *
+    smooth(LAYOUT_SKY.from[0], LAYOUT_SKY.from[1], legS) *
+    (1 - smooth(LAYOUT_SKY.to[0], LAYOUT_SKY.to[1], legS))
+  );
+}
 
 /**
  * THE COVER'S SKY (the paid audit of 2026-10-04, passes 2 and 6: "typography
@@ -511,7 +514,16 @@ export const HOLDINGS_WIDE = 0.42;
  * leg progress), before the holdings' own grad comes on.
  */
 export const COVER_SKY = {
-  stops: 1.45,
+  // 1.45 until the concept built 1:1 (2026-10-27): its sky is bright and warm
+  // over the house, and the title stands on the shade of a great tree's
+  // crown at the frame's top left (exteriorJungle.ts, GIANTS). So the grad
+  // leans to the left (`lean`: where across the frame it is centred, and how
+  // wide): behind the title it holds the words at 3:1, and the sky over the
+  // house and toward the sun keeps the concept's light. A tenth and a half of a
+  // stop over its old 1.45: the forest and its haze stand behind the gilt line
+  // now, where the sky's foot did (2.99:1 at 1440x900 at 1.45).
+  stops: 1.6,
+  lean: { cx: 0.14, rx: 1.05 },
   full: 0.32,
   zero: 0.46,
   off: [0.31, 0.345] as const,
@@ -560,7 +572,9 @@ export const COVER_SKY = {
  * A slate, not a blue: the client's rule against saturated blue stands.
  */
 export const COVER_GRADE = {
-  cool: [0.74, 0.91, 1.22] as const,
+  // A slate until the concept built 1:1 (2026-10-27), whose top of frame is a
+  // golden haze: the grad's colour is now the haze's own, a warm umber.
+  cool: [1.0, 0.95, 0.86] as const,
   coolReach: [0.04, 0.38] as const,
   warm: [1.1, 1.0, 0.86] as const,
   warmBand: [0.2, 0.3, 0.33, 0.47] as const,
@@ -571,7 +585,9 @@ export const COVER_GRADE = {
 /** How much of the cover's coloured grad is on at this point of the exterior
  *  leg, 0..1. */
 export function coverGrade(legS: number): number {
-  return 1 - smooth(COVER_GRADE.off[0], COVER_GRADE.off[1], legS);
+  // (and on the layout's grad, whose sky is the same golden haze: LAYOUT_SKY)
+  const layout = smooth(LAYOUT_SKY.from[0], LAYOUT_SKY.from[1], legS) * (1 - smooth(LAYOUT_SKY.to[0], LAYOUT_SKY.to[1], legS));
+  return Math.max(1 - smooth(COVER_GRADE.off[0], COVER_GRADE.off[1], legS), layout);
 }
 
 /**
@@ -613,6 +629,9 @@ export const LAND_BOX = {
   cover: { left: -30, right: 450, top: 0.628, foot: 0.768 },
   revolution: { left: -30, right: 350, top: 0.751, foot: 0.886 },
   revolutionShort: { left: -30, right: 540, top: 0.751, foot: 0.916 },
+  // the layout's line and its cue, on the foreground's crowns (the founder's
+  // frame, 2026-10-28): "Start here" at 4.42:1 on a sunlit leaf at 1920x945
+  layout: { left: -30, right: 450, top: 0.628, foot: 0.84 },
 } as const;
 
 
@@ -642,45 +661,51 @@ export function holdingsFilter(
   cover = 0,
   revolution = 0,
   short = false,
+  /** How much of the layout's copy is up, 0..1. */
+  layoutCopy = 0,
 ): void {
   const c = Math.min(1, Math.max(0, cover));
   const r = Math.min(1, Math.max(0, revolution));
+  const l = Math.min(1, Math.max(0, layoutCopy));
   // The cover's grad in its own colour (COVER_GRADE): by the place on the
   // leg, like the grad itself, and not by the words.
   const grade = coverGrade(legS);
   lensFilter.sky.cool = grade * ld('coverCool', 1);
   lensFilter.sky.warm = grade * ld('coverWarm', 1);
-  const land = ld('landStops', LAND_ND.stops) * Math.max(c, r);
+  const land = ld('landStops', LAND_ND.stops) * Math.max(c, r, l);
   lensFilter.second.stops = land < 0.004 ? 0 : land;
   if (land > 0) {
     onEdge(
       lensFilter.second.shape,
-      r > c ? (short ? LAND_BOX.revolutionShort : LAND_BOX.revolution) : LAND_BOX.cover,
+      l > Math.max(c, r) ? LAND_BOX.layout : r > c ? (short ? LAND_BOX.revolutionShort : LAND_BOX.revolution) : LAND_BOX.cover,
       aspect,
       ld('landPad', LAND_ND.pad),
     );
     lensFilter.second.inner = ld('landInner', LAND_ND.inner);
   }
-  const on = smooth(HOLDINGS_ND.from[0], HOLDINGS_ND.from[1], legS) * (1 - smooth(HOLDINGS_ND.to[0], HOLDINGS_ND.to[1], legS));
-  const opening = 1 - smooth(HOLDINGS_ND.settle[0], HOLDINGS_ND.settle[1], legS);
-  const holdings = (holdingsDensity(legS) + ld('holdOpen', HOLDINGS_WIDE_OPEN) * opening) * on * ld('holdGain', HOLDINGS_WIDE);
   const sky = coverSkyStops(legS);
-  if (sky > holdings) {
-    // A grad anchored at the top edge: an ellipse centred above the frame,
-    // wide enough that across the frame its edge is a line.
+  const layout = layoutSkyStops(legS);
+  lensFilter.topGap = ld('layoutGap', 1) * (layout / Math.max(1e-3, ld('layoutSky', LAYOUT_SKY.stops)));
+  // A grad anchored at the top edge: an ellipse centred above the frame,
+  // wide enough that across the frame its edge is a line. The cover's, or
+  // the layout's (LAYOUT_SKY), whichever is the denser here.
+  const cy = 1.2;
+  if (sky >= layout) {
     const reach = short ? COVER_SKY_SHORT : COVER_SKY;
     const vFull = 1 - ld('coverSkyFull', reach.full);
     const vZero = 1 - ld('coverSkyZero', reach.zero);
-    const cy = 1.2;
     const ry = cy - vZero;
     lensFilter.stops = sky;
-    lensFilter.shape.set(0.5, cy, 3, ry);
+    lensFilter.shape.set(ld('coverSkyCx', COVER_SKY.lean.cx), cy, ld('coverSkyRx', COVER_SKY.lean.rx), ry);
     lensFilter.inner = (cy - vFull) / ry;
     return;
   }
-  lensFilter.stops = holdings;
-  lensFilter.inner = ld('holdInner', 0.5);
-  onEdge(lensFilter.shape, HOLDINGS_BOX, aspect, ld('holdPad', HOLDINGS_PAD));
+  const vFull = 1 - ld('layoutSkyFull', LAYOUT_SKY.full);
+  const vZero = 1 - ld('layoutSkyZero', LAYOUT_SKY.zero);
+  const ry = cy - vZero;
+  lensFilter.stops = layout;
+  lensFilter.shape.set(ld('layoutSkyCx', LAYOUT_SKY.lean.cx), cy, ld('layoutSkyRx', LAYOUT_SKY.lean.rx), ry);
+  lensFilter.inner = (cy - vFull) / ry;
 }
 
 /**
@@ -762,6 +787,9 @@ export const PHONE_SKY = { reach: 0.74, rise: 0.12, margin: 0.03, fall: 0.09 } a
  * much denser, and gives it back as the evening settles (HOLDINGS_ND.settle).
  */
 export const PHONE_HOLDINGS_BOOST = 0.6;
+/** And held this much denser throughout: the layout's title stands on its bright
+ *  sky on these frames (2.64:1 at 820x1180 with 0.35). */
+export const PHONE_HOLDINGS_MIST = 0.75;
 
 type Anchor = 'top' | 'bottom';
 interface GradState {
@@ -850,7 +878,7 @@ export function phoneSkyFilter(panes: readonly CopyPane[], legS: number, dt: num
   // ground of 130 at 2.6:1 and the line under it at 3.96:1.)
   const density = (id: string) =>
     id === 'holdings'
-      ? holdingsDensity(legS) + PHONE_HOLDINGS_BOOST * opening
+      ? holdingsDensity(legS) + PHONE_HOLDINGS_BOOST * opening + PHONE_HOLDINGS_MIST
       : id === 'revolution'
         ? PHONE_SKY_ND.revolution + skyRide(legS)
         : PHONE_SKY_ND[id] ?? 0;

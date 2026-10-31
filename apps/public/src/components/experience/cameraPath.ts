@@ -344,145 +344,104 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     frameOffset: 6.4 * ESTATE_SCALE,
   },
   {
-    id: 'crane',
-    // THE CRANE, which replaces what used to be THE TURN AWAY.
+    id: 'layout',
+    // THE LAYOUT (the founder's frame, 2026-10-28: "Elevated Drone-Sweep View
+    // ... the camera has been lifted significantly higher and is sweeping back
+    // ... The villa and pool are now positioned in the mid-left"). Where the
+    // crane and the holdings stood, behind the house at dusk, the chapter is
+    // now the land the house stands in, laid out in plots (exteriorLayout.ts):
+    // from over the west lawn, the house and its pool left of the middle, the
+    // avenue running from its forecourt to the frame's right foot, and the
+    // plotted lawns either side of it filling the foot of the frame, under
+    // the forest and the hills.
     //
-    // The old beat swung the aim off the building and out into empty field, so
-    // that by 0.82 the estate was already gone. This one keeps the building and
-    // climbs: the camera rises from 8.4m to 15m while retreating from -19 to
-    // -32, and the aim lifts from the mansion's centroid toward its roofline.
-    // The move reads as pulling back to see what the house belongs to, which is
-    // the sentence the chapter has to say.
-    at: 0.82 * FILM_SHARE,
-    position: grow([-21.0, 15.0, -32.0]),
-    // The aim was 16 m up, for a house that rose 20 m to the tip of its spire.
-    // The roof is flat now (the client, 2026-10-01) and the house ends at its
-    // parapet's urns, 12.5 m up; the aim comes down 4 m with it, here and at
-    // the holdings beat, so the house holds the place in the frame it held.
-    target: [0.0, ROOFLINE_AIM, 0.0],
-    fog: growFog([30, 165]),
-    keyIntensity: 2.4,
-    fov: 44,
-    roll: -0.02,
-    frameOffset: 4.6 * ESTATE_SCALE,
-    // EVENING IS COMPLETE HERE, not at the last beat — the light changes DURING
-    // the crane and has finished by the time the camera settles.
-    //
-    // Putting the 1 on the final beat instead was measured and was wrong for the
-    // same structural reason the constellation's own reveal curve was wrong:
-    // `at: 1.0` is the END of the leg, which is document scroll 0.46, which is
-    // the middle of the crossover veil. The held frame of the chapter sits at
-    // legProgress 0.81, and with the 1 on the last beat that frame photographed
-    // at evening 0.72 — sky mean 75.4 where the fully fallen frame reads 58.7.
-    // The chapter would have spent its whole held moment on the way to a look
-    // it only reached behind a black screen.
-    evening: 1,
-  },
-  {
-    id: 'holdings',
-    // HOLDINGS (the constellation's chapter until the second art-direction
-    // audit removed the sphere). The rear three-quarter, craned high and far
-    // out, holding the estate low-right with its parapet against the evening
-    // land and the land beside it gone dark — the quiet ground the figures sit
-    // on.
-    //
-    // The aim came DOWN 5.8 m with the sphere: it was lifted to leave room above
-    // the spire for the ball, and with the ball gone that room was sky with
-    // nothing in it and the house pushed into the foot of the frame.
-    //
-    // No longer the end of the leg: the approach to the door follows it. It is
-    // still where the camera slows almost to rest, which is what makes it the
-    // held frame of its chapter.
+    // The pose was fitted to the founder's frame (scratchpad layout/fit8.py):
+    // the house's four parapet corners and two of its feet, the pool, the
+    // avenue on his road's middle, the first cross road on his, and the horizon
+    // a sixth of the way down, his hills' foot. His frame stands the house 43
+    // degrees round from the axis and the roads square with it; the avenue on
+    // the axis then lies within a road's width of his road. Thirty-seven metres
+    // up over the west lawn, on a 48-degree lens. (Fitted first with the house
+    // left out of the angle: 34 degrees round, the house too square-on.)
+    // A DAY FRAME. The evening that used to fall over the crane now falls over
+    // the descent that follows (APPROACH_BEATS): the founder's land is golden
+    // and misty, as the cover is.
     at: FILM_SHARE,
-    position: grow([-24.0, 18.0, -42.0]),
-    // (And down again with the flat roof: see the crane, above.)
-    target: [0.0, ROOFLINE_AIM, 0.0],
-    // Fog is doing MORE work here than anywhere else on the path, not less. The
-    // authored terrain stops dead at +/-120m, and from this vantage the far edge
-    // is 149m away and lands at y 453 — a hard line straight across the frame,
-    // the single artefact that most reads as a diorama on a table. 60..150
-    // takes that edge to 89% haze while leaving the building, whose nearest
-    // corner is 39.8m from the eye, completely untouched.
+    position: [-62.4, 37.2, 95.8],
+    target: [20.0, 1.2, 7.5],
     fog: growFog([60, 150]),
     keyIntensity: 2.6,
-    fov: 37,
+    fov: 48,
     roll: 0.0,
-    // Held open: the house sits in the right of frame, the figures in the
-    // dark land to its left.
-    frameOffset: 3.6 * ESTATE_SCALE,
-    // Held, not still climbing. See the note on the beat above.
-    evening: 1,
+    // The house is left of the middle by the aim alone.
+    frameOffset: 0,
+    evening: 0,
   },
 ];
 
 /**
- * THE APPROACH — from the constellation down to the front door, as night falls.
+ * THE SWEEP, from the three-quarter to the layout: up behind the house's left
+ * shoulder (the crane, where the approved film rose to), round over the trees
+ * beyond the west wall, and in over the west lawn, the aim on the house the
+ * whole way until it settles right of it.
  *
- * WHY THE LEFT FLANK, AND WHY THAT IS NOT A REWIND. The obvious route is on
- * round the right side, closing the circle. Measured on the curves, it is 122 m
- * and 210 degrees of azimuth from the constellation to the door, which at any
- * page length the film can afford sweeps the house twice as fast as the orbit it
- * follows. Back down the left is 99 m and 150 degrees. And it does not read as
- * the revolution played backwards, for two reasons the frame makes obvious: the
- * revolution flew that flank at noon and nine metres up, and this passes it at
- * dusk with every window lit, lower and wider; and it ends somewhere the
- * revolution never went — on the axis, at the door. The film opens on the front
- * of the house in daylight and comes back to it at night to go inside.
+ * These are waypoints, not beats: the curve passes through them but no lens or
+ * light is set at them (the lens and the evening run from the three-quarter
+ * straight to the layout, lensAt). The first is the crane as it was, so the
+ * revolution's last stretch, which a Catmull-Rom shapes by the point after it,
+ * is the stretch that was approved (cameraPath.test.ts).
+ */
+export const SWEEP_WAYPOINTS: readonly { position: [number, number, number]; target: [number, number, number] }[] = [
+  { position: grow([-21.0, 15.0, -32.0]), target: [0.0, ROOFLINE_AIM, 0.0] },
+  { position: [-80.0, 36.0, -20.0], target: [0.0, 9.0, 0.0] },
+  { position: [-94.0, 34.0, 64.0], target: [6.0, 8.0, 4.0] },
+];
+
+/**
+ * THE APPROACH — from the layout down to the front door, as night falls.
+ *
+ * DOWN OVER THE PLOTS, not back round the house (the founder's layout,
+ * 2026-10-28). It used to leave the holdings beat, behind the house, and come
+ * back down the left flank; the layout stands far out to the south-west, so
+ * the way to the door is over the land it has just shown: down across the
+ * west lawn's plots as the light goes, in round the head of the avenue's
+ * first palms, onto the axis over the fountain, and square on the door. The
+ * last three beats are the approved ones, unchanged (the doorway continues
+ * their push).
  *
  * GEOMETRY. Clearances are in cameraPath.test.ts against the same hulls as the
- * rest of the path; the tightest is 3.0 m, over the left cypress line at the
- * forecourt beat. The last two beats are ON the entry axis (x = 0), so the final
- * stretch is a straight push toward the door rather than a slide onto it —
- * which matters, because the doorway move continues that push.
+ * rest of the path. The last two beats are ON the entry axis (x = 0), so the
+ * final stretch is a straight push toward the door rather than a slide onto it
+ * — which matters, because the doorway move continues that push.
  *
- * AT VALUES are on the whole exterior leg. The first entry is the constellation
- * beat itself: this curve starts where the film's ends.
+ * AT VALUES are on the whole exterior leg. The first entry is the layout beat
+ * itself: this curve starts where the film's ends.
  */
 const APPROACH_SPAN = 1 - FILM_SHARE;
 
 export const APPROACH_BEATS: readonly CameraBeat[] = [
   FILM_BEATS[FILM_BEATS.length - 1],
   {
-    id: 'dusk-flank',
-    // Down off the crane and out along the left flank, wider than the
-    // revolution flew it and three metres lower. The aim drops from the roofline
-    // to the first floor as the camera does, so the house comes back into the
-    // middle of frame and the sphere rides up out of the top of it.
+    id: 'descent',
+    // Down off the layout over the west lawn's plots, the house ahead and the
+    // evening falling on it: the dusk is complete here, where the flank was.
     at: FILM_SHARE + APPROACH_SPAN * 0.33,
-    // V7: pulled in to x -46, 19 m up. Grown straight it stood at x -57.6, 20 m
-    // up, inside the rain trees planted along the compound wall.
-    position: [-45.7, 18.5, -12.9],
-    target: grow([0.0, 6.4, 0.0]),
+    position: [-44.0, 19.0, 80.0],
+    target: [0.0, 6.0, 10.0],
     fog: growFog([40, 160]),
     keyIntensity: 2.5,
-    fov: 46,
-    // Banking the OTHER way from the revolution: this turn runs the opposite
-    // direction round the house.
-    roll: 0.035,
+    fov: 42,
+    roll: 0.02,
     frameOffset: 2.4 * ESTATE_SCALE,
     evening: 1,
   },
   {
     id: 'forecourt',
-    // Round the front-left corner above the hedge line, the lit facade raking
-    // away to the right. 8.2 m clears the 5.4 m cypresses by 2.8 m.
+    // In over the forecourt's west lawn, round the head of the avenue's palms
+    // (the first pair stands at z 41 to 53, crowns to 13.5 m), the lit front
+    // raking away to the right, and on toward the axis.
     at: FILM_SHARE + APPROACH_SPAN * 0.64,
-    // V7: round the front-left corner of the podium and into the forecourt
-    // between the house and the ring of palms, which is planted only on the
-    // fountain's far side, so the camera comes onto the axis inside the ring
-    // rather than through it. The lit front rakes away to the right.
-    //
-    // LOWER, FURTHER OUT AND ON A LONGER LENS (the refinement brief,
-    // 2026-10-04: "avoid camera distances that expose the limitations of the
-    // model without providing photographic intimacy"). It stood at
-    // [-11.8, 14.5, 20.5] aiming at [0, 4.5, 7.2] on 45 degrees: 20 m from the
-    // corner and two and a half metres over the parapet, looking down — and a
-    // third of the frame was the flat roof, the one plane of the house with
-    // nothing on it, at the distance that shows it best. Under the parapet
-    // (12.5 m) the roof is behind its balustrade; 27 m out on 41 degrees the
-    // lit front is a three-quarter elevation against the evening sky, which
-    // is the photograph a house like this is sold by.
-    position: [-15.0, 10.6, 25.5],
+    position: [-27.0, 12.0, 44.0],
     target: [0.0, 5.4, 7.2],
     fog: growFog([32, 150]),
     keyIntensity: 2.45,
@@ -585,39 +544,67 @@ function curveThrough(points: readonly [number, number, number][]) {
  */
 export const SUBJECT: [number, number, number] = grow([0, 4.0, 0]);
 
-/** The approved film: hero, revolution, crane, constellation. */
-export const FILM_POSITION_CURVE = curveThrough(FILM_BEATS.map((b) => b.position));
-export const FILM_TARGET_CURVE = curveThrough(FILM_BEATS.map((b) => b.target));
-/** The approach, from the constellation to the front door. */
+const [HERO, QUARTER, THREE_QUARTER, LAYOUT] = FILM_BEATS;
+const CRANE = SWEEP_WAYPOINTS[0];
+
+/**
+ * The approved film, the hero to the three-quarter: through the crane as well,
+ * which it no longer reaches, because a Catmull-Rom segment is shaped by the
+ * point after it and the revolution's last stretch was approved with the crane
+ * there. Read up to the three-quarter only (exteriorPoseAtSwing).
+ */
+export const FILM_POSITION_CURVE = curveThrough([HERO, QUARTER, THREE_QUARTER].map((b) => b.position).concat([CRANE.position]));
+export const FILM_TARGET_CURVE = curveThrough([HERO, QUARTER, THREE_QUARTER].map((b) => b.target).concat([CRANE.target]));
+/** The revolution's beats as its curve has them (the crane's `at` is never
+ *  reached: the curve is read only as far as the three-quarter). */
+const REVOLUTION = [HERO, QUARTER, THREE_QUARTER, { ...THREE_QUARTER, at: LAYOUT.at }];
+
+/**
+ * The sweep, from the three-quarter through its waypoints to the layout. Drawn
+ * from the quarter, so it leaves the three-quarter on the revolution's own
+ * tangent (a segment's tangent at its start is shaped by the point before it),
+ * and read from the three-quarter on.
+ */
+export const SWEEP_POSITION_CURVE = curveThrough(
+  [QUARTER.position, THREE_QUARTER.position, ...SWEEP_WAYPOINTS.map((w) => w.position), LAYOUT.position],
+);
+export const SWEEP_TARGET_CURVE = curveThrough(
+  [QUARTER.target, THREE_QUARTER.target, ...SWEEP_WAYPOINTS.map((w) => w.target), LAYOUT.target],
+);
+/** Where on the sweep's curves the three-quarter is. */
+const SWEEP_FROM_U = 1 / (SWEEP_WAYPOINTS.length + 2);
+
+/**
+ * THE LAYOUT ON AN UPRIGHT SCREEN. The layout's aim is right of the house, for
+ * a wide frame whose left is the chapter's words; a phone's frame is the
+ * middle two-fifths of that, and held the house cut by its left edge. Upright,
+ * the chapter's words stand over the top half of the frame (as the cover's
+ * do), so the aim comes onto the house and above it: the house in the lower
+ * middle of the frame with its pool to the left, the fountain and the avenue
+ * to the right, the plots under them (seen at 390x844). Taken on over the
+ * sweep's second half and given back over the descent's first stretch
+ * (`swing`: whole between, none outside), by how upright the frame is.
+ */
+export const LAYOUT_UPRIGHT = {
+  target: [-6.0, 15.0, 8.0] as [number, number, number],
+  swing: [0.45, 0.58, FILM_SHARE, FILM_SHARE + (1 - FILM_SHARE) * 0.33] as const,
+} as const;
+const layoutUprightAim = new THREE.Vector3(...LAYOUT_UPRIGHT.target);
+
+/** How much of the layout's upright aim a frame takes at this point of swing
+ *  space, before its uprightness. */
+export function layoutUpright(swing: number): number {
+  const [a, b, c, d] = LAYOUT_UPRIGHT.swing;
+  const s = (e0: number, e1: number) => {
+    const t = Math.min(1, Math.max(0, (swing - e0) / (e1 - e0)));
+    return t * t * (3 - 2 * t);
+  };
+  return s(a, b) * (1 - s(c, d));
+}
+
+/** The approach, from the layout to the front door. */
 export const APPROACH_POSITION_CURVE = curveThrough(APPROACH_BEATS.map((b) => b.position));
-/**
- * THE APPROACH'S AIM IS DRAWN FROM WHERE IT WAS DRAWN: 16 m up at the holdings
- * beat. A Catmull-Rom segment is shaped by the point before it, so bringing
- * that beat's aim down for the flat roof (ROOFLINE_AIM) re-shaped the whole
- * stretch from the flank to the forecourt as well — measured, the picture 12
- * px lower at leg 0.8, which stood the approach's eyebrow on a lit window
- * (its ground from a p90 luma of 73 to 142). The curve keeps its old first
- * point, so every frame from the flank beat to the door is the frame it was;
- * the difference is taken up across the first segment alone (see
- * exteriorPoseAtSwing), where the camera is leaving the holdings beat anyway.
- */
-export const APPROACH_AIM_FROM = 16.0;
-export const APPROACH_TARGET_CURVE = curveThrough(
-  APPROACH_BEATS.map((b, i) => (i === 0 ? [b.target[0], APPROACH_AIM_FROM, b.target[2]] : b.target)),
-);
-/**
- * AND AN UPRIGHT SCREEN KEEPS THE OLD AIM ALTOGETHER. The lowered aim is a
- * wide frame's composition: there the copy stands beside the house, and the
- * house wants the middle of the frame. On a phone the copy stands ABOVE the
- * house, and lifting the house 8% of the frame put the holdings' gloss across
- * its lit first-floor windows (seen at 390x844). So an upright frame aims
- * where it always did — the film's curve with the crane and the holdings at
- * 16 m — and every phone frame is the frame that was checked.
- */
-const FILM_TARGET_CURVE_UPRIGHT = curveThrough(
-  FILM_BEATS.map((b) => (b.id === 'crane' || b.id === 'holdings' ? [b.target[0], APPROACH_AIM_FROM, b.target[2]] : b.target)),
-);
-const uprightAim = new THREE.Vector3();
+export const APPROACH_TARGET_CURVE = curveThrough(APPROACH_BEATS.map((b) => b.target));
 
 /**
  * Map progress to a parameter on one curve.
@@ -710,34 +697,121 @@ export function exteriorSwing(legProgress: number): number {
   return FILM_SHARE + APPROACH_SPAN * SWING((s - FILM_SHARE) / APPROACH_SPAN);
 }
 
+/** Back from swing space to leg progress, on the film's second half (where
+ *  the sweep is): the ease above, solved for x >= 0.5. */
+function filmLegOf(swing: number): number {
+  const s = Math.min(1, Math.max(0.5, swing / FILM_SHARE));
+  const y = (-SWING_LEAD + Math.sqrt(SWING_LEAD * SWING_LEAD + 8 * (1 - SWING_LEAD) * (1 - s))) / (4 * (1 - SWING_LEAD));
+  return FILM_SHARE * (1 - y);
+}
+
 /**
- * Position and aim at a point in swing space. Picks the curve; the constellation
- * beat, where they meet, is the same point on both.
+ * THE SWEEP'S PACE, which is not the film's ease's.
+ *
+ * Some two hundred metres from the three-quarter to the layout, where the
+ * revolution flew forty, in the same stretch of the film's ease: read on its
+ * beats as the rest of the film is, the camera would leave the three-quarter at
+ * five times the speed it arrived at and whip round the house at 120 degrees a
+ * viewport. So the sweep keeps its own clock:
+ *
+ *   BY ANGLE, NOT BY METRE. Its length is measured as the eye sees it, each
+ *   metre of path divided by how far from the house it is flown, so the camera
+ *   goes fast where it is far out and slowly where it is close: what turns on
+ *   the screen is what is paced.
+ *   ON THE PAGE, NOT ON THE EASE. Its progress is eased over the leg's own
+ *   scroll, from the three-quarter's place on the page to the layout's, so the
+ *   film's ease (which has all but finished by then) does not crowd it into
+ *   the first viewport.
+ *   AND JOINED. It leaves the three-quarter at the speed and on the line the
+ *   revolution arrives at (the tangent through the quarter, the speed read off
+ *   the film's curve), and settles onto the layout at a drift (SWEEP_ARRIVE),
+ *   the speed the film's ease had at its end.
+ *
+ * MEASURED on the curves (cameraPath.test.ts): never more than 72 degrees of
+ * turn a viewport of scroll, the approach's own 63 near enough.
+ */
+const SWEEP_TABLE = 2048;
+/** How near the house a metre of the sweep is counted at, at most (metres). */
+const SWEEP_NEAR = 20;
+/** The drift it arrives at, in angle (radians) per unit of leg. */
+const SWEEP_ARRIVE = 0.2;
+const sweepFrom = filmLegOf(THREE_QUARTER.at);
+const sweepSpan = FILM_SHARE - sweepFrom;
+/** The sweep's length by angle, sampled along its curve from the three-quarter. */
+const sweepLength = (() => {
+  const out = new Float64Array(SWEEP_TABLE + 1);
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  SWEEP_POSITION_CURVE.getPoint(SWEEP_FROM_U, a);
+  for (let i = 1; i <= SWEEP_TABLE; i += 1) {
+    SWEEP_POSITION_CURVE.getPoint(SWEEP_FROM_U + (1 - SWEEP_FROM_U) * (i / SWEEP_TABLE), b);
+    const far = Math.max(SWEEP_NEAR, Math.hypot((a.x + b.x) / 2, (a.y + b.y) / 2 - SUBJECT[1], (a.z + b.z) / 2));
+    out[i] = out[i - 1] + a.distanceTo(b) / far;
+    a.copy(b);
+  }
+  return out;
+})();
+/** The angle a unit of leg turns as the sweep leaves the three-quarter: the
+ *  revolution's own speed there, off the film's curve. */
+const sweepLeave = (() => {
+  const u = 2 / 3;
+  const e = 1e-5;
+  const p = FILM_POSITION_CURVE.getPoint(u);
+  const metresPerSwing = p.distanceTo(FILM_POSITION_CURVE.getPoint(u - e)) / e / (3 * (THREE_QUARTER.at - QUARTER.at));
+  const swingPerLeg = SWING_LEAD + (1 - SWING_LEAD) * 4 * (1 - sweepFrom / FILM_SHARE);
+  return (metresPerSwing * swingPerLeg) / Math.max(SWEEP_NEAR, Math.hypot(p.x, p.y - SUBJECT[1], p.z));
+})();
+
+/** Where on the sweep's curves the camera is at this leg progress. */
+function sweepU(leg: number): number {
+  const t = Math.min(1, Math.max(0, (leg - sweepFrom) / sweepSpan));
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const total = sweepLength[SWEEP_TABLE];
+  const s =
+    (-2 * t3 + 3 * t2) * total + (t3 - 2 * t2 + t) * sweepLeave * sweepSpan + (t3 - t2) * SWEEP_ARRIVE * sweepSpan;
+  let lo = 0;
+  let hi = SWEEP_TABLE;
+  while (hi - lo > 1) {
+    const m = (lo + hi) >> 1;
+    if (sweepLength[m] < s) lo = m;
+    else hi = m;
+  }
+  const k = (s - sweepLength[lo]) / Math.max(1e-12, sweepLength[hi] - sweepLength[lo]);
+  return SWEEP_FROM_U + (1 - SWEEP_FROM_U) * ((lo + Math.min(1, Math.max(0, k))) / SWEEP_TABLE);
+}
+
+/**
+ * Position and aim at a point in swing space. Picks the curve: the
+ * revolution's to the three-quarter, the sweep's to the layout, the
+ * approach's to the door. Where two meet, the pose is the same on both.
  */
 export function exteriorPoseAtSwing(
   swing: number,
   outPosition: THREE.Vector3,
   outTarget: THREE.Vector3,
   /** How upright the frame is, 0..1 (phoneFraming.phoneWeight): an upright
-   *  frame keeps the aim it had before the roof was made flat. */
+   *  frame aims at the house at the layout (LAYOUT_UPRIGHT). */
   upright = 0,
 ): void {
-  if (swing <= FILM_SHARE) {
-    const u = curveTOver(FILM_BEATS, swing);
+  pose(swing, outPosition, outTarget);
+  const k = Math.min(1, Math.max(0, upright)) * layoutUpright(swing);
+  if (k > 0) outTarget.lerp(layoutUprightAim, k);
+}
+
+function pose(swing: number, outPosition: THREE.Vector3, outTarget: THREE.Vector3): void {
+  if (swing <= THREE_QUARTER.at) {
+    const u = curveTOver(REVOLUTION, swing);
     FILM_POSITION_CURVE.getPoint(u, outPosition);
     FILM_TARGET_CURVE.getPoint(u, outTarget);
-    if (upright > 0) outTarget.lerp(FILM_TARGET_CURVE_UPRIGHT.getPoint(u, uprightAim), Math.min(1, upright));
+  } else if (swing <= FILM_SHARE) {
+    const u = sweepU(filmLegOf(swing));
+    SWEEP_POSITION_CURVE.getPoint(u, outPosition);
+    SWEEP_TARGET_CURVE.getPoint(u, outTarget);
   } else {
     const u = curveTOver(APPROACH_BEATS, swing);
     APPROACH_POSITION_CURVE.getPoint(u, outPosition);
     APPROACH_TARGET_CURVE.getPoint(u, outTarget);
-    // The aim leaves the holdings beat from where the flat roof put it and is
-    // back on the approach's own curve by the flank beat (APPROACH_AIM_FROM):
-    // the whole difference at the join, none of it by the first beat, and no
-    // slope at either end.
-    const k = Math.min(1, u * (APPROACH_BEATS.length - 1));
-    const w = 1 - k * k * k * (k * (k * 6 - 15) + 10);
-    outTarget.y += (ROOFLINE_AIM - APPROACH_AIM_FROM) * w * (1 - Math.min(1, Math.max(0, upright)));
   }
 }
 
@@ -812,6 +886,9 @@ export const UPRIGHT_LENS: Readonly<Record<string, { widen: number; offset: numb
   hero: { widen: 1.9, offset: 0 },
   quarter: { widen: 1.194, offset: 1 },
   'three-quarter': { widen: 1.149, offset: 1 },
+  // the house, its pool and the avenue's head across a phone's width, under
+  // the chapter's words (LAYOUT_UPRIGHT)
+  layout: { widen: 1.35, offset: 1 },
 };
 
 /** A tablet held upright's cover: the paid audit's upright lens, which holds

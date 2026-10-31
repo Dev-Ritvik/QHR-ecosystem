@@ -128,8 +128,10 @@ describe('one water', () => {
 describe('a mirror, and never more than one', () => {
   it('returns more than water does looked down on, and all of it only at a glance', () => {
     for (const kind of ['pool', 'canal', 'fountain'] as const) {
-      // real water is 0.02: a black pool from the film's high frames
-      expect(WATER[kind].f0).toBeGreaterThan(0.08);
+      // real water is 0.02: a black pool from the film's high frames. (The
+      // pool is less of a mirror since the concept built 1:1, 2026-10-27, so
+      // its aqua shows through it; still more than water's own.)
+      expect(WATER[kind].f0).toBeGreaterThan(kind === 'pool' ? 0.04 : 0.08);
       // and still a dark mirror, not a sheet of the sky laid on the ground
       expect(WATER[kind].f0).toBeLessThan(0.35);
       expect(WATER[kind].rough).toBeLessThan(0.15);
@@ -267,9 +269,13 @@ describe('the trough beside the pool', () => {
     expect(WATER_SUN).toContain('waterShade');
   });
 
-  it('is a slate under the reflection, not a resort’s turquoise', () => {
-    expect(WATER.pool.body).toBeLessThan(1);
-    // most of the file's colour is given up for its own grey
-    expect(WATER_COLOUR).toContain('diffuseColor.rgb, 0.3) * uWaterBody;');
+  it('is an aqua under the reflection again, at the user’s word (the concept built 1:1)', () => {
+    // The forensic audit's slate (#17) and the paid audit's dark mirror, kept
+    // by the client, were set aside by the user on 2026-10-27: the concept's
+    // pool is a grey-aqua over a pale floor. Not the file's whole turquoise.
+    expect(WATER.pool.body).toBeLessThanOrEqual(1);
+    expect(WATER.pool.teal).toBeGreaterThan(0.3);
+    expect(WATER.pool.teal).toBeLessThan(0.7);
+    expect(WATER_COLOUR).toContain(`diffuseColor.rgb, ${WATER.pool.teal.toFixed(2)}) * uWaterBody;`);
   });
 });

@@ -163,11 +163,6 @@ export function SiteHeader() {
               is why it never hides — note 2 above) and "Menu"; every page of
               the site is one press away in the panel. */}
           <div className="col-span-6 flex items-center justify-end gap-7 md:col-span-7 lg:col-span-6">
-            {/* The film's sound control is set here (AmbientSound, a portal
-                into this slot): on the header's ground, which the lens holds
-                dark, rather than in a corner of the picture, which nothing
-                does. Empty, and no width, on every other page. */}
-            {overFilm ? <span id="film-sound" className="flex items-center" /> : null}
             <Link href="/contact" className="cta-enquire on-film tap-target">
               Enquire
             </Link>
@@ -198,6 +193,24 @@ export function SiteHeader() {
             </button>
           </div>
         </div>
+        {/* UNDER THE CONTROLS, OVER THE FILM: WHERE, AND THE SOUND (the
+            concept the user asked to be built 1:1, 2026-10-27). The
+            co-ordinates are Vizianagaram's, the town the first office and the
+            cover's first district are named for — not a claim about the house
+            in the film, which is a picture, and said so to a screen reader.
+            Under them the sound control (AmbientSound, a portal into this
+            slot): a waveform and a switch. Empty, and nothing, on every other
+            page. */}
+        {overFilm ? (
+          <div className="film-locator">
+            <p className="film-coords">
+              <span className="sr-only">Vizianagaram, </span>
+              <span aria-hidden title="Vizianagaram">18.114° N, 83.402° E</span>
+              <span className="sr-only">18.114 degrees north, 83.402 degrees east</span>
+            </p>
+            <span id="film-sound" className="film-sound-slot" />
+          </div>
+        ) : null}
       </header>
 
       {open ? (

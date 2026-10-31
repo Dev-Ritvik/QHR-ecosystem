@@ -254,6 +254,18 @@ def build_materials():
                                       rough=0.75, double=True, clip=True, normal_strength=0.8)
         M["bark_" + key] = principled(f"MAT_Bark_{key.title()}", tex={"base": f"{stem}_bark.jpg", "normal": f"{stem}_bark_normal.jpg",
                                                                        "rough": f"{stem}_bark_rough.png"}, rough=0.9, normal_strength=1.0)
+    # The trees grown here (grow_trees_v7.py, the user's refinement brief of
+    # 2026-10-27): a leaf atlas of photographed leaves on twigs, and a
+    # tileable Poly Haven bark.
+    for key in GROWN_TREES:
+        stem = f"{TEX}/v7_grown_{key}"
+        if not os.path.exists(f"{stem}.png"):
+            continue
+        leaf_name, bark_name = grown_names(key)
+        M["leaf_grown_" + key] = principled(leaf_name, tex={"base": f"{stem}.png", "normal": f"{stem}_normal.png"},
+                                            rough=0.55 if key == "coconut" else 0.7, double=True, clip=True, normal_strength=0.8)
+        M["bark_grown_" + key] = principled(bark_name, tex={"base": f"{stem}_bark.jpg", "normal": f"{stem}_bark_normal.jpg",
+                                                            "rough": f"{stem}_bark_rough.png"}, rough=0.9, normal_strength=1.0)
     # ---- the luxury programme -------------------------------------------
     # Polished stone reads as expense before any detail does: it is the one
     # surface in the set that carries a reflection, and a reflection is what
@@ -1560,27 +1572,74 @@ def park_mask(x, y):
     return _smooth(formal / 18.0) * _smooth((to_wall - 4.0) / 14.0) * _smooth((pad - 3.0) / 12.0)
 
 
+# THE COUNTRY ROUND THE ESTATE, out to where the air has it whole (the
+# creative director's audit, 2026-10-27: "the ground outside the estate is a
+# dead-flat green plane ... meeting a sharp, artificial horizon line. Nothing
+# screams 'unpolished Three.js scene' faster than an infinite flat ground
+# plane"; the second client review had said it of the park). Outside the berm
+# the land lay flat at 2.6 m to +/-330 m and stopped there, and once the day's
+# fog was opened to 500 m (the user's Feature 1 brief, 2026-10-26) that edge
+# stood in half a haze against the sky. Now it rolls, climbs a little away from
+# the wall, and runs on to COUNTRY_REACH: past the day's fog (WorldCanvas,
+# DAY_FOG), past the horizon's skirt and the far plane that stands behind it
+# (exteriorHaze HORIZON_SKIRT, EXTERIOR_FAR), so it is haze before it ends.
+COUNTRY_REACH = 900.0
+
+
+def country_swell(x, y):
+    """Fields and low hills: long, incommensurate waves, 120 m to 1.6 km
+    across and metres high, so that no two bearings show the same skyline."""
+    return (2.2 * math.sin(x / 57.0 + 0.4) * math.cos(y / 79.0 - 1.1)
+            + 1.5 * math.sin((x - 0.6 * y) / 103.0 + 2.2)
+            + 0.9 * math.cos((0.8 * x + y) / 43.0 + 0.3)
+            + 0.8 * math.sin(x / 19.0 + 1.9) * math.cos(y / 23.0 + 0.6)
+            + 5.0 * math.sin(x / 191.0 - 0.8) * math.sin(y / 163.0 + 0.5)
+            + 3.0 * math.cos((x + 0.4 * y) / 271.0 + 1.7))
+
+
 def ground_height(x, y):
-    """Level in the formal core, gently rolling in the park, and a planted berm
-    rising outside the compound so the horizon is trees, not a terrain edge."""
+    """Level in the formal core, gently rolling in the park, a planted berm
+    rising outside the compound, and past the berm and its belt the country,
+    rolling and climbing gently toward low hills."""
     ox = max(0.0, abs(x) - (WALL_X + 6))
     oy = max(0.0, (y - WALL_BACK - 6), (WALL_FRONT - 6) - y)
     o = math.hypot(ox, oy)
     berm = 2.6 * (1 - math.exp(-(o / 22.0) ** 2))
-    return berm + 0.9 * park_swell(x, y) * park_mask(x, y)
+    country = _smooth((o - 30.0) / 160.0) * (country_swell(x, y) + 0.018 * max(0.0, o - 120.0))
+    return berm + country + 0.9 * park_swell(x, y) * park_mask(x, y)
+
+
+def ground_axis(inner_lo, inner_hi, reach_lo, reach_hi, step=6.0, widest=40.0, grow=1.18):
+    """One axis of the ground's grid: a line every `step` metres across the
+    lived-in middle (the 6 m the lawn was always cut in), then each further out
+    than the last by a little more, to the country's reach. Out there the land
+    is haze and a pixel is metres across."""
+    mid = [inner_lo + step * i for i in range(int(round((inner_hi - inner_lo) / step)) + 1)]
+
+    def out(start, end):
+        lines, pos, d = [], start, step
+        sign = 1.0 if end > start else -1.0
+        while sign * (end - pos) > 1e-6:
+            d = min(widest, d * grow)
+            pos = end if sign * (end - (pos + sign * d)) < d * 0.5 else pos + sign * d
+            lines.append(pos)
+        return lines
+    return out(inner_lo, reach_lo)[::-1] + mid + out(inner_hi, reach_hi)
 
 
 def build_ground(M, col):
     bm = new_bm()
-    N, S = 110, 330.0
-    verts = []
-    for j in range(N + 1):
-        row = []
-        for i in range(N + 1):
-            x = -S + 2 * S * i / N
-            y = -S - 60 + 2 * S * j / N
-            row.append(bm.verts.new((x, y, ground_height(x, y) - 0.02)))
-        verts.append(row)
+    S = 330.0
+    xs = ground_axis(-S, S, -COUNTRY_REACH, COUNTRY_REACH)
+    ys = ground_axis(-S - 60, S - 60, -COUNTRY_REACH - 60, COUNTRY_REACH - 60)
+    # THE LAWN LIES 4 CM UNDER THE PAVING (2 until 2026-10-27). The drive and the
+    # walks are laid at 0 to 13 mm; Draco then puts every vertex of a mesh on a
+    # grid sized by that mesh's extent, and when the country took the ground to
+    # 1.8 km that grid was 11 cm and the lawn came up THROUGH the forecourt. The
+    # ship quantizes positions at 16 bits now (ship_estate_v7.sh: 2.7 cm on this
+    # mesh, 1.4 at worst), and the lawn lies deep enough under the paving that
+    # no rounding brings it within a centimetre of it.
+    verts = [[bm.verts.new((x, y, ground_height(x, y) - 0.04)) for x in xs] for y in ys]
     # THE POOL IS CUT INTO THE LAWN, NOT LAID ON IT. The grid used to run
     # straight under the pool terrace, so the lawn sat 20 mm below the pool's
     # water line and 1.5 m above its floor: through water at 45% alpha the pool
@@ -1588,8 +1647,8 @@ def build_ground(M, col):
     # inside the terrace footprint are left out; the slab covers every one of
     # them except the pool opening, which is exactly the hole that was missing.
     T = TERRACE
-    for j in range(N):
-        for i in range(N):
+    for j in range(len(ys) - 1):
+        for i in range(len(xs) - 1):
             quad = [verts[j][i], verts[j][i + 1], verts[j + 1][i + 1], verts[j + 1][i]]
             if all(T["x0"] <= v.co.x <= T["x1"] and T["y0"] <= v.co.y <= T["y1"] for v in quad):
                 continue
@@ -1671,6 +1730,24 @@ def build_fountain(M, col, gold_bm):
     ob = finish("fountain_water", water, [M["water"]], col)
 
 
+FISH_LIB = "C:/dev/Blender/_fish/fish_web.blend"
+
+
+def refined_fish():
+    """The fish refined by tools/blender/refine_fish_v7.py (the refinement
+    brief of 2026-10-27: welded, 9,000 triangles, wet scales, its fin mask in
+    its colour's alpha), or None when its library is not there."""
+    name = "fish_betta_refined"
+    if not os.path.exists(FISH_LIB):
+        return None
+    if name not in bpy.data.meshes:
+        with bpy.data.libraries.load(FISH_LIB, link=False) as (src, dst):
+            if name not in src.meshes:
+                return None
+            dst.meshes = [name]
+    return bpy.data.meshes[name]
+
+
 def fountain_fish(col):
     """THE FOUNTAIN'S FISH (the user, 2026-10-26: "Add a animation where the
     goldfish in the fountain outside the mansion must dolphin leap every time
@@ -1684,7 +1761,8 @@ def fountain_fish(col):
     the head is the end of the body with the less height to it, the betta's
     tail and fins being three times the head's. None when the library or the
     model is not there."""
-    lib = tripo_mesh("fish_betta")
+    # (REFINED where it has been: the generator's own copy stands in.)
+    lib = refined_fish() or tripo_mesh("fish_betta")
     if lib is None:
         return None
     me = lib.copy()
@@ -2031,6 +2109,35 @@ def tripo_mesh(key, lod=None):
 
 PH_TREES = ("rain", "mango", "neem")
 PH_LIB = "C:/dev/Blender/_polyhaven/ph_trees_web.blend"
+GROWN_TREES = ("globe", "mango", "banyan", "tamarind", "coconut")
+GROWN_LIB = "C:/dev/Blender/_trees/grown_trees_web.blend"
+
+
+def grown_names(key):
+    """A grown species' (leaf, bark) materials. The palm's leaf is a frond
+    (exteriorFoliage sways a frond from its foot, along its UV); a species
+    that is also a scan's takes _Grown, or the two would meet as .001."""
+    if key == "coconut":
+        return "MAT_Palm_Frond_Coconut", "MAT_Bark_Coconut"
+    title = key.title() + ("_Grown" if key in PH_TREES else "")
+    return f"MAT_Leaves_{title}", f"MAT_Bark_{title}"
+
+
+def grown_tree(M, key):
+    """A tree grown by tools/blender/grow_trees_v7.py, or None when its library
+    or its textures are not there (the build never depends on them)."""
+    name = f"grown_tree_{key}"
+    if "bark_grown_" + key not in M or not os.path.exists(GROWN_LIB):
+        return None
+    if name not in bpy.data.meshes:
+        with bpy.data.libraries.load(GROWN_LIB, link=False) as (src, dst):
+            if name not in src.meshes:
+                return None
+            dst.meshes = [name]
+    me = bpy.data.meshes[name]
+    me.materials[0] = M["bark_grown_" + key]
+    me.materials[1] = M["leaf_grown_" + key]
+    return me
 
 
 def ph_tree(M, key):
@@ -2128,8 +2235,13 @@ def build_vegetation(M, col):
     # wall, seen from eighty metres and more, keep the scripted palm: a
     # generated one is solid leaf, eight thousand triangles a crown.
     t_royal = tripo_mesh("palm_royal")
-    t_coco = tripo_mesh("palm_coconut")
-    t_coco_far = tripo_mesh("palm_coconut", "far")
+    # (GROWN since the refinement brief of 2026-10-27, from the grove in Royal
+    # audit/coconut palm 3d model.glb: a ringed trunk and fronds of leaflets,
+    # light enough at 3,300 triangles to stand near and far alike. The
+    # generated model stands in where it has not been grown.)
+    g_coco = grown_tree(M, "coconut")
+    t_coco = g_coco or tripo_mesh("palm_coconut")
+    t_coco_far = g_coco or tripo_mesh("palm_coconut", "far")
     scatter(col, t_royal or royal[1], "veg_palm_forecourt", ring)
     near, far = [], []
     # Groves stand off the camera's orbit: flanking the forecourt well out,
@@ -2175,8 +2287,13 @@ def build_vegetation(M, col):
     # (tree_globe). The first twelve of `fr` are those rows; the six by the
     # drive keep the young mango. Where the model has not been made the rows
     # are the mango as they were.
-    small = ph_tree(M, "mango")
-    globe = tripo_mesh("tree_globe")
+    # (The grown mango where it has been grown: the rounded tree of the
+    # refinement brief, young.)
+    small = grown_tree(M, "mango") or ph_tree(M, "mango")
+    # (GROWN since the refinement brief of 2026-10-27: the same globe on a
+    # clean stem, with limbs, bark and leaves under it; the Tripo model
+    # stands in where the grown tree has not been made.)
+    globe = grown_tree(M, "globe") or tripo_mesh("tree_globe")
     if small is not None:
         srng = random.Random(23)
         garden = [(x, y, r, srng.uniform(0.36, 0.5)) for x, y, r, _ in fr]
@@ -2248,10 +2365,24 @@ def build_vegetation(M, col):
         inner.append((x, rng.uniform(WALL_BACK - 9, WALL_BACK - 4), rng.uniform(0, 6.28), rng.uniform(0.85, 1.15)))
     allt = belt + inner
     rng.shuffle(allt)
-    scatter(col, rain, "veg_tree_rain", allt[0::3], shape=0.13)
-    scatter(col, mango, "veg_tree_mango", allt[1::3], shape=0.13)
-    scatter(col, neem, "veg_tree_neem", allt[2::3], shape=0.13)
-    scatter(col, coco[0], "veg_palm_belt", [(p[0] + 4.5, p[1] + 3.5, p[2], 1.0) for p in belt[::4]])
+    # THE BELT IS THE CLIENT'S OWN TREES (the refinement brief of 2026-10-27:
+    # the large tree, the rounded tree and the sprawling tamarind in Royal
+    # audit, grown by grow_trees_v7.py as a banyan, a mango and a tamarind).
+    # A banyan to every fifth place, at four-fifths of the size drawn for it
+    # (its crown is three times a mango's); mango and tamarind by turns in
+    # the rest. The places are the scans', which stand in where the three
+    # have not been grown.
+    banyan, g_mango, tamarind = grown_tree(M, "banyan"), grown_tree(M, "mango"), grown_tree(M, "tamarind")
+    if banyan is not None and g_mango is not None and tamarind is not None:
+        rest = [p for i, p in enumerate(allt) if i % 5]
+        scatter(col, banyan, "veg_tree_banyan", [(x, y, r, s * 0.8) for x, y, r, s in allt[0::5]], shape=0.13)
+        scatter(col, g_mango, "veg_tree_mango", rest[0::2], shape=0.13)
+        scatter(col, tamarind, "veg_tree_tamarind", rest[1::2], shape=0.13)
+    else:
+        scatter(col, rain, "veg_tree_rain", allt[0::3], shape=0.13)
+        scatter(col, mango, "veg_tree_mango", allt[1::3], shape=0.13)
+        scatter(col, neem, "veg_tree_neem", allt[2::3], shape=0.13)
+    scatter(col, g_coco or coco[0], "veg_palm_belt", [(p[0] + 4.5, p[1] + 3.5, p[2], 1.0) for p in belt[::4]])
 
 
 def build_gardens(M, col):

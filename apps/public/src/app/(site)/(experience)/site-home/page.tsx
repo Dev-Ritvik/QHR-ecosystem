@@ -44,6 +44,8 @@ import { AmbientSound } from '@/components/experience/AmbientSound';
 import { StartCue } from '@/components/experience/StartCue';
 import { ChapterRail } from '@/components/experience/ChapterRail';
 import { RAIL_END, type RailStop } from '@/components/experience/railMath';
+import { LAYOUTS, plotArea } from '@/lib/layouts';
+import { plotSize } from '@/lib/units';
 
 // ISR: Background revalidation every hour, unless manually cleared by the webhook (T37)
 export const revalidate = 3600;
@@ -130,6 +132,21 @@ const TRACK_ROOT_TRANSPARENT = '!pointer-events-none';
 const PANE = 'sticky top-0 flex h-screen w-full flex-col px-6 pointer-events-none wide:block wide:px-0';
 /** A block of copy in a pane. */
 const BLOCK = 'pointer-events-auto wide:absolute wide:left-[var(--edge)]';
+
+/**
+ * The plot the layout's drawing is ruled in (chapter three): 30 by 60 ft, as
+ * Kartikeya Water Front's sheet prints it (layouts.ts) — VSR Gayatri
+ * Township's 60 by 30 is the same plot turned — its size and its area read
+ * from that record, not typed here.
+ */
+const LAYOUT_PLOT = (() => {
+  const size = LAYOUTS.flatMap((l) => l.sizes).find((z) => z.feet[0] === 30 && z.feet[1] === 60) ?? {
+    label: plotSize(30, 60),
+    feet: [30, 60] as [number, number],
+  };
+  const area = plotArea(size);
+  return { size: size.label, sqFt: area.sqFt.toLocaleString('en-IN'), sqYd: area.sqYd.toLocaleString('en-IN') };
+})();
 
 /** A chapter's section: a viewport taller than the chapter, with that
  *  viewport given back, so its pane is pinned from the chapter's first pixel
@@ -241,7 +258,7 @@ export default async function SiteHomePage() {
   const RAIL_NAMES: Record<string, string> = {
     hero: 'Arrival',
     revolution: 'The land',
-    holdings: 'The count',
+    holdings: 'Layout',
     approach: 'The door',
     establish: 'The hall',
     portrait: 'The portrait',
@@ -294,6 +311,78 @@ export default async function SiteHomePage() {
       {/* Where you are in the film, and the way to any other part of it: a
           dot a chapter down the frame's right edge. */}
       <ChapterRail mode="film" stops={railStops} />
+      {/* THE COVER'S SURVEY PINS (the concept built 1:1, 2026-10-27): three
+          small labels stood each frame over their places on the ground by the
+          scene (exteriorSurvey.ts, SurveyPins), with the survey's contours,
+          and gone with them as the camera leaves the cover. The co-ordinates
+          are Vizianagaram's, as the header's are; the elevation is the
+          camera's, as the rail's is. */}
+      <div aria-hidden className="survey-pins">
+        <span className="survey-pin" data-survey-pin="0">
+          Bound // 18.11° N
+        </span>
+        <span className="survey-pin" data-survey-pin="1">
+          Bound // 83.40° E
+        </span>
+        <span className="survey-pin survey-pin-major" data-survey-pin="2">
+          Bound // 18.11° N
+          <small>Survey line · WGS 84</small>
+          <small>Elevation 20.0 m // 83.402° E</small>
+        </span>
+      </div>
+
+      {/* THE LAYOUT'S SURVEY (the founder's frame, 2026-10-28): the words of
+          the drawing laid over the south lawns in chapter three, each stood
+          over its place along the line of the road or the plots it names by
+          the scene (exteriorLayout.ts, LayoutMarks), its crosshairs, and the
+          chapter's status at the frame's foot; all of it the drawing's, and
+          gone with it. What it says is what the layouts' own sheets say: the
+          plots it draws are 30 by 60 ft, the size Kartikeya Water Front's
+          sheet prints and VSR Gayatri Township's every plot (layouts.ts), on
+          30 ft roads; the numbers it gives them are the drawing's own. */}
+      <div aria-hidden className="layout-sheet">
+        <span className="layout-label layout-label-title" data-layout-label="0">
+          <b>Plots 14 – 21</b>
+          <span>{`[${LAYOUT_PLOT.size} // ${LAYOUT_PLOT.sqFt} sq ft each]`}</span>
+        </span>
+        <span className="layout-label" data-layout-label="1">
+          Sanctioned layout // plan published in full
+        </span>
+        <span className="layout-label layout-label-small" data-layout-label="2">
+          Bound // 18.114° N
+        </span>
+        <span className="layout-label layout-label-small" data-layout-label="3">
+          Bound // 18.114° N
+        </span>
+        <span className="layout-label" data-layout-label="4">
+          Underground drainage // water // street lighting
+        </span>
+        <span className="layout-label layout-label-title layout-label-far" data-layout-label="5">
+          <b>Plots 22 – 29</b>
+          <span>{`[${LAYOUT_PLOT.size} // ${LAYOUT_PLOT.sqYd} sq yd each]`}</span>
+        </span>
+        <span className="layout-label layout-label-small" data-layout-label="6">
+          30 ft
+        </span>
+        <span className="layout-label layout-label-small" data-layout-label="7">
+          60 ft
+        </span>
+        <span className="layout-label layout-label-small" data-layout-label="8">
+          Bound // 18.114° N
+        </span>
+        <span className="layout-label layout-label-small" data-layout-label="9">
+          Sanctioned layout
+        </span>
+        <span className="layout-mark" data-layout-mark="0" />
+        <span className="layout-mark" data-layout-mark="1" />
+        <span className="layout-mark" data-layout-mark="2" />
+        <div className="layout-hud" data-layout-hud>
+          <span>3D scanning status: 100% complete</span>
+          <i />
+          <span>Geometric survey in progress</span>
+          <b className="layout-mark layout-hud-mark" />
+        </div>
+      </div>
 
       {/* (The published layouts are handed to the WebGL tree by the segment's
           layout, for every page of it: the hall's tables are dressed wherever
@@ -413,82 +502,42 @@ export default async function SiteHomePage() {
         </div>
       </section>
 
-      {/* ── CHAPTER 3 · THE HOLDINGS ─────────────────────────────────────
-          The crane comes round behind the house at sunset and all but rests
-          there: the estate low in the right of the frame, the land to its
-          left going dark. The figures stand on that land, and they are the
-          event of the chapter (the
-          audit, P1: "the stats numbers are barely larger than their labels
-          ... each read as the main event of their chapter"): three numerals
-          at the display's largest size in the face's old-style figures, each
-          over a line of tracked capitals. Every one comes from the published
-          projection — nothing here is composed. `flex-col-reverse` puts each
-          figure over its label while the markup keeps the term first, as a
-          <dl> must. */}
+      {/* ── CHAPTER 3 · THE LAYOUT ───────────────────────────────────────
+          THE FOUNDER'S FRAME (2026-10-28). The camera sweeps up behind the
+          house and out round the west side to stand high over the south-west
+          corner of the walls, and the land is laid out under it: the house
+          and its pool left of the middle, the avenue to the frame's right
+          foot, and the south lawns either side of it in blocks of plots on
+          their cross roads, with the survey drawn over them
+          (exteriorLayout.ts). The chapter's words stand as the cover's do:
+          the title in the sky over the forest, the line on the dark land at
+          the frame's foot, and the cue under it. (Where the holdings'
+          figures stood until then: the count is the hall's, table by
+          table.) */}
       <section id="holdings" className="relative scroll-mt-[62px]" style={track(holdings)}>
-        <div className={`${PANE} justify-center`} data-chapter-fade data-copy={copyOf(holdings)}>
-          {/* THE FIGURES FIRST, the statement under them and its gloss under
-              that (`order`: the markup keeps the heading first). ON EVERY
-              FRAME since the forensic audit of 2026-10-09 (#57: "On wide
-              screens the three figures stand above the chapter's heading ...
-              on a phone and tablet the heading comes first. Expected: one
-              order."): the figures are the event of the chapter wherever it
-              is read. Where the crane all but rests (leg 0.6) the
-              lawn the evening sun still reaches is a bright strip across the
-              left of the frame from 52 to 64% of the way down, and from 65%
-              down the land is the trees' long shadows and the canal garden:
-              the figures stand across the strip's foot and everything smaller
-              is below it. The block comes up earlier than that, while the
-              crane is still rising over the lit lawn, so the lens carries a
-              soft ellipse round it for as long as it is up (lensFilter.ts,
-              HOLDINGS_BOX).
-
-              ON A FRAME MORE THAN TWICE AS WIDE AS IT IS TALL (`panoramic:`)
-              the camera sees further left, and the frame's first seventh is
-              that lawn in the open, past the palms' shadows: at 1280x593 the
-              first figure's label began on a ground of 126 (3.5:1). The
-              block stands further in as the frame widens past two to one —
-              four-tenths of the width it has over that, so nothing at
-              exactly two to one, 12px at 1920x945 and 38 at 1280x593 —
-              where the shadows are. */}
-          <div className={`${BLOCK} flex flex-col wide:top-[58.5vh] short:top-[calc(58.5vh+var(--bl)*8)] panoramic:left-[calc(var(--edge)_+_(100vw_-_200vh)_*_0.4)]`}>
-            <p className="sr-only">The holdings</p>
-            <h2 className="order-2 mt-8 t-d3 text-[#F2EDE4] wide:mt-[calc(var(--bl)*9)] short:mt-[calc(var(--bl)*5)]">
-              Every plot we hold,
+        <div className={`${PANE} justify-start pt-[calc(var(--bar)_+_2vh)] wide:pt-0`} data-chapter-fade data-copy={copyOf(holdings)}>
+          <div className={`${BLOCK} wide:top-[max(10.5vh,var(--clear))]`}>
+            <p className="sr-only">The layout</p>
+            <h2 className="t-d1 text-[#F2EDE4]">
+              Each plot,
               <br />
-              <span className="t-gilt short:text-[#F2EDE4]">counted in full.</span>
+              meticulously
+              <br />
+              platted.
             </h2>
-            {/* (Ranged by their heads: on a phone a label takes two lines and
-                the figures must still stand on one line with each other.) */}
-            <dl className="order-1 flex items-start gap-x-[calc(var(--bl)*9)] wide:gap-x-[calc(var(--bl)*14)]">
-              <div className="flex flex-col-reverse">
-                <dt className="t-eyebrow mt-3 text-[#F2EDE4]">Plots open</dt>
-                <dd className="t-fig text-[#F2EDE4]">
-                  {list.reduce(
-                    (n: number, p: any) =>
-                      n + (typeof p.availableUnits === 'number' ? p.availableUnits : 0),
-                    0,
-                  )}
-                </dd>
-              </div>
-              <div className="flex flex-col-reverse">
-                <dt className="t-eyebrow mt-3 text-[#F2EDE4]">Plots in all</dt>
-                <dd className="t-fig text-[#F2EDE4]">
-                  {list.reduce(
-                    (n: number, p: any) =>
-                      n + (typeof p.totalUnits === 'number' ? p.totalUnits : 0),
-                    0,
-                  )}
-                </dd>
-              </div>
-              <div className="flex flex-col-reverse">
-                <dt className="t-eyebrow mt-3 text-[#F2EDE4]">{list.length === 1 ? 'Layout' : 'Layouts'}</dt>
-                <dd className="t-fig text-[#F2EDE4]">{list.length}</dd>
-              </div>
-            </dl>
-            <p className="order-3 t-support mt-8 max-w-[34ch] text-[#F2EDE4] short:sr-only wide:mt-[calc(var(--bl)*5)] wide:max-w-none wide:whitespace-nowrap">
-              Counted from the sanctioned layout plans, not from a brochure.
+          </div>
+          <div className={`${BLOCK} wide:bottom-[calc(18vh_+_var(--bl)*17)] wide:max-w-[max(calc(430*var(--u)),calc(var(--support)*19.5))]`}>
+            <p className="t-support mt-5 max-w-[36ch] text-[#F2EDE4] short:sr-only wide:mt-0">
+              From 40 ft blacktop roads to underground utilities, we shape and
+              secure the earth before we sell.
             </p>
+            <p className="sr-only">
+              Drawn over the lawns: plots of {LAYOUT_PLOT.size}, {LAYOUT_PLOT.sqFt} sq ft each, in
+              blocks on 30 ft roads off the avenue.
+            </p>
+          </div>
+          <div className={`${BLOCK} mt-7 wide:bottom-[18vh] wide:mt-0`}>
+            <StartCue href="#approach" mark="survey" />
           </div>
         </div>
       </section>

@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SHORT_QUERY, WIDE_QUERY, filmIsShort, filmIsWide } from './copyZone';
-import { COVER_SKY, COVER_SKY_SHORT, EDGE, HOLDINGS_BOX, LAND_BOX, LAND_ND, STAGE, holdingsFilter, lensFilter } from './lensFilter';
+import { COVER_SKY, COVER_SKY_SHORT, EDGE, LAND_BOX, LAND_ND, LAYOUT_SKY, STAGE, holdingsFilter, lensFilter } from './lensFilter';
 import { READING_STOPS, READING_TIME } from './readingLight';
 
 const read = (p: string) => readFileSync(join(__dirname, p), 'utf8').replace(/\r\n/g, '\n');
@@ -177,7 +177,10 @@ describe("the film's stage", () => {
     // each chapter's dominant line, and the two the audit named
     expect(page).toContain('<h1 className="t-d1 ');
     expect(page).toMatch(/<p className="t-d1 [^"]*">\s*We do not\s*<br \/>\s*broker <span className="t-gilt">land\.<\/span>/);
-    expect(page.match(/<dd className="t-fig /g)?.length).toBe(3);
+    // (and the layout's title, the founder's frame of 2026-10-28, at the
+    // cover's size: the holdings' three figures went with their chapter)
+    expect(page).toMatch(/<h2 className="t-d1 [^"]*">\s*Each plot,/);
+    expect(page).not.toContain('<dd className="t-fig ');
     expect(read('../site/SiteFooter.tsx')).toContain('<p data-line data-hold data-reveal className="t-end text-[#F2EDE4] held:sticky held:top-[60vh]">');
   });
 });
@@ -207,7 +210,8 @@ describe('a phone on its side', () => {
 
   it("takes each chapter's gloss off the picture but not out of the page, and keeps every heading and link", () => {
     // off the frame, still read by a screen reader: never display:none on copy.
-    // Three glosses and the establishing copy's second sentence.
+    // Three glosses (the cover's, the layout's and the city's) and the
+    // establishing copy's second sentence.
     expect(page.match(/short:sr-only/g)?.length).toBe(4);
     expect(read('../site/CityLink.tsx')).toContain('short:sr-only');
     // nothing is hidden outright any more (the one thing that was, was a rule)
@@ -245,35 +249,31 @@ describe('a phone on its side, to the lens', () => {
     // cover's title and the orbit's line stood at nothing, dissolved by the
     // rule that keeps a line out of the header (ChapterFade: across 14/62 of
     // the bar beneath it). Measured on the build of 2026-10-05, 844x390.
-    expect(page.match(/wide:top-\[max\(10\.5vh,var\(--clear\)\)\]/g)?.length).toBe(2);
-    // (the cover's title and the orbit's line stand in the same place)
+    expect(page.match(/wide:top-\[max\(10\.5vh,var\(--clear\)\)\]/g)?.length).toBe(3);
+    // (the cover's title, the orbit's line and the layout's title stand in
+    // the same place)
     const clear = /--clear: calc\(var\(--bar\) \* ([\d.]+)\);/.exec(css)!;
     expect(Number(clear[1])).toBeGreaterThan(1 + 14 / 62);
     // The bar's floor is 44px, so on that frame the line is 14.2vh down: no
     // block of a chapter is placed above it by the frame's height alone.
     const bare = [...page.matchAll(/wide:top-\[([\d.]+)vh\]/g)].map((m) => Number(m[1]));
-    expect(bare.length).toBeGreaterThan(4);
+    expect(bare.length).toBeGreaterThanOrEqual(4);
     for (const vh of bare) expect(vh).toBeGreaterThanOrEqual(15);
   });
 
-  it('is a panoramic frame too, and the figures stand in from its edge', () => {
-    // Twice as wide as tall, the frame sees past the palms' shadows to the
-    // lawn in the open on its left: the first figure's label began on it.
+  it('is a panoramic frame too, and keeps the variant for it', () => {
+    // Twice as wide as tall, the frame sees further to either side. The
+    // holdings' figures stood in from its edge there; they went with their
+    // chapter (the founder's layout, 2026-10-28), whose words stand as the
+    // cover's do, and the variant stays declared for the next block that
+    // needs it.
     const tw = read('../../../tailwind.config.ts');
     expect(tw).toContain("addVariant('panoramic', '@media (min-aspect-ratio: 2/1)');");
     // declared after `wide` and `short`, so it overrides them where it speaks
     expect(tw.indexOf("addVariant('panoramic'")).toBeGreaterThan(tw.indexOf("addVariant('short'"));
     expect(844 / 390).toBeGreaterThan(2);
     expect(1280 / 593).toBeGreaterThan(2);
-    // A desk's window under a browser's bar is one by a hair (1920x945), so
-    // the inset grows from nothing at two to one: 12px there, 38 at 1280x593.
-    expect(1920 / 945).toBeGreaterThan(2);
-    const line = page.split('\n').find((l) => l.includes('wide:top-[58.5vh]'))!;
-    expect(line).toContain('panoramic:left-[calc(var(--edge)_+_(100vw_-_200vh)_*_0.4)]');
-    const inset = (w: number, h: number) => Math.max(0, (w - 2 * h) * 0.4);
-    expect(inset(1920, 945)).toBeCloseTo(12, 6);
-    expect(inset(1280, 593)).toBeCloseTo(37.6, 6);
-    expect(inset(1440, 900)).toBe(0);
+    expect(page).not.toContain('wide:top-[58.5vh]');
   });
 
   it("sets the film's quiet link in the text's own ivory: over a picture a tint is the picture", () => {
@@ -302,7 +302,6 @@ describe('a phone on its side, to the lens', () => {
     expect(floor('--d2')).toBeGreaterThanOrEqual(24);
     expect(floor('--d3')).toBeLessThan(24);
     // and the gilt of a display line is a class, never a colour in the markup
-    expect(page).toContain('<span className="t-gilt short:text-[#F2EDE4]">counted in full.</span>');
     expect(page).not.toMatch(/<h[12] [^>]*>[^<]*<span className="text-\[#E8B98A\]/);
   });
 });
@@ -316,10 +315,13 @@ describe('the lens on the stage', () => {
     // edge, in blocks measured in the frame's unit.
     const src = read('./lensFilter.ts');
     for (const fn of ['stationFilter', 'holdingsFilter', 'approachFilter']) expect(src).toContain(`export function ${fn}(`);
-    // the cover: a grad across the whole width from the top edge, for its title
+    // the cover: a grad from the top edge for its title, leaning to the title's
+    // side since the concept built 1:1 (2026-10-27): its sky over the house and
+    // toward the sun is left bright (COVER_SKY.lean)
     holdingsFilter(0, 1920 / 945, 1, 0);
-    expect(lensFilter.shape.x).toBe(0.5);
-    expect(lensFilter.shape.z).toBeGreaterThanOrEqual(3);
+    expect(lensFilter.shape.x).toBe(COVER_SKY.lean.cx);
+    expect(lensFilter.shape.x).toBeLessThan(0.5);
+    expect(lensFilter.shape.z).toBe(COVER_SKY.lean.rx);
     expect(lensFilter.stops).toBe(COVER_SKY.stops);
     // and the second ellipse under its small type on the land, for as long as that is up
     expect(lensFilter.second.stops).toBeCloseTo(LAND_ND.stops, 9);
@@ -335,10 +337,11 @@ describe('the lens on the stage', () => {
     expect(left(wide, 1920 / 945)).toBeCloseTo((LAND_BOX.cover.left + LAND_BOX.cover.right) / 2, 6);
     holdingsFilter(0, 1920 / 945, 0, 0);
     expect(lensFilter.second.stops).toBe(0);
-    // the figures' ground: the lower left, round their block
-    holdingsFilter(0.5, 1920 / 945, 0, 0);
-    expect(lensFilter.stops).toBeGreaterThan(0.5);
-    expect(1 - lensFilter.shape.y).toBeCloseTo((HOLDINGS_BOX.top + HOLDINGS_BOX.foot) / 2, 9);
+    // the layout's title (the founder's frame, 2026-10-28): the cover's kind
+    // of grad from the top edge, leaning to the left where the title stands
+    holdingsFilter(0.62, 1920 / 945, 0, 0);
+    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops, 9);
+    expect(lensFilter.shape.y).toBeGreaterThan(1);
     expect(lensFilter.shape.x).toBeLessThan(0.3);
     // the design's frame is still the stage's measure (the tables' burnt edge)
     expect(STAGE.aspect).toBeCloseTo(1.6, 9);
@@ -509,30 +512,22 @@ describe('every line of the film at a strength its ground allows', () => {
     expect(colophon).not.toMatch(/text-\[#E8B98A\]\/(\[0\.\d+\]|\d+)/);
   });
 
-  it("sets the holdings' figures as the event of their chapter: each figure over its label, what is open first", () => {
-    // "The stats numbers (344 / 407 / 3) are barely larger than their labels.
-    // Done when ... the stats numbers each read as the main event of their
-    // chapter. Keep the white-and-gold two-line style and old-style numerals"
-    // (the audit of 2026-10-05, P1). Three figures in a row at the largest
-    // step a chapter has, each over its label in the film's letterspaced
-    // capitals; the statement under them, and its gloss under that.
-    const table = page.slice(page.indexOf('<dl className="order-1 flex items-start'), page.indexOf('</dl>'));
-    const terms = [...table.matchAll(/<dt className="t-eyebrow mt-3 text-\[#F2EDE4\]">([^<]+)<\/dt>/g)].map((m) => m[1]);
-    expect(terms.slice(0, 2)).toEqual(['Plots open', 'Plots in all']);
-    expect([...table.matchAll(/<dd className="t-fig text-\[#F2EDE4\]">/g)]).toHaveLength(3);
-    // ivory, not gilt: a figure is a fact
-    expect(table).not.toContain('#E8B98A');
-    expect(table).not.toContain('t-gilt');
-    // the figures come first, the statement second, the gloss third: on EVERY
-    // frame (the forensic audit of 2026-10-09, #57: "on a phone and tablet the
-    // heading comes first. Expected: one order")
-    expect(table).toContain('<dl className="order-1 flex');
-    expect(page).toMatch(/<h2 className="order-2 mt-8 t-d3 text-\[#F2EDE4\] /);
-    expect(page).toMatch(/<p className="order-3 t-support /);
-    expect(page).not.toMatch(/wide:order-[123]/);
-    // old-style figures, as the face draws them — through the one token a
-    // display statistic's figures are set by (the forensic audit of
-    // 2026-10-09 asks for lining ones, #53: the client's to say, and one line)
+  it("sets the layout's words as the cover's: a title in the sky, its line on the land, and its cue", () => {
+    // The founder's frame (2026-10-28): "Each plot, meticulously platted." in
+    // the top left, its line at the frame's foot, and "Start here" with the
+    // survey's crosshair under it. Where the holdings' figures stood.
+    const layout = page.slice(page.indexOf('<section id="holdings"'), page.indexOf('<section id="approach"'));
+    expect(layout).toMatch(/<h2 className="t-d1 text-\[#F2EDE4\]">\s*Each plot,\s*<br \/>\s*meticulously\s*<br \/>\s*platted\.\s*<\/h2>/);
+    expect(layout).toContain('From 40 ft blacktop roads to underground utilities');
+    expect(layout).toContain('<StartCue href="#approach" mark="survey" />');
+    // set where the cover's are, on the same three lines of the frame
+    expect(layout).toContain('wide:top-[max(10.5vh,var(--clear))]');
+    expect(layout).toContain('wide:bottom-[calc(18vh_+_var(--bl)*17)]');
+    expect(layout).toContain('wide:bottom-[18vh]');
+    // no figures, and nothing composed: the drawing's plot is the sheets'
+    expect(layout).not.toContain('t-fig');
+    expect(page).toContain('LAYOUTS.flatMap((l) => l.sizes).find((z) => z.feet[0] === 30 && z.feet[1] === 60)');
+    // the display figures' token is still the one a statistic is set by
     const fig = css.slice(css.indexOf('\n.t-fig {'));
     expect(fig.slice(0, fig.indexOf('}'))).toMatch(/font-variant-numeric: var\(--figure-nums\) proportional-nums/);
     expect(css).toContain('  --figure-nums: oldstyle-nums;');
@@ -550,17 +545,22 @@ describe('every line of the film at a strength its ground allows', () => {
     // drawn; the only letterspaced capitals in a frame are the three figures'
     // labels, which the audit of 2026-10-05 kept ("the letterspaced capital
     // labels" are on its list of what must survive), and an action's.
-    expect(page.match(/<p className="sr-only">/g)?.length).toBe(7);
+    // (the layout's drawing has its own words on the ground, the founder's
+    // frame of 2026-10-28: they are the drawing's, aria-hidden, and told to
+    // a screen reader in a sentence of the chapter's own)
+    expect(page.match(/<p className="sr-only">/g)?.length).toBe(8);
     const film = page.slice(0, page.indexOf('Sold-out layouts sit AFTER the journey'));
-    expect(film.match(/className="t-eyebrow/g)?.length).toBe(3);
-    for (const m of film.matchAll(/<(\w+) className="t-eyebrow/g)) expect(m[1]).toBe('dt');
+    expect(film.match(/className="t-eyebrow/g)).toBeNull();
+    expect(film).toContain('<div aria-hidden className="layout-sheet">');
     expect(film.match(/className="t-micro /g)).toBeNull();
     // no hairline but the ones an action leads with (in CSS), and no numerals
     expect(film).not.toMatch(/<span aria-hidden className="[^"]*\bh-px\b/);
     expect(film).not.toContain('roman(');
     // ONE CUE on the cover ("the hero shows both 'START HERE' and 'SCROLL'
     // plus a stray vertical tick. Done when there is one designed cue")
-    expect(film.match(/<StartCue /g)?.length).toBe(1);
+    // (and the layout's, the founder's frame: one a frame, the cover's and
+    // the layout's)
+    expect(film.match(/<StartCue /g)?.length).toBe(2);
     expect(film).not.toContain('ScrollCue');
     expect(film).not.toMatch(/>\s*Scroll\s*</);
     // a table's count and the list's are sentences in the small text, not capitals
@@ -576,7 +576,7 @@ describe('every line of the film at a strength its ground allows', () => {
     for (const line of [
       'Land, in the districts we come from.',
       'We do not broker land.',
-      'Every plot we hold, counted in full.',
+      'Each plot, meticulously platted.',
       'The door is open.',
       'The land is best seen from the land.',
     ]) {
@@ -632,13 +632,19 @@ describe('every line of the film at a strength its ground allows', () => {
 
   it("stands the colophon on the film's stage, and the sound control on the header's ground", () => {
     expect(footer).toContain('<footer id="visit" className="film-stage relative z-10">');
-    // the control is drawn in the header's slot, not fixed in a corner of the picture
-    expect(header).toContain('{overFilm ? <span id="film-sound" className="flex items-center" /> : null}');
+    // the control is drawn in the header's slot (under its controls, beside
+    // the co-ordinates, since the concept built 1:1), not fixed in a corner of
+    // the picture
+    expect(header).toContain('<span id="film-sound" className="film-sound-slot" />');
+    expect(header).toContain('<div className="film-locator">');
     const sound = read('./AmbientSound.tsx');
     expect(sound).toContain("export const SOUND_SLOT_ID = 'film-sound';");
     expect(sound).toContain('return createPortal(');
-    // and it is a loudspeaker, not four bars ("reads as a glitch": P1)
-    expect(sound).toContain("className={'sound-glyph' + (on ? ' is-on' : '')}");
+    // and it says what it is: a waveform with a SWITCH beside it, on or off as
+    // a switch is (the four bars alone "read as a glitch": P1, 2026-10-05)
+    expect(sound).toContain('role="switch"');
+    expect(sound).toContain('aria-checked={on}');
+    expect(sound).toContain('className="sound-switch"');
     expect(sound).not.toContain('sound-bars');
     expect(css).not.toContain('.sound-bars');
     const rule = css.slice(css.indexOf('\n.sound-toggle {\n  position: relative;'));

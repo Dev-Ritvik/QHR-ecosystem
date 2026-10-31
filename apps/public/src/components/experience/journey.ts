@@ -154,6 +154,11 @@ export interface JourneyState {
    *  the coda, in which the house lights go down round the map table and the
    *  camera rises off it (WorldCanvas). Written by the journey driver. */
   coda: number;
+  /** Whether the film is what moves the camera (the film's page, the journey
+   *  driver active). False on every other page, which stands its camera on a
+   *  pose: what belongs to the film's cover alone (the survey, the near
+   *  leaves, the shafts, the cover's sky) is not drawn there. */
+  film?: boolean;
 }
 
 /**
@@ -177,6 +182,7 @@ export const journeyState: JourneyState = {
   veil: 0,
   armed: false,
   coda: 0,
+  film: false,
 };
 
 /** GLSL smoothstep, matching the one the shaders use so eases agree across the
@@ -287,9 +293,11 @@ const COPY_SPAN: Readonly<Record<string, { after: number; before: number; rise?:
   // its gilt word on a ground of 127 at 0.29, 147 at 0.305, under a grad the
   // lens is already riding up: lensFilter.ts, COVER_SKY.ride). Gone before.
   revolution: { after: 0.1, before: 3.9 },
-  // The figures stand on the evening's land from the crane's first slowing to
-  // the frame it all but rests on, and go as the descent gathers way.
-  holdings: { after: 0.5, before: 0.6 },
+  // THE LAYOUT (the founder's frame, 2026-10-28): its words come up as the
+  // sweep settles over the land (leg 0.585, the drawing already on the
+  // ground: exteriorLayout.ts, LAYOUT.shown), and go as the descent gathers
+  // way (0.672).
+  holdings: { after: 7.4, before: 0.35 },
   // "The door is open." comes up as the camera turns onto the door's axis
   // (leg 0.86), not while it is still coming down the west side; the passage
   // takes it (the window's end is set in `chapters`).

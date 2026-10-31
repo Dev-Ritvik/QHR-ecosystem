@@ -33,9 +33,11 @@ import {
   FILM_TARGET_CURVE,
   APPROACH_POSITION_CURVE,
   APPROACH_TARGET_CURVE,
-  APPROACH_AIM_FROM,
+  SWEEP_POSITION_CURVE,
+  SWEEP_TARGET_CURVE,
+  SWEEP_WAYPOINTS,
   ROOFLINE_AIM,
-  curveTOver,
+  exteriorPoseAt,
   exteriorPoseAtSwing,
   exteriorSwing,
   lensAt,
@@ -165,9 +167,9 @@ function distanceToBox(p: THREE.Vector3, b: Box): number {
   );
 }
 
-function sampleCurve(curve: THREE.CatmullRomCurve3, n: number): THREE.Vector3[] {
+function sampleCurve(curve: THREE.CatmullRomCurve3, n: number, from = 0, to = 1): THREE.Vector3[] {
   const out: THREE.Vector3[] = [];
-  for (let i = 0; i <= n; i += 1) out.push(curve.getPoint(i / n));
+  for (let i = 0; i <= n; i += 1) out.push(curve.getPoint(from + ((to - from) * i) / n));
   return out;
 }
 
@@ -264,15 +266,19 @@ function frameAt(beat: (typeof BEATS)[number]) {
 }
 
 describe('exterior camera path', () => {
-  // TWO CURVES since the approach to the front door was added — the approved
-  // film, and the descent from the constellation to the door — meeting at the
-  // constellation beat. Every contract below is held by both.
+  // THREE CURVES since the founder's layout (2026-10-28): the approved film to
+  // the three-quarter, the sweep from there to the layout, and the descent
+  // from the layout to the door, each read over its own stretch (the film's
+  // curve runs on to the crane it no longer reaches, the sweep's begins at the
+  // quarter it does not fly). Every contract below is held by all three.
+  const SWEEP_FROM = 1 / (SWEEP_WAYPOINTS.length + 2);
   const CURVES = [
-    { name: 'film', position: FILM_POSITION_CURVE, target: FILM_TARGET_CURVE },
-    { name: 'approach', position: APPROACH_POSITION_CURVE, target: APPROACH_TARGET_CURVE },
+    { name: 'film', position: FILM_POSITION_CURVE, target: FILM_TARGET_CURVE, from: 0, to: 2 / 3 },
+    { name: 'sweep', position: SWEEP_POSITION_CURVE, target: SWEEP_TARGET_CURVE, from: SWEEP_FROM, to: 1 },
+    { name: 'approach', position: APPROACH_POSITION_CURVE, target: APPROACH_TARGET_CURVE, from: 0, to: 1 },
   ];
   const samples = CURVES.flatMap((c) =>
-    sampleCurve(c.position, 600).map((p, i) => ({ curve: c.name, t: i / 600, p })),
+    sampleCurve(c.position, 600, c.from, c.to).map((p, i) => ({ curve: c.name, t: i / 600, p })),
   );
 
   it('never enters the estate geometry', () => {
@@ -309,7 +315,7 @@ describe('exterior camera path', () => {
     // Per curve: the join between them is a near-stop at the constellation,
     // not a point either curve has to be smooth across.
     for (const c of CURVES) {
-      const pts = sampleCurve(c.position, 600);
+      const pts = sampleCurve(c.position, 600, c.from, c.to);
       let worst = 0;
       for (let i = 1; i < pts.length - 1; i += 1) {
         const d2 = pts[i + 1].y - 2 * pts[i].y + pts[i - 1].y;
@@ -317,8 +323,13 @@ describe('exterior camera path', () => {
       }
       // 600 samples over ~90m of arc: a smooth curve keeps this in the
       // thousandths. A visible kink is an order of magnitude above. The second
-      // difference scales with the path, so the bound grows with the estate.
-      expect(worst, c.name).toBeLessThan(0.01 * ESTATE_SCALE);
+      // difference scales with the path, so the bound grows with the estate,
+      // and with the square of a curve's own step (the sweep is four times the
+      // film's length over the same 600 samples).
+      let length = 0;
+      for (let i = 1; i < pts.length; i += 1) length += pts[i].distanceTo(pts[i - 1]);
+      const step = Math.max(1, length / (90 * ESTATE_SCALE));
+      expect(worst, c.name).toBeLessThan(0.01 * ESTATE_SCALE * step * step);
     }
   });
 
@@ -335,106 +346,103 @@ describe('exterior camera path', () => {
     }
   });
 
-  it("leaves the holdings beat on the flat roof's aim, and is on the approach's own curve by the flank", () => {
-    // The aim came down 4 m at the holdings beat with the roof (ROOFLINE_AIM).
-    // The approach's curve is still drawn from the old 16 m, so its frames from
-    // the flank beat on are the frames they were; the difference is blended
-    // out across the first segment.
+  it('flies the approved revolution exactly as it was, to the three-quarter', () => {
+    // The founder's layout (2026-10-28) changed the film from the three-quarter
+    // on. Everything before it is the approved film: the curve through the
+    // approved beats as they were, the crane and the holdings included, read
+    // on the approved ease.
+    const approved = [0, 0.3, 0.58];
+    expect(FILM_BEATS.map((b) => b.id)).toEqual(['hero', 'quarter', 'three-quarter', 'layout']);
+    FILM_BEATS.slice(0, 3).forEach((b, i) => expect(b.at).toBeCloseTo(approved[i] * FILM_SHARE, 9));
+    const grow = (v: number[]) => new THREE.Vector3(...v.map((c) => c * ESTATE_SCALE));
+    const old = new THREE.CatmullRomCurve3(
+      [new THREE.Vector3(-46, 20, 66), grow([-26, 9, 2]), grow([-15, 8.4, -19]), grow([-21, 15, -32]), grow([-24, 18, -42])],
+      false,
+      'centripetal',
+    );
+    const oldAt = [0, 0.3, 0.58, 0.82, 1].map((a) => a * FILM_SHARE);
     const p = new THREE.Vector3();
     const a = new THREE.Vector3();
-    const held = BEATS.find((b) => b.id === 'holdings')!;
-    const flank = BEATS.find((b) => b.id === 'dusk-flank')!;
-    exteriorPoseAtSwing(held.at + 1e-6, p, a);
-    expect(a.y).toBeCloseTo(ROOFLINE_AIM, 3);
-    // No step at the join, and never back up above where it left from.
-    let last = a.y;
-    for (let s = held.at + 0.002; s <= flank.at; s += 0.002) {
+    for (let s = 0; s <= oldAt[2]; s += 0.0025) {
       exteriorPoseAtSwing(s, p, a);
-      expect(Math.abs(a.y - last)).toBeLessThan(0.12);
-      expect(a.y).toBeLessThan(ROOFLINE_AIM + 0.05);
-      last = a.y;
+      const i = s <= oldAt[1] ? 0 : 1;
+      const u = (i + (s - oldAt[i]) / (oldAt[i + 1] - oldAt[i])) / 4;
+      expect(p.distanceTo(old.getPoint(u))).toBeLessThan(1e-6);
     }
-    // From the flank on, the raw curve: untouched.
-    for (const s of [flank.at, 0.8, 0.86, 0.95, 1]) {
-      exteriorPoseAtSwing(s, p, a);
-      const raw = APPROACH_TARGET_CURVE.getPoint(curveTOver(APPROACH_BEATS, s));
-      expect(a.distanceTo(raw)).toBeLessThan(1e-9);
-    }
-    expect(APPROACH_AIM_FROM).toBe(16);
-  });
-
-  it('keeps the old aim on an upright screen: its copy stands above the house, not beside it', () => {
-    const p = new THREE.Vector3();
-    const wide = new THREE.Vector3();
-    const tall = new THREE.Vector3();
-    for (const id of ['crane', 'holdings']) {
-      const beat = BEATS.find((b) => b.id === id)!;
-      exteriorPoseAtSwing(beat.at, p, wide);
-      exteriorPoseAtSwing(beat.at, p, tall, 1);
-      expect(wide.y).toBeCloseTo(ROOFLINE_AIM, 3);
-      expect(tall.y).toBeCloseTo(APPROACH_AIM_FROM, 3);
-    }
-    // The same camera, the same frames outside those two beats' reach (a
-    // segment is shaped by the point after it, so the stretch before the
-    // crane differs by a fraction of a millimetre), and no step where the two
-    // curves meet.
-    for (const s of [0, 0.1, 0.2, 0.86, 0.95, 1]) {
-      exteriorPoseAtSwing(s, p, wide);
-      const at = p.clone();
-      exteriorPoseAtSwing(s, p, tall, 1);
-      expect(p.distanceTo(at)).toBe(0);
-      expect(tall.distanceTo(wide)).toBeLessThan(s === 0.2 ? 1e-3 : 1e-6);
-    }
-    exteriorPoseAtSwing(FILM_SHARE, p, wide, 1);
-    exteriorPoseAtSwing(FILM_SHARE + 1e-6, p, tall, 1);
-    expect(tall.distanceTo(wide)).toBeLessThan(0.01);
-  });
-
-  it('keeps the approved film exactly where it was, inside the first FILM_SHARE', () => {
-    // The approach was ADDED, not blended in. The approved beats keep their
-    // positions and their spacing, rescaled into the film's share of the leg, so
-    // every frame of the hero, the revolution and the constellation is the frame
-    // that was signed off — at the same number of viewports of scroll.
-    const approved = [0, 0.3, 0.58, 0.82, 1.0];
-    expect(FILM_BEATS.map((b) => b.id)).toEqual([
-      'hero', 'quarter', 'three-quarter', 'crane', 'holdings',
-    ]);
-    FILM_BEATS.forEach((b, i) => expect(b.at).toBeCloseTo(approved[i] * FILM_SHARE, 9));
     // Leg progress through the film maps onto swing space exactly as the old
     // single leg did, scaled.
     for (const s of [0.1, 0.3, 0.5, 0.8, 1]) {
-      const old = 0.2 * s + 0.8 * (s < 0.5 ? 2 * s * s : 1 - 2 * (1 - s) * (1 - s));
-      expect(exteriorSwing(s * FILM_SHARE)).toBeCloseTo(old * FILM_SHARE, 9);
+      const was = 0.2 * s + 0.8 * (s < 0.5 ? 2 * s * s : 1 - 2 * (1 - s) * (1 - s));
+      expect(exteriorSwing(s * FILM_SHARE)).toBeCloseTo(was * FILM_SHARE, 9);
     }
-    // The two curves share the constellation beat and nothing else.
+    // The curves meet at the layout beat and nowhere else.
     expect(APPROACH_BEATS[0]).toBe(FILM_BEATS[FILM_BEATS.length - 1]);
   });
 
-  it('holds the residence at the holdings beat, with the left of frame clear', () => {
-    // The composition contract of the chapter that held the constellation until
-    // the second art-direction audit removed it: the house in frame as the
-    // anchor, its roofline in shot, and the left of frame left to the copy column.
-    const held = BEATS.find((b) => b.id === 'holdings')!;
-    const shot = frameAt(held);
+  it('sweeps out to the layout on the revolution’s own line and speed, and never whips round', () => {
+    // Joined: no step in where the camera is, and none in how fast it goes,
+    // where the revolution hands over to the sweep and the sweep to the layout.
+    const p = new THREE.Vector3();
+    const q = new THREE.Vector3();
+    const a = new THREE.Vector3();
+    const VIEWPORT = 100 / (782 / FILM_SHARE);
+    const legOf = (beat: (typeof BEATS)[number]) => {
+      let lo = 0;
+      let hi = FILM_SHARE;
+      for (let i = 0; i < 60; i += 1) {
+        const m = (lo + hi) / 2;
+        if (exteriorSwing(m) < beat.at) lo = m;
+        else hi = m;
+      }
+      return (lo + hi) / 2;
+    };
+    const tq = legOf(FILM_BEATS[2]);
+    const speed = (leg: number) => {
+      exteriorPoseAt(leg - 1e-5, p, a);
+      exteriorPoseAt(leg + 1e-5, q, a);
+      return { v: q.distanceTo(p) / 2e-5, dir: q.clone().sub(p).normalize() };
+    };
+    const before = speed(tq - 2e-4);
+    const after = speed(tq + 2e-4);
+    expect(after.v / before.v).toBeGreaterThan(0.95);
+    expect(after.v / before.v).toBeLessThan(1.05);
+    expect(after.dir.dot(before.dir)).toBeGreaterThan(0.999);
+    // The turn about the house, a quarter of a viewport at a time: the
+    // approach's own fastest is 63 degrees a viewport; the sweep is held near it.
+    const bearing = (v: THREE.Vector3) => Math.atan2(v.z, v.x);
+    let worst = 0;
+    for (let leg = tq; leg < FILM_SHARE; leg += VIEWPORT / 4) {
+      exteriorPoseAt(leg, p, a);
+      exteriorPoseAt(Math.min(FILM_SHARE, leg + VIEWPORT / 4), q, a);
+      let d = bearing(q) - bearing(p);
+      if (d > Math.PI) d -= 2 * Math.PI;
+      if (d < -Math.PI) d += 2 * Math.PI;
+      worst = Math.max(worst, Math.abs(d) * 4 * (180 / Math.PI));
+    }
+    expect(worst).toBeLessThan(72);
+    // And it settles: the last quarter viewport before the layout, where the
+    // chapter's copy is up, draws the camera back a few metres, not tens.
+    exteriorPoseAt(FILM_SHARE - VIEWPORT / 4, p, a);
+    exteriorPoseAt(FILM_SHARE, q, a);
+    expect(q.distanceTo(new THREE.Vector3(...FILM_BEATS[3].position))).toBeLessThan(1e-6);
+    expect(p.distanceTo(q)).toBeLessThan(12);
+  });
 
-    expect(shot.mansion.inFrame, 'the residence is in the held frame').toBe(true);
-    expect(shot.roofline.inFrame, 'and so is its roofline').toBe(true);
-
-    // Present, and present as the anchor rather than as a detail or as the
-    // whole shot. Under a fifth of frame width it stops being readable as a
-    // building; past two thirds it is a second hero and the chapter has not
-    // moved.
-    expect(shot.mansion.widthPct).toBeGreaterThan(20);
-    expect(shot.mansion.widthPct).toBeLessThan(66);
-
-    // The roofline stands about the middle of the frame, against the evening
-    // land, not at its foot: the aim came down with the roof (ROOFLINE_AIM).
-    expect(shot.roofline.box[1]).toBeLessThan(FRAME[1] * 0.5);
-    expect(shot.roofline.box[3]).toBeGreaterThan(FRAME[1] * 0.42);
-
-    // The copy column runs down the left. Nothing may intrude on the first
-    // quarter of the frame.
-    expect(shot.mansion.box[0]).toBeGreaterThan(FRAME[0] * 0.25);
+  it('holds the house left of the middle at the layout beat, a building and not a dot', () => {
+    // The founder's frame: the villa and its pool in the mid-left, the plotted
+    // land across the foot and the right of the frame.
+    const shot = frameAt(FILM_BEATS[3]);
+    expect(shot.mansion.inFrame).toBe(true);
+    const [x0, y0, x1, y1] = shot.mansion.box;
+    const cx = (x0 + x1) / 2 / FRAME[0];
+    const cy = (y0 + y1) / 2 / FRAME[1];
+    expect(cx).toBeGreaterThan(0.3);
+    expect(cx).toBeLessThan(0.5);
+    expect(cy).toBeGreaterThan(0.4);
+    expect(cy).toBeLessThan(0.65);
+    expect(shot.mansion.widthPct).toBeGreaterThan(12);
+    expect(shot.mansion.widthPct).toBeLessThan(30);
+    void ROOFLINE_AIM;
   });
 
   it('ends square on the front door, on the entry axis', () => {
@@ -478,7 +486,10 @@ describe('exterior camera path', () => {
       // parallax that sells the orbit disappears — so only the cover is held
       // on less (26: a still, an architectural photograph's long lens), and
       // the lens has opened past 30 by the time the orbit is under way.
-      expect(l.fov).toBeGreaterThanOrEqual(i / 100 < 0.05 ? 26 : 30);
+      // (And the layout, the founder's aerial frame, on 22: a survey's long
+      // lens from 250 m, opening again as the descent comes in.)
+      const t = i / 100;
+      expect(l.fov).toBeGreaterThanOrEqual(t < 0.05 ? 26 : t > 0.45 && t < 0.75 ? 22 : 30);
       expect(l.fov).toBeLessThanOrEqual(70);
       // Past ~0.09 rad the horizon tilt reads as a broken camera.
       expect(Math.abs(l.roll)).toBeLessThan(0.09);
@@ -499,8 +510,8 @@ describe('exterior camera path', () => {
     // distance outside the range a lens can hold.
     const bad: string[] = [];
     for (const c of CURVES) {
-      const aims = sampleCurve(c.target, 200);
-      const eyes = sampleCurve(c.position, 200);
+      const aims = sampleCurve(c.target, 200, c.from, c.to);
+      const eyes = sampleCurve(c.position, 200, c.from, c.to);
       for (let i = 0; i < aims.length; i += 1) {
         const a = aims[i];
         if (a.y < 1.0) bad.push(`${c.name}: aim below the estate at y=${a.y.toFixed(2)}`);
@@ -508,7 +519,9 @@ describe('exterior camera path', () => {
         // Under 8m the 19m-wide facade cannot fit any lens in the sequence; past
         // 70m it is a dot on a 450m plane. Both grow with the estate: the house
         // is 31 m across now, and the approved frames were grown with it.
-        if (d < 8 || d > 70 * ESTATE_SCALE) {
+        // (The sweep goes out to the layout's 130 m: on its 48-degree lens the
+        // house is a sixth of the frame, not a dot.)
+        if (d < 8 || d > (c.name === 'approach' && i > 60 ? 70 * ESTATE_SCALE : c.name === 'film' ? 70 * ESTATE_SCALE : 300)) {
           bad.push(`${c.name}: subject distance ${d.toFixed(1)}m at t=${(i / 200).toFixed(2)}`);
         }
       }

@@ -13,8 +13,7 @@ import {
   HEADER_BAND,
   COVER_SKY_SHORT,
   EDGE,
-  HOLDINGS_BOX,
-  HOLDINGS_WIDE,
+  LAYOUT_SKY,
   LAND_BOX,
   LAND_ND,
   COVER_GRADE,
@@ -22,8 +21,8 @@ import {
   coverGrade,
   coverSkyStops,
   HOLDINGS_ND,
-  HOLDINGS_WIDE_OPEN,
   PHONE_HOLDINGS_BOOST,
+  PHONE_HOLDINGS_MIST,
   PHONE_ROOM,
   PHONE_SKY,
   PHONE_SKY_ND,
@@ -42,6 +41,7 @@ import {
   headerBandReach,
   HEADER_APPROACH,
   holdingsFilter,
+  layoutSkyStops,
   lensFilter,
   phoneRoomFilter,
   phoneSkyFilter,
@@ -278,63 +278,58 @@ describe("the tables, on a frame that is not wide: the header's band comes down 
   });
 });
 
-describe('the holdings', () => {
-  /** The figures' ground once the evening has settled, on a wide frame. */
-  const SETTLED = HOLDINGS_ND.stops * HOLDINGS_WIDE;
+describe('the layout', () => {
+  // The founder's frame (2026-10-28): chapter three's title stands in the top
+  // left of the frame, as the cover's does, and the lens wears the cover's
+  // kind of grad for it (LAYOUT_SKY), where the figures' ellipse stood.
+  const aspect = 1920 / 945;
 
-  it('keeps its soft ellipse after the tables have set a hard one', () => {
+  it('is a grad from the top edge, leaning to the title, for as long as the words are up', () => {
+    holdingsFilter(0.62, aspect);
+    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops, 9);
+    expect(layoutSkyStops(0.62)).toBeCloseTo(LAYOUT_SKY.stops, 9);
+    expect(lensFilter.shape.x).toBe(LAYOUT_SKY.lean.cx);
+    expect(lensFilter.shape.y).toBeGreaterThan(1);
+    // whole behind the title, down to its foot
+    expect(stopsAt(EDGE + 0.05, 1 - 0.12)).toBeCloseTo(LAYOUT_SKY.stops, 1);
+    expect(stopsAt(EDGE + 0.1, 1 - (LAYOUT_SKY.full - 0.02))).toBeGreaterThan(LAYOUT_SKY.stops * 0.95);
+    // and gone over the house's roofline and the land under it
+    expect(stopsAt(0.4, 1 - (LAYOUT_SKY.zero + 0.02))).toBe(0);
+    expect(stopsAt(0.6, 1 - 0.8)).toBe(0);
+  });
+
+  it('wears the soft density under its line and its cue, for as long as they are up', () => {
+    holdingsFilter(0.62, aspect, 0, 0, false, 1);
+    expect(lensFilter.second.stops).toBeCloseTo(LAND_ND.stops, 9);
+    expect(1 - lensFilter.second.shape.y).toBeCloseTo((LAND_BOX.layout.top + LAND_BOX.layout.foot) / 2, 9);
+    holdingsFilter(0.62, aspect, 0, 0, false, 0);
+    expect(lensFilter.second.stops).toBe(0);
+  });
+
+  it('keeps its soft edge after the tables have set a hard one', () => {
     stationFilter({ S1: 1 }, WIDE);
-    holdingsFilter(0.6);
-    expect(lensFilter.inner).toBe(0.5);
-    expect(lensFilter.stops).toBeCloseTo(SETTLED, 5);
+    holdingsFilter(0.62, aspect);
+    expect(lensFilter.inner).toBeGreaterThan(0);
+    expect(lensFilter.inner).toBeLessThan(1);
+    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops, 9);
   });
 
-  it('opens denser while the sunset is in the frame, and eases off after', () => {
-    holdingsFilter(0.44);
-    expect(lensFilter.stops).toBeCloseTo((HOLDINGS_ND.open + HOLDINGS_WIDE_OPEN) * HOLDINGS_WIDE, 5);
-    holdingsFilter(0.51);
-    expect(lensFilter.stops).toBeLessThan((HOLDINGS_ND.open + HOLDINGS_WIDE_OPEN) * HOLDINGS_WIDE);
-    expect(lensFilter.stops).toBeGreaterThan(SETTLED);
-    // ...and has given all of it back once the evening has settled
-    holdingsFilter(0.56);
-    expect(lensFilter.stops).toBeCloseTo(SETTLED, 5);
-    // a wide frame takes under half of what the heading in the glare took:
-    // the figures stand on the land (never the smudge the audit saw)
-    expect(HOLDINGS_WIDE).toBeLessThan(0.5);
-    expect((HOLDINGS_ND.open + HOLDINGS_WIDE_OPEN) * HOLDINGS_WIDE).toBeLessThan(1.25);
-  });
-
-  it('is off outside its chapter', () => {
+  it('is off outside its chapter, and comes and goes without a step', () => {
     // (before it, the lens wears the cover's sky grad until the orbit's line
     // has gone: off by COVER_SKY.off[1])
-    holdingsFilter(COVER_SKY.off[1]);
+    holdingsFilter(COVER_SKY.off[1], aspect);
     expect(lensFilter.stops).toBe(0);
-    holdingsFilter(0.9);
+    holdingsFilter(0.5, aspect);
     expect(lensFilter.stops).toBe(0);
-  });
-
-  it("stands round the figures' block: off the frame's left edge, from the figures to the gloss", () => {
-    // The block is the figures, their labels, the statement and its gloss,
-    // from 58.5% of the way down a wide frame to its foot (site-home), and it
-    // is measured in the frame's unit: the same picture under it on every
-    // shape of frame.
-    const aspect = 1920 / 945;
-    holdingsFilter(0.6, aspect);
-    const x = (units: number) => EDGE + units / 900 / aspect;
-    // whole under the figures' row and under the gloss's far end
-    expect(stopsAt(x(60), 1 - 0.64)).toBeGreaterThan(SETTLED * 0.95);
-    expect(stopsAt(x(420), 1 - 0.64)).toBeGreaterThan(SETTLED * 0.9);
-    expect(stopsAt(x(600), 1 - 0.93)).toBeGreaterThan(SETTLED * 0.6);
-    // and the house, right of the frame's middle, clear
-    expect(stopsAt(0.62, 1 - 0.6)).toBe(0);
-    expect(stopsAt(0.75, 1 - 0.8)).toBe(0);
-    // the sky above the land is not the figures' to darken
-    expect(stopsAt(x(300), 1 - 0.3)).toBe(0);
-    // the same block on the design's frame: the same distance from its edge, in units
-    const at2 = lensFilter.shape.clone();
-    holdingsFilter(0.6, 1440 / 900);
-    expect((lensFilter.shape.x - EDGE) * (1440 / 900)).toBeCloseTo((at2.x - EDGE) * aspect, 9);
-    expect(lensFilter.shape.y).toBeCloseTo(1 - (HOLDINGS_BOX.top + HOLDINGS_BOX.foot) / 2, 9);
+    holdingsFilter(0.9, aspect);
+    expect(lensFilter.stops).toBe(0);
+    let last = layoutSkyStops(0.5);
+    for (let s = 0.5; s <= 0.75; s += 0.002) {
+      const now = layoutSkyStops(s);
+      // (a smoothstep's steepest is 1.5 times its mean: 1.3 stops over 0.04)
+      expect(Math.abs(now - last)).toBeLessThan(1.6 * LAYOUT_SKY.stops * (0.002 / (LAYOUT_SKY.from[1] - LAYOUT_SKY.from[0])));
+      last = now;
+    }
   });
 });
 
@@ -349,7 +344,9 @@ describe("the cover's sky", () => {
     expect(coverSkyStops(COVER_SKY.ride.to)).toBeCloseTo(evening, 9);
     expect(coverSkyStops(COVER_SKY.off[0])).toBeCloseTo(evening, 9);
     expect(COVER_SKY.ride.to).toBeLessThan(COVER_SKY.off[0]);
-    expect(evening).toBeLessThanOrEqual(2.2);
+    // (2.2 until the cover's own density rose to 1.6 for the concept's forest
+    // behind its gilt line, 2026-10-27)
+    expect(evening).toBeLessThanOrEqual(2.3);
     expect(coverSkyStops(COVER_SKY.off[1])).toBe(0);
     // off before the holdings' own grad begins: the two never trade places
     expect(COVER_SKY.off[1]).toBeLessThanOrEqual(HOLDINGS_ND.from[0]);
@@ -364,27 +361,33 @@ describe("the cover's sky", () => {
 
   it('holds its density over the words and is gone before the roofline', () => {
     holdingsFilter(0, 1.6);
-    // across the whole width, not a shape behind the text
-    for (const x of [0.05, 0.3, 0.5, 0.7, 0.95]) {
+    // whole across the title's side of the frame, and leaning off toward the
+    // sun's side, where the concept (built 1:1 at the user's word, 2026-10-27)
+    // keeps its sky bright: it was across the whole width
+    for (const x of [0.05, 0.3, 0.45]) {
       expect(stopsAt(x, 1 - 0.12)).toBeCloseTo(COVER_SKY.stops, 1);
     }
+    expect(stopsAt(0.95, 1 - 0.12)).toBeLessThan(stopsAt(0.3, 1 - 0.12));
     // full to the foot of the title
     expect(stopsAt(0.3, 1 - (COVER_SKY.full - 0.02))).toBeCloseTo(COVER_SKY.stops, 1);
     // and gone under the horizon, above the house's parapet
     expect(stopsAt(0.6, 1 - (COVER_SKY.zero + 0.02))).toBe(0);
-    // a grad a photographer would use on a sky, not a blackout
-    expect(COVER_SKY.stops).toBeLessThanOrEqual(1.5);
+    // a grad a photographer would use on a sky, not a blackout (1.6 since the
+    // concept built 1:1 put the forest's haze behind the gilt line)
+    expect(COVER_SKY.stops).toBeLessThanOrEqual(1.65);
     // a phone on its side: whole to its own title's foot
     holdingsFilter(0, 844 / 390, 0, 0, true);
     expect(stopsAt(0.3, 1 - (COVER_SKY_SHORT.full - 0.02))).toBeCloseTo(COVER_SKY.stops, 1);
   });
 
-  it("gives way to the holdings' grad", () => {
+  it("gives way to nothing, and then to the layout's grad", () => {
+    // (the holdings' ellipse round the figures went with them: between the
+    // orbit's line and the layout's title the lens wears no grad)
     holdingsFilter(0.5, 1.6);
-    expect(lensFilter.inner).toBe(0.5);
-    // (round the figures' block now, not across the sky)
-    expect(lensFilter.shape.z).toBeLessThan(1);
-    expect(lensFilter.stops).toBeGreaterThan(HOLDINGS_ND.stops * HOLDINGS_WIDE);
+    expect(lensFilter.stops).toBe(0);
+    holdingsFilter(0.62, 1.6);
+    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops, 9);
+    expect(lensFilter.shape.x).toBe(LAYOUT_SKY.lean.cx);
   });
 
   it("wears a soft density under the small type on the land, on a second ellipse, while that copy is up", () => {
@@ -430,17 +433,19 @@ describe("the cover's sky", () => {
 });
 
 describe("the cover's grad, in its own colour", () => {
-  it('is a slate over the title and warm at the horizon, on the cover and gone by the orbit', () => {
+  it('is the haze’s own umber over the title and warm at the horizon, on the cover and gone by the orbit', () => {
     // The forensic audit of 2026-10-09 (#6): "a flat grey-brown overcast with
     // almost no colour ... Expected: a cover sky with a readable light
-    // direction and some colour, while keeping the headline legible."
+    // direction and some colour, while keeping the headline legible." It was a
+    // slate for that; the concept built 1:1 (the user, 2026-10-27) is a golden
+    // haze over a forest valley, and the grad over its title takes that colour.
     const [r, g, b] = COVER_GRADE.cool;
-    // cool: blue over green over red, and no lighter than the neutral grad it colours
-    expect(b).toBeGreaterThan(g);
-    expect(g).toBeGreaterThan(r);
+    // warm: red over green over blue, and no lighter than the neutral grad it colours
+    expect(r).toBeGreaterThanOrEqual(g);
+    expect(g).toBeGreaterThan(b);
     expect(0.2126 * r + 0.7152 * g + 0.0722 * b).toBeLessThanOrEqual(1);
-    // a slate, not a blue: the client's rule against saturated blue
-    expect(b / r).toBeLessThan(1.8);
+    // and never a blue (the client's rule against saturated blue)
+    expect(b / r).toBeLessThan(1);
     // warm where it lets go: red over green over blue, and no change of exposure
     const [wr, wg, wb] = COVER_GRADE.warm;
     expect(wr).toBeGreaterThan(wg);
@@ -521,11 +526,13 @@ describe('the phone', () => {
   });
 
   it("rides the holdings' density, opened denser into the sunset and given back as it settles", () => {
+    // (and held PHONE_HOLDINGS_MIST denser throughout, for the concept's mist
+    // under the figures, 2026-10-27)
     settle([{ id: 'holdings', weight: 1, top: 0.3, bottom: 0.7 }], 0.44);
-    expect(lensFilter.stops).toBeCloseTo(HOLDINGS_ND.open + PHONE_HOLDINGS_BOOST, 1);
-    expect(at(0.69)).toBeGreaterThan((HOLDINGS_ND.open + PHONE_HOLDINGS_BOOST) * 0.95);
+    expect(lensFilter.stops).toBeCloseTo(HOLDINGS_ND.open + PHONE_HOLDINGS_BOOST + PHONE_HOLDINGS_MIST, 1);
+    expect(at(0.69)).toBeGreaterThan((HOLDINGS_ND.open + PHONE_HOLDINGS_BOOST + PHONE_HOLDINGS_MIST) * 0.95);
     settle([{ id: 'holdings', weight: 1, top: 0.3, bottom: 0.7 }], 0.6);
-    expect(lensFilter.stops).toBeCloseTo(HOLDINGS_ND.stops, 1);
+    expect(lensFilter.stops).toBeCloseTo(HOLDINGS_ND.stops + PHONE_HOLDINGS_MIST, 1);
   });
 });
 

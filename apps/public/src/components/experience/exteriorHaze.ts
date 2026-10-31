@@ -49,26 +49,80 @@ export const hazeUniforms = {
   uHazeGain: { value: 1 },
   /** 1 once the plate has been read; 0 keeps three's own fog colour. */
   uHazeOn: { value: 0 },
+  /** The valley's mist: (how much at the ground, the height it thins by, the
+   *  run it gathers over), metres. WorldCanvas writes it a frame (VALLEY_MIST). */
+  uMist: { value: new THREE.Vector3(0, 8, 400) },
+  /** Toward the sun (DAY_SUN, normalised), and the air's lobe about it:
+   *  (sharpness, gain away from the sun, gain toward it). WorldCanvas writes
+   *  the lobe a frame (HAZE_PHASE). */
+  uHazeSun: { value: new THREE.Vector3(86, 25, 50).normalize() },
+  uHazePhase: { value: new THREE.Vector3(1, 1, 1) },
+  /** How far out from the eye the air begins, metres: 0 but where the film
+   *  stands far back from its subject (WorldCanvas, SUBJECT_AIR), where it is
+   *  how much further back than the cover it stands. The fog's own distances
+   *  are moved out by the same, there. */
+  uHazeFrom: { value: 0 },
+  /** How far from the eye the land is drawn at all, metres: past the far plane
+   *  but over the layout (WorldCanvas, SUBJECT_AIR.end), where the country's far
+   *  hills would stand over the horizon in facets. */
+  uHazeEnd: { value: 1e6 },
+  /** And how high, metres, past 210 m from the eye: the same hills, nearer, where
+   *  they rise over the camera's own height. */
+  uHazeTop: { value: 1e6 },
+  /** How much of the ground's own run of air is up, 0..1, over the layout: the
+   *  land goes into the air (HAZE_GROUND_RUN, metres from the eye) well before
+   *  the trees on it, so what is left of the country under the horizon has no
+   *  outline against the skirt behind it, and the far trees stand in mist. */
+  uHazeGround: { value: 0 },
+  /** Which frame the dissolves are on, 0..63: their pattern moves on each frame,
+   *  and the eye takes the moving pattern for a fade. */
+  uHazeFrame: { value: 0 },
 };
+
+/** Where the ground's own air begins and is whole (uHazeGround). */
+export const HAZE_GROUND_RUN = [170, 265] as const;
+
+/** The air's lobe about the sun by day (the concept built 1:1, 2026-10-27). */
+export const HAZE_PHASE = { sharp: 3, away: 0.55, toward: 2.0 } as const;
+
+/** The valley's mist by day (the concept built 1:1, 2026-10-27). */
+export const VALLEY_MIST = { k: 0.55, height: 11, run: 450 } as const;
 
 /** The height the sky's foot is read at, for anything at or under the
  *  horizon: the middle of the band the frame's one colour is the mean of
  *  (skyHaze.ts, HAZE_BAND_DEG). */
-export const HAZE_FOOT_DEG = 2.2;
+export const HAZE_FOOT_DEG = -0.2;
 const HAZE_PARS = /* glsl */ `
 uniform sampler2D uHazeRing;
 uniform float uHazeGain;
 uniform float uHazeOn;
+uniform vec3 uMist;
+uniform vec3 uHazeSun;
+uniform vec3 uHazePhase;
+uniform float uHazeFrom;
+uniform float uHazeEnd;
+uniform float uHazeTop;
+uniform float uHazeGround;
+uniform float uHazeFrame;
 void main() {`;
 
 const HAZE_FOG = /* glsl */ `
 #ifdef USE_FOG
 	{
+		#ifdef HAZE_CUT
+			if ( dot( vViewPosition, vViewPosition ) > uHazeEnd * uHazeEnd ) discard;
+		#endif
 		// The fragment's bearing from the eye, in the world's axes; the plate is
 		// read at u = atan2( z, x ) / 2pi + 0.5 (three's equirectangular lookup).
 		vec3 hazeDir = normalize( ( vec4( -vViewPosition, 0.0 ) * viewMatrix ).xyz );
+		#ifdef HAZE_CUT
+			if ( dot( vViewPosition, vViewPosition ) > 44100.0 && cameraPosition.y + hazeDir.y * length( vViewPosition ) > uHazeTop ) discard;
+		#endif
 		// at or under the horizon: the sky's foot (${HAZE_FOOT_DEG} degrees up)
 		float hazeUp = max( hazeDir.y, ${Math.sin((HAZE_FOOT_DEG * Math.PI) / 180).toFixed(5)} );
+		#ifdef HAZE_GROUND
+			hazeUp = mix( hazeUp, ${Math.sin((HAZE_FOOT_DEG * Math.PI) / 180).toFixed(5)}, uHazeGround );
+		#endif
 		vec2 hazeUv = vec2( atan( hazeDir.z, hazeDir.x ) * 0.15915494 + 0.5, asin( hazeUp ) * 0.31830989 + 0.5 );
 		vec3 hazeColour = mix( fogColor, texture2D( uHazeRing, hazeUv ).rgb * uHazeGain, uHazeOn );
 		#ifdef FOG_EXP2
@@ -76,6 +130,41 @@ const HAZE_FOG = /* glsl */ `
 		#else
 			float hazeFactor = smoothstep( fogNear, fogFar, vFogDepth );
 		#endif
+		// AND THE VALLEY'S MIST (the concept built 1:1, 2026-10-27): denser
+		// near the ground and thinning with height (uMist.y metres), gathered
+		// over the run of the line of sight (uMist.z), so the forest's trunks
+		// stand in it and its crowns stand clear.
+		// (Gathered from where the air begins: uHazeFrom.)
+		if ( uMist.x > 0.0 ) {
+			float hazeLen = length( vViewPosition );
+			float hazeRun = max( hazeLen - uHazeFrom, 0.0 );
+			float hazeY = cameraPosition.y + hazeDir.y * hazeLen;
+			float hazeMist = uMist.x * ( 1.0 - exp( - hazeRun / uMist.z ) ) * exp( - max( hazeY, 0.0 ) / uMist.y );
+			hazeFactor = 1.0 - ( 1.0 - hazeFactor ) * ( 1.0 - hazeMist );
+		}
+		#ifdef HAZE_DISSOLVE
+			if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) < uHazeGround ) discard;
+		#endif
+		#ifdef HAZE_ARRIVE
+			if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) >= uHazeGround ) discard;
+		#endif
+		#ifdef HAZE_LEAVE
+			if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) < uHazeGround ) discard;
+		#endif
+		#ifdef HAZE_GROUND
+			hazeFactor = 1.0 - ( 1.0 - hazeFactor ) * ( 1.0 - uHazeGround * smoothstep( ${HAZE_GROUND_RUN[0].toFixed(1)}, ${HAZE_GROUND_RUN[1].toFixed(1)}, length( vViewPosition ) ) );
+		#endif
+		// THE AIR IS LIT FROM ONE SIDE: air scatters the sun's light forward,
+		// so the haze toward the sun glows and the haze away from it is dim,
+		// and the forest on the frame's far side from the sun stays dark
+		// through it (uHazePhase: the lobe's sharpness, the gain away, the gain
+		// toward). Whole air (a far thing gone into it) is the plate's own
+		// colour again, so the land still meets the sky behind it seamlessly.
+		if ( uHazePhase.y != uHazePhase.z ) {
+			float hazePhase = pow( clamp( dot( hazeDir, uHazeSun ) * 0.5 + 0.5, 0.0, 1.0 ), uHazePhase.x );
+			vec3 hazeLit = hazeColour * mix( uHazePhase.y, uHazePhase.z, hazePhase );
+			hazeColour = mix( hazeLit, hazeColour, hazeFactor * hazeFactor );
+		}
 		gl_FragColor.rgb = mix( gl_FragColor.rgb, hazeColour, hazeFactor );
 	}
 #endif`;
@@ -102,6 +191,17 @@ export function dressHaze(root: THREE.Object3D): number {
       if (!mat || mat.__haze || mat.fog === false || !hasViewPosition(mat)) continue;
       mat.__haze = true;
       n += 1;
+      const ground = mesh.name === 'ground_plane';
+      // (the forest's roof beyond is not drawn at all over the layout: from this
+      // height it is shards, cut by uHazeEnd and uHazeTop. It goes by a dissolve,
+      // far off and in the air as it is.)
+      const roof = mat.name === 'MAT_Jungle_Canopy';
+      // (Only what can stand out there is cut, and what already discards: a discard
+      // costs the whole of a material its early depth, and the house has no need.)
+      const cut = ground || roof || ((mat as Hazed & { alphaTest?: number }).alphaTest ?? 0) > 0;
+      // (and what is the layout's comes and goes with its air: exteriorLayout.ts)
+      const arrive = !!mat.userData?.arrive;
+      const leave = !!mat.userData?.leave;
       const prev = mat.onBeforeCompile;
       // What it compiled to before this pass, read NOW: three's default key is
       // the source of whatever onBeforeCompile is current, which after this
@@ -113,11 +213,22 @@ export function dressHaze(root: THREE.Object3D): number {
         shader.uniforms.uHazeRing = hazeUniforms.uHazeRing;
         shader.uniforms.uHazeGain = hazeUniforms.uHazeGain;
         shader.uniforms.uHazeOn = hazeUniforms.uHazeOn;
+        shader.uniforms.uMist = hazeUniforms.uMist;
+        shader.uniforms.uHazeSun = hazeUniforms.uHazeSun;
+        shader.uniforms.uHazePhase = hazeUniforms.uHazePhase;
+        shader.uniforms.uHazeFrom = hazeUniforms.uHazeFrom;
+        shader.uniforms.uHazeEnd = hazeUniforms.uHazeEnd;
+        shader.uniforms.uHazeTop = hazeUniforms.uHazeTop;
+        shader.uniforms.uHazeGround = hazeUniforms.uHazeGround;
+        shader.uniforms.uHazeFrame = hazeUniforms.uHazeFrame;
         shader.fragmentShader = shader.fragmentShader
-          .replace('void main() {', HAZE_PARS)
+          .replace(
+            'void main() {',
+            `${cut ? '#define HAZE_CUT\n' : ''}${ground ? '#define HAZE_GROUND\n' : ''}${roof ? '#define HAZE_DISSOLVE\n' : ''}${arrive ? '#define HAZE_ARRIVE\n' : ''}${leave ? '#define HAZE_LEAVE\n' : ''}${HAZE_PARS}`,
+          )
           .replace('#include <fog_fragment>', HAZE_FOG);
       };
-      mat.customProgramCacheKey = () => `${key}|sky-haze`;
+      mat.customProgramCacheKey = () => `${key}|sky-haze${cut ? '-cut' : ''}${ground ? '-ground' : ''}${roof ? '-roof' : ''}${arrive ? '-arrive' : ''}${leave ? '-leave' : ''}`;
       mat.needsUpdate = true;
     }
   });
@@ -132,9 +243,9 @@ export function hazeFromPlate(): void {
 }
 
 /**
- * WHERE THE LAND ENDS, AIR. The ground stops (the far plane takes it at 400 m)
- * and what stands behind its end is the sky plate — whose lower half is not
- * sky. From the film's high frames the eye is thirty metres up and the land's
+ * WHERE THE LAND ENDS, AIR. The ground stops (the far plane takes it) and what
+ * stands behind its end is the sky plate — whose lower half is not sky. From
+ * the film's high frames the eye is thirty metres up and the land's
  * end is four degrees UNDER the horizon: between the two the plate's underside
  * showed, a band darker than the haze the far trees had gone to, and the trees
  * stood against it in outline. That band is the "hard fog band" as much as the
@@ -146,8 +257,23 @@ export function hazeFromPlate(): void {
  * far thing has already gone to. It is opaque under the horizon and thins to
  * nothing over the two degrees above it, where the plate's own foot takes
  * over. The land then ends in the same air the sky begins in.
+ *
+ * ONLY IF THE LAND HAS GONE TO THAT AIR BEFORE IT GETS THERE (the creative
+ * director's audit, 2026-10-27: "a dead-flat green plane ... meeting a sharp,
+ * artificial horizon line"). The skirt stood at 360 m, the land at +/-330 m
+ * and the far plane at 400; once the day's fog was opened to 500 m (the
+ * Feature 1 brief) the land reached the skirt three-quarters hazed, and the
+ * skirt drew a line under it. So now: the country runs to +/-900 m
+ * (build_estate_v7.py, COUNTRY_REACH), the skirt stands past the day fog's
+ * far, and the far plane past the skirt — the land is whole haze where it
+ * meets the skirt, from every camera in the film. (A ridge of far hills was
+ * tried on the skirt, over the horizon, the same day: drawn in the air's
+ * colour it came out a flat band ruled across the sky, lighter than the sky
+ * above it, which was the line this was meant to take away. It is not here.)
  */
-export const HORIZON_SKIRT = { radius: 360, over: 2.0, whole: -0.4, under: -32, segments: 96 } as const;
+export const HORIZON_SKIRT = { radius: 560, over: 2.0, whole: -0.4, under: -32, segments: 96 } as const;
+/** The camera's far plane outside (WorldCanvas CLIP): just behind the skirt. */
+export const EXTERIOR_FAR = 620;
 
 const SKIRT_NAME = 'estate_horizon';
 

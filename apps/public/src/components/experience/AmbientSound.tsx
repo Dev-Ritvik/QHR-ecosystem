@@ -177,20 +177,10 @@ export function AmbientSound() {
     find();
     return () => cancelAnimationFrame(raf);
   }, []);
-  // And not on the opening frame (the third art-direction critique: "Only the
-  // absolute essential UI elements are visible"). It arrives once the film is
-  // under way — half a viewport in — and stays. A visitor who turned it on
-  // last time sees it from the start, lit.
-  const [underway, setUnderway] = useState(false);
-  useEffect(() => {
-    if (underway) return;
-    const check = () => {
-      if (window.scrollY > window.innerHeight * 0.5) setUnderway(true);
-    };
-    check();
-    window.addEventListener('scroll', check, { passive: true });
-    return () => window.removeEventListener('scroll', check);
-  }, [underway]);
+  // ON THE OPENING FRAME TOO, now (the concept built 1:1, 2026-10-27, has it
+  // under the co-ordinates on the cover). The third art-direction critique had
+  // kept it off the first frame ("Only the absolute essential UI elements are
+  // visible") until the film was half a viewport under way.
   const rig = useRef<Rig | null>(null);
 
   const apply = useCallback((next: boolean) => {
@@ -272,48 +262,35 @@ export function AmbientSound() {
     [],
   );
 
-  const away = !underway && !on;
   if (!slot) return null;
   return createPortal(
     <button
       type="button"
+      role="switch"
       onClick={toggle}
-      aria-pressed={on}
-      aria-label={on ? 'Turn sound off' : 'Turn sound on'}
-      className={'sound-toggle tap-target group' + (away ? ' is-tucked' : '')}
-      tabIndex={away ? -1 : 0}
+      aria-checked={on}
+      aria-label="Sound"
+      className={'sound-toggle tap-target group' + (on ? ' is-on' : '')}
     >
-      {/* A LOUDSPEAKER (the audit of 2026-10-05, P1: "the tiny four-bar icon
-          left of ENQUIRE is unlabeled and reads as a glitch. If it is a sound
-          toggle, make it clearly recognisable"). Four hairlines a pixel wide
-          were an equaliser only to someone who already knew; this is the sign
-          every player uses — the cone, with its waves when the sound is on
-          and struck through when it is off — drawn in the header's hairline. */}
-      <svg
-        aria-hidden
-        className={'sound-glyph' + (on ? ' is-on' : '')}
-        viewBox="0 0 22 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.1"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M1.6 5.9h2.9l4.1-3.5v11.2L4.5 10.1H1.6z" />
-        <path className="sound-wave" d="M11.6 5.3a3.9 3.9 0 0 1 0 5.4" />
-        <path className="sound-wave" d="M14.2 2.9a7.3 7.3 0 0 1 0 10.2" />
-        <path className="sound-mute" d="M12.4 5.6l4.8 4.8M17.2 5.6l-4.8 4.8" />
-      </svg>
-      {/* The glyph alone, and the word when the control is pointed at or
-          focused (globals.css, .sound-label): the header over the film is the
-          mark and two words, and a third in capitals beside them was one more
-          voice than the picture needs (the paid audit, 2026-10-04: "navigation
-          almost invisible unless needed"). Never on a phone, whose header has
-          no room for it. */}
-      <span className="sound-label max-md:hidden">
-        {on ? 'Sound on' : 'Sound'}
+      {/* A WAVEFORM AND A SWITCH (the concept the user asked to be built 1:1,
+          2026-10-27). The loudspeaker it replaces was the audit of 2026-10-05's
+          answer to four bars that "read as a glitch": what makes this one
+          read is the switch beside it, which says on or off as a switch does.
+          The waveform stands still while the sound is off and breathes while
+          it plays. */}
+      <span aria-hidden className="sound-wave-bars">
+        {WAVE.map((h, i) => (
+          <i key={i} style={{ ['--h' as string]: h, ['--i' as string]: i }} />
+        ))}
+      </span>
+      <span aria-hidden className="sound-switch">
+        <i />
       </span>
     </button>,
     slot,
   );
 }
+
+/** The waveform's bars, as heights out of one: a short phrase, loudest in its
+ *  middle, as a recording's envelope is drawn. */
+const WAVE = [0.16, 0.24, 0.2, 0.36, 0.3, 0.52, 0.42, 0.7, 0.58, 1, 0.82, 0.62, 0.9, 0.5, 0.66, 0.4, 0.3, 0.44, 0.24, 0.3, 0.18, 0.12];

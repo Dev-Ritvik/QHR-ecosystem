@@ -178,12 +178,17 @@ describe('the lens (depth in alpha)', () => {
   });
 
   it('pulls focus: no jump between neighbouring frames of the move', () => {
-    let last = poseAt(0).focus;
+    let last = poseAt(0);
     for (let i = 1; i <= 800; i += 1) {
-      const { focus } = poseAt(i / 800);
-      // A step of the leg this small moves the camera well under a metre.
-      expect(Math.abs(focus - last)).toBeLessThan(2.5);
-      last = focus;
+      const now = poseAt(i / 800);
+      // A step of the leg this small moves the camera well under a metre. And
+      // the blur goes as |d - s| / d: two hundred metres out, at the
+      // founder's layout (2026-10-28), where the lens's axis crosses the
+      // house's end and the focus steps from its face to its middle (4 m at
+      // 211 m), the step is what 0.6 m is at 35 m. Under 2.5 m, or 2.5% of
+      // the distance focused at.
+      expect(Math.abs(now.focus - last.focus)).toBeLessThan(Math.max(2.5, 0.025 * now.focus));
+      last = now;
     }
   });
 

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   BAND_AMP,
+  COMPOUND,
   BAND_M,
   GRAVEL_MAP_FRAGMENT,
   GRAVEL_TILE_M,
@@ -52,6 +53,16 @@ describe('the estate lawn', () => {
     expect(LAWN_MAP_FRAGMENT).toContain(`m.x / ${BAND_M.toFixed(2)}`);
     expect(LAWN_MAP_FRAGMENT).toContain('cameraPosition - vLawnWorld');
     expect(LAWN_MAP_FRAGMENT).toContain('fwidth(t)');
+  });
+
+  it('mows inside the wall only: the country outside it is not striped', () => {
+    // the creative director's audit, 2026-10-27: outside the estate "a
+    // dead-flat green plane with a repetitive noise texture"
+    expect(COMPOUND.x).toBe(72);
+    expect(COMPOUND.z0).toBe(-84);
+    expect(COMPOUND.z1).toBe(214);
+    expect(LAWN_MAP_FRAGMENT).toContain(`abs(vLawnWorld.x) - ${COMPOUND.x.toFixed(1)}`);
+    expect(LAWN_MAP_FRAGMENT).toContain(`smoothstep(0.0, ${COMPOUND.fade.toFixed(1)}, outside)`);
   });
 
   it('has the grain of a sward between its patches and a pixel, and bands that can be seen', () => {

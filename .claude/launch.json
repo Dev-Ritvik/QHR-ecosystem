@@ -59,6 +59,15 @@
       "port": 3004
     },
     {
+      "name": "public-dev-3005",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd apps\\public\\.dev && npx next dev --port 3005 --hostname 0.0.0.0"
+      ],
+      "port": 3005
+    },
+    {
       "name": "public-stage-live",
       "runtimeExecutable": "cmd",
       "runtimeArgs": [

@@ -53,7 +53,9 @@ import { STILL_PHONE, poseFor, setFor, type Pose, type SceneSet } from './poses'
 import { pageMove, plateBand, riseInBand, stillProgress } from './plateBand';
 import {
   exteriorPoseAt,
+  exteriorSwing,
   atmosphereAt,
+  layoutUpright,
   lensAt,
   uprightLensAt,
   FILM_SHARE,
@@ -118,7 +120,7 @@ import {
   lensFilter,
   phoneSkyFilter,
 } from './lensFilter';
-import { PHONE_FRAMING, applyShift, phoneFrameAt, phoneFrameInCoda, phoneWeight, widenFov } from './phoneFraming';
+import { PHONE_FRAMING, applyShift, phoneFrameAt, phoneFrameInCoda, phoneWeight, tabletWeight, widenFov } from './phoneFraming';
 import { HALL_AIM_OFFSET, codaEase, codaPose, codaProgress } from './codaFrame';
 import { mapStage } from './mapTablePlan';
 import { copyPresence, copyZone, filmIsShort, filmIsWide } from './copyZone';
@@ -132,7 +134,8 @@ import { veiledPush } from '@/components/site/RouteVeil';
 import { ld, ldColour } from './lookdev';
 import { followRoomLook } from './exteriorWindows';
 import { readSkyHaze, skyHazeReady, skyHazeToward } from './skyHaze';
-import { hazeFromPlate, hazeUniforms } from './exteriorHaze';
+import { EXTERIOR_FAR, HAZE_PHASE, VALLEY_MIST, hazeFromPlate, hazeUniforms } from './exteriorHaze';
+import { layoutAir } from './exteriorLayout';
 
 /**
  * Scrub, in seconds per unit of a pose's `ease` — the lag between where scroll
@@ -509,8 +512,8 @@ function CameraRig({
         }
       } else {
         const s = journeyState.legProgress;
-        // (An upright screen keeps the aim it had before the roof was made
-        // flat: cameraPath, FILM_TARGET_CURVE_UPRIGHT.)
+        // (An upright screen aims at the house at the layout: cameraPath,
+        // LAYOUT_UPRIGHT.)
         const upright = phoneWeight(size.width / Math.max(1, size.height));
         exteriorPoseAt(s, desired.current, look.current, upright);
         offset = lensAt(s).frameOffset;
@@ -848,6 +851,17 @@ function CameraRig({
     } else {
       stillRise.current = null;
     }
+    // (And over the layout on a phone that is short for its width, the frame slid
+    // the other way: the chapter's words take the same pixels from a frame with
+    // fewer of them, and the house stood behind "Start here", seen at 390x664.)
+    if (lens && p.path && journeyState.leg === 'exterior' && doorFov === null && k > 0 && !banded) {
+      rise =
+        -LAYOUT_SHORT_RISE *
+        THREE.MathUtils.smoothstep(aspect, 0.48, 0.58) *
+        (1 - tabletWeight(size.width)) *
+        layoutUpright(exteriorSwing(journeyState.legProgress)) *
+        k;
+    }
     applyShift(cam, aspect, rise, shift);
     // And outside, an upright screen's wider field (cameraPath, UPRIGHT_LENS).
     if (lens && p.path && journeyState.leg === 'exterior' && doorFov === null && k > 0) {
@@ -1091,6 +1105,7 @@ function JourneyDriver({
     journeyState.veil = 0;
     journeyState.armed = false;
     journeyState.coda = 0;
+    journeyState.film = false;
     interiorLeg.current = 0;
     if (veil.current) veil.current.style.opacity = '0';
   }, [active, interiorLeg, veil]);
@@ -1105,6 +1120,7 @@ function JourneyDriver({
     stepDoorway(now);
     paintDoorway();
     readJourney(scroll.current, journeyState);
+    journeyState.film = true;
     // The leaves over the last of the approach, by the scroll (doorway.ts,
     // DOOR_AJAR): the door stands open by the time the camera is square on it.
     if (journeyState.leg === 'exterior') doorwayState.ajar = doorAjar(journeyState.legProgress);
@@ -1423,7 +1439,11 @@ const CLIP: Record<SceneSet, { near: number; far: number }> = {
   // to clear its corners; the delivered terrain spans +/-120m, so the furthest
   // visible geometry from any point on the camera path is under 200m. A 1200:1
   // depth range was buying nothing but z-fighting risk on the slate courses.
-  exterior: { near: 0.5, far: 400 },
+  // 400 -> 620 (EXTERIOR_FAR, 2026-10-27): the country now runs to +/-900 m and
+  // the horizon's skirt stands at 560, past the day fog's 500, so the land has
+  // gone to haze before it meets the skirt (exteriorHaze.ts). Near stays at
+  // 0.5, and the precision at the house is set by near, not far.
+  exterior: { near: 0.5, far: EXTERIOR_FAR },
 };
 
 /*
@@ -1513,6 +1533,11 @@ const GRADE_BG: Record<Grade, string> = { dusk: '#0A1120', daylight: '#B9C6D8' }
  * the dark in front of it.
  */
 const HALL_GROUND = '#15110C';
+
+/** The pixel ratio a wide frame below the high tier is drawn at, and what a
+ *  wide frame is (see the canvas's `dpr`). */
+const WIDE_MID_DPR = 1.25;
+const WIDE_FRAME_PX = 1024;
 
 /** How long after the film's first picture is built the hall's bytes are
  *  asked for (hallBytes.ts): the curtain has lifted and its fade is over. */
@@ -1672,12 +1697,40 @@ function useLook(set: SceneSet) {
 // [80, 270] -> [140, 500] BY DAY ONLY (the user, 2026-10-26, of the band of
 // the cover behind its title: "decrease the fog here"). At 270 the belt behind
 // the house was a milky wall across the horizon; at 500 its trees and the land
-// to the horizon read, and the ground (to 330 m) still meets the sky in haze.
+// to the horizon read. (It was written here that the ground, to 330 m, still
+// met the sky in haze. It did not: it ended three-quarters hazed, a hard line
+// the creative director's audit found at once, 2026-10-27. The country runs to
+// +/-900 m now and is whole haze before the horizon's skirt: exteriorHaze.ts.)
 // The evening's band is as it was: near comes back to 80 as the evening falls
 // (EVENING_FOG_NEAR), so the approach and the door are untouched.
-const DAY_FOG: readonly [number, number] = [140, 500];
+// [140, 500] until the concept built 1:1 (2026-10-27): its valley is misty,
+// the forest's layers each paler than the one in front, so the air closes in
+// from 70 metres and is whole by 460 (the house's front, 80 metres out, takes
+// almost none of it).
+const DAY_FOG: readonly [number, number] = [70, 460];
 const EVENING_FOG_NEAR = 80;
 const EVENING_FOG_FAR = 210;
+/**
+ * THE AIR IS MEASURED FROM THE SUBJECT WHEN THE CAMERA STANDS FAR BACK (the
+ * founder's layout, 2026-10-28). The fog above is set for a camera eighty
+ * metres from the house; the layout stands two hundred and sixty out on a
+ * long lens, and at that range the same air took half the house into the
+ * haze and the land in front of it all of it (measured on the frame: the
+ * front at 52% haze), where the founder's frame has the house and its land
+ * clear and the mist standing behind them. So on the film, past `from`
+ * metres from the house (`at`) the air begins that much further out: the
+ * house and its land are seen as they are from the cover, and what is behind
+ * them goes into the mist as it does there. Where it is whole stays where it
+ * was, or `depth` past where it begins if that is further: moved out with the
+ * rest, it uncovered the forest's far roof (exteriorJungle.ts, the canopy),
+ * whose crowns are drawn for the mist to take. The cover, the revolution and
+ * the door are all nearer than `from`, and are untouched. (And over the layout
+ * alone, `layout` metres further and only `layoutDepth` deep: his middle distance
+ * is crisp and the mist stands right behind it. And the country's far hills,
+ * built to be seen in haze and faceted from this height, are not drawn past
+ * `end`, nor over `top`: the plate's own ridges stand there.)
+ */
+const SUBJECT_AIR = { at: new THREE.Vector3(0, 6.4, 0), from: 90, depth: 260, layout: 70, layoutDepth: 136, end: 322, top: 40 } as const;
 /** Emissive strength of the curtained windows at full evening (see ExteriorLighting). */
 const WINDOW_EVENING_GLOW = 0.5;
 /**
@@ -1758,6 +1811,9 @@ const HAZE_NIGHT = new THREE.Color('#42424A');
  *  and how wide a slice of that foot is averaged, radians either side of the
  *  camera's bearing. */
 const HAZE_GAIN = 0.92;
+/** The per-fragment air against the sky behind it (exteriorHaze.ts): a tenth
+ *  over it since the concept built 1:1 (2026-10-27), whose mist is luminous. */
+const HAZE_SKY = 1.1;
 const HAZE_SPREAD = 0.42;
 const HAZE_DIR = new THREE.Vector3();
 /** The land's air at full evening: the sunset's own mauve-umber, lit. */
@@ -1834,7 +1890,32 @@ const ENV_HOURS = { evening: 0.8, night: 0.6 } as const;
  * over the roofline, with the stone under it lit by that sky (FILL_NIGHT) and
  * the lamps the only warm things in the picture.
  */
-const SKY_HOURS = { evening: 0.6, night: 0.32 } as const;
+// `day` 1 until the concept built 1:1 (2026-10-27): its sky over the hills is
+// the brightest thing in the frame, a golden haze. The plate is drawn at twice
+// its strength ON THE COVER (SKY_COVER: let down to its old strength over the
+// camera's first turn, before the orbit's line stands in that sky; at the
+// cover's strength it stood there at 1.1:1), and comes down to the evening's
+// six-tenths as before.
+const SKY_HOURS = { day: 1.0, cover: 2.0, evening: 0.6, night: 0.32 } as const;
+/** Over this much of the exterior leg the cover's sky comes down to the day's. */
+const SKY_COVER: readonly [number, number] = [0.02, 0.17];
+/** And over this much it comes up again for the layout (the founder's frame,
+ *  2026-10-28: the misty hills over the land are the brightest thing in it,
+ *  as the cover's are); the evening takes it down after, as it does the day's. */
+const SKY_LAYOUT: readonly [number, number] = [0.46, 0.56];
+/** The air while the camera is up over the land, from the revolution's end
+ *  (leg 0.3875) until it is down on the forecourt: over what leg progress, and
+ *  what is taken from the mist and from the sun's lobe. */
+const AIR_ALOFT = { over: [0.39, 0.45, 0.7, 0.78], mist: 0.5, lobe: 0.7 } as const;
+/** How far the frame is slid over the layout on a short phone, of its height. */
+const LAYOUT_SHORT_RISE = 0.09;
+/** The air's own strength over the layout, as a share of the day's: his mist is
+ *  a deeper gold than a plate this bright gives it. */
+const HAZE_LAYOUT = 0.84;
+/** How far the plate is turned over the layout, radians. */
+const SKY_LAYOUT_TURN = 0.31;
+/** How much of the cover's brighter sky an upright frame takes. */
+const SKY_COVER_UPRIGHT = 0.3;
 /**
  * What the night does to the fill, across the approach. It used to take three
  * tenths of it; it ADDS to it now (a loss of minus one is the fill doubled),
@@ -1847,7 +1928,16 @@ const NIGHT_FILL_LOSS = -1.0;
 // Warmer than it was (#FFF0DB): the key is a 14-degree sun, and the raking
 // front it now lights should read as the hour, against the cool sky fill on
 // the west flank. Warm against cool is what makes the two faces two faces.
-const KEY_DAY = new THREE.Color('#FFE1BA');
+const KEY_DAY = new THREE.Color('#FFD9A8');
+/**
+ * THE CONCEPT'S DAY (built 1:1 at the user's word, 2026-10-27): a forest valley
+ * at golden hour under a hazy sky is lit by the sun and by little else, so its
+ * shade is deep and its lit faces golden. By day the sky's light (`env`) and
+ * the hemisphere's fill (`hemi`) are taken to these shares of the approved
+ * rig's and the sun (`key`) raised by this much; the evening gives all of it
+ * back (by `1 - evening`), so the dusk at the door is the approved one.
+ */
+const CONCEPT_DAY = { env: 0.33, hemi: 0.35, key: 1.28 } as const;
 const KEY_EVENING = new THREE.Color('#FFC489');
 
 function ExteriorLighting({
@@ -1884,6 +1974,7 @@ function ExteriorLighting({
    *  shadow under it is the one thing that reads as a toy at any resolution. */
   const shadowPx = tier === 'low' ? 1024 : tier === 'mid' ? 2048 : 4096;
   const shadowMap = useMemo<[number, number]>(() => [shadowPx, shadowPx], [shadowPx]);
+  const frame = useThree((s) => s.size);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
   const key = useRef<THREE.DirectionalLight>(null);
@@ -2053,6 +2144,7 @@ function ExteriorLighting({
         // frame, the end of the leg: no filter of this leg's at all.)
         const cover = out && film ? copyZone.panes.find((p) => p.id === 'hero') : undefined;
         const rev = out && film ? copyZone.panes.find((p) => p.id === 'revolution') : undefined;
+        const plots = out && film ? copyZone.panes.find((p) => p.id === 'holdings') : undefined;
         holdingsFilter(
           out && film ? legS : 1,
           window.innerWidth / Math.max(1, window.innerHeight),
@@ -2061,9 +2153,11 @@ function ExteriorLighting({
           // before its title does: ChapterFade, LEAVE_ATTR)
           rev ? copyPresence(rev.weight) * (rev.early ?? 1) : 0,
           filmIsShort(window.innerWidth, window.innerHeight),
+          plots ? copyPresence(plots.weight) : 0,
         );
       } else {
         lensFilter.second.stops = 0;
+        lensFilter.topGap = 0;
         // (and no colour in the grad: COVER_GRADE is the wide cover's)
         lensFilter.sky.cool = 0;
         lensFilter.sky.warm = 0;
@@ -2117,6 +2211,26 @@ function ExteriorLighting({
       fog.near = dayNear + (ld('fogNearEvening', EVENING_FOG_NEAR) - dayNear) * Math.max(e, n);
       fog.far = dayFar + (eveFar - dayFar) * e;
       fog.far += (ld('fogFarNight', eveFar) - fog.far) * n;
+      // (measured from the subject when the camera stands far back: SUBJECT_AIR)
+      const layoutClear = journeyState.film && holdTime === undefined ? layoutAir(journeyState.leg, journeyState.legProgress, true) : 0;
+      const back =
+        journeyState.film && holdTime === undefined
+          ? Math.max(0, camera.position.distanceTo(SUBJECT_AIR.at) - ld('airFrom', SUBJECT_AIR.from)) +
+            ld('airLayout', SUBJECT_AIR.layout) * layoutClear
+          : 0;
+      fog.near += back;
+      fog.far = Math.max(fog.far, fog.near + ld('airDepth', SUBJECT_AIR.depth));
+      fog.far += Math.min(0, fog.near + ld('airLayoutDepth', SUBJECT_AIR.layoutDepth) - fog.far) * layoutClear;
+      hazeUniforms.uHazeFrom.value = back;
+      hazeUniforms.uHazeEnd.value = layoutClear > 0 ? 1 / ((1 - layoutClear) / 2000 + layoutClear / ld('airEnd', SUBJECT_AIR.end)) : 1e6;
+      hazeUniforms.uHazeTop.value = layoutClear > 0 ? 1 / ((1 - layoutClear) / 2000 + layoutClear / ld('airTop', SUBJECT_AIR.top)) : 1e6;
+      hazeUniforms.uHazeGround.value = layoutClear;
+      hazeUniforms.uHazeFrame.value = (hazeUniforms.uHazeFrame.value + 1) % 64;
+      // (the plate turned so its lower hill stands where the founder's peak does,
+      // in the frame's middle, the great hill's flank to its left and the far
+      // ridges running off to the sun on its right: turned while the camera is
+      // itself turning)
+      scene.backgroundRotation.y = ld('skyTurn', SKY_LAYOUT_TURN) * layoutClear;
       fog.color
         .copy(ldColour('hazeDay', HAZE_DAY))
         .lerp(ldColour('hazeEvening', HAZE_EVENING), e)
@@ -2135,11 +2249,35 @@ function ExteriorLighting({
         // bearing. The colour above is what the rest keeps.
         // (At the sky's whole strength: the frame's one colour is held a
         // little under it, a mean being wrong at both ends; this is not.)
-        hazeUniforms.uHazeGain.value = sky * ld('hazeSky', 1);
+        hazeUniforms.uHazeGain.value =
+          sky * ld('hazeSky', HAZE_SKY) * (1 - (1 - ld('hazeLayout', HAZE_LAYOUT)) * layoutAir(journeyState.leg, journeyState.legProgress, !!journeyState.film));
         hazeUniforms.uHazeOn.value = ld('hazeFlat', 0) > 0.5 ? 0 : 1;
       } else {
         hazeUniforms.uHazeOn.value = 0;
       }
+      // The valley's mist (exteriorHaze.ts, VALLEY_MIST): the day's, thinned a
+      // little as the evening falls and a little more by night.
+      // (And thinner, and lit more evenly, while the camera is up over the land:
+      // AIR_ALOFT. Looking down the sun's way from there a whole lawn is under the
+      // lobe that is meant for what stands on the horizon, and it went to a
+      // bright flat cream.)
+      const aloft =
+        (journeyState.film && holdTime === undefined ? 1 : 0) *
+        THREE.MathUtils.smoothstep(legS, AIR_ALOFT.over[0], AIR_ALOFT.over[1]) *
+        (1 - THREE.MathUtils.smoothstep(legS, AIR_ALOFT.over[2], AIR_ALOFT.over[3]));
+      hazeUniforms.uMist.value.set(
+        ld('mistK', VALLEY_MIST.k) * (1 - 0.25 * e) * (1 - 0.35 * n) * (1 - ld('aloftMist', AIR_ALOFT.mist) * aloft),
+        ld('mistH', VALLEY_MIST.height),
+        ld('mistRun', VALLEY_MIST.run),
+      );
+      // ...lit from the sun's side (HAZE_PHASE), less so once the sun is low
+      // and gone: by night the air is evenly lit by the sky.
+      const lobe = (1 - 0.4 * e) * (1 - n) * (1 - ld('aloftLobe', AIR_ALOFT.lobe) * aloft);
+      hazeUniforms.uHazePhase.value.set(
+        ld('phaseSharp', HAZE_PHASE.sharp),
+        1 + (ld('phaseAway', HAZE_PHASE.away) - 1) * lobe,
+        1 + (ld('phaseToward', HAZE_PHASE.toward) - 1) * lobe,
+      );
     }
 
     // The KEY SURVIVES. This is the difference between evening falling and the
@@ -2150,7 +2288,8 @@ function ExteriorLighting({
     // physics the fog is.
     if (key.current) {
       key.current.intensity =
-        keyIntensity * ld('key', 1) * (1 - ld('evKeyLoss', EVENING_KEY_LOSS) * e) * (1 - ld('nightKeyLoss', NIGHT_KEY_LOSS) * n);
+        keyIntensity * ld('key', 1) * (1 - ld('evKeyLoss', EVENING_KEY_LOSS) * e) * (1 - ld('nightKeyLoss', NIGHT_KEY_LOSS) * n) *
+        (1 + (ld('conceptKey', CONCEPT_DAY.key) - 1) * (1 - e));
       key.current.color.copy(ldColour('keyDay', KEY_DAY)).lerp(ldColour('keyEvening', KEY_EVENING), e);
     }
     // The FILL RISES, and warms (FILL_EVENING, above): to EVENING_FILL of
@@ -2159,7 +2298,8 @@ function ExteriorLighting({
     // colour.
     if (hemi.current) {
       hemi.current.intensity =
-        hemiIntensity * ld('fill', 1) * (1 + (ld('evFill', EVENING_FILL) - 1) * e) * (1 - ld('nightFillLoss', NIGHT_FILL_LOSS) * n);
+        hemiIntensity * ld('fill', 1) * (1 + (ld('evFill', EVENING_FILL) - 1) * e) * (1 - ld('nightFillLoss', NIGHT_FILL_LOSS) * n) *
+        (1 + (ld('conceptHemi', CONCEPT_DAY.hemi) - 1) * (1 - e));
       hemi.current.color
         .copy(ldColour('fillDay', FILL_DAY))
         .lerp(ldColour('fillEvening', FILL_EVENING), e)
@@ -2175,7 +2315,9 @@ function ExteriorLighting({
       envIntensity *
       ld('env', 1) *
       (1 + (ld('envEvening', ENV_HOURS.evening) - 1) * e) *
-      (1 + (ld('envNight', ENV_HOURS.night) - 1) * n);
+      (1 + (ld('envNight', ENV_HOURS.night) - 1) * n) *
+      // the concept's day (CONCEPT_DAY), given back by the evening
+      (1 + (ld('conceptEnv', CONCEPT_DAY.env) - 1) * (1 - e));
 
     // (The portico's lantern comes on with the same evening: PorticoLantern
     // reads filmState.)
@@ -2184,8 +2326,19 @@ function ExteriorLighting({
     // its cloud structure and its hill silhouettes at a tenth of the luminance,
     // which is what dusk looks like — and it means the frame still has real
     // landscape in it rather than a flat colour where a landscape was.
+    // (on a frame that stands upright the cover's title stands in the middle
+    // of that sky, and it is held at the day's strength and a third of the
+    // cover's: SKY_COVER_UPRIGHT)
+    const coverSky =
+      (journeyState.film && holdTime === undefined ? 1 : 0) *
+      Math.max(
+        1 - THREE.MathUtils.smoothstep(legS, SKY_COVER[0], SKY_COVER[1]),
+        THREE.MathUtils.smoothstep(legS, SKY_LAYOUT[0], SKY_LAYOUT[1]) * ld('skyLayout', 1),
+      ) *
+      (1 - (1 - SKY_COVER_UPRIGHT) * phoneWeight(frame.width / Math.max(1, frame.height)));
+    const skyDay = ld('skyDay', SKY_HOURS.day) + (ld('skyCover', SKY_HOURS.cover) - ld('skyDay', SKY_HOURS.day)) * coverSky;
     const skyEvening = ld('skyEvening', SKY_HOURS.evening);
-    scene.backgroundIntensity = 1 + (skyEvening - 1) * e;
+    scene.backgroundIntensity = skyDay + (skyEvening - skyDay) * e;
     scene.backgroundIntensity += (ld('skyNight', SKY_HOURS.night) - scene.backgroundIntensity) * n;
 
     // THE ROOMS LIGHT UP AS EVENING FALLS. Every window of the v7 house is glass
@@ -2956,7 +3109,15 @@ function RoomCubeAtStart() {
 // lighting copy alike (tools/gltf/grade_sky_v10.py has the measurements).
 // The haze is read from the plate, so everything seen toward the sun is
 // veiled in the same amber.
-const SKY_EQUIRECT_URL = '/textures/sky_estate_v10_4k.jpg';
+// v11 (the concept the user asked to be built 1:1, 2026-10-27): no longer a
+// pure sky. Misty forested hills round the estate - a big hill rising out of
+// the cover's left, a lower one on its right, the valley behind the house
+// running back to a pale far range - rendered in Blender under the estate's
+// own sun (tools/blender/make_sky_hills_v11.py) with the air and the valley's
+// mist laid on after (tools/gltf/grade_sky_hills_v11.py), and a hazy golden
+// sky with no cloud in it. The client's "slum" was a photograph's village on
+// its horizon; there is none here, only forest.
+const SKY_EQUIRECT_URL = '/textures/sky_estate_v11_4k.jpg';
 /**
  * What the estate is LIT by, as opposed to what it is seen against: the same
  * sky, with the lawn's bounce below the horizon where the backdrop carries
@@ -2965,7 +3126,7 @@ const SKY_EQUIRECT_URL = '/textures/sky_estate_v10_4k.jpg';
  * the sky; lit by the lawn, they fall into the shade a photograph shows.
  * 1024 x 512: PMREM reduces it to a 256 cube, so more would be spent on nothing.
  */
-const SKY_LIGHTING_URL = '/textures/sky_estate_v10_env.jpg';
+const SKY_LIGHTING_URL = '/textures/sky_estate_v11_env.jpg';
 
 // Contact-hardening sun shadows, installed before the first frame compiles a
 // shadow-receiving material (softSunShadows.ts).
@@ -3202,6 +3363,8 @@ export function WorldCanvas() {
   const [tier, setTier] = useState<DeviceTier>('mid');
   const [failed, setFailed] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
+  /** A laptop's or a desktop's frame (WIDE_MID_DPR): read once, at mount. */
+  const [wideFrame] = useState(() => typeof window !== 'undefined' && window.innerWidth >= WIDE_FRAME_PX);
 
   // THE JOURNEY, and the one thing about it that has to live in React state.
   //
@@ -3488,7 +3651,14 @@ export function WorldCanvas() {
           shadows={tier === 'low' ? false : { type: THREE.PCFSoftShadowMap }}
           // A 3x phone screen renders 9x the pixels for no perceptible gain on
           // a scene this dark, and it is the single biggest mobile cost.
-          dpr={[1, tier === 'high' ? 2 : 1.5]}
+          // AND A WIDE FRAME BELOW THE HIGH TIER STOPS AT 1.25 (WIDE_MID_DPR):
+          // the concept's valley (2026-10-27) costs an integrated card a third
+          // more a frame, and a laptop at 150% (a 2880x1620 buffer) measured
+          // 34.5 ms on the cover against 24.3 before it, past the 33 ms that
+          // demotes a device to the low tier (no shadows, no lens). At 1.25
+          // it is the old frame's cost; a card that holds 18 ms is promoted
+          // to the high tier and its full density as before.
+          dpr={[1, tier === 'high' ? 2 : wideFrame ? WIDE_MID_DPR : 1.5]}
           // Measured by LAYOUT size, not the bounding box. The door passage
           // once scaled this frame with a CSS transform (to hide the soft edge
           // of a blur it no longer has), and a bounding box includes

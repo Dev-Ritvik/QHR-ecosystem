@@ -49,6 +49,22 @@ describe('the frangipani petals', () => {
     );
   });
 
+  it('the grown trees are foliage, the coconut sways as a frond, the barks stay bark', () => {
+    // (the names build_estate_v7.py's grown_names gives grow_trees_v7.py's
+    // species; fix_estate_materials_v7.py cuts the same names out)
+    const grown = ['MAT_Leaves_Globe', 'MAT_Leaves_Mango_Grown', 'MAT_Leaves_Banyan', 'MAT_Leaves_Tamarind'];
+    const root = estate([...grown, 'MAT_Palm_Frond_Coconut', 'MAT_Bark_Coconut', 'MAT_Bark_Banyan']);
+    expect(dressFoliage(root)).toBe(5);
+    for (const n of grown) {
+      expect(material(root, n).defines).toHaveProperty('ESTATE_FOLIAGE');
+      expect(material(root, n).defines).not.toHaveProperty('FOLIAGE_FROND');
+    }
+    expect(material(root, 'MAT_Palm_Frond_Coconut').defines).toHaveProperty('FOLIAGE_FROND');
+    for (const n of ['MAT_Bark_Coconut', 'MAT_Bark_Banyan']) {
+      expect(material(root, n).defines ?? {}).not.toHaveProperty('ESTATE_FOLIAGE');
+    }
+  });
+
   it('a leaf keeps the full lift; a petal takes less than it', () => {
     // Outside the petal branch the tint is the leaf's lift, unchanged.
     expect(FOLIAGE_TINT).toMatch(new RegExp(`#else\\s+float lift = ${FOLIAGE_GAIN.toFixed(2)};`));

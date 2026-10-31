@@ -19,7 +19,9 @@ doc = json.load(open(path))
 changed = []
 for m in doc.get("materials", []):
     name = m.get("name", "")
-    if name == "MAT_Palm_Frond" or name.startswith("MAT_Leaves_"):
+    # (MAT_Palm_Frond_* too: the grown coconut's fronds, grow_trees_v7.py,
+    # fell through to "opaque" below and drew the atlas's black ground)
+    if name.startswith("MAT_Palm_Frond") or name.startswith("MAT_Leaves_"):
         m["alphaMode"] = "MASK"
         m["alphaCutoff"] = 0.5
         m["doubleSided"] = True

@@ -21,6 +21,8 @@
 //   Small on purpose — this is an estate on a still evening, not a storm.
 
 import * as THREE from 'three';
+import { layoutAir } from './exteriorLayout';
+import { journeyState } from './journey';
 import { filmState } from './FilmGrade';
 import { ld } from './lookdev';
 
@@ -34,6 +36,8 @@ export const foliageUniforms = {
   /** The light through the leaves, as a share of TRANSLUCENCY: eased down
    *  with the film's evening (followSun). */
   uGlow: { value: 1 },
+  /** The sun on the crowns' tops, over the layout only (LAYOUT_TOP). */
+  uTop: { value: 0 },
   /** The bougainvillea's light (BLOOM_LIGHT): of the sun, and of the shade. */
   uBloomSun: { value: 1 as number },
   uBloomShade: { value: 1 as number },
@@ -255,6 +259,11 @@ export const FOLIAGE_TRANSLUCENCY = /* glsl */ `
   float wrap = 0.25 * max(0.0, -dot(normal, sunV));
   vec3 through = diffuseColor.rgb * vec3(1.0, 1.12, 0.55);
   reflectedLight.directDiffuse += through * uFoliageSunColor * ${TRANSLUCENCY.toFixed(3)} * uFoliageGlow * (back + wrap);
+  // Over the layout, the middle distance's crowns in the sun on their tops as well
+  // (their shading normals are bent out of the crown: up, at its top). Not the
+  // near ones: the frame's foot and left stay dark, and the words stand there.
+  float crownTop = max(0.0, dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)));
+  reflectedLight.directDiffuse += through * uFoliageSunColor * uFoliageTop * crownTop * crownTop * smoothstep(105.0, 170.0, length(vViewPosition));
   // The bougainvillea's two lights, drawn toward each other (BLOOM_LIGHT).
   #ifdef FOLIAGE_BLOOM
     reflectedLight.directDiffuse *= uBloomSun;
@@ -291,6 +300,7 @@ export function dressFoliage(root: THREE.Object3D): number {
         shader.uniforms.uFoliageSunDir = foliageUniforms.uSunDir;
         shader.uniforms.uFoliageSunColor = foliageUniforms.uSunColor;
         shader.uniforms.uFoliageGlow = foliageUniforms.uGlow;
+        shader.uniforms.uFoliageTop = foliageUniforms.uTop;
         shader.uniforms.uFoliagePetal = foliageUniforms.uPetal;
         shader.uniforms.uBloomSun = foliageUniforms.uBloomSun;
         shader.uniforms.uBloomShade = foliageUniforms.uBloomShade;
@@ -300,7 +310,7 @@ export function dressFoliage(root: THREE.Object3D): number {
         shader.fragmentShader = shader.fragmentShader
           .replace(
             'void main() {',
-            'uniform vec3 uFoliageSunDir;\nuniform vec3 uFoliageSunColor;\nuniform float uFoliageGlow;\nuniform float uFoliagePetal;\nuniform float uBloomSun;\nuniform float uBloomShade;\nvarying float vFoliageSeed;\nvoid main() {',
+            'uniform vec3 uFoliageSunDir;\nuniform vec3 uFoliageSunColor;\nuniform float uFoliageGlow;\nuniform float uFoliageTop;\nuniform float uFoliagePetal;\nuniform float uBloomSun;\nuniform float uBloomShade;\nvarying float vFoliageSeed;\nvoid main() {',
           )
           .replace('#include <color_fragment>', FOLIAGE_TINT)
           .replace('#include <alphatest_fragment>', FOLIAGE_COVERAGE)
@@ -313,13 +323,22 @@ export function dressFoliage(root: THREE.Object3D): number {
   return done.size;
 }
 
+/** The low sun through the crowns over the layout, as a multiple: the founder's
+ *  frame lights its middle distance from behind, yellow-green on dark. */
+const LAYOUT_GLOW = 1.6;
+/** And on the crowns' tops: his middle distance is lit from above as well, where
+ *  a sun this low lights a crown only on its far side. */
+const LAYOUT_TOP = 0.28;
+
 const toSun = new THREE.Vector3();
 const at = new THREE.Vector3();
 
 /** Follow the key light: its direction and its colour times intensity. */
 export function followSun(light: THREE.DirectionalLight | null, dt: number): void {
   foliageUniforms.uTime.value += dt;
-  foliageUniforms.uGlow.value = 1 - GLOW_EVENING_LOSS * filmState.evening;
+  const layout = layoutAir(journeyState.leg, journeyState.legProgress, !!journeyState.film);
+  foliageUniforms.uGlow.value = (1 - GLOW_EVENING_LOSS * filmState.evening) * (1 + (ld('layoutGlow', LAYOUT_GLOW) - 1) * layout);
+  foliageUniforms.uTop.value = ld('layoutTop', LAYOUT_TOP) * layout;
   foliageUniforms.uBloomSun.value = ld('bloomSun', BLOOM_LIGHT.sun);
   foliageUniforms.uBloomShade.value = ld('bloomShade', BLOOM_LIGHT.shade);
   foliageUniforms.uPalmThrough.value = ld('palmThrough', PALM_LIGHT.through);

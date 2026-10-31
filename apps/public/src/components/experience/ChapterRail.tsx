@@ -48,6 +48,14 @@
 // movement brings it back, saying where you are as you go. It is still there to
 // be touched: a touch where it stands opens the names, as the first touch
 // always has, and that brings it back too. A wide frame keeps it in view.
+//
+// ON THE FILM, A SURVEYOR'S SCALE (the concept the user asked to be built 1:1,
+// 2026-10-27: "01 / CHAPTER" over a ruled line, a figure at every mark, the
+// current one lit). The chapter's number stands over the rail; each dot is a
+// mark on a ruled scale with its figure beside it, the camera's height over
+// the ground at that chapter (railElevation.ts); the names still come out on
+// hover, in the figures' place. The chapter numerals went in the build of
+// 2026-10-04 and are back at the user's word. A reading page keeps its dots.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -96,6 +104,21 @@ export function ChapterRail(props: FilmProps | PageProps) {
   const film = props.mode === 'film';
   const filmStops = film ? props.stops : null;
   const pageKey = !film ? props.pageKey : undefined;
+  /** The scale's figures (the film only): the camera's height at each stop. */
+  const [figures, setFigures] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!filmStops) return;
+    let gone = false;
+    const stations = filmStops.filter((s) => /^station-\d+$/.test(s.id)).length;
+    // (RAIL_END is the page's end: the film's last frame.)
+    const places = filmStops.map((s) => (s.at === RAIL_END ? 1 : s.at));
+    void import('./railElevation').then(({ filmElevations, elevationLabel }) => {
+      if (!gone) setFigures(filmElevations(places, stations).map(elevationLabel));
+    });
+    return () => {
+      gone = true;
+    };
+  }, [filmStops]);
 
   // ── the stops, resolved against this document ───────────────────────────
   const resolve = useCallback(() => {
@@ -294,14 +317,34 @@ export function ChapterRail(props: FilmProps | PageProps) {
       style={{ ['--rail-n' as string]: stops.length }}
     >
       <span aria-hidden className="rail-shade" />
+      {film ? (
+        <span aria-hidden className="rail-chapter">
+          <span className="rail-chapter-head">
+            <span className="rail-chapter-n">{String(current + 1).padStart(2, '0')}</span> /
+          </span>
+          {/* The cover's word is "Chapter" (the concept built 1:1,
+              2026-10-27); every other chapter's is its number and its name,
+              as the founder's layout frame has it ("03 / Layout",
+              2026-10-28). */}
+          <span className="rail-chapter-word">
+            {current === 0 ? 'Chapter' : `${String(current + 1).padStart(2, '0')} / ${stops[current]?.label ?? ''}`}
+          </span>
+        </span>
+      ) : null}
       <span aria-hidden className="rail-track">
         <i />
       </span>
+      {film ? <span aria-hidden className="rail-ruler" /> : null}
       <ol className="rail-list">
         {stops.map((s, i) => (
           <li key={s.id} className="rail-item" data-state={i < current ? 'past' : i === current ? 'current' : 'ahead'}>
             <a href={`#${s.id}`} aria-current={i === current ? 'step' : undefined} onClick={(e) => go(i, e)}>
               <span className="rail-label">{s.label}</span>
+              {film ? (
+                <span aria-hidden className={'rail-figure' + (figures ? ' is-in' : '')}>
+                  {figures?.[i] ?? ''}
+                </span>
+              ) : null}
               <span aria-hidden className="rail-dot" />
             </a>
           </li>

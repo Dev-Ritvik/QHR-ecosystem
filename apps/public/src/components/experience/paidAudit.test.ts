@@ -78,10 +78,15 @@ describe("an upright screen's lens, outside", () => {
     expect(mid.widen).toBeLessThan(UPRIGHT_LENS.hero.widen);
   });
 
-  it('is none from the crane on, and never steps', () => {
-    const crane = BEATS.find((b) => b.id === 'crane')!;
-    expect(uprightLensAt(crane.at)).toEqual({ widen: 1, offset: 1 });
-    expect(uprightLensAt(FILM_SHARE)).toEqual({ widen: 1, offset: 1 });
+  it('is none from the descent on, and never steps', () => {
+    // (the crane, where it was none from, is a waypoint of the founder's sweep
+    // now, 2026-10-28: the layout has an upright lens of its own, and the
+    // descent after it is the next beat with none)
+    const layout = BEATS.find((b) => b.id === 'layout')!;
+    const descent = BEATS.find((b) => b.id === 'descent')!;
+    expect(layout.at).toBe(FILM_SHARE);
+    expect(uprightLensAt(FILM_SHARE)).toEqual(UPRIGHT_LENS.layout);
+    expect(uprightLensAt(descent.at)).toEqual({ widen: 1, offset: 1 });
     expect(uprightLensAt(1)).toEqual({ widen: 1, offset: 1 });
     let last = uprightLensAt(0);
     for (let s = 0.005; s <= 1; s += 0.005) {
