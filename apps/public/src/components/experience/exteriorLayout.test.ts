@@ -12,7 +12,6 @@ import { LAYOUTS } from '@/lib/layouts';
 import {
   LAYOUT,
   LAYOUT_LABELS,
-  LAYOUT_MARKS,
   inJunction,
   layoutBlocks,
   layoutAir,
@@ -185,7 +184,7 @@ describe('the air and the land over the chapter', () => {
     expect(layout).toContain('own.userData.leave = true;');
     expect(layout).toContain('mesh.castShadow = false;');
     expect(read('./exteriorHaze.ts')).toContain('#ifdef HAZE_LEAVE');
-    expect(read('./ExteriorModel.tsx')).toContain('for (const m of fades.current.leaving) m.visible = air < 1;');
+    expect(read('./ExteriorModel.tsx')).toContain('for (const m of fades.current.leaving) m.visible = air < 1 || (m.userData.back === true && back > 0);');
     // and the air is only up over the chapter
     expect(layoutAir('exterior', 0.2)).toBe(0);
     expect(layoutAir('exterior', FILM_SHARE)).toBe(1);
@@ -200,8 +199,8 @@ describe('the air and the land over the chapter', () => {
     expect(haze).toContain("const roof = mat.name === 'MAT_Jungle_Canopy';");
     expect(haze).toContain('const cut = ground || roof ||');
     for (const m of haze.matchAll(/discard;/g)) {
-      const before = haze.slice(Math.max(0, m.index - 400), m.index);
-      expect(before).toMatch(/#ifdef HAZE_(CUT|DISSOLVE|ARRIVE|LEAVE)/);
+      const before = haze.slice(Math.max(0, m.index - 1200), m.index);
+      expect(before).toMatch(/#ifdef HAZE_(CUT|DISSOLVE|ARRIVE|FAR|LEAVE)/);
     }
   });
 });
@@ -234,12 +233,18 @@ describe('the drawing', () => {
     expect(layoutOn('exterior', leg(holdings.copy.in[0]))).toBeGreaterThan(0.5);
   });
 
-  it('labels every word it lays on the ground, and stands every cross over a place', () => {
+  it('stands no crosshair anywhere: not on the ground, by its status, or after its cue', () => {
+    // (the founder's frame had them; the user took them off the site, 2026-11-01)
+    expect(read('../../app/(site)/(experience)/site-home/page.tsx')).not.toMatch(/layout-mark|layout-hud-mark/);
+    expect(read('../../app/globals.css')).not.toMatch(/layout-mark|layout-hud-mark|start-cue-crosshair|start-cue-ticks/);
+    expect(read('./StartCue.tsx')).not.toContain('start-cue-crosshair');
+    expect(read('./exteriorLayout.ts')).not.toMatch(/LAYOUT_MARKS|data-layout-mark/);
+  });
+
+  it('labels every word it lays on the ground', () => {
     const page = readFileSync(join(__dirname, '../../app/(site)/(experience)/site-home/page.tsx'), 'utf8');
     const labels = [...page.matchAll(/data-layout-label="(\d+)"/g)].map((m) => Number(m[1]));
     expect(labels.sort((a, b) => a - b)).toEqual(LAYOUT_LABELS.map((_, i) => i));
-    const marks = [...page.matchAll(/data-layout-mark="(\d+)"/g)].map((m) => Number(m[1]));
-    expect(marks.sort((a, b) => a - b)).toEqual(LAYOUT_MARKS.map((_, i) => i));
     // the words are the drawing's, told to a screen reader in the chapter's own
     expect(page).toContain('<div aria-hidden className="layout-sheet">');
     // and say only what the sheets say: no plot of 12,500 sq ft, no approval

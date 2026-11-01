@@ -34,6 +34,8 @@
 // mush, which reads as low resolution even when the texture is not.
 
 import * as THREE from 'three';
+import { GROUND_FOOT, GROUND_PARS, groundUniforms } from './exteriorGround';
+import { ld } from './lookdev';
 
 /** Mowing band width, metres (a ride-on mower's cut). */
 export const BAND_M = 1.6;
@@ -57,12 +59,27 @@ export const BAND_AMP = 0.085;
  */
 export const COMPOUND = { x: 72, z0: -84, z1: 214, fade: 10 } as const;
 
-/** The concept's lawn (built 1:1, 2026-10-27): how much of the sward's colour
- *  is kept, and the warm olive it is printed through. */
-export const LAWN_CONCEPT = { sat: 0.62, tint: [0.46, 0.42, 0.3] as const } as const;
-/** And the forest's floor past the wall: reached over `fade` metres, a dark
- *  leaf-litter brown-olive. */
-export const FOREST_FLOOR = { fade: 14, tint: [0.62, 0.55, 0.36] as const } as const;
+/**
+ * THE LAWN (the concept built 1:1, 2026-10-27, then the brief of 2026-11-01: "the
+ * bare, uniform brown ground ... immediately breaks immersion"): how much of the
+ * sward's colour is kept, and what it is printed through. It was { sat 0.62, tint
+ * 0.46, 0.42, 0.3 }: under the film's warm low light that is a dead brown from the
+ * terrace to the wall. A kept lawn is green at the end of a dry day, but only just:
+ * the client asked for less saturated green (2026-10-04), so this is an olive that
+ * has been watered, and not a golf course.
+ */
+export const LAWN_CONCEPT = { sat: 0.95, tint: [0.4, 0.55, 0.2] as const } as const;
+/**
+ * And the forest's floor past the wall, reached over `fade` metres: not one brown,
+ * which from the air read as bare earth beyond a green lawn, but a shaded understorey
+ * of moss and fern (`green`) with leaf litter through it (`litter`), the two laid out
+ * by a slow noise.
+ */
+export const FOREST_FLOOR = {
+  fade: 14,
+  green: [0.42, 0.56, 0.26] as const,
+  litter: [0.62, 0.52, 0.32] as const,
+} as const;
 
 /**
  * THE SWARD'S OWN GRAIN, at three sizes: [features a metre across the cut,
@@ -87,7 +104,28 @@ export const SWARD = [
 /** The lawn texture's tile, metres (tools/blender/build_estate_v7.py TILE). */
 export const LAWN_TILE_M = 6.0;
 
+/**
+ * THE LOW SUN ON A LAWN (the user's reference of 2026-11-01: the sun's patches on the
+ * grass bright against its shade). A sun fourteen degrees up gives a flat plane a quarter
+ * of its light, and that is what the mesh is. But a lawn is not flat: it is blades standing
+ * up, and a blade takes that sun nearly square on. So its direct light is more than the
+ * plane's, by the hour; given back with the evening, when there is no sun to speak of.
+ */
+export const LAWN_SUN = 1.9;
+/** On a tier that draws no shadows the whole lawn has the sun, and at LAWN_SUN it is a pale
+ *  wash from the terrace to the wall. */
+export const LAWN_SUN_UNSHADOWED = 1.2;
+export const lawnUniforms = { uLawnSun: { value: LAWN_SUN as number } };
+/** Once a frame. */
+export function followLawn(evening: number, noon = 0, shadows = true): void {
+  const sun = shadows ? ld('lawnSun', LAWN_SUN) : LAWN_SUN_UNSHADOWED;
+  // (and the visitor's noon, whose high sun lights a plane and a blade alike)
+  lawnUniforms.uLawnSun.value = 1 + (sun - 1) * (1 - Math.min(1, evening)) * (1 - noon);
+}
+
 const LAWN_RE = /^MAT_Lawn/;
+/** Where the lawn's fields read the world (exteriorGrass.ts stands a blade's on its foot). */
+export const LAWN_WORLD_LINE = 'vLawnWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;';
 /** The gravel scan's tile, metres (build_estate_v7.py TILE, MAT_Gravel). */
 export const GRAVEL_TILE_M = 3.0;
 const GRAVEL_RE = /^MAT_Gravel/;
@@ -164,9 +202,13 @@ export const LAWN_MAP_FRAGMENT = /* glsl */ `
     sampledDiffuseColor.rgb = mix(vec3(dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), sampledDiffuseColor.rgb, ${LAWN_CONCEPT.sat.toFixed(2)})
                             * vec3(${LAWN_CONCEPT.tint.map((v) => v.toFixed(2)).join(', ')});
     float forestFloor = smoothstep(0.0, ${FOREST_FLOOR.fade.toFixed(1)}, outside);
-    sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb,
-      vec3(dot(sampledDiffuseColor.rgb, vec3(0.3, 0.5, 0.2))) * vec3(${FOREST_FLOOR.tint.map((v) => v.toFixed(2)).join(', ')}),
-      forestFloor);
+    if (forestFloor > 0.0) {
+      float litter = smoothstep(-0.2, 0.5, 0.65 * lawnNoise(vLawnWorld.xz / 13.0 + vec2(5.3, 2.1)) + 0.45 * lawnNoise(vLawnWorld.xz / 41.0 + vec2(1.7, 8.8)));
+      vec3 understorey = mix(vec3(${FOREST_FLOOR.green.map((v) => v.toFixed(2)).join(', ')}), vec3(${FOREST_FLOOR.litter.map((v) => v.toFixed(2)).join(', ')}), litter);
+      sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb,
+        vec3(dot(sampledDiffuseColor.rgb, vec3(0.3, 0.5, 0.2))) * understorey,
+        forestFloor);
+    }
     // The sward's grain (SWARD): tufts, the lie of the blades, the blades.
     {
       vec2 g = vLawnWorld.xz;
@@ -183,6 +225,7 @@ ${SWARD_GLSL}
     sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb,
       vec3(dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.04, 1.02, 0.9), 0.3 * graze);
     sampledDiffuseColor.rgb *= 1.0 + 0.22 * graze;
+${GROUND_FOOT}
   }
   diffuseColor *= sampledDiffuseColor;
 #endif
@@ -230,16 +273,23 @@ export function dressLawn(root: THREE.Object3D): number {
       const prev = mat.onBeforeCompile;
       mat.onBeforeCompile = (shader, renderer) => {
         prev.call(mat, shader, renderer);
+        if (!gravel) Object.assign(shader.uniforms, groundUniforms, lawnUniforms);
         shader.vertexShader = shader.vertexShader
           .replace('void main() {', 'varying vec3 vLawnWorld;\nvoid main() {')
           .replace(
             '#include <begin_vertex>',
             `#include <begin_vertex>
-             vLawnWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+             ${LAWN_WORLD_LINE}`,
           );
         shader.fragmentShader = shader.fragmentShader
-          .replace('void main() {', `varying vec3 vLawnWorld;\n${NOISE}\nvoid main() {`)
+          .replace('void main() {', `varying vec3 vLawnWorld;\n${gravel ? '' : `${GROUND_PARS}uniform float uLawnSun;\n`}${NOISE}\nvoid main() {`)
           .replace('#include <map_fragment>', gravel ? GRAVEL_MAP_FRAGMENT : LAWN_MAP_FRAGMENT);
+        if (!gravel) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <lights_fragment_end>',
+            '#include <lights_fragment_end>\n  reflectedLight.directDiffuse *= uLawnSun;',
+          );
+        }
       };
       mat.customProgramCacheKey = () => (gravel ? 'estate-gravel' : 'estate-lawn');
       mat.needsUpdate = true;

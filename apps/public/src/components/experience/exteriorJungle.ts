@@ -126,6 +126,8 @@ export const CANOPY = {
   rings: 64,
   segments: 384,
   tile: 2.6,
+  /** How far out, of its run to `outer`, it begins to fall and has fallen; and how much. */
+  fall: [0.02, 0.3, 0.72] as const,
 } as const;
 
 /** A deterministic stream of numbers in [0, 1) (mulberry32). */
@@ -218,6 +220,8 @@ function beltStems(root: THREE.Object3D): Xz[] {
 function arriving(from: THREE.Material): THREE.Material {
   const own = from.clone();
   own.userData.arrive = true;
+  // (it stands far off, against the mist: exteriorHaze.ts, HAZE_FOG)
+  own.userData.far = true;
   return own;
 }
 
@@ -334,7 +338,13 @@ export function canopyGeometry(): THREE.BufferGeometry {
       // the forest's edge comes up out of the ground over `edge` metres
       const along = Math.hypot(x - ix, z - iz);
       const rise = Math.min(1, along / edge);
-      const y = h * (rise * rise * (3 - 2 * rise));
+      // AND IT GOES DOWN AS IT GOES AWAY (the user's reference of 2026-11-01). Thirty
+      // metres of roof at its full height stands over the horizon from every height the
+      // film has, and these rings are tens of metres apart out here: with the air cleared
+      // it stood against the sky as a row of black polygons. Under the eye, the far
+      // forest is a floor going off into the air, and the hills are what meets the sky.
+      const fall = Math.min(1, Math.max(0, (s - CANOPY.fall[0]) / (CANOPY.fall[1] - CANOPY.fall[0])));
+      const y = h * (rise * rise * (3 - 2 * rise)) * (1 - CANOPY.fall[2] * fall * fall * (3 - 2 * fall));
       pos.push(x, y, z);
       // a crown's own green, darker in the hollows between crowns
       const hollow = Math.min(1, Math.max(0, (y - CANOPY.height[0] * 0.55) / (CANOPY.height[1] * 0.5)));

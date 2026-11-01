@@ -115,26 +115,26 @@ const toLinear = (v: number) => {
  *  is what the band just under the hills' feet holds. */
 export const HAZE_BAND_DEG = [-1.2, 0.8] as const;
 
-/**
- * Read the sky's foot from the equirectangular plate (its image, as loaded).
- * Returns false where there is no canvas to read it with; the fog then keeps
- * its authored colours.
- */
-export function readSkyHaze(image: CanvasImageSource): boolean {
-  if (typeof document === 'undefined') return false;
+/** A plate as the air reads it: its small sky, and its foot by bearing. */
+type HourAir = { dome: Uint8Array; table: Float32Array };
+
+/** Read a plate's image into its small sky and its foot's table. */
+function readAir(image: CanvasImageSource): HourAir | null {
+  if (typeof document === 'undefined') return null;
   const W = 288;
   const H = 144;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const g = canvas.getContext('2d', { willReadFrequently: true });
-  if (!g) return false;
+  if (!g) return null;
   try {
     // (a fourteenth of the plate's size: averaged, not point-sampled)
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
     g.drawImage(image, 0, 0, W, H);
     const px = g.getImageData(0, 0, W, H).data;
+    const air: HourAir = { dome: new Uint8Array(domeData.length), table: new Float32Array(table.length) };
     // The small sky: each texel the mean of a 2 x 2 block, in linear light;
     // the canvas's rows run down from the zenith, the texture's up.
     for (let y = 0; y < DOME_H; y += 1) {
@@ -151,13 +151,12 @@ export function readSkyHaze(image: CanvasImageSource): boolean {
           }
         }
         const o = ((DOME_H - 1 - y) * DOME_W + x) * 4;
-        domeData[o] = toSRGB(r / 4);
-        domeData[o + 1] = toSRGB(gr / 4);
-        domeData[o + 2] = toSRGB(bl / 4);
-        domeData[o + 3] = 255;
+        air.dome[o] = toSRGB(r / 4);
+        air.dome[o + 1] = toSRGB(gr / 4);
+        air.dome[o + 2] = toSRGB(bl / 4);
+        air.dome[o + 3] = 255;
       }
     }
-    domeReady = true;
     // v = 0.5 is the horizon; an image row counts down from the zenith.
     const y0 = Math.floor(H * (0.5 - HAZE_BAND_DEG[1] / 180));
     const y1 = Math.max(y0 + 1, Math.floor(H * (0.5 - HAZE_BAND_DEG[0] / 180)));
@@ -176,16 +175,83 @@ export function readSkyHaze(image: CanvasImageSource): boolean {
           n += 1;
         }
       }
-      table[b * 3] = r / n;
-      table[b * 3 + 1] = gr / n;
-      table[b * 3 + 2] = bl / n;
+      air.table[b * 3] = r / n;
+      air.table[b * 3 + 1] = gr / n;
+      air.table[b * 3 + 2] = bl / n;
     }
-    writeRing();
-    ready = true;
+    return air;
   } catch {
-    ready = false;
+    return null;
   }
-  return ready;
+}
+
+/**
+ * THE AIR GOES WITH THE SKY (filmHours.ts). Each plate is read once as it
+ * arrives, and the air the estate is hazed with is the three mixed, each time
+ * the hour moves: the far land keeps going into the sky behind it, whichever
+ * sky that is, at every point of the way from one to the next.
+ */
+const hourAir: { day: HourAir | null; twilight: HourAir | null; night: HourAir | null; noon: HourAir | null } = {
+  day: null,
+  twilight: null,
+  night: null,
+  noon: null,
+};
+let airAt = { e: 0, n: 0, noon: 0 };
+
+/**
+ * Read the sky's foot from the equirectangular plate (its image, as loaded).
+ * Returns false where there is no canvas to read it with; the fog then keeps
+ * its authored colours.
+ */
+export function readSkyHaze(image: CanvasImageSource): boolean {
+  const air = readAir(image);
+  if (!air) {
+    ready = false;
+    return false;
+  }
+  hourAir.day = air;
+  domeReady = true;
+  ready = true;
+  airAt = { e: -1, n: -1, noon: -1 };
+  followSkyHour(0, 0);
+  return true;
+}
+
+/** And the other hours' plates, as they arrive (SkyHours.tsx). */
+export function readSkyHour(hour: 'twilight' | 'night' | 'noon', image: CanvasImageSource): boolean {
+  const air = readAir(image);
+  if (!air) return false;
+  hourAir[hour] = air;
+  airAt = { e: -1, n: -1, noon: -1 };
+  return true;
+}
+
+/**
+ * The air at this hour: the plates mixed, into the small sky and the foot's
+ * table. Only when the hour has moved: forty kilobytes of texture to send.
+ */
+export function followSkyHour(e: number, n: number, noon = 0): void {
+  const { day, twilight, night, noon: high } = hourAir;
+  if (!day) return;
+  if (Math.abs(e - airAt.e) < 0.002 && Math.abs(n - airAt.n) < 0.002 && Math.abs(noon - airAt.noon) < 0.002) return;
+  airAt = { e, n, noon };
+  const tw = twilight && night ? e * (1 - n) : 0;
+  const ni = twilight && night ? e * n : 0;
+  const hi = high ? noon * (1 - e) : 0;
+  const d = 1 - tw - ni - hi;
+  const dd = day.dome;
+  const td = twilight?.dome ?? dd;
+  const nd = night?.dome ?? dd;
+  const hd = high?.dome ?? dd;
+  for (let i = 0; i < domeData.length; i += 1) domeData[i] = d * dd[i] + tw * td[i] + ni * nd[i] + hi * hd[i] + 0.5;
+  const dt = day.table;
+  const tt = twilight?.table ?? dt;
+  const nt = night?.table ?? dt;
+  const ht = high?.table ?? dt;
+  for (let i = 0; i < table.length; i += 1) table[i] = d * dt[i] + tw * tt[i] + ni * nt[i] + hi * ht[i];
+  writeRing();
+  if (dome) dome.needsUpdate = true;
 }
 
 /** For tests: set the table directly (linear RGB per bin). */

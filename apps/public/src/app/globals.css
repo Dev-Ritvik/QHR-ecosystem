@@ -899,9 +899,8 @@ optgroup {
 .start-cue:focus-visible .start-cue-rose {
   transform: rotate(45deg);
 }
-/* THE LAYOUT'S CUE (the founder's frame, 2026-10-28: "START HERE with active
-   survey crosshairs"): a mouse before the words, its wheel turning, and a
-   surveyor's crosshair at the rule's end, its ring's ticks slowly turning. */
+/* THE LAYOUT'S CUE (the founder's frame, 2026-10-28): a mouse before the words,
+   its wheel turning. */
 .start-cue-mouse {
   display: block;
   width: calc(var(--bl) * 3.4);
@@ -926,23 +925,6 @@ optgroup {
     opacity: 0;
   }
 }
-.start-cue-crosshair {
-  display: block;
-  width: calc(var(--bl) * 10);
-  height: calc(var(--bl) * 10);
-  margin-left: calc(var(--bl) * -3);
-  overflow: visible;
-  filter: drop-shadow(0 0 3px rgba(10, 8, 6, 0.55));
-}
-.start-cue-ticks {
-  transform-origin: 0 0;
-  animation: cueticks 14s linear infinite;
-}
-@keyframes cueticks {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .start-cue-line i {
     animation: none;
@@ -952,8 +934,7 @@ optgroup {
   .start-cue-rose {
     transition: none;
   }
-  .start-cue-wheel,
-  .start-cue-ticks {
+  .start-cue-wheel {
     animation: none;
   }
 }
@@ -2106,6 +2087,92 @@ html[data-menu-open] [data-film] {
     display: none;
   }
 }
+/* THE HOUR (components/experience/HourChoice.tsx): the coords' small voice, a line
+   under the one the estate is held at, and gone when the film has gone indoors. Its
+   ground is the corner of the lens going down (the header's band has let go by here, and
+   the hills are behind it: 1.9 to 3.3:1 on grounds of 119 to 165, measured). No panel and
+   no blur: the same soft density the rail stands on, falling away from the frame's edge. */
+.film-hours-slot {
+  display: flex;
+  align-items: center;
+}
+.hour-choice {
+  position: relative;
+  display: inline-flex;
+  gap: max(10px, calc(14 * var(--u)));
+  transition: opacity 0.4s linear, visibility 0s linear 0s;
+}
+.hour-choice::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: calc(-1 * max(52px, calc(66 * var(--u))));
+  bottom: calc(-1 * max(52px, calc(66 * var(--u))));
+  left: calc(-1 * max(110px, calc(150 * var(--u))));
+  right: calc(-1 * var(--edge));
+  background: radial-gradient(
+    ellipse farthest-side at 100% 50%,
+    rgba(8, 6, 4, 0.54) 0%,
+    rgba(8, 6, 4, 0.5) 56%,
+    rgba(8, 6, 4, 0.3) 74%,
+    rgba(8, 6, 4, 0.1) 90%,
+    rgba(8, 6, 4, 0) 100%
+  );
+  pointer-events: none;
+  transition: opacity 0.6s linear;
+}
+/* (not on a phone on its side, where the band's fall is over before the frame's a third
+   down, and this row stands at its foot) */
+@media (min-height: 500px) {
+  .hour-choice.is-in-sky::before {
+    opacity: 0.5;
+  }
+}
+/* On a phone the title is close under it: the two controls stand on one line, inside the
+   header's band, which reaches further down an upright frame and is ground enough. */
+@media (max-width: 767px) {
+  .film-locator {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .film-hours-slot {
+    order: -1;
+  }
+  .hour-choice::before {
+    display: none;
+  }
+}
+.hour-choice.is-away {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.4s linear, visibility 0s linear 0.4s;
+}
+.hour-choice-button {
+  position: relative;
+  min-height: 0;
+  padding: 0.3em 0;
+  font-family: var(--font-text);
+  font-size: var(--step--2);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  color: rgba(250, 246, 238, 0.97);
+  text-shadow: 0 0 8px rgba(10, 8, 6, 0.55), 0 0 1px rgba(10, 8, 6, 0.65);
+  /* the line under the hour it is held at (not a pseudo-element: .tap-target's ::after
+     is the 44 px it can be pressed in) */
+  background: linear-gradient(currentColor, currentColor) center bottom / 0 1px no-repeat;
+  border: 0;
+  transition: color 0.2s linear, background-size 0.25s var(--ease);
+}
+.hour-choice-button:hover,
+.hour-choice-button:focus-visible {
+  color: rgba(255, 252, 244, 1);
+}
+.hour-choice-button[aria-pressed='true'] {
+  color: rgba(255, 252, 244, 1);
+  background-size: 100% 1px;
+}
 
 /* ---------------------------------------------------------------------------
    THE RAIL (components/experience/ChapterRail.tsx): where you are, and the way
@@ -2349,6 +2416,30 @@ html[data-menu-open] .rail,
   }
 }
 
+/* THE SCALE'S OWN GROUND, OVER THE ESTATE (the user's reference of 2026-11-01: "the
+   right-hand scroll ruler ... sits over subtle dark foliage and gradient contrast so the
+   telemetry numbers remain effortless to read"). A density, as the lens wears under the
+   copy: not a blur and not a panel, gone before the picture's subject, and off once the
+   film has gone indoors (`data-outside`, ChapterRail), where the rooms stay bright. */
+@media (min-width: 768px) {
+  .rail[data-rail-mode='film']::before {
+    content: '';
+    position: absolute;
+    top: calc(var(--rail-pitch) * -5);
+    bottom: calc(var(--rail-pitch) * -5);
+    right: calc(var(--edge, 1.5rem) * -1);
+    width: max(210px, calc(280 * var(--u, 1px)));
+    background: linear-gradient(to left, rgba(8, 6, 4, 0.5) 0%, rgba(8, 6, 4, 0.34) 42%, rgba(8, 6, 4, 0) 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 78%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 78%, transparent 100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s linear;
+  }
+  .rail[data-rail-mode='film'][data-outside]::before {
+    opacity: 1;
+  }
+}
 /* ON THE FILM, A SURVEYOR'S SCALE (ChapterRail; the concept built 1:1 at the
    user's word, 2026-10-27). The chapter's number over the rail, "01 /" in the
    display face and the word under it in the film's capitals; the line ruled,
@@ -2573,12 +2664,11 @@ html[data-menu-open] .rail,
 }
 
 /* THE LAYOUT'S SURVEY (site-home, chapter three; exteriorLayout.ts,
-   LayoutMarks stands each word over its place along the line it names, each
-   crosshair over its point, and fades all of it with the drawing on the
-   ground). The founder's frame (2026-10-28): the film's small capitals in
-   ivory along the roads and the blocks, a block's title over its line of
-   figures in brackets, thin crosses on the ground, and the chapter's status
-   centred at the frame's foot over a rule. */
+   LayoutMarks stands each word over its place along the line it names, and
+   fades all of it with the drawing on the ground). The founder's frame
+   (2026-10-28): the film's small capitals in ivory along the roads and the
+   blocks, a block's title over its line of figures in brackets, and the
+   chapter's status centred at the frame's foot over a rule. */
 .layout-sheet {
   position: fixed;
   inset: 0;
@@ -2624,23 +2714,6 @@ html[data-menu-open] .rail,
 .layout-label-far b {
   font-size: max(12px, calc(15 * var(--u, 1px)));
 }
-.layout-mark {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: max(22px, calc(28 * var(--u, 1px)));
-  height: max(22px, calc(28 * var(--u, 1px)));
-  margin: calc(max(22px, calc(28 * var(--u, 1px))) / -2) 0 0 calc(max(22px, calc(28 * var(--u, 1px))) / -2);
-  opacity: 0;
-  will-change: transform, opacity;
-  background:
-    linear-gradient(rgba(242, 237, 228, 0.92), rgba(242, 237, 228, 0.92)) center / 1.5px 100% no-repeat,
-    linear-gradient(rgba(242, 237, 228, 0.92), rgba(242, 237, 228, 0.92)) center / 100% 1.5px no-repeat;
-  filter: drop-shadow(0 0 2px rgba(10, 8, 6, 0.7));
-  /* the middle left open, as a surveyor's cross is */
-  -webkit-mask: radial-gradient(circle, transparent 0 18%, #000 19%);
-  mask: radial-gradient(circle, transparent 0 18%, #000 19%);
-}
 .layout-hud {
   position: absolute;
   left: 50%;
@@ -2672,20 +2745,10 @@ html[data-menu-open] .rail,
   font-weight: 500;
   color: rgba(242, 237, 228, 0.8);
 }
-/* and a crosshair off its right, on the ground's dark */
-.layout-hud .layout-hud-mark {
-  top: auto;
-  left: auto;
-  right: calc(max(22px, calc(28 * var(--u, 1px))) * -2.4);
-  bottom: 0;
-  margin: 0;
-  opacity: 1;
-}
 /* (not on a phone, upright or on its side: its frame has no ground to spare
    beside the words, and the status would stand on the drawing's own lines) */
 @media (max-width: 767px), (max-height: 500px) {
   .layout-label,
-  .layout-mark,
   .layout-hud {
     display: none;
   }
@@ -2730,4 +2793,67 @@ html[data-menu-open] .rail,
   visibility: hidden;
   opacity: 0;
   will-change: transform, opacity;
+}
+
+/* ---------------------------------------------------------------------------
+   THE CURSOR (components/site/ReticleDrawing.tsx; the user's sheet, 2026-11-01).
+   The system's is hidden only once the drawing has met a mouse (html.reticle-on),
+   so a page whose script has not run, or a touch, is never left without one. It
+   is back on what takes a caret. Over everything (the consent card is 100, the
+   route's veil 80) and in the way of nothing.
+   --------------------------------------------------------------------------- */
+html.reticle-on,
+html.reticle-on * {
+  cursor: none !important;
+}
+html.reticle-on input:not([type='checkbox'], [type='radio'], [type='submit'], [type='button']),
+html.reticle-on textarea,
+html.reticle-on [contenteditable='true'] {
+  cursor: text !important;
+}
+.reticle {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 110;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.14s linear;
+  will-change: transform;
+}
+.reticle.is-seen {
+  opacity: 1;
+}
+.reticle[data-state='text'] {
+  opacity: 0;
+}
+.reticle-body {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: transform 0.14s var(--ease);
+}
+.reticle[data-down] .reticle-body {
+  transform: scale(0.92);
+}
+.reticle-ring {
+  position: absolute;
+  top: -18px;
+  left: -18px;
+  width: 36px;
+  height: 36px;
+  overflow: visible;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reticle,
+  .reticle * {
+    transition: none !important;
+  }
+}
+@media print {
+  .reticle {
+    display: none;
+  }
 }

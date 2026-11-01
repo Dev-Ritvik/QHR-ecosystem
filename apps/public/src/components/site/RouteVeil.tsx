@@ -256,9 +256,9 @@ export function RouteVeil() {
   return (
     <div
       aria-hidden="true"
-      // z-[80]: above the header (z-40), the skip link (z-50), the preloader
-      // (z-60) and the cursor ring (z-70). A transition that something else
-      // draws over is not a transition.
+      // z-[80]: above the header (z-40), the preloader (z-60) and the skip link
+      // (z-70). A transition that something else draws over is not a transition.
+      // (Only the cursor stands over it, z-110: it is the visitor's own.)
       className="pointer-events-none fixed inset-0 z-[80]"
       style={{
         opacity: shut ? 1 : 0,

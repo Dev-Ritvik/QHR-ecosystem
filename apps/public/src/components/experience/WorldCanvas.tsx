@@ -35,7 +35,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { placeForRoute, type PlaceId } from '@estate/domain/experience/places';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { HALL_MODEL_BYTES, HALL_MODEL_URL, HallModel } from './HallModel';
-import { hallBytes, hallWaitShare, mayFetchAhead, type HallLoad } from './hallBytes';
+import { hallBytes, hallLoad, hallWaitShare, mayFetchAhead, type HallLoad } from './hallBytes';
 import { hallWarmIdle, roomCube, warmProgramsUnder } from './hallProbe';
 import {
   HOLD_FRAMES,
@@ -90,7 +90,7 @@ import {
   interiorCurveT,
   interiorLensAt,
 } from './interiorPath';
-import { CROSSOVER, JOURNEY_END, journeyState, readJourney } from './journey';
+import { CROSSOVER, JOURNEY_END, journeyState, readJourney, followPageRest, pageAtRest } from './journey';
 import { cancelDive, diveProgress, diveState, prefersReducedMotion } from './dive';
 import {
   CUT_MS,
@@ -125,6 +125,9 @@ import { HALL_AIM_OFFSET, codaEase, codaPose, codaProgress } from './codaFrame';
 import { mapStage } from './mapTablePlan';
 import { copyPresence, copyZone, filmIsShort, filmIsWide } from './copyZone';
 import { READING_STOPS, READING_TIME, isFilmRoute, readingLight } from './readingLight';
+import { hourChoice, midnightAt, setHourChoice, stepHourChoice } from './filmHours';
+import { SkyHours, skyHoursReady } from './SkyHours';
+import { EstateLamps } from './exteriorLamps';
 import { ExteriorDoorway } from './DoorwayRig';
 import { FountainFish } from './FountainFish';
 import { lenisInstance } from './SmoothScroll';
@@ -132,8 +135,9 @@ import { InteriorStage } from './InteriorStage';
 import { MapTable } from './MapTable';
 import { veiledPush } from '@/components/site/RouteVeil';
 import { ld, ldColour } from './lookdev';
-import { followRoomLook } from './exteriorWindows';
+import { DAY_INTERIOR, DRAPE_LAMP, EVENING_INTERIOR, LAMP_DAY, followRoomLook, roomUniforms } from './exteriorWindows';
 import { readSkyHaze, skyHazeReady, skyHazeToward } from './skyHaze';
+import { mirrorUniforms } from './exteriorWater';
 import { EXTERIOR_FAR, HAZE_PHASE, VALLEY_MIST, hazeFromPlate, hazeUniforms } from './exteriorHaze';
 import { layoutAir } from './exteriorLayout';
 
@@ -1125,7 +1129,14 @@ function JourneyDriver({
     // DOOR_AJAR): the door stands open by the time the camera is square on it.
     if (journeyState.leg === 'exterior') doorwayState.ajar = doorAjar(journeyState.legProgress);
 
-    if (journeyState.armed && !armedOnce.current) {
+    // THE HALL IS ARMED WHILE NOTHING IS MOVING, IF IT CAN BE (journey.ts,
+    // pageAtRest): its parse and the building of its programs stop the frame for a
+    // moment here and there. Only with its bytes already in hand (hallBytes.ts: this
+    // never asks the line for anything), and the page's own picture built. A visitor
+    // who never stops has journey.ts's PRELOAD_LEAD.
+    followPageRest(window.scrollY, now);
+    const atRest = sceneWarm.ready && hallLoad.state === 'done' && pageAtRest(now);
+    if ((journeyState.armed || atRest) && !armedOnce.current) {
       armedOnce.current = true;
       onArmed();
     }
@@ -1707,7 +1718,9 @@ function useLook(set: SceneSet) {
 // the forest's layers each paler than the one in front, so the air closes in
 // from 70 metres and is whole by 460 (the house's front, 80 metres out, takes
 // almost none of it).
-const DAY_FOG: readonly [number, number] = [70, 460];
+// (near 70 until the user's reference of 2026-11-01: the air starts past what the film
+// stands close to, and the far land still goes into it by the same distance)
+const DAY_FOG: readonly [number, number] = [150, 480];
 const EVENING_FOG_NEAR = 80;
 const EVENING_FOG_FAR = 210;
 /**
@@ -1730,28 +1743,41 @@ const EVENING_FOG_FAR = 210;
  * built to be seen in haze and faceted from this height, are not drawn past
  * `end`, nor over `top`: the plate's own ridges stand there.)
  */
-const SUBJECT_AIR = { at: new THREE.Vector3(0, 6.4, 0), from: 90, depth: 260, layout: 70, layoutDepth: 136, end: 322, top: 40 } as const;
+const SUBJECT_AIR = { at: new THREE.Vector3(0, 6.4, 0), from: 90, depth: 260, layout: 70, layoutDusk: 8, layoutDepth: 136, end: 322, top: 40 } as const;
 /** Emissive strength of the curtained windows at full evening (see ExteriorLighting). */
-const WINDOW_EVENING_GLOW = 0.5;
+// (0.6 until the reference of the blue hour, 2026-11-01: its windows are the
+// brightest warm things in the frame. WINDOW_NIGHT_GLOW gives back what the door's
+// frame was measured at.)
+const WINDOW_EVENING_GLOW = 1.0;
 /**
- * NIGHT FALLS OVER THE APPROACH. The evening above keeps the sun on the house
- * (the magic-hour shot the holdings chapter holds); then, as the camera comes
- * down the flank and onto the axis, the sun goes: the key loses NIGHT_KEY_LOSS
- * of itself, the house's lamps come up — the frontispiece's arched windows, the
- * entry bay, the flank — and the curtained rooms glow brighter. The second
- * art-direction audit (2026-09-30) removed the shade behind "The door is open";
- * this is what gives that line its ground: the forecourt the copy stands on is
- * in the dark, and the house it is inviting the visitor into is lit from
- * within. Leg progress, on the approach's own share (cameraPath.ts).
+ * THE LAMPS ARE ALREADY ON AT THE GOLDEN HOUR (the user's reference of 2026-11-01:
+ * "subtle, warm interior lighting behind specular glass panes immediately makes the
+ * mansion feel inhabited and three-dimensional rather than a hollow box"). A house at
+ * the end of the afternoon, seen from its shaded side: the rooms that have their lamps
+ * on (three in four, exteriorWindows.ts) show them. The drive, as EVENING's.
  */
-const NIGHT_FROM = FILM_SHARE + (1 - FILM_SHARE) * 0.35;
-const NIGHT_TO = FILM_SHARE + (1 - FILM_SHARE) * 0.9;
-const NIGHT_KEY_LOSS = 0.95;
-const WINDOW_NIGHT_GLOW = 0.22;
+const WINDOW_GOLDEN_GLOW = 0.8;
+/** And the lit rooms by the day's light, against their lamps, at that hour: a room with a
+ *  lamp on looks warm from outside only while what comes in at its window is not more. */
+const ROOMS_GOLDEN = { lamp: 0.44, day: 0.6 } as const;
+/**
+ * THE HOUSE'S LAMPS. The rooms come up with the twilight, nearly whole before
+ * the sky is dark (the user's reference: the house at the blue hour with every
+ * lit room amber), and the last of it comes with the midnight. Which rooms are
+ * lit is each room's own (exteriorWindows.ts). The second art-direction audit
+ * (2026-09-30) removed the shade behind "The door is open"; this is what gives
+ * that line its ground: the forecourt it stands on is in the dark, and the house
+ * it is inviting the visitor into is lit from within.
+ */
+const WINDOW_NIGHT_GLOW = -0.28;
+/** The rooms' lamps and how much the drapes pass of them, over the layout, as a
+ *  gain over their own. */
+const ROOMS_FAR = { lamps: 0.6, drapes: 3.0 } as const;
 /** What the lit rooms throw on the ground outside, against the rooms' own
  *  drive: the rooms came down to a glow (the paid audit, 2026-10-04) and their
  *  light on the terrace is what says they are lit. */
-const POOL_GAIN = 1.6;
+const POOL_GAIN = 1.1;
+const POOLS_BLUE = 0.6;
 /** Aerial-perspective colour, sampled from the approved render's own horizon band. */
 // V7: the painted sky's horizon haze, so the tree belt fades into the sky it
 // stands against rather than into the olive of the old meadow hills.
@@ -1814,6 +1840,11 @@ const HAZE_GAIN = 0.92;
 /** The per-fragment air against the sky behind it (exteriorHaze.ts): a tenth
  *  over it since the concept built 1:1 (2026-10-27), whose mist is luminous. */
 const HAZE_SKY = 1.1;
+/** How much of the sky plate's strength over one the air takes. */
+const HAZE_WITH_SKY = 0.75;
+/** And over it again at the blue hour, whose valley mist is the brightest thing
+ *  under the sky. */
+const HAZE_DUSK = 0;
 const HAZE_SPREAD = 0.42;
 const HAZE_DIR = new THREE.Vector3();
 /** The land's air at full evening: the sunset's own mauve-umber, lit. */
@@ -1848,7 +1879,10 @@ const HAZE_EVENING = new THREE.Color('#6B5A52');
  * moves by two in any channel.)
  */
 const FILL_DAY = new THREE.Color('#B8BCC8');
-const FILL_EVENING = new THREE.Color('#CDB7A6');
+// (A slate, to the user's reference of the blue hour, 2026-11-01: its lawn 15, 40, 57,
+// its roof 19, 42, 62, its road 6, 17, 23. Its greens are the print's to turn: FilmGrade,
+// DUSK_PRINT. A more saturated blue, #6E86BC, printed as an electric one.)
+const FILL_EVENING = new THREE.Color('#7F97B0');
 /**
  * And once the SUN HAS GONE the sky is not the sunset's colour any more. The
  * refinement brief (2026-10-03): "the warm cinematic mood remains, but the
@@ -1860,18 +1894,21 @@ const FILL_EVENING = new THREE.Color('#CDB7A6');
  * stone goes back to its own cream and the lamps are the warm things in the
  * picture. Taken across the same night that takes the key.
  */
-const FILL_NIGHT = new THREE.Color('#BEBFC4');
+const FILL_NIGHT = new THREE.Color('#66708F');
 // (1.3 until the paid audit: see SKY_HOURS.)
-const EVENING_FILL = 0.9;
+const EVENING_FILL = 2.0;
 /** How much of the sun the evening takes (the night takes most of the rest). */
-const EVENING_KEY_LOSS = 0.6;
+const EVENING_KEY_LOSS = 1;
 /** The hemisphere's lower half: what the land throws back up, by the hour. */
 const BOUNCE_DAY = new THREE.Color('#75604A');
-const BOUNCE_EVENING = new THREE.Color('#75604A');
-const BOUNCE_NIGHT = new THREE.Color('#3A3530');
+const BOUNCE_EVENING = new THREE.Color('#1A2430');
+const BOUNCE_NIGHT = new THREE.Color('#0C1018');
 /** The sky as a light (the prefiltered environment), as a share of its
  *  daylight gain, at full evening and once the sun has gone. */
-const ENV_HOURS = { evening: 0.8, night: 0.6 } as const;
+// (0.3 at evening until the reference of the blue hour: the panes took the day's sky
+// from it, a cream veil over the rooms. `night` holds the door's frame at what it was
+// measured at: 0.036 of the day's.)
+const ENV_HOURS = { evening: 0.08, night: 0.45 } as const;
 /**
  * And the sky as a picture (scene.backgroundIntensity), at the same hours.
  *
@@ -1896,9 +1933,16 @@ const ENV_HOURS = { evening: 0.8, night: 0.6 } as const;
 // camera's first turn, before the orbit's line stands in that sky; at the
 // cover's strength it stood there at 1.1:1), and comes down to the evening's
 // six-tenths as before.
-const SKY_HOURS = { day: 1.0, cover: 2.0, evening: 0.6, night: 0.32 } as const;
+// `day` 1.5 from the user's reference of 2026-11-01 (the frame at leg 0.32: a cream horizon
+// that is the brightest thing there is). `words`: what it stays at while the orbit's line
+// stands in that sky (1.5 under them, "We do not" on a ground of 167 at 2.06:1 at every wide
+// size); `wordsGo`: over where it comes up to the day's, as the words and the lens's grad go.
+const SKY_HOURS = { day: 1.5, words: 1, cover: 2.0, evening: 0.6, night: 0.32 } as const;
+const SKY_WORDS_GO: readonly [number, number] = [0.27, 0.31];
 /** Over this much of the exterior leg the cover's sky comes down to the day's. */
-const SKY_COVER: readonly [number, number] = [0.02, 0.17];
+// ([0.02, 0.17] until the same plate: at 1440x900 "districts" reaches the lit hills at
+// leg 0.05 at nearly the cover's whole strength, on a ground of 169.)
+const SKY_COVER: readonly [number, number] = [0, 0.1];
 /** And over this much it comes up again for the layout (the founder's frame,
  *  2026-10-28: the misty hills over the land are the brightest thing in it,
  *  as the cover's are); the evening takes it down after, as it does the day's. */
@@ -1914,6 +1958,10 @@ const LAYOUT_SHORT_RISE = 0.09;
 const HAZE_LAYOUT = 0.84;
 /** How far the plate is turned over the layout, radians. */
 const SKY_LAYOUT_TURN = 0.31;
+/** And how far it is tipped, and about what: square to the layout's bearing
+ *  (cameraPath.ts, its position to its target). Radians. */
+const SKY_LAYOUT_TILT = 0.065;
+const SKY_TILT_AXIS = { x: -0.731, z: -0.682 } as const;
 /** How much of the cover's brighter sky an upright frame takes. */
 const SKY_COVER_UPRIGHT = 0.3;
 /**
@@ -1924,7 +1972,8 @@ const SKY_COVER_UPRIGHT = 0.3;
  * before the paid audit, about 90 after) but it is lit by a dusk sky, cool
  * and even, instead of by the day's environment and a last fifth of the sun.
  */
-const NIGHT_FILL_LOSS = -1.0;
+// (and with EVENING_FILL at 2, the door's frame stands at 0.9 of the fill as it did)
+const NIGHT_FILL_LOSS = 0.55;
 // Warmer than it was (#FFF0DB): the key is a 14-degree sun, and the raking
 // front it now lights should read as the hour, against the cool sky fill on
 // the west flank. Warm against cool is what makes the two faces two faces.
@@ -1938,7 +1987,22 @@ const KEY_DAY = new THREE.Color('#FFD9A8');
  * back (by `1 - evening`), so the dusk at the door is the approved one.
  */
 const CONCEPT_DAY = { env: 0.33, hemi: 0.35, key: 1.28 } as const;
-const KEY_EVENING = new THREE.Color('#FFC489');
+/**
+ * THE VISITOR'S DAY (HourChoice.tsx, the brief of 2026-11-01), against the golden hour:
+ * the sun high over the front of the house and neutral, the sky's fill up and white, the
+ * air cleared. Only ever reached by pressing it.
+ */
+const NOON = { key: 1.05, hemi: 1.9, env: 2.4, mistLoss: 0.5, fogNear: 60, fogFar: 140 } as const;
+const NOON_SUN = new THREE.Vector3(62, 86, 44);
+const NOON_KEY = new THREE.Color('#FFF4E4');
+const NOON_FILL = new THREE.Color('#E8F0FA');
+const KEY_EVENING = new THREE.Color('#FF9A5A');
+/**
+ * THE MOON, once the sun has gone: the same light, the same bearing and the same
+ * held shadow map (softSunShadows.ts), at a fraction of the sun and the colour
+ * of the sky. It only just separates the stone from the night around it.
+ */
+const MOON = { key: 0.05, colour: new THREE.Color('#9DB2DC') } as const;
 
 function ExteriorLighting({
   driveByScroll,
@@ -2010,6 +2074,7 @@ function ExteriorLighting({
   // every frame (softSunShadows.ts, SUN_SHADOW_CADENCE). Its own loop: the
   // one below returns early on a page that holds the film still.
   const sunShadow = useRef<SunShadowState>({ owed: SUN_SHADOW_CADENCE.onMount, frame: 0 });
+  const lastNoon = useRef(0);
   // The estate arriving (or replaced): its meshes are merged in the frames
   // after it loads, and the map owes them a draw before anyone sees the house.
   useEffect(() => {
@@ -2019,7 +2084,7 @@ function ExteriorLighting({
     const light = key.current;
     if (!light || !light.castShadow) return;
     light.shadow.autoUpdate = false;
-    if (sunShadowDue(sunShadow.current, doorwayState.mode === 'running', light.shadow.map === null)) {
+    if (sunShadowDue(sunShadow.current, doorwayState.mode === 'running' || hourChoice.moving, light.shadow.map === null)) {
       light.shadow.needsUpdate = true;
     }
   });
@@ -2106,13 +2171,17 @@ function ExteriorLighting({
       holdTime ?? (journeyState.leg === 'exterior' ? journeyState.legProgress : 1);
     const a = atmosphereAt(legS);
     const fog = scene.fog as THREE.Fog | null;
+    // THE HOUR: the film's own, or the one the visitor has asked for (filmHours.ts).
+    const hour = stepHourChoice(delta, a.evening, midnightAt(legS), film && day && holdTime === undefined);
     // The print's exposure rides the same evening (FilmGrade, filmState).
-    filmState.evening = day ? a.evening : 0;
+    filmState.evening = day ? hour.evening : 0;
+    filmState.noon = day ? hour.noon : 0;
     // The header's band across the top of the lens: by day, and lightly again
     // while the lit house passes behind it on the approach (lensFilter.ts).
     // (The night is read here as well as below: the band rides both.)
-    const nightBand = legS <= NIGHT_FROM ? 0 : smooth01((legS - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM));
-    lensFilter.top = film && day ? Math.max(headerBandOutside(a.evening, nightBand), headerBandApproach(legS)) : 0;
+    const nightBand = hour.night;
+    lensFilter.top = film && day ? Math.max(headerBandOutside(hour.evening, nightBand), headerBandApproach(legS)) : 0;
+    lensFilter.topWarm = film && day ? (1 - hour.evening) * (1 - hour.noon) : 0;
     // Through the open door (doorway.ts, 'through') the header's band goes to
     // the hall's own with the print, so it is already there when the sets
     // change behind the doorway.
@@ -2133,7 +2202,7 @@ function ExteriorLighting({
     if (!hallsFilter) {
       const out = journeyState.leg === 'exterior';
       // (further down a frame that stands upright: HEADER_BAND.zeroOutsideTall)
-      if (out) headerBandReach(true, delta, !filmIsWide(window.innerWidth, window.innerHeight));
+      if (out) headerBandReach(true, delta, !filmIsWide(window.innerWidth, window.innerHeight), legS);
       // Through the open door the reach goes to the hall's with the print,
       // as the band's density does (above).
       if (out && film && passageLight.grade > 0) {
@@ -2165,7 +2234,7 @@ function ExteriorLighting({
       }
       // And the foot of the frame while the lit portico passes behind the
       // approach's copy (APPROACH_ND).
-      if (out && film) approachFilter(legS);
+      if (out && film) approachFilter(legS, filmIsShort(window.innerWidth, window.innerHeight));
     }
 
     if (!day) {
@@ -2192,11 +2261,15 @@ function ExteriorLighting({
     // 12m sphere over a bright cloud bank read as dust. Letting the sun go down
     // over the last chapter fixes the cut and the sphere at once, with no
     // change to either.
-    const e = a.evening;
-    // NIGHT, across the approach: the sun, which held the house through the
-    // evening, sets while the camera comes down the flank and onto the axis.
-    const n = legS <= NIGHT_FROM ? 0 : smooth01((legS - NIGHT_FROM) / (NIGHT_TO - NIGHT_FROM));
+    const e = hour.evening;
+    // AND MIDNIGHT, over the descent to the door (filmHours.ts).
+    const n = nightBand;
+    // And the visitor's noon, past the golden hour (NOON).
+    const noon = hour.noon;
     filmState.night = n;
+    // The sky's own light is its plate's, once the plates are in (SkyHours.tsx);
+    // without them the day's plate is dimmed for the hour instead.
+    const plated = skyHoursReady();
 
     if (fog && fog.isFog) {
       // near stays at 60 throughout: the building's nearest corner is 39.8m
@@ -2211,12 +2284,15 @@ function ExteriorLighting({
       fog.near = dayNear + (ld('fogNearEvening', EVENING_FOG_NEAR) - dayNear) * Math.max(e, n);
       fog.far = dayFar + (eveFar - dayFar) * e;
       fog.far += (ld('fogFarNight', eveFar) - fog.far) * n;
+      fog.near += NOON.fogNear * noon;
+      fog.far += NOON.fogFar * noon;
       // (measured from the subject when the camera stands far back: SUBJECT_AIR)
       const layoutClear = journeyState.film && holdTime === undefined ? layoutAir(journeyState.leg, journeyState.legProgress, true) : 0;
       const back =
         journeyState.film && holdTime === undefined
           ? Math.max(0, camera.position.distanceTo(SUBJECT_AIR.at) - ld('airFrom', SUBJECT_AIR.from)) +
-            ld('airLayout', SUBJECT_AIR.layout) * layoutClear
+            // (and nearer at the blue hour: the reference's forest goes back in layers of mist)
+            (ld('airLayout', SUBJECT_AIR.layout) - ld('airLayoutDusk', SUBJECT_AIR.layoutDusk) * e) * layoutClear
           : 0;
       fog.near += back;
       fog.far = Math.max(fog.far, fog.near + ld('airDepth', SUBJECT_AIR.depth));
@@ -2225,12 +2301,19 @@ function ExteriorLighting({
       hazeUniforms.uHazeEnd.value = layoutClear > 0 ? 1 / ((1 - layoutClear) / 2000 + layoutClear / ld('airEnd', SUBJECT_AIR.end)) : 1e6;
       hazeUniforms.uHazeTop.value = layoutClear > 0 ? 1 / ((1 - layoutClear) / 2000 + layoutClear / ld('airTop', SUBJECT_AIR.top)) : 1e6;
       hazeUniforms.uHazeGround.value = layoutClear;
+      hazeUniforms.uHazeLow.value = layoutClear * e;
       hazeUniforms.uHazeFrame.value = (hazeUniforms.uHazeFrame.value + 1) % 64;
       // (the plate turned so its lower hill stands where the founder's peak does,
       // in the frame's middle, the great hill's flank to its left and the far
       // ridges running off to the sun on its right: turned while the camera is
       // itself turning)
-      scene.backgroundRotation.y = ld('skyTurn', SKY_LAYOUT_TURN) * layoutClear;
+      // (and tipped down on the camera's bearing, so the hills stand lower in the
+      // frame and there is sky over them for the hours to go through: the user's
+      // reference of the blue hour, 2026-11-01. As the sky turns, so the golden
+      // frame keeps its hills and the lens's grad over them; and given back as
+      // the camera comes down, when far hills rise anyway.)
+      const skyTilt = ld('skyTilt', SKY_LAYOUT_TILT) * layoutClear * e;
+      scene.backgroundRotation.set(skyTilt * SKY_TILT_AXIS.x, ld('skyTurn', SKY_LAYOUT_TURN) * layoutClear, skyTilt * SKY_TILT_AXIS.z);
       fog.color
         .copy(ldColour('hazeDay', HAZE_DAY))
         .lerp(ldColour('hazeEvening', HAZE_EVENING), e)
@@ -2242,7 +2325,7 @@ function ExteriorLighting({
       if (skyHazeReady() && ld('hazeAuthored', 0) < 0.5) {
         camera.getWorldDirection(HAZE_DIR);
         const skyNow = 1 + (ld('skyEvening', SKY_HOURS.evening) - 1) * e;
-        const sky = skyNow + (ld('skyNight', SKY_HOURS.night) - skyNow) * n;
+        const sky = plated ? 1 : skyNow + (ld('skyNight', SKY_HOURS.night) - skyNow) * n;
         skyHazeToward(HAZE_DIR.x, HAZE_DIR.z, HAZE_SPREAD, fog.color).multiplyScalar(sky * ld('hazeGain', HAZE_GAIN));
         // And per fragment, for everything of the estate's that can say where
         // it is (exteriorHaze.ts): the same band, on the fragment's own
@@ -2250,7 +2333,10 @@ function ExteriorLighting({
         // (At the sky's whole strength: the frame's one colour is held a
         // little under it, a mean being wrong at both ends; this is not.)
         hazeUniforms.uHazeGain.value =
-          sky * ld('hazeSky', HAZE_SKY) * (1 - (1 - ld('hazeLayout', HAZE_LAYOUT)) * layoutAir(journeyState.leg, journeyState.legProgress, !!journeyState.film));
+          sky * ld('hazeSky', HAZE_SKY) * (1 + ld('hazeDusk', HAZE_DUSK) * e) * (1 - (1 - ld('hazeLayout', HAZE_LAYOUT)) * (1 - e) * layoutAir(journeyState.leg, journeyState.legProgress, !!journeyState.film)) *
+          // (and at the plate's own strength, given back with the evening: the far land
+          // goes into the sky behind it, not into something darker than it)
+          (1 + (ld('hazeWithSky', HAZE_WITH_SKY) * (scene.backgroundIntensity - 1)) * (1 - e));
         hazeUniforms.uHazeOn.value = ld('hazeFlat', 0) > 0.5 ? 0 : 1;
       } else {
         hazeUniforms.uHazeOn.value = 0;
@@ -2266,13 +2352,14 @@ function ExteriorLighting({
         THREE.MathUtils.smoothstep(legS, AIR_ALOFT.over[0], AIR_ALOFT.over[1]) *
         (1 - THREE.MathUtils.smoothstep(legS, AIR_ALOFT.over[2], AIR_ALOFT.over[3]));
       hazeUniforms.uMist.value.set(
-        ld('mistK', VALLEY_MIST.k) * (1 - 0.25 * e) * (1 - 0.35 * n) * (1 - ld('aloftMist', AIR_ALOFT.mist) * aloft),
+        // (and the blue hour's mist stands in the valley whole: the reference's)
+        (ld('mistK', VALLEY_MIST.k) + (VALLEY_MIST.kDusk - ld('mistK', VALLEY_MIST.k)) * e) * (1 - 0.35 * n) * (1 - ld('aloftMist', AIR_ALOFT.mist) * aloft * (1 - 0.8 * e)) * (1 - NOON.mistLoss * noon),
         ld('mistH', VALLEY_MIST.height),
         ld('mistRun', VALLEY_MIST.run),
       );
       // ...lit from the sun's side (HAZE_PHASE), less so once the sun is low
       // and gone: by night the air is evenly lit by the sky.
-      const lobe = (1 - 0.4 * e) * (1 - n) * (1 - ld('aloftLobe', AIR_ALOFT.lobe) * aloft);
+      const lobe = (1 - 0.4 * e) * (1 - n) * (1 - ld('aloftLobe', AIR_ALOFT.lobe) * aloft) * (1 - noon);
       hazeUniforms.uHazePhase.value.set(
         ld('phaseSharp', HAZE_PHASE.sharp),
         1 + (ld('phaseAway', HAZE_PHASE.away) - 1) * lobe,
@@ -2288,9 +2375,20 @@ function ExteriorLighting({
     // physics the fog is.
     if (key.current) {
       key.current.intensity =
-        keyIntensity * ld('key', 1) * (1 - ld('evKeyLoss', EVENING_KEY_LOSS) * e) * (1 - ld('nightKeyLoss', NIGHT_KEY_LOSS) * n) *
-        (1 + (ld('conceptKey', CONCEPT_DAY.key) - 1) * (1 - e));
-      key.current.color.copy(ldColour('keyDay', KEY_DAY)).lerp(ldColour('keyEvening', KEY_EVENING), e);
+        keyIntensity * ld('key', 1) * (1 - ld('evKeyLoss', EVENING_KEY_LOSS) * e) * (1 + (ld('conceptKey', CONCEPT_DAY.key) - 1) * (1 - e)) +
+        keyIntensity * ld('moon', MOON.key) * n;
+      key.current.intensity *= 1 + (NOON.key - 1) * noon;
+      key.current.color
+        .copy(ldColour('keyDay', KEY_DAY))
+        .lerp(NOON_KEY, noon)
+        .lerp(ldColour('keyEvening', KEY_EVENING), e)
+        .lerp(ldColour('moonColour', MOON.colour), n);
+      // The sun climbs to it, and comes back down (its map drawn as it goes:
+      // hourChoice.moving). Nothing at all in the film's own hours.
+      if (noon !== lastNoon.current) {
+        lastNoon.current = noon;
+        key.current.position.set(DAY_SUN[0], DAY_SUN[1], DAY_SUN[2]).lerp(NOON_SUN, noon);
+      }
     }
     // The FILL RISES, and warms (FILL_EVENING, above): to EVENING_FILL of
     // itself — it used to fall to 0.22, for a sphere of additive light that
@@ -2299,9 +2397,11 @@ function ExteriorLighting({
     if (hemi.current) {
       hemi.current.intensity =
         hemiIntensity * ld('fill', 1) * (1 + (ld('evFill', EVENING_FILL) - 1) * e) * (1 - ld('nightFillLoss', NIGHT_FILL_LOSS) * n) *
-        (1 + (ld('conceptHemi', CONCEPT_DAY.hemi) - 1) * (1 - e));
+        (1 + (ld('conceptHemi', CONCEPT_DAY.hemi) - 1) * (1 - e)) *
+        (1 + (NOON.hemi - 1) * noon);
       hemi.current.color
         .copy(ldColour('fillDay', FILL_DAY))
+        .lerp(NOON_FILL, noon)
         .lerp(ldColour('fillEvening', FILL_EVENING), e)
         .lerp(ldColour('fillNight', FILL_NIGHT), n);
       // What the land throws back up under the soffits and the shaded walls.
@@ -2317,7 +2417,8 @@ function ExteriorLighting({
       (1 + (ld('envEvening', ENV_HOURS.evening) - 1) * e) *
       (1 + (ld('envNight', ENV_HOURS.night) - 1) * n) *
       // the concept's day (CONCEPT_DAY), given back by the evening
-      (1 + (ld('conceptEnv', CONCEPT_DAY.env) - 1) * (1 - e));
+      (1 + (ld('conceptEnv', CONCEPT_DAY.env) - 1) * (1 - e)) *
+      (1 + (NOON.env - 1) * noon);
 
     // (The portico's lantern comes on with the same evening: PorticoLantern
     // reads filmState.)
@@ -2336,10 +2437,16 @@ function ExteriorLighting({
         THREE.MathUtils.smoothstep(legS, SKY_LAYOUT[0], SKY_LAYOUT[1]) * ld('skyLayout', 1),
       ) *
       (1 - (1 - SKY_COVER_UPRIGHT) * phoneWeight(frame.width / Math.max(1, frame.height)));
-    const skyDay = ld('skyDay', SKY_HOURS.day) + (ld('skyCover', SKY_HOURS.cover) - ld('skyDay', SKY_HOURS.day)) * coverSky;
+    const skyOpen =
+      ld('skyWords', SKY_HOURS.words) +
+      (ld('skyDay', SKY_HOURS.day) - ld('skyWords', SKY_HOURS.words)) *
+        (journeyState.film && holdTime === undefined ? THREE.MathUtils.smoothstep(legS, SKY_WORDS_GO[0], SKY_WORDS_GO[1]) : 1);
+    const skyDay = skyOpen + (ld('skyCover', SKY_HOURS.cover) - skyOpen) * coverSky;
     const skyEvening = ld('skyEvening', SKY_HOURS.evening);
-    scene.backgroundIntensity = skyDay + (skyEvening - skyDay) * e;
-    scene.backgroundIntensity += (ld('skyNight', SKY_HOURS.night) - scene.backgroundIntensity) * n;
+    // (With the plates in, the day's sky is left as it is: the dome over it takes
+    // it away as the twilight comes on.)
+    scene.backgroundIntensity = plated ? skyDay : skyDay + (skyEvening - skyDay) * e;
+    if (!plated) scene.backgroundIntensity += (ld('skyNight', SKY_HOURS.night) - scene.backgroundIntensity) * n;
 
     // THE ROOMS LIGHT UP AS EVENING FALLS. Every window of the v7 house is glass
     // over a drawn curtain (MAT_Window_Interior); by day the curtain is cream in
@@ -2358,11 +2465,28 @@ function ExteriorLighting({
       glow.mats = [...found];
     }
     followRoomLook();
+    {
+      const golden = (1 - e) * (1 - noon);
+      roomUniforms.uLampDay.value = ld('roomLampDay', LAMP_DAY) + ld('roomLampGolden', ROOMS_GOLDEN.lamp) * golden;
+      roomUniforms.uInteriorDay.value = ld('roomDay', DAY_INTERIOR) * (1 - ld('roomDayGolden', ROOMS_GOLDEN.day) * golden);
+    }
+    // SEEN FROM FAR OFF A LIT ROOM IS ITS WINDOW'S MEAN: lamp, wall and drape in
+    // six pixels, and at the rooms' own strength the house from the layout was
+    // hardly lit at all. Over the layout they are drawn stronger, drapes most,
+    // as a long exposure of a far lit house has them (the user's reference).
+    const roomsFar = journeyState.film && holdTime === undefined ? layoutAir(journeyState.leg, journeyState.legProgress, true) : 0;
+    roomUniforms.uInteriorEvening.value = ld('roomEvening', EVENING_INTERIOR) * (1 + ld('roomFar', ROOMS_FAR.lamps) * roomsFar);
+    roomUniforms.uRoomSilk.value = ld('roomSilk', DRAPE_LAMP) * (1 + ld('silkFar', ROOMS_FAR.drapes) * roomsFar);
+    roomUniforms.uRoomFar.value = roomsFar * e;
     const rooms = ld('winEvening', WINDOW_EVENING_GLOW) * e + ld('winNight', WINDOW_NIGHT_GLOW) * n;
-    for (const m of glow.mats) m.emissiveIntensity = rooms;
+    // (and already on, a little, at the golden hour: WINDOW_GOLDEN_GLOW)
+    const lit = rooms + ld('winGolden', WINDOW_GOLDEN_GLOW) * (1 - e) * (1 - noon);
+    for (const m of glow.mats) m.emissiveIntensity = lit;
     // And the pools those rooms throw on the ground outside (nightPools.ts),
     // on the same drive.
-    poolLight.gain = rooms * ld('pools', POOL_GAIN);
+    // (less of them while the sky is still light: the reference's blue hour has a
+    // small warm halo at each lamp, and whole they stood on its lawn as yellow patches)
+    poolLight.gain = rooms * ld('pools', POOL_GAIN) * (1 - ld('poolsBlue', POOLS_BLUE) * e * (1 - n));
     applyPoolGain();
   });
 
@@ -3117,7 +3241,9 @@ function RoomCubeAtStart() {
 // mist laid on after (tools/gltf/grade_sky_hills_v11.py), and a hazy golden
 // sky with no cloud in it. The client's "slum" was a photograph's village on
 // its horizon; there is none here, only forest.
-const SKY_EQUIRECT_URL = '/textures/sky_estate_v11_4k.jpg';
+// v14 (the user's reference of 2026-11-01): the same hills under a warmer sky, whose cream
+// stands higher up it (grade_sky_hills_v11.py ZENITH_RGB=176,168,150 SKY_POW=0.95).
+const SKY_EQUIRECT_URL = '/textures/sky_estate_v14_4k.jpg';
 /**
  * What the estate is LIT by, as opposed to what it is seen against: the same
  * sky, with the lawn's bounce below the horizon where the backdrop carries
@@ -3166,7 +3292,9 @@ function DebugHandle() {
       doorway: doorwayState,
       // the film's hour: its evening and its night, 0 to 1 (FilmGrade.tsx)
       film: filmState,
+      hours: { choice: hourChoice, set: setHourChoice },
       lens: lensFilter,
+      mirror: mirrorUniforms,
       map: mapStage,
       copy: copyZone,
     };
@@ -3800,6 +3928,10 @@ export function WorldCanvas() {
             {onJourney || set === 'exterior' ? (
             <group ref={exteriorGroup} visible={set === 'exterior' && exteriorWarm}>
               <ExteriorModel grade={look.grade} onRoot={setExteriorRoot} />
+              {/* The sky's other hours (filmHours.ts), on the film only. */}
+              {onJourney ? <SkyHours film /> : null}
+              {/* And its lamps (exteriorLamps.tsx). */}
+              <EstateLamps />
               {/* The front doors, cut into two leaves that can open. Closed,
                   they are the shipped geometry exactly; only a passage through
                   the doorway moves them. */}

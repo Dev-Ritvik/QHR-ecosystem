@@ -10,6 +10,8 @@
 // never in the blur — that is checked against the same generated bounds the
 // camera collision tests use, along the whole exterior leg.
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { installSoftSunShadows, PCSS_SPREAD, SUN_SHADOW_CAMERA } from './softSunShadows';
@@ -240,5 +242,19 @@ describe('the lens (depth in alpha)', () => {
     expect(EXTERIOR_APERTURE).toBeGreaterThanOrEqual(1.4);
     expect(GATE_MM).toBe(24);
     expect(FAR_FROM).toBeGreaterThan(20);
+  });
+});
+
+describe('a chain without the lens', () => {
+  it('takes the depth out of the alpha before anything blends by it', () => {
+    const src = (f: string) => readFileSync(join(__dirname, f), 'utf8').replace(/\r\n/g, '\n');
+    const fx = src('PostFX.tsx');
+    // first in every chain: the lens's, where the lens consumes it, and the others'
+    expect(fx).toContain('{lens ? <LensFocus active={film || hall} stillHall={still && hall} /> : <DepthOff />}');
+    expect(fx).toContain('<DepthOff />\n        <BrightnessContrast ref={bindContrast}');
+    const lens = src('LensFocus.tsx');
+    // a pass of its own, or the bloom's passes read the depth before it has run
+    expect(lens).toContain("super('DepthOffEffect', DEPTH_OFF, { attributes: EffectAttribute.CONVOLUTION });");
+    expect(lens).toContain('outputColor = vec4(inputColor.rgb, 1.0);');
   });
 });

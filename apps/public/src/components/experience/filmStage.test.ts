@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { SHORT_QUERY, WIDE_QUERY, filmIsShort, filmIsWide } from './copyZone';
 import { COVER_SKY, COVER_SKY_SHORT, EDGE, LAND_BOX, LAND_ND, LAYOUT_SKY, STAGE, holdingsFilter, lensFilter } from './lensFilter';
 import { READING_STOPS, READING_TIME } from './readingLight';
+import { twilightAt } from './filmHours';
 
 const read = (p: string) => readFileSync(join(__dirname, p), 'utf8').replace(/\r\n/g, '\n');
 const css = read('../../app/globals.css');
@@ -340,14 +341,14 @@ describe('the lens on the stage', () => {
     // the layout's title (the founder's frame, 2026-10-28): the cover's kind
     // of grad from the top edge, leaning to the left where the title stands
     holdingsFilter(0.62, 1920 / 945, 0, 0);
-    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops, 9);
+    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops * (1 - LAYOUT_SKY.duskOff * twilightAt(0.62)), 9);
     expect(lensFilter.shape.y).toBeGreaterThan(1);
     expect(lensFilter.shape.x).toBeLessThan(0.3);
     // the design's frame is still the stage's measure (the tables' burnt edge)
     expect(STAGE.aspect).toBeCloseTo(1.6, 9);
     const canvas = read('./WorldCanvas.tsx');
     expect(canvas).toContain('filmIsShort(window.innerWidth, window.innerHeight),');
-    expect(canvas).toContain('if (out && film) approachFilter(legS);');
+    expect(canvas).toContain('if (out && film) approachFilter(legS, filmIsShort(window.innerWidth, window.innerHeight));');
     const stage = read('./InteriorStage.tsx');
     // (and a phone on its side has its own densities: lensFilter, STATION_ND_SHORT)
     expect(stage).toMatch(
@@ -514,8 +515,8 @@ describe('every line of the film at a strength its ground allows', () => {
 
   it("sets the layout's words as the cover's: a title in the sky, its line on the land, and its cue", () => {
     // The founder's frame (2026-10-28): "Each plot, meticulously platted." in
-    // the top left, its line at the frame's foot, and "Start here" with the
-    // survey's crosshair under it. Where the holdings' figures stood.
+    // the top left, its line at the frame's foot, and "Start here" under it.
+    // Where the holdings' figures stood.
     const layout = page.slice(page.indexOf('<section id="holdings"'), page.indexOf('<section id="approach"'));
     expect(layout).toMatch(/<h2 className="t-d1 text-\[#F2EDE4\]">\s*Each plot,\s*<br \/>\s*meticulously\s*<br \/>\s*platted\.\s*<\/h2>/);
     expect(layout).toContain('From 40 ft blacktop roads to underground utilities');

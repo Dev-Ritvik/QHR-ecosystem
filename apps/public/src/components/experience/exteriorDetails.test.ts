@@ -24,7 +24,7 @@ describe("the grounds' lamps", () => {
     expect(LAMPS.whole).toBeGreaterThan(LAMPS.from + 0.2);
     expect(LAMPS.whole).toBeLessThan(1);
     expect(model).toContain("const on = THREE.MathUtils.smoothstep(filmState.evening, ld('lampsFrom', LAMPS.from), ld('lampsWhole', LAMPS.whole));");
-    expect(model).toContain('const want = l.full * on;');
+    expect(model).toContain('const want = l.full * on * LAMPS.lit;');
   });
 
   it('are opal glass unlit and one warm white lit, the terrace like the drive', () => {
@@ -138,6 +138,29 @@ describe('stone at the distance the film sees it from', () => {
     expect(build).toContain('"left sharp (would look down)", looks_down');
   });
 
+  it('copes the pool on all four sides and stands the terrace in the lawn', () => {
+    // The user, 2026-11-01: "fix this part of swimming pool". A catch basin a
+    // metre deep ran down the west side and read as a trench in the terrace,
+    // and the slab stood on 0 over a lawn at -4 cm: a white line at its foot.
+    expect(build).not.toContain('"catch"');
+    expect(build).toContain('(P["x0"] - CW, P["x0"], P["y0"] - CW, P["y1"] + CW)');
+    const foot = /TERRACE_FOOT = (-[\d.]+)/.exec(build);
+    expect(Number(foot![1])).toBeLessThan(-0.08);
+    expect(build).toContain('add_box(stone, T["x0"], P["x0"] - CW, T["y0"], T["y1"], foot, top)');
+  });
+
+  it('runs one rail round the pool deck, with a gate at the head of its flight', () => {
+    // The user, 2026-11-01: "fix this gap in the fence of the pool".
+    const east = Number(/RAIL_EAST = (-[\d.]+)/.exec(build)![1]);
+    // the last post stands against the corner die's face (half a post off it)
+    expect(east).toBeCloseTo(-(17.4 + 0.62 / 2) - 0.045, 3);
+    expect(build).toContain('((west, south), (RAIL_EAST, south), RAIL_GATE_BAY');
+    expect(build).toContain('((west, north), (RAIL_EAST, north), 1.7, None)');
+    const gate = /RAIL_GATE = \((-[\d.]+), (-[\d.]+)\)/.exec(build)!;
+    const flight = /add_box\(stone, (-[\d.]+), (-[\d.]+), T\["y0"\] - 0\.42/.exec(build)!;
+    expect((Number(gate[1]) + Number(gate[2])) / 2).toBeCloseTo((Number(flight[1]) + Number(flight[2])) / 2, 3);
+  });
+
   it('gives the quoins a joint a pixel wide from the cover', () => {
     const m = /p, q, gap = ([\d.]+), ([\d.]+), ([\d.]+)/.exec(build);
     expect(m).not.toBeNull();
@@ -206,6 +229,6 @@ describe('stone at the distance the film sees it from', () => {
 describe('water and the sky', () => {
   it('mirrors the sky at the strength it is shown, with no gain', () => {
     expect(WATER_SKY).toBe(1);
-    expect(model).toContain("const shown = scene.backgroundIntensity * ld('waterSky', WATER_SKY);");
+    expect(model).toContain("const shown = scene.backgroundIntensity * ld('waterSky', WATER_SKY) * (1 - 0.9 * filmState.evening);");
   });
 });

@@ -598,6 +598,37 @@ const aoLook = (() => {
   return { radius: r > 0 ? r : AO_RADIUS, strength: w >= 0 && q?.has('aos') ? w : AO_STRENGTH };
 })();
 
+/**
+ * WHERE THERE IS NO LENS, THE DEPTH STOPS AT THE DOOR OF THE CHAIN. The scene's
+ * alpha is its depth in metres, and negative on a surface seen by its own light:
+ * the windows, the water and, since the contact pass leaves it alone, every dressed
+ * stone (ExteriorModel, CONTACT_FREE_RE). The lens's pass reads it and writes 1.0.
+ * A chain without the lens (every device below the high tier) handed it to the
+ * bloom and the grade, which blend by alpha, and a negative depth of forty metres
+ * blended a stone house to white: FOUND 2026-10-31, on an integrated card that the
+ * jungle's cost had taken under the high tier for the first time. This pass is the
+ * lens's one duty without the lens. A pass of its own (CONVOLUTION), so the bloom's
+ * own passes, which read the buffer before any effect has run, see 1.0 too.
+ */
+const DEPTH_OFF = /* glsl */ `
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  outputColor = vec4(inputColor.rgb, 1.0);
+}
+`;
+
+export class DepthOffEffect extends Effect {
+  constructor() {
+    super('DepthOffEffect', DEPTH_OFF, { attributes: EffectAttribute.CONVOLUTION });
+  }
+}
+
+export const DepthOff = forwardRef<DepthOffEffect>(function DepthOff(_props, ref) {
+  const effect = useMemo(() => new DepthOffEffect(), []);
+  // (As the lens's: no dispose={null} on the primitive.)
+  useEffect(() => () => effect.dispose?.(), [effect]);
+  return <primitive ref={ref} object={effect} />;
+});
+
 export const LensFocus = forwardRef<LensFocusEffect, { active?: boolean; stillHall?: boolean }>(function LensFocus(
   { active = true, stillHall = false },
   ref,

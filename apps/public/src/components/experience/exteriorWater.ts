@@ -27,7 +27,7 @@
 //   went to umber.
 //
 //   THE "NOISE TEXTURE WITH VISIBLE BLOCKS" was two things. The overflow
-//   trough beside the pool is a slot a metre deep, and the lens's contact
+//   trough then beside the pool was a slot a metre deep, and the lens's contact
 //   occlusion (LensFocus.tsx) — six pairs of taps turned by a per-pixel noise
 //   — printed that noise on its flat dark water as a stipple. And a 256-pixel
 //   probe, magnified by a grazing view, showed its texels.
@@ -71,8 +71,7 @@
 //
 //   NO CONTACT OCCLUSION. Occlusion is the sky hidden from a matte surface. A
 //   mirror shows what it faces; the pass leaves water alone (ESTATE_EMITTER,
-//   the mark the lit rooms already carry). The trough is dark because it is in
-//   a slot (TROUGH_SHADE), by its height, with no noise in it.
+//   the mark the lit rooms already carry).
 //
 // The numbers of the basins are the generator's (tools/blender/
 // build_estate_v7.py: POOL, TERRACE, build_fountain, build_canal,
@@ -95,8 +94,8 @@ export function waterKind(name: string): WaterKind {
   return POOL_RE.test(name) ? 'pool' : name.startsWith(CANAL_MATERIAL) ? 'canal' : 'fountain';
 }
 
-/** The pool's sheet, its coping and the overflow trough beside it. */
-export const POOL = { x0: -32.8, x1: -21.4, z0: -6.6, z1: 6.6, level: 0.455, coping: 0.52, trough: -0.42 } as const;
+/** The pool's sheet and the coping round it. */
+export const POOL = { x0: -32.8, x1: -21.4, z0: -6.6, z1: 6.6, level: 0.455, coping: 0.52 } as const;
 /** The canal behind the house, and the roundel at its far end. */
 export const CANAL = { x0: -2, x1: 2, z0: -60, z1: -18, level: 0.12, kerb: 0.26 } as const;
 export const ROUNDEL = { x: 0, z: -63.6, r: 3.0, level: 0.3, rim: 0.4 } as const;
@@ -187,10 +186,32 @@ export const WATER = {
   fountain: { f0: 0.14, rough: 0.08, sun: 0.4, sat: 0.85, dusk: 0.5, body: 1.0 },
   stone: [0.6, 0.55, 0.46] as readonly [number, number, number],
   stoneSky: 1.5,
-  /** The trough's water against the pool's: it lies a metre down a slot. */
-  troughShade: 0.34,
+  /** THE POOL'S LAMPS, once the sun has gone (the user's reference: a turquoise
+   *  block of light at the blue hour): the water's own light at full on,
+   *  scene-linear, at the deep and at the edge, and how much of the mirror it
+   *  leaves. */
+  poolGlow: { deep: [0.0, 0.42, 0.56] as const, edge: [0.02, 0.72, 0.84] as const, gain: 0.42, mirror: 0.2 },
+  fountainGlow: [0.15, 0.33, 0.52] as const,
   /** The probe's own level of detail: a notch off its sharpest. */
   probeLod: 0.7,
+} as const;
+
+/**
+ * THE POOL'S RIPPLE (the brief of 2026-11-01; tools/gltf/make_water_ripple.py): one
+ * seamless map read twice at two sizes, crossing, each drifting its own way. The
+ * trains of sines that were here crossed into a lattice, and a low sun on a lattice
+ * is a row of white bars across the water. Metres to a tile, the slope at the map's
+ * full range, how they drift (tiles a second), and how many metres the reflection of
+ * a thing on the far side moves for a unit of slope.
+ */
+export const RIPPLE = {
+  url: '/textures/water_ripple_v1.png',
+  a: { tile: 7.3, drift: [0.011, 0.006] as const },
+  b: { tile: 2.9, drift: [-0.017, 0.013] as const },
+  slope: 0.032,
+  bend: 7,
+  /** The reflection at the coping, and how far from it, metres, it is whole. */
+  edge: { dark: 0.42, reach: 0.65 },
 } as const;
 
 const far = () => new THREE.Vector4(1, 0, 1e9, -1e9);
@@ -216,11 +237,10 @@ function uniformsFor(kind: WaterKind) {
   const proxies = proxyUniforms(kind === 'fountain' ? [] : PROXIES[kind]);
   const basin = kind === 'fountain' ? FOUNTAIN : kind === 'canal' ? ROUNDEL : null;
   const tiers = kind === 'fountain' ? FOUNTAIN_TIERS : kind === 'canal' ? ROUNDEL_TIERS : [];
-  // A rectangular sheet and the top of what stands round it. The pool's west
-  // side is its overflow: no coping there, so that side is nowhere.
+  // A rectangular sheet and the top of what stands round it.
   const box =
     kind === 'pool'
-      ? new THREE.Vector4(-1e4, POOL.z0, POOL.x1, POOL.z1)
+      ? new THREE.Vector4(POOL.x0, POOL.z0, POOL.x1, POOL.z1)
       : kind === 'canal'
         ? new THREE.Vector4(CANAL.x0, CANAL.z0, CANAL.x1, CANAL.z1)
         : new THREE.Vector4(0, 0, 0, 0);
@@ -249,10 +269,22 @@ function uniformsFor(kind: WaterKind) {
 export const waterShared = {
   uTime: { value: 0 },
   uPoolBox: { value: new THREE.Vector4(POOL.x0, POOL.z0, POOL.x1, POOL.z1) },
-  uPoolLevel: { value: POOL.level },
-  uTroughShade: { value: WATER.troughShade as number },
+  /** How much of the pool's lamps is on, 0..1 (filmHours.ts, through lampsOn). */
+  uPoolGlow: { value: 0 },
+  uRipple: { value: null as THREE.Texture | null },
+  uRippleSlope: { value: RIPPLE.slope as number },
+  uRippleBend: { value: RIPPLE.bend as number },
   uStone: { value: new THREE.Vector3(...WATER.stone) },
   uStoneSky: { value: WATER.stoneSky as number },
+};
+
+/** The pool's mirror (poolMirror.ts), as its shader reads it. */
+export const mirrorUniforms = {
+  uMirror: { value: null as THREE.Texture | null },
+  uMirrorDepth: { value: null as THREE.Texture | null },
+  uMirrorOn: { value: 0 },
+  /** World to the mirror's texture. */
+  uMirrorMatrix: { value: new THREE.Matrix4() },
 };
 
 export const waterUniforms: Record<WaterKind, ReturnType<typeof uniformsFor>> = {
@@ -266,9 +298,10 @@ export const waterUniforms: Record<WaterKind, ReturnType<typeof uniformsFor>> = 
  * the reflection's colour, given up toward the dusk's. And, under ?debug=1,
  * the rest of it live (lookdev.ts). Call once a frame.
  */
-export function followWaterHour(evening: number): void {
+export function followWaterHour(evening: number, lamps = 0): void {
   const e = Math.min(1, Math.max(0, evening));
   const live = lookdevOn();
+  waterShared.uPoolGlow.value = lamps * (live ? ld('poolGlow', WATER.poolGlow.gain) : WATER.poolGlow.gain);
   for (const kind of ['pool', 'canal', 'fountain'] as const) {
     const u = waterUniforms[kind];
     const look = WATER[kind];
@@ -283,15 +316,15 @@ export function followWaterHour(evening: number): void {
     u.uProbeLod.value = ld('probeLod', WATER.probeLod);
   }
   if (!live) return;
-  waterShared.uTroughShade.value = ld('troughShade', WATER.troughShade);
   waterShared.uStoneSky.value = ld('stoneSky', WATER.stoneSky);
+  waterShared.uRippleSlope.value = ld('rippleSlope', RIPPLE.slope);
+  waterShared.uRippleBend.value = ld('rippleBend', RIPPLE.bend);
 }
 
 export const WATER_FUNCTIONS = /* glsl */ `
 uniform float uTime;
 uniform vec4 uPoolBox;
-uniform float uPoolLevel;
-uniform float uTroughShade;
+uniform float uPoolGlow;
 uniform vec3 uStone;
 uniform float uStoneSky;
 uniform float uWaterF0;
@@ -310,20 +343,22 @@ uniform vec3 uTier[4];
 uniform vec4 uBoxRim;
 uniform float uBoxRimTop;
 varying vec3 vRipplePos;
-// The rippled surface's normal in the world, and how much of its light this
-// water keeps (the trough: TROUGH_SHADE).
+uniform sampler2D uRipple;
+uniform float uRippleSlope;
+uniform float uRippleBend;
+vec2 waterSlope = vec2(0.0);
+#ifdef WATER_POOL
+uniform sampler2D uMirror;
+uniform sampler2D uMirrorDepth;
+uniform mat4 uMirrorMatrix;
+uniform float uMirrorOn;
+#endif
+// The rippled surface's normal in the world.
 vec3 waterNw = vec3(0.0, 1.0, 0.0);
-float waterShade = 1.0;
+// How much of what it mirrors this water shows (its own lamps' light is over it).
+float waterMirror = 1.0;
 // A pixel's reach across the water, metres.
 float waterFw = 0.0;
-// One train's slope: amplitude x wavenumber x cos, along its direction, faded
-// out before its wavelength shrinks to a couple of pixels.
-vec2 waterTrain(vec2 p, float lambda, float angle, float slope, float speed, float fw) {
-  float k = 6.2831853 / lambda;
-  vec2 d = vec2(cos(angle), sin(angle));
-  float keep = 1.0 - smoothstep(lambda * 0.18, lambda * 0.5, fw);
-  return d * slope * keep * cos(dot(d, p) * k - uTime * speed);
-}
 float waterCaustic(vec2 p, float t) {
   float r1 = abs(sin(p.x * 3.1 + sin(p.y * 2.3 + t * 0.8) * 1.2 + t * 0.6));
   float r2 = abs(sin(p.y * 2.7 + sin(p.x * 1.9 - t * 0.7) * 1.3 - t * 0.5));
@@ -421,7 +456,7 @@ vec4 waterStanding(vec3 P, vec3 r) {
     }
   }
   // A rectangular sheet: the kerb or coping round it, from inside. (The
-  // sheet itself, a hand under its kerb: not the trough a metre below it.)
+  // sheet itself, a hand under its kerb.)
   if (uBoxRimTop > P.y && uBoxRimTop - P.y < 0.3
       && P.x > uBoxRim.x && P.x < uBoxRim.z && P.z > uBoxRim.y && P.z < uBoxRim.w) {
     float tx = r.x > 0.0 ? (uBoxRim.z - P.x) / max(r.x, 1.0e-5) : (uBoxRim.x - P.x) / min(r.x, -1.0e-5);
@@ -451,10 +486,14 @@ export const WATER_NORMAL = /* glsl */ `
   // mirror that breathes: one long swell, a shorter one across it at a third
   // of its slope, and a trace of ripple. The sky and the house hold together
   // in the reflection, and only their edges move.
-  vec2 g = waterTrain(p, 3.1, 0.3, 0.018, 0.9, fw)
-         + waterTrain(p, 1.3, 2.1, 0.008, 1.4, fw)
-         + waterTrain(p, 0.55, 4.0, 0.004, 2.2, fw)
-         + waterTrain(p, 0.27, 5.3, 0.002, 3.1, fw);
+  // The ripple (RIPPLE), in place of the trains of sines that were here and crossed
+  // into a lattice: the map's mips put it down as it shrinks toward a pixel, by
+  // themselves. All the estate's water: the brief's "lower-left reflecting pool" is the
+  // canal as often as the pool, by the frame.
+  vec2 g = (texture2D(uRipple, p / ${RIPPLE.a.tile.toFixed(2)} + uTime * vec2(${RIPPLE.a.drift.map((v) => v.toFixed(4)).join(', ')})).xy - 0.5)
+    + 0.7 * (texture2D(uRipple, vec2(p.y, -p.x) / ${RIPPLE.b.tile.toFixed(2)} + uTime * vec2(${RIPPLE.b.drift.map((v) => v.toFixed(4)).join(', ')})).xy - 0.5);
+  g *= 2.0 * uRippleSlope;
+  waterSlope = g;
   waterNw = normalize(vec3(-g.x, 1.0, -g.y));
   normal = normalize((viewMatrix * vec4(waterNw, 0.0)).xyz);
 }
@@ -479,10 +518,18 @@ export const WATER_COLOUR = /* glsl */ `
   float fw = length(fwidth(vRipplePos.xz));
   float c = waterCaustic(vRipplePos.xz, uTime) * (1.0 - smoothstep(0.08, 0.25, fw));
   diffuseColor.rgb += c * (1.0 - 0.75 * deep) * vec3(0.02, 0.026, 0.026);
-  // THE OVERFLOW AND ITS TROUGH lie below the sheet, in the slot's own shade.
-  waterShade = mix(uTroughShade, 1.0, smoothstep(uPoolLevel - 0.35, uPoolLevel - 0.05, vRipplePos.y));
-  diffuseColor.rgb *= waterShade;
+  // THE LAMPS IN ITS WALLS: the whole body of the water lit from within, palest
+  // at the walls they stand in, with the swell's caustics moving over it.
+  if (uPoolGlow > 0.0) {
+    vec3 lit = mix(vec3(${WATER.poolGlow.edge.map((v) => v.toFixed(3)).join(', ')}), vec3(${WATER.poolGlow.deep.map((v) => v.toFixed(3)).join(', ')}), deep);
+    totalEmissiveRadiance += lit * uPoolGlow * (1.0 + 0.45 * waterCaustic(vRipplePos.xz, uTime));
+    waterMirror = mix(1.0, ${WATER.poolGlow.mirror.toFixed(2)}, min(1.0, uPoolGlow));
+  }
 }
+#endif
+#if !defined(WATER_POOL) && !defined(WATER_PROBE)
+// THE FOUNTAIN IS LIT TOO, a pale blue in its bowls (the reference, 106, 150, 181).
+totalEmissiveRadiance += vec3(${WATER.fountainGlow.map((v) => v.toFixed(3)).join(', ')}) * uPoolGlow;
 #endif
 `;
 
@@ -515,16 +562,45 @@ export const WATER_REFLECTION = /* glsl */ `
   }
 #endif
   seen = mix(vec3(dot(seen, vec3(0.2126, 0.7152, 0.0722))), seen, uWaterSat);
+#ifdef WATER_POOL
+  // THE HOUSE, WHERE A MIRROR PUTS IT (poolMirror.ts). Where anything landed in the
+  // mirror's texture it stands over the sky and far trees just read. The ripple moves
+  // the place it is read from: the same point of the water, moved on the water by its
+  // slope, is the point that shows a thing the reflected ray has swung to.
+  if (uMirrorOn > 0.0) {
+    vec4 mc = uMirrorMatrix * vec4(vRipplePos + vec3(waterSlope.x, 0.0, waterSlope.y) * uRippleBend, 1.0);
+    vec2 muv = mc.xy / mc.w;
+    vec2 mt = 0.75 / vec2(textureSize(uMirror, 0));
+    float cover = 0.25 * (step(texture2D(uMirrorDepth, muv + mt).r, 0.99999) + step(texture2D(uMirrorDepth, muv - mt).r, 0.99999)
+      + step(texture2D(uMirrorDepth, muv + vec2(mt.x, -mt.y)).r, 0.99999) + step(texture2D(uMirrorDepth, muv + vec2(-mt.x, mt.y)).r, 0.99999));
+    if (cover > 0.0) {
+      vec3 house = texture2D(uMirror, muv).rgb;
+      house = mix(vec3(dot(house, vec3(0.2126, 0.7152, 0.0722))), house, uWaterSat);
+      seen = mix(seen, house, cover * uMirrorOn);
+    }
+  }
+#endif
   vec4 stood = waterStanding(vRipplePos, wR);
   seen = mix(seen, stood.rgb, stood.a);
-  radiance = seen * waterShade;
+  // THE REFLECTION FALLS AWAY AT THE EDGE (the user's reference: "edge reflection
+  // falloff"): against its coping a sheet of water is in the kerb's own shelter and
+  // what it shows is the kerb's underside and dark, for the width of a hand or two.
+#if defined( WATER_POOL ) || defined( WATER_PROBE )
+  {
+    vec2 eA = vRipplePos.xz - uBoxRim.xy;
+    vec2 eB = uBoxRim.zw - vRipplePos.xz;
+    float eD = min(min(eA.x, eA.y), min(eB.x, eB.y));
+    seen *= mix(${RIPPLE.edge.dark.toFixed(2)}, 1.0, smoothstep(0.0, ${RIPPLE.edge.reach.toFixed(2)}, eD));
+  }
+#endif
+  radiance = seen * waterMirror;
 }
 `;
 
 /** After the lights are summed: the sun's own glint, held. */
 export const WATER_SUN = /* glsl */ `
 #include <lights_fragment_end>
-reflectedLight.directSpecular *= uWaterSun * waterShade;
+reflectedLight.directSpecular *= uWaterSun;
 `;
 
 const canals = new WeakMap<THREE.Material, THREE.Material>();
@@ -577,6 +653,7 @@ export function dressWater(root: THREE.Object3D): number {
       mat.onBeforeCompile = (shader, renderer) => {
         prev.call(mat, shader, renderer);
         Object.assign(shader.uniforms, waterShared, own);
+        if (kind === 'pool') Object.assign(shader.uniforms, mirrorUniforms);
         shader.vertexShader = shader.vertexShader
           .replace('void main() {', 'varying vec3 vRipplePos;\nvoid main() {')
           .replace(
@@ -591,9 +668,22 @@ export function dressWater(root: THREE.Object3D): number {
           .replace('#include <lights_fragment_maps>', WATER_REFLECTION)
           .replace('#include <lights_fragment_end>', WATER_SUN);
       };
-      mat.customProgramCacheKey = () => `estate-water-v4-${kind}`;
+      mat.customProgramCacheKey = () => `estate-water-v5-${kind}`;
       mat.needsUpdate = true;
     }
   });
+  loadRipple();
   return seen.size;
+}
+
+function loadRipple(): void {
+  if (waterShared.uRipple.value || typeof document === 'undefined') return;
+  // (a texture with nothing in it yet is a flat, still pool: all it can be while
+  // this comes down)
+  const tex = new THREE.TextureLoader().load(RIPPLE.url);
+  tex.name = 'water_ripple';
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  waterShared.uRipple.value = tex;
 }

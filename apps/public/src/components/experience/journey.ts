@@ -117,8 +117,37 @@ export const VEIL_HALF_BAND = 0.036;
  * white for a hall that has not arrived — so the earlier the parse starts, the
  * less likely a visitor ever sees that hold. Armed at 0.31, the hall loads
  * across the constellation and the whole approach.
+ *
+ * 0.25 -> 0.38 with the film's hours (filmHours.ts). As chapters came in, that
+ * 0.31 of the page had become leg 0.574 of the film, and the hall's parse and the
+ * building of its programs fell exactly on the turn from gold to blue under the
+ * layout's title: MEASURED on an integrated card with a wheel walk (2026-11-01), a
+ * tenth of a second at the arming, four-tenths as it landed, then stops of up to a
+ * second to leg 0.64. Now leg 0.33: the orbit's line has gone, the layout's has not
+ * come and the light has not begun to move. (And earlier than that if the page
+ * stands still with the bytes in hand: WorldCanvas, JourneyDriver.)
  */
-export const PRELOAD_LEAD = 0.25;
+export const PRELOAD_LEAD = 0.38;
+
+/**
+ * THE PAGE AT REST: what stops a frame is best done then. Under a moving camera a
+ * stopped frame is a jolt; under a camera standing still, with a visitor reading,
+ * it is nothing. Long enough that the visitor is reading and not between two
+ * notches of the wheel, ms.
+ */
+export const PAGE_REST_MS = 1200;
+const pageRest = { y: -1, since: 0 };
+
+/** Where the page stands now (JourneyDriver, each frame). */
+export function followPageRest(y: number, now: number): void {
+  if (y === pageRest.y) return;
+  pageRest.y = y;
+  pageRest.since = now;
+}
+
+export function pageAtRest(now: number): boolean {
+  return pageRest.y >= 0 && now - pageRest.since > PAGE_REST_MS;
+}
 
 /**
  * Where the CAMERA journey finishes, as a fraction of document scroll.

@@ -62,7 +62,7 @@ import { createPortal } from 'react-dom';
 import { lenisInstance } from './SmoothScroll';
 import { measureFilmSpan } from './filmTrack';
 import { cutTo, glideOnFilm } from './doorway';
-import { CROSSOVER, TRACK_VH } from './journey';
+import { CROSSOVER, TRACK_VH, journeyState } from './journey';
 import { RAIL_END, railCurrent, railGlideSeconds, railMove, railPosition, type RailStop } from './railMath';
 
 interface FilmProps {
@@ -102,6 +102,13 @@ export function ChapterRail(props: FilmProps | PageProps) {
   /** The stops as the scroll handler reads them: resolved to this page. */
   const live = useRef<RailStop[]>([]);
   const film = props.mode === 'film';
+  // Over the estate: its own ground under the scale (globals.css). A few looks a second.
+  const [outside, setOutside] = useState(false);
+  useEffect(() => {
+    if (!film) return undefined;
+    const t = window.setInterval(() => setOutside(journeyState.leg === 'exterior'), 250);
+    return () => window.clearInterval(t);
+  }, [film]);
   const filmStops = film ? props.stops : null;
   const pageKey = !film ? props.pageKey : undefined;
   /** The scale's figures (the film only): the camera's height at each stop. */
@@ -312,6 +319,7 @@ export function ChapterRail(props: FilmProps | PageProps) {
       // (`film-stage` on the film: the rail is sized in the frame's own unit,
       // like everything else on that picture, and takes the frame's edge.)
       className={'rail' + (film ? ' film-stage' : ' folio-stage') + (open ? ' is-open' : '')}
+      data-outside={film && outside ? '' : undefined}
       data-rail-mode={props.mode}
       data-rail-resting={resting && !open ? '' : undefined}
       style={{ ['--rail-n' as string]: stops.length }}

@@ -42,7 +42,7 @@
 // already holds for the groves.
 
 import * as THREE from 'three';
-import { PALM_SCATTER, PALM_WARMTH, foliageUniforms } from './exteriorFoliage';
+import { PALM_SCATTER, PALM_WARMTH, SWAY_FROND, WIND_DIR, WIND_GUST, foliageUniforms } from './exteriorFoliage';
 
 interface TreeKind {
   /** Matches the scatter's node name. */
@@ -180,6 +180,16 @@ vPalmCrown = crown;
   float side = dot(transformed.xz, own) / max(sqrt(r2), 1e-3);
   transformed.xz *= 1.0 + crown * ${CROWN_SIDE.toFixed(3)} * side;
   transformed.y -= crown * mix(${CROWN_DROOP.min.toFixed(4)}, ${CROWN_DROOP.max.toFixed(4)}, cB) * r2;
+  // THE WIND (exteriorFoliage.ts, WIND): one mesh, trunk and crown, so the crown's
+  // own share and how far out on it a vertex is say how far it goes.
+  float out2 = r2 / 25.0;
+  float gust = 0.35 + 0.65 * windGust(cInst.xz + modelMatrix[3].xz, uFoliageTime);
+  float limb = sin(uFoliageTime * 1.43 + cA * 11.0 + transformed.x * 0.41 + transformed.z * 0.33);
+  float lean = 0.55 + 0.45 * sin(uFoliageTime * 0.62 + cA * 6.2832);
+  vec2 dir = vec2(${WIND_DIR[0].toFixed(3)}, ${WIND_DIR[1].toFixed(3)});
+  float reach = crown * ${SWAY_FROND.toFixed(3)} * min(out2, 1.6) * uFoliageWind;
+  transformed.xz += (dir * lean * gust + vec2(-dir.y, dir.x) * 0.35 * limb * gust + dir * 0.3 * limb) * reach;
+  transformed.y += (0.6 * limb - 0.25 * lean) * gust * reach;
 }
 #endif
 `;
@@ -245,6 +255,8 @@ export function dressPalmCrowns(root: THREE.Object3D): number {
       const key = mat.customProgramCacheKey();
       mat.onBeforeCompile = (shader, renderer) => {
         prev.call(mat, shader, renderer);
+        shader.uniforms.uFoliageTime = foliageUniforms.uTime;
+        shader.uniforms.uFoliageWind = foliageUniforms.uWind;
         shader.uniforms.uFoliageSunDir = foliageUniforms.uSunDir;
         shader.uniforms.uFoliageSunColor = foliageUniforms.uSunColor;
         shader.uniforms.uFoliageGlow = foliageUniforms.uGlow;
@@ -253,7 +265,7 @@ export function dressPalmCrowns(root: THREE.Object3D): number {
         shader.uniforms.uPalmTrunk = foliageUniforms.uPalmTrunk;
         shader.uniforms.uPalmChroma = foliageUniforms.uPalmChroma;
         shader.vertexShader = shader.vertexShader
-          .replace('void main() {', 'varying float vPalmCrown;\nvoid main() {')
+          .replace('void main() {', `varying float vPalmCrown;\nuniform float uFoliageTime;\nuniform float uFoliageWind;\n${WIND_GUST}\nvoid main() {`)
           .replace('#include <begin_vertex>', crownVertex(crown));
         shader.fragmentShader = shader.fragmentShader
           .replace('void main() {', `${PALM_UNIFORMS}void main() {`)

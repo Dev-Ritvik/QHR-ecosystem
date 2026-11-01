@@ -26,8 +26,8 @@ describe('the estate stone', () => {
   it('dresses the stone, the roof and the hedges, each once', () => {
     const root = new THREE.Group();
     root.add(mesh('MAT_Stone_Wall_AO'), mesh('MAT_Stone_Trim'), mesh('MAT_Stone_Rustic_AO'), mesh('MAT_Roof_Slate_AO'), mesh('MAT_Hedge'), mesh('MAT_Gold'));
-    expect(dressSurfaces(root)).toEqual({ stone: 3, slate: 1, hedge: 1 });
-    expect(dressSurfaces(root)).toEqual({ stone: 0, slate: 0, hedge: 0 });
+    expect(dressSurfaces(root)).toEqual({ stone: 3, slate: 1, hedge: 1, setts: 0, drive: 0 });
+    expect(dressSurfaces(root)).toEqual({ stone: 0, slate: 0, hedge: 0, setts: 0, drive: 0 });
   });
 
   it('puts back under a baked soffit the bounce the occlusion took, and only there', () => {

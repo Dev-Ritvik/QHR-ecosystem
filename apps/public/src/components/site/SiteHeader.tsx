@@ -209,6 +209,8 @@ export function SiteHeader() {
               <span className="sr-only">18.114 degrees north, 83.402 degrees east</span>
             </p>
             <span id="film-sound" className="film-sound-slot" />
+            {/* And the hour: Day, Golden, Night (HourChoice.tsx, a portal into this slot). */}
+            <span id="film-hours" className="film-hours-slot" />
           </div>
         ) : null}
       </header>

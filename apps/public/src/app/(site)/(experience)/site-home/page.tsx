@@ -40,6 +40,7 @@ import { ChapterUrl } from '@/components/experience/ChapterUrl';
 import { ChapterFade } from '@/components/experience/ChapterFade';
 import { EnterLink } from '@/components/experience/EnterLink';
 import { WordReveal } from '@/components/experience/WordReveal';
+import { HourChoice } from '@/components/experience/HourChoice';
 import { AmbientSound } from '@/components/experience/AmbientSound';
 import { StartCue } from '@/components/experience/StartCue';
 import { ChapterRail } from '@/components/experience/ChapterRail';
@@ -308,6 +309,7 @@ export default async function SiteHomePage() {
       {/* A sound layer, muted until asked for (its control is set in the
           header). */}
       <AmbientSound />
+      <HourChoice />
       {/* Where you are in the film, and the way to any other part of it: a
           dot a chapter down the frame's right edge. */}
       <ChapterRail mode="film" stops={railStops} />
@@ -334,8 +336,8 @@ export default async function SiteHomePage() {
       {/* THE LAYOUT'S SURVEY (the founder's frame, 2026-10-28): the words of
           the drawing laid over the south lawns in chapter three, each stood
           over its place along the line of the road or the plots it names by
-          the scene (exteriorLayout.ts, LayoutMarks), its crosshairs, and the
-          chapter's status at the frame's foot; all of it the drawing's, and
+          the scene (exteriorLayout.ts, LayoutMarks), and the chapter's status
+          at the frame's foot; all of it the drawing's, and
           gone with it. What it says is what the layouts' own sheets say: the
           plots it draws are 30 by 60 ft, the size Kartikeya Water Front's
           sheet prints and VSR Gayatri Township's every plot (layouts.ts), on
@@ -373,14 +375,10 @@ export default async function SiteHomePage() {
         <span className="layout-label layout-label-small" data-layout-label="9">
           Sanctioned layout
         </span>
-        <span className="layout-mark" data-layout-mark="0" />
-        <span className="layout-mark" data-layout-mark="1" />
-        <span className="layout-mark" data-layout-mark="2" />
         <div className="layout-hud" data-layout-hud>
           <span>3D scanning status: 100% complete</span>
           <i />
           <span>Geometric survey in progress</span>
-          <b className="layout-mark layout-hud-mark" />
         </div>
       </div>
 

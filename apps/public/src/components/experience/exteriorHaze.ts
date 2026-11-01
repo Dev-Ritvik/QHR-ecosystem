@@ -74,24 +74,44 @@ export const hazeUniforms = {
    *  the trees on it, so what is left of the country under the horizon has no
    *  outline against the skirt behind it, and the far trees stand in mist. */
   uHazeGround: { value: 0 },
+  /** How much of the far ground's air goes dark at the blue hour, 0..1. The mist stands
+   *  behind the trees there, and under them the land is the reference's dark: all the
+   *  air's colour on it was a bright strip ruled under the far crowns. */
+  uHazeLow: { value: 0 },
+  /** How far what stood back for the layout has come back for the blue hour, 0..1
+   *  (the avenue's palms: the reference has them; exteriorLayout.ts, standBack). */
+  uHazeBack: { value: 0 },
   /** Which frame the dissolves are on, 0..63: their pattern moves on each frame,
    *  and the eye takes the moving pattern for a fade. */
   uHazeFrame: { value: 0 },
 };
 
+/** How dark the far ground's air goes at the blue hour, and over what run from the eye
+ *  it is whole again (uHazeLow), metres. */
+export const HAZE_LOW = { dark: 0.5, from: 300, to: 540 } as const;
+
 /** Where the ground's own air begins and is whole (uHazeGround). */
 export const HAZE_GROUND_RUN = [170, 265] as const;
 
 /** The air's lobe about the sun by day (the concept built 1:1, 2026-10-27). */
-export const HAZE_PHASE = { sharp: 3, away: 0.55, toward: 2.0 } as const;
+export const HAZE_PHASE = { sharp: 3, away: 0.6, toward: 1.35 } as const;
 
 /** The valley's mist by day (the concept built 1:1, 2026-10-27). */
-export const VALLEY_MIST = { k: 0.55, height: 11, run: 450 } as const;
+// (the user's reference of 2026-11-01: "crisp atmospheric depth", the foreground's
+// contrast rich, rather than "the entire scene in muddy yellow-brown fog". k was 0.55.)
+export const VALLEY_MIST = { k: 0.26, kDusk: 0.55, height: 11, run: 450 } as const;
 
 /** The height the sky's foot is read at, for anything at or under the
  *  horizon: the middle of the band the frame's one colour is the mean of
  *  (skyHaze.ts, HAZE_BAND_DEG). */
 export const HAZE_FOOT_DEG = -0.2;
+/** How much of a far thing's coming or going is left to the dissolve, once it has
+ *  gone to the air's colour (HAZE_FOG). */
+export const HAZE_AIR = 0.45;
+/** How far from the eye a tree begins to go by way of the air and goes wholly so,
+ *  metres, and how far into it. */
+export const HAZE_TREE = { from: 80, whole: 120, air: 0.55 } as const;
+
 const HAZE_PARS = /* glsl */ `
 uniform sampler2D uHazeRing;
 uniform float uHazeGain;
@@ -104,6 +124,8 @@ uniform float uHazeEnd;
 uniform float uHazeTop;
 uniform float uHazeGround;
 uniform float uHazeFrame;
+uniform float uHazeBack;
+uniform float uHazeLow;
 void main() {`;
 
 const HAZE_FOG = /* glsl */ `
@@ -142,17 +164,35 @@ const HAZE_FOG = /* glsl */ `
 			float hazeMist = uMist.x * ( 1.0 - exp( - hazeRun / uMist.z ) ) * exp( - max( hazeY, 0.0 ) / uMist.y );
 			hazeFactor = 1.0 - ( 1.0 - hazeFactor ) * ( 1.0 - hazeMist );
 		}
+		// WHAT STANDS FAR OFF COMES AND GOES BY WAY OF THE AIR. A dark crown going by the
+		// dissolve alone stands against the lit mist as a pattern of dots for as
+		// long as it takes (seen over the blue hour's mist, 2026-11-01). So first it
+		// goes to the colour of the sky behind it, with no dissolve, and only then,
+		// when there is nothing left to see, it is taken away.
 		#ifdef HAZE_DISSOLVE
-			if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) < uHazeGround ) discard;
+			float hazeWhole = 1.0 - uHazeGround;
+			if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) >= hazeWhole / ${HAZE_AIR.toFixed(2)} ) discard;
+			hazeFactor = 1.0 - ( 1.0 - hazeFactor ) * smoothstep( ${HAZE_AIR.toFixed(2)}, 1.0, hazeWhole );
 		#endif
 		#ifdef HAZE_ARRIVE
-			if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) >= uHazeGround ) discard;
+			#ifdef HAZE_FAR
+				// (a tree, part of the way and only far off: it may have another
+				// tree behind it, and near the camera the dark land, and a crown in
+				// the air's colour stood on them as a pale ghost)
+				float hazeOff = smoothstep( ${HAZE_TREE.from.toFixed(1)}, ${HAZE_TREE.whole.toFixed(1)}, length( vViewPosition ) );
+				if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) >= mix( uHazeGround, uHazeGround / ${HAZE_AIR.toFixed(2)}, hazeOff ) ) discard;
+				hazeFactor = 1.0 - ( 1.0 - hazeFactor ) * ( 1.0 - ${HAZE_TREE.air.toFixed(2)} * hazeOff * ( 1.0 - smoothstep( ${HAZE_AIR.toFixed(2)}, 1.0, uHazeGround ) ) );
+			#else
+				if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) >= uHazeGround ) discard;
+			#endif
 		#endif
 		#ifdef HAZE_LEAVE
-			if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) < uHazeGround ) discard;
+			if ( fract( 52.9829189 * fract( dot( floor( gl_FragCoord.xy ) + 5.588238 * uHazeFrame, vec2( 0.06711056, 0.00583715 ) ) ) ) < uHazeGround * ( 1.0 - uHazeBack ) ) discard;
 		#endif
 		#ifdef HAZE_GROUND
 			hazeFactor = 1.0 - ( 1.0 - hazeFactor ) * ( 1.0 - uHazeGround * smoothstep( ${HAZE_GROUND_RUN[0].toFixed(1)}, ${HAZE_GROUND_RUN[1].toFixed(1)}, length( vViewPosition ) ) );
+			// (and whole again by the time it meets the skirt, so no line is drawn there)
+			hazeColour *= mix( 1.0, ${HAZE_LOW.dark.toFixed(2)}, uHazeLow * ( 1.0 - smoothstep( ${HAZE_LOW.from.toFixed(1)}, ${HAZE_LOW.to.toFixed(1)}, length( vViewPosition ) ) ) );
 		#endif
 		// THE AIR IS LIT FROM ONE SIDE: air scatters the sun's light forward,
 		// so the haze toward the sun glows and the haze away from it is dim,
@@ -201,6 +241,7 @@ export function dressHaze(root: THREE.Object3D): number {
       const cut = ground || roof || ((mat as Hazed & { alphaTest?: number }).alphaTest ?? 0) > 0;
       // (and what is the layout's comes and goes with its air: exteriorLayout.ts)
       const arrive = !!mat.userData?.arrive;
+      const far = !!mat.userData?.far;
       const leave = !!mat.userData?.leave;
       const prev = mat.onBeforeCompile;
       // What it compiled to before this pass, read NOW: three's default key is
@@ -221,14 +262,16 @@ export function dressHaze(root: THREE.Object3D): number {
         shader.uniforms.uHazeTop = hazeUniforms.uHazeTop;
         shader.uniforms.uHazeGround = hazeUniforms.uHazeGround;
         shader.uniforms.uHazeFrame = hazeUniforms.uHazeFrame;
+        shader.uniforms.uHazeLow = hazeUniforms.uHazeLow;
+        shader.uniforms.uHazeBack = mat.userData?.back ? hazeUniforms.uHazeBack : { value: 0 };
         shader.fragmentShader = shader.fragmentShader
           .replace(
             'void main() {',
-            `${cut ? '#define HAZE_CUT\n' : ''}${ground ? '#define HAZE_GROUND\n' : ''}${roof ? '#define HAZE_DISSOLVE\n' : ''}${arrive ? '#define HAZE_ARRIVE\n' : ''}${leave ? '#define HAZE_LEAVE\n' : ''}${HAZE_PARS}`,
+            `${cut ? '#define HAZE_CUT\n' : ''}${ground ? '#define HAZE_GROUND\n' : ''}${roof ? '#define HAZE_DISSOLVE\n' : ''}${arrive ? '#define HAZE_ARRIVE\n' : ''}${far ? '#define HAZE_FAR\n' : ''}${leave ? '#define HAZE_LEAVE\n' : ''}${HAZE_PARS}`,
           )
           .replace('#include <fog_fragment>', HAZE_FOG);
       };
-      mat.customProgramCacheKey = () => `${key}|sky-haze${cut ? '-cut' : ''}${ground ? '-ground' : ''}${roof ? '-roof' : ''}${arrive ? '-arrive' : ''}${leave ? '-leave' : ''}`;
+      mat.customProgramCacheKey = () => `${key}|sky-haze${cut ? '-cut' : ''}${ground ? '-ground' : ''}${roof ? '-roof' : ''}${arrive ? '-arrive' : ''}${far ? '-far' : ''}${leave ? '-leave' : ''}`;
       mat.needsUpdate = true;
     }
   });

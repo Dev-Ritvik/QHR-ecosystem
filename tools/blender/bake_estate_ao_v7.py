@@ -130,7 +130,7 @@ ARCH = [
 ]
 GROUND = [
     "ground_plane", "drive_forecourt", "terrace_upper", "parterre_gravel",
-    "garden_beds", "podium_beds", "helipad_deck", "hardscape_kerbs", "parterre_kerb",
+    "garden_beds", "podium_beds", "helipad_deck", "hardscape_kerbs", "parterre_kerb", "drive_setts",
 ]
 # Blender XY metres the ground map covers: the compound's lived-in middle, with
 # the house at the centre. Outside it the map clamps to its border, which is

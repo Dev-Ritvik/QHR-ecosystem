@@ -16,15 +16,16 @@
 //   and value a little: ~180 belt trees drawn from three meshes stop reading as
 //   clones.
 //
-//   WIND. A slow sway, larger higher in the crown and at a frond's tip; phase
-//   from the instance and the vertex, so neighbours do not move in lockstep.
-//   Small on purpose — this is an estate on a still evening, not a storm.
+//   WIND. A crown leaning with slow gusts that cross the estate, its limbs moving
+//   within that, its leaves trembling; a frond's tip further than its root. See WIND
+//   for what it was and why.
 
 import * as THREE from 'three';
 import { layoutAir } from './exteriorLayout';
 import { journeyState } from './journey';
 import { filmState } from './FilmGrade';
 import { ld } from './lookdev';
+import { sceneWarm } from './sceneWarm';
 
 /** Shared by every foliage material: one assignment a frame moves them all. */
 export const foliageUniforms = {
@@ -33,6 +34,8 @@ export const foliageUniforms = {
   uSunDir: { value: new THREE.Vector3(-0.8, 0.25, 0.5).normalize() },
   /** Key light colour times intensity. */
   uSunColor: { value: new THREE.Color(1, 0.85, 0.66) },
+  /** The wind's strength, 0..1: nothing while a still is over the picture. */
+  uWind: { value: 0 },
   /** The light through the leaves, as a share of TRANSLUCENCY: eased down
    *  with the film's evening (followSun). */
   uGlow: { value: 1 },
@@ -86,7 +89,7 @@ export const foliageUniforms = {
  * All of them can be moved on a running build (lookdev: palmThrough,
  * palmLeaf, palmTrunk, palmChroma).
  */
-export const PALM_LIGHT = { through: 0.8, leaf: 1.15, trunk: 3.2, chroma: 0.62 } as const;
+export const PALM_LIGHT = { through: 0.5, leaf: 1.15, trunk: 3.2, chroma: 0.62 } as const;
 export const PALM_WARMTH = [1.1, 1.0, 0.74] as const;
 /** The share of the light through a crown that reaches a frond turned from
  *  the sun (exteriorTrees, PALM_THROUGH): seen on the first lit build, the
@@ -107,10 +110,16 @@ foliageUniforms.uPalmChroma.value = PALM_LIGHT.chroma;
  * rim, so the evening takes most of the through-light, and the crown reads as
  * one shape again.
  */
-export const GLOW_EVENING_LOSS = 0.7;
+export const GLOW_EVENING_LOSS = 1;
 
 /** Strength of the light through the leaves, relative to the key. */
 export const TRANSLUCENCY = 0.32;
+/**
+ * AND SHOWN (the user's reference of 2026-11-01: "the golden-hour sunlight passes through
+ * the palm fronds and broadleaf tree canopies"): a multiple of the above, given back with
+ * the evening as it always was.
+ */
+export const LEAF_GLOW = 0.95;
 /**
  * Lift on the leaf colour. The cards carry the occlusion between leaves in
  * their albedo AND the crowns carry it again per vertex (COLOR_0); measured on
@@ -147,9 +156,42 @@ foliageUniforms.uPetal.value = PETAL_GAIN;
  * alpha up with the mip level holds the coverage at distance.
  */
 export const ALPHA_PER_MIP = 0.3;
-/** Sway, metres, at the top of a crown / the tip of a frond. */
-export const SWAY_CROWN = 0.06;
-export const SWAY_FROND = 0.16;
+/**
+ * THE WIND (the brief of 2026-11-01: "a custom vertex wind shader so palm fronds and
+ * tree canopies sway naturally"). There was one, at 6 cm at the top of a crown and
+ * 16 cm at a frond's tip: from where the film stands a pixel is four centimetres
+ * across, so a crown moved a pixel and a half. It was there to be measured and not to
+ * be seen. Metres, now, at the top of a ten-metre crown and at a frond's tip five
+ * metres out, at the height of a gust: an estate in a light evening air, not a storm.
+ *
+ *   GUSTS come over the land: two slow waves in the world, so that a tree and its
+ *   neighbour lean together and the far side of the lawn a few seconds later.
+ *   THE LEAN takes the whole crown the wind's way (WIND_DIR) and lets it back.
+ *   THE LIMBS move within that, each at its own phase.
+ *   THE LEAVES tremble, a few centimetres, and only as much as a gust has.
+ *
+ * Held at nothing while a still is over the picture or being shot (uWind, followSun),
+ * so a still and the first live frame are the same trees.
+ */
+export const SWAY_CROWN = 0.26;
+export const SWAY_FROND = 0.42;
+export const TREMBLE = 0.025;
+/** Which way it blows: world x, z. */
+export const WIND_DIR = [0.78, 0.62] as const;
+/** How long the wind takes to come up once nothing is held over the picture, seconds. */
+export const WIND_IN_S = 3;
+
+/**
+ * THE GUST AT A PLACE, 0..1, for any vertex shader with uFoliageTime in it. `p` is the
+ * tree's own place in the world, xz.
+ */
+export const WIND_GUST = /* glsl */ `
+float windGust(vec2 p, float t) {
+  float a = sin(t * 0.19 + dot(p, vec2(0.021, 0.013)));
+  float b = sin(t * 0.073 + dot(p, vec2(-0.009, 0.017)) + 1.7);
+  return 0.5 + 0.5 * clamp(a * 0.7 + b * 0.5, -1.0, 1.0);
+}
+`;
 
 const FOLIAGE_RE = /^MAT_(Leaves_|Palm_Frond)/;
 const FROND_RE = /^MAT_Palm_Frond/;
@@ -191,14 +233,27 @@ export const FOLIAGE_VERTEX = /* glsl */ `
   #endif
   float fSeed = fract(sin(dot(fInst.xz, vec2(12.9898, 78.233))) * 43758.5453);
   vFoliageSeed = fSeed;
+  float fGust = 0.35 + 0.65 * windGust(fInst.xz + modelMatrix[3].xz, uFoliageTime);
   #ifdef FOLIAGE_FROND
-    float amp = ${SWAY_FROND.toFixed(3)} * uv.x * uv.x;
+    // a frond hangs from the crown: the further out along it, the further it goes
+    // (by where it is, not its map: the atlases are not all laid out one way)
+    float fOut = length(transformed.xz) / 5.0;
+    float amp = ${SWAY_FROND.toFixed(3)} * fOut * fOut;
   #else
-    float amp = ${SWAY_CROWN.toFixed(3)} * clamp(transformed.y / 10.0, 0.0, 1.2);
+    float fUp = clamp(transformed.y / 10.0, 0.0, 1.4);
+    float amp = ${SWAY_CROWN.toFixed(3)} * fUp * fUp;
   #endif
-  float w = sin(uFoliageTime * 1.1 + fSeed * 6.2832 + transformed.x * 0.31 + transformed.z * 0.23) * 0.65
-          + sin(uFoliageTime * 2.3 + fSeed * 11.0 + transformed.y * 0.8) * 0.35;
-  transformed += vec3(w, 0.0, w * 0.55) * amp;
+  // the lean, the limbs, the leaves
+  float fLean = 0.55 + 0.45 * sin(uFoliageTime * 0.62 + fSeed * 6.2832);
+  float fLimb = sin(uFoliageTime * 1.43 + fSeed * 11.0 + transformed.x * 0.41 + transformed.z * 0.33 + transformed.y * 0.27);
+  float fLeaf = sin(uFoliageTime * 5.3 + fSeed * 17.0 + dot(transformed, vec3(2.3, 1.7, 2.9)));
+  vec2 fDir = vec2(${WIND_DIR[0].toFixed(3)}, ${WIND_DIR[1].toFixed(3)});
+  vec2 fPush = fDir * fLean * fGust + vec2(-fDir.y, fDir.x) * 0.35 * fLimb * fGust + fDir * 0.3 * fLimb;
+  transformed.xz += fPush * amp * uFoliageWind;
+  #ifdef FOLIAGE_FROND
+    transformed.y += (0.6 * fLimb - 0.25 * fLean) * fGust * amp * uFoliageWind;
+  #endif
+  transformed += vec3(fLeaf, fLeaf * 0.6, -fLeaf * 0.8) * ${TREMBLE.toFixed(3)} * fGust * uFoliageWind;
 }
 `;
 
@@ -297,6 +352,7 @@ export function dressFoliage(root: THREE.Object3D): number {
       mat.onBeforeCompile = (shader, renderer) => {
         prev.call(mat, shader, renderer);
         shader.uniforms.uFoliageTime = foliageUniforms.uTime;
+        shader.uniforms.uFoliageWind = foliageUniforms.uWind;
         shader.uniforms.uFoliageSunDir = foliageUniforms.uSunDir;
         shader.uniforms.uFoliageSunColor = foliageUniforms.uSunColor;
         shader.uniforms.uFoliageGlow = foliageUniforms.uGlow;
@@ -305,7 +361,7 @@ export function dressFoliage(root: THREE.Object3D): number {
         shader.uniforms.uBloomSun = foliageUniforms.uBloomSun;
         shader.uniforms.uBloomShade = foliageUniforms.uBloomShade;
         shader.vertexShader = shader.vertexShader
-          .replace('void main() {', 'uniform float uFoliageTime;\nvarying float vFoliageSeed;\nvoid main() {')
+          .replace('void main() {', `uniform float uFoliageTime;\nuniform float uFoliageWind;\nvarying float vFoliageSeed;\n${WIND_GUST}\nvoid main() {`)
           .replace('#include <begin_vertex>', FOLIAGE_VERTEX);
         shader.fragmentShader = shader.fragmentShader
           .replace(
@@ -336,9 +392,12 @@ const at = new THREE.Vector3();
 /** Follow the key light: its direction and its colour times intensity. */
 export function followSun(light: THREE.DirectionalLight | null, dt: number): void {
   foliageUniforms.uTime.value += dt;
+  const stillShoot = typeof window !== 'undefined' && (window as unknown as { __estateStillShoot?: boolean }).__estateStillShoot === true;
+  foliageUniforms.uWind.value =
+    sceneWarm.hold > 0 || stillShoot ? 0 : Math.min(1, foliageUniforms.uWind.value + Math.max(0, dt) / WIND_IN_S);
   const layout = layoutAir(journeyState.leg, journeyState.legProgress, !!journeyState.film);
-  foliageUniforms.uGlow.value = (1 - GLOW_EVENING_LOSS * filmState.evening) * (1 + (ld('layoutGlow', LAYOUT_GLOW) - 1) * layout);
-  foliageUniforms.uTop.value = ld('layoutTop', LAYOUT_TOP) * layout;
+  foliageUniforms.uGlow.value = (1 - GLOW_EVENING_LOSS * filmState.evening) * (1 + (ld('layoutGlow', LAYOUT_GLOW) - 1) * layout) * (1 - 0.55 * filmState.noon) * ld('leafGlow', LEAF_GLOW);
+  foliageUniforms.uTop.value = ld('layoutTop', LAYOUT_TOP) * layout * (1 - filmState.evening);
   foliageUniforms.uBloomSun.value = ld('bloomSun', BLOOM_LIGHT.sun);
   foliageUniforms.uBloomShade.value = ld('bloomShade', BLOOM_LIGHT.shade);
   foliageUniforms.uPalmThrough.value = ld('palmThrough', PALM_LIGHT.through);

@@ -50,7 +50,7 @@ describe("the sun's shadow map", () => {
     const src = readFileSync(join(__dirname, 'WorldCanvas.tsx'), 'utf8').replace(/\r\n/g, '\n');
     expect(src).toContain('light.shadow.autoUpdate = false;');
     expect(src).toContain(
-      "if (sunShadowDue(sunShadow.current, doorwayState.mode === 'running', light.shadow.map === null)) {",
+      "if (sunShadowDue(sunShadow.current, doorwayState.mode === 'running' || hourChoice.moving, light.shadow.map === null)) {",
     );
     // before the scroll-driven loop's early return, not inside it
     expect(src.indexOf('sunShadowDue(sunShadow.current')).toBeLessThan(src.indexOf('if (!driveByScroll) return;'));

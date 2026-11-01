@@ -211,7 +211,12 @@ def build_materials():
     # as the front itself: a white line through the park. A boundary wall is
     # rendered masonry that has stood in the weather; it sits two stops under
     # the ashlar and the eye stays on the house.
-    M["boundary"] = principled("MAT_Stone_Boundary", tex=t("v7_limestone"), tint=(0.5, 0.47, 0.42), normal_strength=0.8)
+    # A dressed rubble wall (the brief of 2026-11-01: "perimeter stone walls"): the
+    # courses are the site's own (exteriorSurfaces.ts, BOUNDARY_STONE). It was a
+    # weathered render at (0.5, 0.47, 0.42), by the paid audit of 2026-10-04.
+    M["boundary"] = principled("MAT_Stone_Boundary", tex=t("v7_limestone"), tint=(0.66, 0.62, 0.55), normal_strength=0.8)
+    # Granite setts: drawn by the site, sett by sett (exteriorSurfaces.ts, SETTS).
+    M["setts"] = principled("MAT_Setts", base=(0.2, 0.19, 0.18), rough=0.82)
     M["spire"] = principled("MAT_Roof", tex={"base": f"{SLATE}/p4c_basecolor.png", "rough": f"{SLATE}/p4c_roughness.png",
                                              "normal": f"{SLATE}/normal.png"}, tint=(0.82, 0.84, 0.86), normal_strength=0.7)
     M["gold"] = principled("MAT_Gold", base=(1.0, 0.77, 0.36), rough=0.3, metal=1.0)
@@ -1534,6 +1539,8 @@ def append_kept(M, col):
 # ---------------------------------------------------------------------------
 FOUNTAIN_Y = -30.0
 APRON_X = 7.0               # half width of the gravel apron between the steps and the ring
+# The saloon's bay at the steps, x0 x1 y0 y1: its setts' frame, to the apron's setts.
+STEPS_BAY = (3.6, 6.3, -20.3, -13.6)
 RING_R = (8.0, 14.0)        # the carriage ring round the fountain lawn
 AVENUE_X = 7.6
 WALL_X, WALL_FRONT, WALL_BACK = 72.0, -214.0, 84.0
@@ -1666,7 +1673,11 @@ def build_hardscape(M, col):
     for k in range(segs):
         k2 = (k + 1) % segs
         face(pav, [inner[k], outer[k], outer[k2], inner[k2]], 0)
-    kerb_prof = [(-0.08, 0.0), (0.08, 0.0), (0.08, 0.1), (-0.08, 0.1)]
+    # THE RING'S KERB, HEAVIER (the brief of 2026-11-01: "driveway curbing around the
+    # parked car"): 16 cm by 10 it was a line a pixel wide from the film's distances,
+    # and the car stood on a dark sheet that ran into the lawn. A dressed granite
+    # kerb, 28 by 15.
+    kerb_prof = [(-0.14, 0.0), (0.14, 0.0), (0.14, 0.15), (-0.14, 0.15)]
     add_sweep(kerb, [(r0 * math.cos(2 * math.pi * k / segs), FOUNTAIN_Y + r0 * math.sin(2 * math.pi * k / segs)) for k in range(segs)],
               kerb_prof, closed=True, prof_closed=True)
     # THE OUTER KERB STOPS WHERE THE DRIVE RUNS THROUGH IT. It was one closed
@@ -1702,7 +1713,7 @@ def build_hardscape(M, col):
         # the avenue, from the ring's outer kerb to the gate
         kerb_run(s * 4.4 - 0.08, s * 4.4 + 0.08, WALL_FRONT, FOUNTAIN_Y - ring_at(4.4))
         # the apron, from the ring's outer kerb to the podium walk
-        kerb_run(s * APRON_X - 0.08, s * APRON_X + 0.08, FOUNTAIN_Y + ring_at(APRON_X), -12.2)
+        add_box(kerb, s * APRON_X - 0.14, s * APRON_X + 0.14, FOUNTAIN_Y + ring_at(APRON_X), -12.2, 0.0, 0.15)
         # the rear walk, from the podium walk to the canal
         kerb_run(s * 3.8 - 0.08, s * 3.8 + 0.08, 12.2, 17.6)
     # the podium walk: its east side, and its front and back either side of the
@@ -1714,6 +1725,47 @@ def build_hardscape(M, col):
     kerb_run(3.8, 17.48, 12.12, 12.28)
     finish("drive_forecourt", pav, [M["drive"]], col)
     finish("hardscape_kerbs", kerb, [M["trim"]], col)
+    forecourt_setts(M, col, apron_at, avenue_at)
+
+
+def forecourt_setts(M, col, apron_at, avenue_at):
+    """A band of granite setts inside the forecourt's kerbs, and a bay of them round the
+    saloon at the steps. The forecourt itself stays polished stone (the user's Feature 1
+    brief of 2026-10-26): this is its edging, what a drive of this kind is finished with,
+    and the brief of 2026-11-01's "cobblestone driveways" as far as that allows. Laid 3 cm
+    proud: on the 16-bit grid the drive is quantised to, anything nearer is a coin toss."""
+    bm = new_bm()
+    z = 0.03
+    r0, r1 = RING_R
+
+    def band(ra, rb, a0, a1):
+        steps = max(2, int(round((a1 - a0) / 5.0)))
+        for k in range(steps):
+            t0, t1 = math.radians(a0 + (a1 - a0) * k / steps), math.radians(a0 + (a1 - a0) * (k + 1) / steps)
+            pts = [(ra * math.cos(t0), FOUNTAIN_Y + ra * math.sin(t0)), (rb * math.cos(t0), FOUNTAIN_Y + rb * math.sin(t0)),
+                   (rb * math.cos(t1), FOUNTAIN_Y + rb * math.sin(t1)), (ra * math.cos(t1), FOUNTAIN_Y + ra * math.sin(t1))]
+            face(bm, [bm.verts.new((x, y, z)) for x, y in pts], 0)
+
+    def flat(x0, x1, y0, y1):
+        face(bm, [bm.verts.new((x0, y0, z)), bm.verts.new((x1, y0, z)), bm.verts.new((x1, y1, z)), bm.verts.new((x0, y1, z))], 0)
+
+    # inside the ring's outer kerb, either side; round its inner kerb, all the way
+    for a0, a1 in ((-avenue_at, apron_at), (180.0 - apron_at, 180.0 + avenue_at)):
+        band(r1 - 0.72, r1 - 0.14, a0, a1)
+    band(r0 + 0.14, r0 + 0.72, 0.0, 360.0)
+    # up each side of the apron
+    ring_top = FOUNTAIN_Y + math.sqrt(r1 * r1 - APRON_X * APRON_X)
+    for s in (-1, 1):
+        x0, x1 = sorted((s * (APRON_X - 0.72), s * (APRON_X - 0.14)))
+        flat(x0, x1, ring_top, -12.2)
+    # The bay: a frame of setts round the saloon at the steps (motor_court), closed by
+    # the kerb on its outer side.
+    bx0, bx1, by0, by1 = STEPS_BAY
+    w = 0.3
+    flat(bx0, bx0 + w, by0, by1)
+    flat(bx0 + w, bx1, by0, by0 + w)
+    flat(bx0 + w, bx1, by1 - w, by1)
+    finish("drive_setts", bm, [M["setts"]], col)
 
 
 def build_fountain(M, col, gold_bm):
@@ -1820,6 +1872,8 @@ def build_compound_wall(M, col):
         U, Nn = Vector((d.x, d.y, 0)), Vector((n.x, n.y, 0))
         add_oriented_box(bm, o, U, Nn, 0, L, 0.0, 2.3, -0.2, 0.2)
         add_oriented_box(bm, o, U, Nn, -0.05, L + 0.05, 2.3, 2.42, -0.27, 0.27)
+        # a plinth, a course proud of the stone, for it to stand on
+        add_oriented_box(bm, o, U, Nn, 0, L, 0.0, 0.46, -0.27, 0.27)
         # Piers every eight metres, UNDER THE WALL'S OWN COPING: each stands
         # out from the wall's face and carries a wider block of the same
         # coping at the same height. (They stood 46 cm over it, each with a
@@ -2332,6 +2386,30 @@ def build_vegetation(M, col):
                 sh.append((-26.5 + sx * rng.uniform(2.4, 6.2), -25.0 + sy * rng.uniform(2.4, 5.6),
                            rng.uniform(0, 6.28), rng.uniform(0.6, 0.85)))
     scatter(col, bloom, "veg_bougainvillea", sh)
+    # THE WEST BORDER'S PLANTING, and what climbs the pergolas: their own random
+    # numbers, so that every tree after this keeps the place it had.
+    brng = random.Random(71)
+    bx0, bx1, by0, by1 = WEST_BORDER
+    border = []
+    y = by0 + 1.4
+    while y < by1 - 1.0:
+        border.append(((bx0 + bx1) / 2 + brng.uniform(-0.35, 0.35), y, brng.uniform(0, 6.28), brng.uniform(0.72, 1.02)))
+        y += brng.uniform(1.9, 2.6)
+    scatter(col, bloom, "veg_bougainvillea_border", border)
+    climbers = []
+    for x0, x1, y0, y1, z in PERGOLAS:
+        long_x = x1 - x0 > y1 - y0
+        n = max(2, int(round(max(x1 - x0, y1 - y0) / 2.6)))
+        for k in range(n):
+            t = (k + 0.5) / n
+            cx = x0 + (x1 - x0) * t if long_x else (x0 + x1) / 2 + brng.uniform(-0.4, 0.4)
+            cy = (y0 + y1) / 2 + brng.uniform(-0.4, 0.4) if long_x else y0 + (y1 - y0) * t
+            climbers.append((cx, cy, brng.uniform(0, 6.28), brng.uniform(0.75, 1.0), z))
+    par = scatter(col, bloom, "veg_bougainvillea_pergola", [(x, y_, r, s_) for x, y_, r, s_, _ in climbers])
+    for ch, c in zip(sorted(par.children, key=lambda o: o.name), climbers):
+        # laid over the joists, spread and flattened
+        ch.location.z = c[4] + PERGOLA_TOP - 0.25
+        ch.scale = (c[3] * 1.25, c[3] * 1.25, c[3] * 0.5)
     # The belt: big canopies outside the compound wall and along its inside.
     belt = []
 
@@ -2385,6 +2463,11 @@ def build_vegetation(M, col):
     scatter(col, g_coco or coco[0], "veg_palm_belt", [(p[0] + 4.5, p[1] + 3.5, p[2], 1.0) for p in belt[::4]])
 
 
+# The west border's bed, x0 x1 y0 y1; and the walk it stands beside.
+WEST_BORDER = (-43.0, -40.0, 16.0, 70.0)
+WEST_WALK = (-39.3, -37.3, -36.0, 74.0)
+
+
 def build_gardens(M, col):
     hedge, beds, soil = new_bm(), new_bm(), new_bm()
     def hedge_rect(x0, x1, y0, y1, h=0.7, t=0.5):
@@ -2434,6 +2517,14 @@ def build_gardens(M, col):
                 add_lathe(hedge, [(0.0, 0.0), (0.43, 0.0), (0.47, 0.16), (0.46, 0.42), (0.41, 0.78), (0.33, 1.14),
                                   (0.23, 1.48), (0.13, 1.74), (0.06, 1.88), (0.0, 1.93)], 20, s * x, y, PODIUM_Z + 0.6)
     # Flower beds of bougainvillea colour in the parterres are shrubs (see veg).
+    # THE WEST BORDER (the brief of 2026-11-01: "garden beds"): a long planted bed
+    # beside the west walk (west_parterre), between the terrace and the helipad.
+    bx0, bx1, by0, by1 = WEST_BORDER
+    add_box(soil, bx0, bx1, by0, by1, 0.0, 0.08)
+    add_box(hedge, bx1 - 0.38, bx1, by0, by1, 0.0, 0.46)
+    add_box(hedge, bx0, bx0 + 0.38, by0, by1, 0.0, 0.46)
+    add_box(hedge, bx0 + 0.38, bx1 - 0.38, by0, by0 + 0.38, 0.0, 0.46)
+    add_box(hedge, bx0 + 0.38, bx1 - 0.38, by1 - 0.38, by1, 0.0, 0.46)
     finish("garden_hedges", hedge, [M["hedge"]], col)
     finish("garden_beds", soil, [M["soil"]], col)
     finish("garden_planters", planters, [M["trim"]], col)
@@ -2453,9 +2544,22 @@ def build_gardens(M, col):
 # across the frame — so the pool terrace is west, where the hero and the quarter
 # beat both hold it, and the helipad is north-west, where the crane finds it.
 TERRACE = {"x0": -36.0, "x1": -17.0, "y0": -12.6, "y1": 12.6, "top": 0.5}
+# The pergolas: x0 x1 y0 y1 of the columns' centres, and the floor they stand on.
+PERGOLAS = ((-31.8, -22.0, 8.9, 12.0, 0.5), (37.4, 40.6, -36.0, -16.0, 0.02))
+PERGOLA_TOP = 2.75
+PERGOLA_BAY = 2.45
 POOL = {"x0": -32.8, "x1": -21.4, "y0": -6.6, "y1": 6.6,
-        "water": 0.455, "floor": -1.55, "catch": -34.3}
+        "water": 0.455, "floor": -1.55}
 HELIPAD = (-56.0, 34.0, 9.0)
+# The terrace's foot, under the lawn (which lies 4 cm under 0: build_ground).
+TERRACE_FOOT = -0.12
+# Where the glass rail's north and south runs end: the last post against the
+# west face of the podium balustrade's corner die (17.4 less half its 0.62).
+RAIL_EAST = -17.755
+# The gate in the south rail, on the centre of the flight below it, and the
+# bays either side of it.
+RAIL_GATE = (-26.8, -25.2)
+RAIL_GATE_BAY = 1.5
 
 
 # The pool ladder's rail, as (y, z) in the plane of one rail: from the deck
@@ -2572,11 +2676,12 @@ def parasol(steel, teak, fabric, x, y, top):
 
 
 def pool_terrace(M, col):
-    """A terrace, an infinity pool, a glass rail, a cabana and the furniture that
+    """A terrace, a pool, a glass rail with a gate in it and the furniture that
     says someone lives here."""
     T, P = TERRACE, POOL
     stone, coping, shell, water, glass, steel, teak, fabric, lamp = (new_bm() for _ in range(9))
     top, wl = T["top"], P["water"]
+    foot = TERRACE_FOOT
 
     # The slab, as a ring round the pool opening so no boolean is needed.
     #
@@ -2588,31 +2693,26 @@ def pool_terrace(M, col):
     # black pixels along two sides of the pool, a hand off the coping (found
     # by a ray through one of them; gone with the baked occlusion off; the
     # atlas itself is white there at full size). The slab stops where the
-    # coping begins (CW), except beside the overflow trough, which has none.
+    # coping begins (CW).
     #
-    # AND ROUND THE TROUGH'S OUTER WALL, WHICH IT CAPS. The slab also ran to
-    # the trough's edge, through that wall: the wall's top and the slab's lay
-    # in one plane, two materials deep, and from the same frame the trough's
-    # far edge was a saw of the two. The slab stops at the wall's back (TW),
-    # and the paving is carried over the wall as a cap of its own.
-    CW, TW, CAP = 0.45, 0.25, 0.08
-    add_box(stone, T["x0"], P["catch"] - TW, T["y0"], T["y1"], 0.0, top)
-    add_box(stone, P["catch"] - TW, P["catch"], T["y0"], P["y0"] - 0.3, 0.0, top)
-    add_box(stone, P["catch"] - TW, P["catch"], P["y1"] + 0.3, T["y1"], 0.0, top)
-    add_box(stone, P["catch"] - TW, P["catch"], P["y0"] - 0.3, P["y1"] + 0.3, top - CAP, top)
-    add_box(stone, P["x1"] + CW, T["x1"], T["y0"], T["y1"], 0.0, top)
-    add_box(stone, P["x0"] - 0.1, P["x1"] + CW, T["y0"], P["y0"] - CW, 0.0, top)
-    add_box(stone, P["x0"] - 0.1, P["x1"] + CW, P["y1"] + CW, T["y1"], 0.0, top)
-    add_box(stone, P["catch"], P["x0"] - 0.1, T["y0"], P["y0"], 0.0, top)
-    add_box(stone, P["catch"], P["x0"] - 0.1, P["y1"], T["y1"], 0.0, top)
-    # Steps down to the lawn on the south edge, and a second flight west.
+    # AND DOWN INTO THE LAWN. It stood on 0 with the lawn at -4 cm, and on the
+    # west the lawn's cells stop exactly at the slab's edge (build_ground, whose
+    # hole for the pool is the terrace's footprint): a slit under the whole
+    # west side, with the sky seen through it, a white line down the film's
+    # cover at the terrace's foot.
+    CW = 0.45
+    add_box(stone, T["x0"], P["x0"] - CW, T["y0"], T["y1"], foot, top)
+    add_box(stone, P["x1"] + CW, T["x1"], T["y0"], T["y1"], foot, top)
+    add_box(stone, P["x0"] - CW, P["x1"] + CW, T["y0"], P["y0"] - CW, foot, top)
+    add_box(stone, P["x0"] - CW, P["x1"] + CW, P["y1"] + CW, T["y1"], foot, top)
+    # Steps down to the lawn on the south edge.
     for k in range(3):
-        add_box(stone, -29.0, -23.0, T["y0"] - 0.42 * (k + 1), T["y0"] - 0.42 * k, 0.0, top - 0.167 * (k + 1))
+        add_box(stone, -29.0, -23.0, T["y0"] - 0.42 * (k + 1), T["y0"] - 0.42 * k, foot, top - 0.167 * (k + 1))
     # THE WAY IN FROM THE HOUSE (podium_balustrade, POOL_GATE): a path of the
     # terrace's stone through the opening in the podium's balustrade and over
     # the bed under it, level with the deck, to the edge of the house's own
     # terrace (its moulding's face at x -15.48, its top 5 cm under this).
-    add_box(stone, -17.05, -15.48, POOL_GATE[0], POOL_GATE[1], 0.0, top)
+    add_box(stone, -17.05, -15.48, POOL_GATE[0], POOL_GATE[1], foot, top)
     # The pool box: walls from the coping down to the floor.
     add_box(shell, P["x0"], P["x1"], P["y0"], P["y1"], P["floor"] - 0.12, P["floor"])
     for x0, x1, y0, y1 in ((P["x0"] - 0.3, P["x0"], P["y0"], P["y1"]),
@@ -2620,16 +2720,25 @@ def pool_terrace(M, col):
                            (P["x0"] - 0.3, P["x1"] + 0.3, P["y0"] - 0.3, P["y0"]),
                            (P["x0"] - 0.3, P["x1"] + 0.3, P["y1"], P["y1"] + 0.3)):
         add_box(shell, x0, x1, y0, y1, P["floor"] - 0.12, wl - 0.02)
-    # THE INFINITY EDGE. The west lip stands exactly at water level and the
-    # water sheet runs over it into a catch basin a metre below — which is the
-    # one detail that makes a pool read as expensive rather than as a tank.
-    add_box(shell, P["catch"], P["x0"], P["y0"] - 0.3, P["y1"] + 0.3, -0.62, -0.5)
-    add_box(shell, P["catch"] - TW, P["catch"], P["y0"] - 0.3, P["y1"] + 0.3, -0.62, top - CAP)
-    # Coping on the three sides that are not the spill. Each length ends
-    # where the next begins (they had lapped), and each is TWO stones: a block
-    # set down into the slot the slab left when it stopped at the coping's
-    # edge, and over it the plate that is seen, which stands a finger proud of
-    # the paving.
+    # A WALL BURIED IN THE WEST DECK, FOR THE SUN. A closed solid goes into the
+    # shadow map by its far faces, so for a low sun from the east the first
+    # thing on file is the terrace's west wall, and the shadow's bias (30 cm
+    # along the ray) leaves the lawn lit for that far from the wall's foot: a
+    # strip of sun at the foot of a wall in its own shadow. A far face a metre
+    # further toward the sun puts the foot well behind what is on file. Never
+    # seen; it stands inside the slab, 2 cm under the paving.
+    add_box(shell, T["x0"] + 1.0, T["x0"] + 1.1, T["y0"] + 0.1, T["y1"] - 0.1, foot, top - 0.02)
+    # COPING ON ALL FOUR SIDES (the user, 2026-11-01: "fix this part of swimming
+    # pool"). The west side was an "infinity edge": its lip at the water's level
+    # and a catch basin a metre below it, 1.5 m wide, with the deck going on
+    # past it to the rail. A vanishing edge wants a drop and a view beyond it;
+    # with neither, from the film it read as a dark trench cut into the terrace,
+    # with the terrace's raw end lit white at its far end.
+    #
+    # Each length ends where the next begins (they had lapped), and each is TWO
+    # stones: a block set down into the slot the slab left when it stopped at
+    # the coping's edge, and over it the plate that is seen, which stands a
+    # finger proud of the paving.
     #
     # THE PLATE IS A STONE OF ITS OWN FOR THE SAKE OF ITS EDGE. As one block,
     # the coping's outer face was a hand of stone buried in the paving and two
@@ -2641,46 +2750,66 @@ def pool_terrace(M, col):
     # are gone). The plate's edge is all in the air, and is narrow enough to
     # take its light from the plate's own top (bake_estate_ao_v7.py, SLIVER).
     for x0, x1, y0, y1 in ((P["x1"], P["x1"] + CW, P["y0"] - CW, P["y1"] + CW),
-                           (P["x0"] - 0.1, P["x1"], P["y0"] - CW, P["y0"]),
-                           (P["x0"] - 0.1, P["x1"], P["y1"], P["y1"] + CW)):
+                           (P["x0"] - CW, P["x0"], P["y0"] - CW, P["y1"] + CW),
+                           (P["x0"], P["x1"], P["y0"] - CW, P["y0"]),
+                           (P["x0"], P["x1"], P["y1"], P["y1"] + CW)):
         add_box(coping, x0, x1, y0, y1, top - 0.2, top)
         add_box(coping, x0, x1, y0, y1, top, top + 0.02)
-    # Water: the pool sheet, the spill face, and the catch basin below it.
-    add_box(water, P["x0"] - 0.02, P["x1"], P["y0"], P["y1"], wl - 0.02, wl)
-    add_box(water, P["x0"] - 0.06, P["x0"] - 0.02, P["y0"], P["y1"], -0.45, wl)
-    add_box(water, P["catch"] + 0.02, P["x0"], P["y0"] - 0.2, P["y1"] + 0.2, -0.5, -0.42)
+    # Water: the pool sheet.
+    add_box(water, P["x0"], P["x1"], P["y0"], P["y1"], wl - 0.02, wl)
     # Underwater lights: two runs in the long walls.
     for y in (-4.4, -1.5, 1.5, 4.4):
         for x, d in ((P["x0"] + 0.02, -1), (P["x1"] - 0.02, 1)):
             add_box(lamp, x - 0.02 - 0.06 * (d > 0), x + 0.02 + 0.06 * (d < 0), y - 0.34, y + 0.34, wl - 0.62, wl - 0.38)
-    # Glass balustrade along the west edge and returns along north and south.
-    # (And the south edge railed to the house, from the steps' east end to
-    # the podium's corner die: it stopped at the steps, and between them and
-    # the house the deck's edge stood open over the lawn. The user,
-    # 2026-10-26: "Extend the wall in the red circle".)
-    rails = [((T["x0"] + 0.2, T["y0"] + 0.2), (T["x0"] + 0.2, T["y1"] - 0.2)),
-             ((T["x0"] + 0.2, T["y0"] + 0.2), (-24.0, T["y0"] + 0.2)),
-             ((-22.8, T["y0"] + 0.2), (-17.9, T["y0"] + 0.2)),
-             ((T["x0"] + 0.2, T["y1"] - 0.2), (-19.0, T["y1"] - 0.2))]
-    for (ax, ay), (bx, by) in rails:
+    # Glass balustrade along the west edge and returns along north and south,
+    # each return running on to the podium's corner die. THE SOUTH RUN IS ONE
+    # RAIL NOW, WITH A GATE IN IT (the user, 2026-11-01: "fix this gap in the
+    # fence of the pool"). It was two, stopping 1.2 m apart at the east end of
+    # the flight below, which left a hole in the fence and five metres of steps
+    # climbing into the glass. The flight has a gate at its centre instead, and
+    # the handrail runs unbroken over it. (The north run stopped short of its
+    # die in the same way, over an open drop to the lawn.)
+    west, south, north = T["x0"] + 0.2, T["y0"] + 0.2, T["y1"] - 0.2
+    rails = [((west, south), (west, north), 1.7, None),
+             ((west, south), (RAIL_EAST, south), RAIL_GATE_BAY, (RAIL_GATE[0] - west, RAIL_GATE[1] - west)),
+             ((west, north), (RAIL_EAST, north), 1.7, None)]
+    for (ax, ay), (bx, by), bay, gate in rails:
         dx, dy = bx - ax, by - ay
         L = math.hypot(dx, dy)
         ux, uy = dx / L, dy / L
         px, py = -uy, ux
-        n = max(2, int(round(L / 1.7)))
-        for k in range(n + 1):
-            cx, cy = ax + ux * L * k / n, ay + uy * L * k / n
+        A, U, V = Vector((ax, ay, 0)), Vector((ux, uy, 0)), Vector((px, py, 0))
+        # where the posts stand along the run: evenly, up to and on from a gate
+        ends = [0.0, *(gate or ()), L]
+        posts = [L]
+        for s0, s1 in zip(ends, ends[1:]):
+            n = max(1, int(round((s1 - s0) / bay)))
+            posts += [s0 + (s1 - s0) * k / n for k in range(n)]
+        posts.sort()
+        for s in posts:
+            cx, cy = ax + ux * s, ay + uy * s
             add_box(steel, cx - 0.045, cx + 0.045, cy - 0.045, cy + 0.045, top, top + 1.06)
-        # the glass, inset between the posts, and a steel handrail over it
-        for k in range(n):
-            t0, t1 = L * k / n + 0.07, L * (k + 1) / n - 0.07
-            add_oriented_box(glass, Vector((ax, ay, 0)), Vector((ux, uy, 0)), Vector((px, py, 0)),
-                             t0, t1, top + 0.06, top + 0.98, -0.009, 0.009)
+        # The glass, between the posts and up to the handrail. CLOSED ON ALL
+        # THREE: it stood 2.5 cm off each post and 2 cm under the rail, and from
+        # the film those slits were under a pixel, a row of bright dashes
+        # wherever the water or the deck lay behind them.
+        for s0, s1 in zip(posts, posts[1:]):
+            t0, t1, z0, z1 = s0 + 0.04, s1 - 0.04, top + 0.06, top + 1.0
+            if gate and s0 == gate[0]:
+                # The gate's leaf: the glass in a frame a hand wide (anything
+                # thinner is under a pixel from the cover), and a lock case on
+                # each face at its free stile.
+                w = 0.075
+                t0, t1 = s0 + 0.045 + w, s1 - 0.045 - w
+                for r0, r1, a, b in ((t0 - w, t0, z0, z1), (t1, t1 + w, z0, z1), (t0, t1, z0, z0 + 0.1), (t0, t1, z1 - 0.08, z1)):
+                    add_oriented_box(steel, A, U, V, r0, r1, a, b, -0.02, 0.02)
+                add_oriented_box(steel, A, U, V, t1 - 0.125, t1, top + 0.64, top + 0.72, -0.045, 0.045)
+                z0, z1 = z0 + 0.1, z1 - 0.08
+            add_oriented_box(glass, A, U, V, t0, t1, z0, z1, -0.009, 0.009)
         # (a handrail a hand wide: at 10 cm by 6 it was under a pixel from
         # the cover, and the rail was "a dotted line" of its posts alone: the
         # forensic audit of 2026-10-09, #19)
-        add_oriented_box(steel, Vector((ax, ay, 0)), Vector((ux, uy, 0)), Vector((px, py, 0)),
-                         -0.06, L + 0.06, top + 1.0, top + 1.1, -0.07, 0.07)
+        add_oriented_box(steel, A, U, V, -0.06, L + 0.06, top + 1.0, top + 1.1, -0.07, 0.07)
     # A LADDER INTO THE POOL (the user, 2026-10-26: "add a ladder to get
     # inside the pool"), on the north side near its east end: two steel rails
     # standing on the deck behind the coping, bowed over it and down the wall
@@ -2917,24 +3046,49 @@ def podium_balustrade(M, col, gold_bm):
     for sx in (-1, 1):
         for sy in (-1, 1):
             add_lathe(bm, [(r * 0.85, zz * 0.85) for r, zz in URN], 20, sx * x, sy * y, z + 1.14)
-    # AND THE SAME URN ON THE TWO DIES EITHER SIDE OF THE STEPS, where the
-    # front runs end (the user, 2026-10-26: "Add the decoration prop from the
-    # pillar in the purple circle to the pillar in the yellow circle"). They
-    # stood bare beside the cheek walls' urns, which are gone (build_portico).
-    for sx in (-1, 1):
-        add_lathe(bm, [(r * 0.85, zz * 0.85) for r, zz in URN], 20, sx * 7.6, -y, z + 1.14)
+    # (The two dies either side of the steps, where the front runs end, carry
+    # lamps: estate_lighting. They carried this urn from 2026-10-26 until the
+    # user's reference of the door at midnight, 2026-11-01, which has a lit globe
+    # on each.)
     finish("podium_balustrade", bm, [M["trim"]], col)
+
+
+# Along the west walk, on its terrace side: y. exteriorLamps.tsx, WALK_BOLLARDS.
+WALK_BOLLARDS = (-32.0, -18.0, 15.0, 29.0, 43.0, 57.0, 71.0)
 
 
 def estate_lighting(M, col):
     """Uplights on the facade and lanterns down the avenue: at dusk they are the
     difference between a model and a place."""
     steel, lamp = new_bm(), new_bm()
+    # THE LAMPS ON THE DIES BESIDE THE STEPS (the user's reference of the door at
+    # midnight, 2026-11-01): a turned bronze foot and stem, an opal globe and a cap.
+    # exteriorLamps.tsx, DIE_LAMPS, has where the globe's light stands.
+    die_top = PODIUM_Z + 1.14
+    for sx in (-1, 1):
+        x, y = sx * 7.6, -12.2
+        add_lathe(steel, [(0.0, 0.0), (0.15, 0.0), (0.15, 0.03), (0.07, 0.07), (0.045, 0.16), (0.07, 0.2), (0.0, 0.2)], 16, x, y, die_top)
+        globe = [(0.0, 0.0)] + [(0.17 * math.sin(math.pi * k / 10), 0.17 * (1 - math.cos(math.pi * k / 10))) for k in range(1, 10)] + [(0.0, 0.34)]
+        add_lathe(lamp, globe, 20, x, y, die_top + 0.2)
+        add_lathe(steel, [(0.0, 0.0), (0.06, 0.0), (0.075, 0.02), (0.03, 0.06), (0.0, 0.1)], 12, x, y, die_top + 0.52)
+    # AND THE BRACKETS OF THE LANTERNS ON THE FRONT OF THE HOUSE (portico_lantern):
+    # an arm out from the wall to the lantern's top.
+    for x, mid, wall, front in WALL_LANTERNS:
+        add_box(steel, x - 0.03, x + 0.03, -front, -wall, mid + WALL_LANTERN_HEIGHT / 2 + 0.02, mid + WALL_LANTERN_HEIGHT / 2 + 0.07)
     for sx in (-1, 1):
         for x in (3.4, 7.0, 10.6):
             add_box(lamp, sx * x - 0.16, sx * x + 0.16, -HD - 0.34, -HD - 0.06, 0.02, 0.1)
         for y in (-6.0, 0.0, 6.0):
             add_box(lamp, sx * (HW + 0.06), sx * (HW + 0.34), y - 0.16, y + 0.16, 0.02, 0.1)
+    # BOLLARDS (the brief of 2026-11-01: "outdoor lighting bollards"): down the west
+    # walk (exteriorLamps.tsx, WALK_BOLLARDS), the terrace's own in bronze. The ring's
+    # are the site's own (exteriorLamps.tsx, RING_BOLLARDS).
+    def bollard(x, y):
+        add_lathe(steel, [(0.0, 0.0), (0.085, 0.0), (0.085, 0.04), (0.06, 0.06), (0.06, 0.62), (0.0, 0.62)], 12, x, y, 0.0)
+        add_lathe(lamp, [(0.0, 0.0), (0.055, 0.0), (0.062, 0.02), (0.062, 0.1), (0.0, 0.1)], 12, x, y, 0.62)
+        add_lathe(steel, [(0.0, 0.0), (0.085, 0.0), (0.09, 0.012), (0.055, 0.04), (0.0, 0.05)], 12, x, y, 0.72)
+    for y in WALK_BOLLARDS:
+        bollard(WEST_WALK[1] + 0.42, y)
     for k in range(9):
         y = -44.0 - k * 17.0
         for sx in (-1, 1):
@@ -2978,6 +3132,24 @@ def west_parterre(M, col):
     # A stone urn on a plinth at the centre, on the cross of the walks.
     add_box(stone, cx - 0.62, cx + 0.62, cy - 0.62, cy + 0.62, 0.0, 0.72)
     add_lathe(stone, [(r * 1.5, zz * 1.5) for r, zz in URN], 24, cx, cy, 0.72)
+    # THE WEST WALK (the brief of 2026-11-01: "gravel pathways"): the long walk from the
+    # parterre past the pool terrace to the wall, with a spur from the parterre to it
+    # and another from the terrace's south gate to the parterre, each kerbed.
+    def walk(x0, x1, y0, y1):
+        add_box(gravel, x0, x1, y0, y1, 0.0, 0.02)
+        if x1 - x0 < y1 - y0:
+            add_box(kerb, x0 - 0.12, x0, y0, y1, 0.0, 0.08)
+            add_box(kerb, x1, x1 + 0.12, y0, y1, 0.0, 0.08)
+        else:
+            add_box(kerb, x0, x1, y0 - 0.12, y0, 0.0, 0.08)
+            add_box(kerb, x0, x1, y1, y1 + 0.12, 0.0, 0.08)
+    wx0, wx1, wy0, wy1 = WEST_WALK
+    walk(wx0, wx1, wy0, wy1)
+    walk(wx1 + 0.12, cx - hw, cy - 1.0, cy + 1.0)
+    walk(-27.0, -25.0, cy + hd, -14.6)
+    # The second pergola stands on a floor of the same gravel.
+    px0, px1, py0, py1, _ = PERGOLAS[1]
+    walk(px0 - 0.25, px1 + 0.25, py0 - 0.25, py1 + 0.25)
     finish("parterre_gravel", gravel, [M["gravel"]], col)
     finish("parterre_kerb", kerb, [M["trim"]], col)
     finish("parterre_hedge", hedge, [M["hedge"]], col)
@@ -3000,6 +3172,10 @@ def podium_beds(M, col):
 LANTERN_AT = (0.0, -9.62)
 LANTERN_TOP = 4.4 - 0.5
 LANTERN_HEIGHT = 0.8        # tripo_assets_v7.ASSETS["lantern"]
+# The lanterns on the wall: x, the height of the lantern's middle, the wall's face
+# and the lantern's axis (both as distances south of the house's middle).
+WALL_LANTERN_HEIGHT = 0.56
+WALL_LANTERNS = ((-1.95, 7.15, 7.8, 8.15), (1.95, 7.15, 7.8, 8.15), (-1.45, 3.35, 8.4, 8.65), (1.45, 3.35, 8.4, 8.65))
 
 
 def portico_lantern(M, col):
@@ -3011,6 +3187,61 @@ def portico_lantern(M, col):
                       z=LANTERN_TOP - LANTERN_HEIGHT)
     if ob is not None:
         print("LANTERN at", [round(v, 3) for v in ob.location])
+    # THE SAME LANTERN, SMALLER, ON THE FRONT OF THE HOUSE (the user's reference of
+    # the door at midnight, 2026-11-01): a pair at the balcony's door and a pair at
+    # the front door. One material with the portico's, so the site lights them
+    # together (PorticoLantern.tsx). exteriorLamps.tsx has where their light stands.
+    for i, (x, mid, wall, front) in enumerate(WALL_LANTERNS):
+        wl = tripo_object("lantern", f"wall_lantern_{i}", col, x, -front, math.pi / 2, z=mid - WALL_LANTERN_HEIGHT / 2)
+        if wl is not None:
+            k = WALL_LANTERN_HEIGHT / LANTERN_HEIGHT
+            wl.scale = (k, k, k)
+
+
+def build_pergolas(M, col):
+    """Two pergolas (the brief of 2026-11-01: "pergolas", to "bridge the visual gap
+    between the European neoclassical mansion and the tropical palm surroundings"): the
+    house's stone holding up a roof of teak, with the tropics growing over it. One over
+    the day bed at the north end of the pool terrace (there was a cabana near there,
+    six square posts and a slab, taken off by the paid audit of 2026-10-04: this is open,
+    round-columned and half the mass), and one walk beyond the east parterre, seen on the
+    revolution's far side and on the way down to the door. (First laid beside the canal garden, where it stood across the foreground of the frame the user's reference is of.)"""
+    stone, wood = new_bm(), new_bm()
+    shaft = [(0.0, 0.0), (0.24, 0.0), (0.24, 0.05), (0.19, 0.09), (0.17, 0.16), (0.15, PERGOLA_TOP - 0.3),
+             (0.2, PERGOLA_TOP - 0.2), (0.24, PERGOLA_TOP - 0.14), (0.24, PERGOLA_TOP - 0.08), (0.0, PERGOLA_TOP - 0.08)]
+    for x0, x1, y0, y1, z in PERGOLAS:
+        long_x = x1 - x0 > y1 - y0
+        length = (x1 - x0) if long_x else (y1 - y0)
+        depth = (y1 - y0) if long_x else (x1 - x0)
+        bays = max(2, int(round(length / PERGOLA_BAY)))
+        for k in range(bays + 1):
+            t = k / bays
+            for side in (0.0, 1.0):
+                if long_x:
+                    add_lathe(stone, shaft, 14, x0 + (x1 - x0) * t, y0 + (y1 - y0) * side, z)
+                else:
+                    add_lathe(stone, shaft, 14, x0 + (x1 - x0) * side, y0 + (y1 - y0) * t, z)
+        top = z + PERGOLA_TOP
+        # the two beams along the columns, and the joists across them, overhung
+        for side in (0.0, 1.0):
+            if long_x:
+                yb = y0 + (y1 - y0) * side
+                add_box(wood, x0 - 0.5, x1 + 0.5, yb - 0.09, yb + 0.09, top - 0.08, top + 0.14)
+            else:
+                xb = x0 + (x1 - x0) * side
+                add_box(wood, xb - 0.09, xb + 0.09, y0 - 0.5, y1 + 0.5, top - 0.08, top + 0.14)
+        joists = int(length / 0.62)
+        for k in range(joists + 1):
+            t = k / joists
+            if long_x:
+                xj = x0 - 0.3 + (x1 - x0 + 0.6) * t
+                add_box(wood, xj - 0.035, xj + 0.035, y0 - 0.42, y1 + 0.42, top + 0.14, top + 0.3)
+            else:
+                yj = y0 - 0.3 + (y1 - y0 + 0.6) * t
+                add_box(wood, x0 - 0.42, x1 + 0.42, yj - 0.035, yj + 0.035, top + 0.14, top + 0.3)
+        print("PERGOLA", (x0, x1, y0, y1), "depth", depth, "bays", bays)
+    finish("pergola_stone", stone, [M["trim"]], col, smooth_angle=40)
+    finish("pergola_timber", wood, [M["teak"]], col)
 
 
 def build_luxury(M, col):
@@ -3018,6 +3249,7 @@ def build_luxury(M, col):
     portico_lantern(M, col)
     pool_terrace(M, col)
     west_parterre(M, col)
+    build_pergolas(M, col)
     podium_beds(M, col)
     helipad(M, col)
     motor_court(M, col)

@@ -50,6 +50,7 @@ import { PortraitBeam } from './PortraitBeam';
 import { WindowLight } from './WindowLight';
 import { hallEnv } from './HallModel';
 import { registerHallRoot } from './doorPortal';
+import { doorwayState } from './doorway';
 import { isShown, warmHallPrograms } from './hallProbe';
 import { lensSubject } from './LensFocus';
 import {
@@ -511,7 +512,22 @@ export function InteriorStage({
     // The lens's edge at the tables whose copy stands on ivory (lensFilter).
     // The header's band across the top of the lens: on the film only (a
     // still's page has a bar behind its header).
-    lensFilter.top = mode === 'still' ? 0 : HEADER_BAND.hall;
+    //
+    // AND THE LENS IS THE HALL'S ONLY ONCE THE HALL HAS THE FRAME. This stage is
+    // armed long before the door (journey.ts, PRELOAD_LEAD), and from then on its
+    // loop ran behind the estate's: it set the band's reach to the hall's on every
+    // frame and the estate's eased it back for one (headerBandReach). MEASURED (a
+    // wheel walk at 1920x945 against each frame's state, 2026-11-01): from the
+    // frame it was armed, at leg 0.577, to the door, the band stood half as deep
+    // again as the estate's: the sky under the header down from 175 to 129 in one
+    // frame, and back up for a frame at each long frame after it. So the estate
+    // writes the lens until the sets change, and on the way out by the door this
+    // goes on until that passage has ended (WorldCanvas, hallsFilter).
+    const hallsLens =
+      mode === 'still' ||
+      doorwayState.sceneLeg === 'interior' ||
+      (doorwayState.mode === 'running' && doorwayState.dir === 'exit' && doorwayState.style === 'through');
+    if (hallsLens) lensFilter.top = mode === 'still' ? 0 : HEADER_BAND.hall;
     if (mode === 'still') {
       lensFilter.stops = 0;
       codaFilterClear();
@@ -540,19 +556,21 @@ export function InteriorStage({
       // of a wide frame, or across the top or foot of any other. (And a phone
       // on its side, filmIsShort, has its own densities: STATION_ND_SHORT.)
       const wide = filmIsWide(window.innerWidth, window.innerHeight);
-      stationFilter(
-        stationWeights,
-        wide,
-        window.innerWidth / Math.max(1, window.innerHeight),
-        stationStyle() === 'model',
-        filmIsShort(window.innerWidth, window.innerHeight),
-      );
-      if (wide) headerBandReach();
-      else {
-        // The grad that rides with the reframed chapters' copy, and the
-        // header's band down over the tables' (lensFilter.ts; phoneFraming.ts).
-        phoneRoomFilter(copyZone.panes, delta);
-        tableBandFilter(copyZone.panes, delta, stationStyle() === 'model');
+      if (hallsLens) {
+        stationFilter(
+          stationWeights,
+          wide,
+          window.innerWidth / Math.max(1, window.innerHeight),
+          stationStyle() === 'model',
+          filmIsShort(window.innerWidth, window.innerHeight),
+        );
+        if (wide) headerBandReach();
+        else {
+          // The grad that rides with the reframed chapters' copy, and the
+          // header's band down over the tables' (lensFilter.ts; phoneFraming.ts).
+          phoneRoomFilter(copyZone.panes, delta);
+          tableBandFilter(copyZone.panes, delta, stationStyle() === 'model');
+        }
       }
       // And the film's last light, for the colophon that comes up over it:
       // the lens closes down while any of its lines stands on the map table.

@@ -1042,6 +1042,46 @@ test.describe('the front door', () => {
 });
 
 test.describe('degraded paths', () => {
+  // THE WHITE HOUSE (found 2026-10-31). Every other test here runs on a discrete
+  // card that reaches the high tier, so nothing looked at the other chains: the
+  // scene's depth reached their bloom and grade through the alpha, and the stone
+  // blended to white on every device below the high tier. Each tier's picture is
+  // read here, as pixels: nothing else about the page says a house is white.
+  for (const [tier, signal] of [
+    ['mid', { deviceMemory: 3 }],
+    ['low', { hardwareConcurrency: 2 }],
+  ] as const) {
+    test(`the ${tier} tier draws the house in its stone`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: VIEWPORT });
+      const page = await ctx.newPage();
+      await page.addInitScript((s) => {
+        for (const [k, v] of Object.entries(s)) Object.defineProperty(navigator, k, { get: () => v });
+      }, signal);
+      await page.goto('/');
+      await consent(page);
+      await ready(page);
+      // past the tier's measuring, which rebuilds the chain
+      await page.waitForTimeout(6000);
+      const png = (await page.screenshot({ type: 'png' })).toString('base64');
+      // (read in a blank tab: the site's content security policy refuses a data URL)
+      const blank = await ctx.newPage();
+      const white = await blank.evaluate(async (b64) => {
+        const blob = await (await fetch(`data:image/png;base64,${b64}`)).blob();
+        const bmp = await createImageBitmap(blob);
+        const c = new OffscreenCanvas(bmp.width, bmp.height);
+        const g = c.getContext('2d')!;
+        g.drawImage(bmp, 0, 0);
+        const d = g.getImageData(0, 0, bmp.width, bmp.height).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (Math.min(d[i], d[i + 1], d[i + 2]) > 245) n += 1;
+        return n / (d.length / 4);
+      }, png);
+      // (it was 40% of the frame; the words and the marks are well under 1%)
+      expect(white, 'share of the frame blown to white').toBeLessThan(0.01);
+      await ctx.close();
+    });
+  }
+
   test('reduced motion still navigates and still reads', async ({ browser }) => {
     const ctx = await browser.newContext({ reducedMotion: 'reduce', viewport: VIEWPORT });
     const page = await ctx.newPage();
@@ -2362,3 +2402,209 @@ test.describe('the rail', () => {
       .toBe('1');
   });
 });
+
+test.describe('the cursor', () => {
+  /** What the drawing is doing, as a visitor would see it. */
+  const reticle = (page: Page) =>
+    page.evaluate(() => {
+      const r = document.querySelector<HTMLElement>('.reticle');
+      if (!r) return null;
+      return {
+        state: r.dataset.state ?? '',
+        seen: getComputedStyle(r).opacity !== '0',
+        at: r.style.transform,
+        width: Math.round(r.querySelector('.reticle-ring')?.getBoundingClientRect().width ?? 0),
+        words: (r.textContent ?? '').trim(),
+        pressed: 'down' in r.dataset,
+      };
+    });
+
+  test('takes the place of the system\u2019s once it has met a mouse, and is in the way of nothing', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await page.waitForSelector('.reticle', { state: 'attached' });
+    // not before: a pointer that has not moved keeps its own (and the press on the
+    // consent card, next, is the first it meets)
+    expect(await page.evaluate(() => document.documentElement.classList.contains('reticle-on'))).toBe(false);
+    expect(await page.evaluate(() => getComputedStyle(document.body).cursor)).not.toBe('none');
+    await consent(page);
+    await ready(page);
+
+    await page.mouse.move(900, 500);
+    await expect.poll(async () => (await reticle(page))?.seen).toBe(true);
+    expect((await reticle(page))?.at).toBe('translate3d(900px, 500px, 0px)');
+    expect(await page.evaluate(() => getComputedStyle(document.body).cursor)).toBe('none');
+    // and nothing it draws is ever what a press lands on
+    expect(await page.evaluate(() => document.elementFromPoint(900, 500)?.closest('.reticle') ?? null)).toBeNull();
+
+    // leaves with the pointer
+    await page.evaluate(() => document.documentElement.dispatchEvent(new MouseEvent('mouseleave')));
+    await expect.poll(async () => (await reticle(page))?.seen).toBe(false);
+    await page.mouse.move(901, 500);
+    await expect.poll(async () => (await reticle(page))?.seen).toBe(true);
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+
+  test('stays what it is over a link, and the press still lands', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    await page.waitForSelector('.reticle', { state: 'attached' });
+    await page.mouse.move(900, 500);
+    // on the film, with the land under it: the ring, and nothing beside it
+    await expect.poll(async () => (await reticle(page))?.seen).toBe(true);
+    const land = (await reticle(page))!;
+    expect(land.words).toBe('');
+    expect(land.width).toBe(36);
+
+    const cue = page.locator('a.start-cue').first();
+    const box = (await cue.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    // the ring does not change
+    await page.waitForTimeout(600);
+    const over = (await reticle(page))!;
+    expect(over.state).toBe('idle');
+    expect(over.words).toBe('');
+    expect((await reticle(page))?.width).toBe(36);
+
+    // a link still takes the press through it
+    const y0 = await page.evaluate(() => scrollY);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect.poll(() => page.evaluate(() => scrollY), { timeout: 8000 }).toBeGreaterThan(y0 + 50);
+  });
+
+  test('over the layout\u2019s plots it is the same, and nothing comes up on the ground', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    await page.waitForSelector('.reticle', { state: 'attached' });
+    await scrollToCopy(page, 'holdings');
+    await page.waitForTimeout(1500);
+    await page.mouse.move(825, 790);
+    await expect.poll(async () => (await reticle(page))?.seen).toBe(true);
+    const land = (await reticle(page))!;
+    expect(land.words).toBe('');
+    expect(land.width).toBe(36);
+    await page.mouse.down();
+    await page.waitForTimeout(600);
+    const held = (await reticle(page))!;
+    expect(held.state).toBe('idle');
+    expect(held.pressed).toBe(true);
+    await page.mouse.up();
+    expect((await reticle(page))?.pressed).toBe(false);
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+
+  test('a table in the hall still says it can be turned, and the cursor does not change', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    await page.waitForSelector('.reticle', { state: 'attached' });
+    await scrollToCopy(page, 'station-1');
+    await page.waitForTimeout(2500);
+    let found = false;
+    for (let y = 320; y <= 760 && !found; y += 40) {
+      for (let x = 560; x <= 1300 && !found; x += 40) {
+        await page.mouse.move(x, y);
+        await page.waitForTimeout(90);
+        found = await page.evaluate(() => Boolean(document.body.style.cursor));
+      }
+    }
+    expect(found, 'something in the hall that answers').toBe(true);
+    const over = (await reticle(page))!;
+    expect(over.state).toBe('idle');
+    expect(over.width).toBe(36);
+  });
+
+  test('gives the caret back in a field', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/contact');
+    await consent(page);
+    await page.waitForSelector('.reticle', { state: 'attached' });
+    await page.mouse.move(40, 400);
+    await expect.poll(async () => (await reticle(page))?.seen).toBe(true);
+
+    // (by name: the form's first input is its honeypot, under the other things)
+    const field = page.locator('input[name="name"]').first();
+    await field.evaluate((e) => e.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    await page.waitForTimeout(1200);
+    const box = (await field.boundingBox())!;
+    await page.mouse.move(box.x + 12, box.y + box.height / 2);
+    await expect.poll(async () => (await reticle(page))?.state).toBe('text');
+    await expect.poll(async () => (await reticle(page))?.seen).toBe(false);
+    expect(await field.evaluate((e) => getComputedStyle(e).cursor)).toBe('text');
+  });
+
+  test('a phone has none of it', async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const page = await ctx.newPage();
+    await page.goto('/contact');
+    await consent(page);
+    await page.waitForTimeout(1500);
+    await page.touchscreen.tap(195, 500);
+    await page.waitForTimeout(400);
+    expect(await page.locator('.reticle').count()).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.classList.contains('reticle-on'))).toBe(false);
+    await ctx.close();
+  });
+});
+
+test.describe('the hour', () => {
+  const film = (page: Page) => page.evaluate(() => (window as unknown as { __estate: { film: { evening: number; night: number; noon: number } } }).__estate.film);
+
+  test('holds the estate at the hour pressed, and pressed again gives it back to the film', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/?debug=1');
+    await consent(page);
+    await ready(page);
+    const night = page.getByRole('button', { name: 'Night', exact: true });
+    await expect(night).toBeVisible();
+    await expect(night).toHaveAttribute('aria-pressed', 'false');
+    // untouched, the film's own hour: gold on the cover
+    expect((await film(page)).night).toBe(0);
+    await night.click();
+    await expect(night).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => (await film(page)).night, { timeout: 10000 }).toBeGreaterThan(0.95);
+    await night.click();
+    await expect(night).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(async () => (await film(page)).night, { timeout: 10000 }).toBeLessThan(0.02);
+    expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+
+  test('asks for the day\u2019s sky only when Day is pressed', async ({ page }) => {
+    const asked: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().includes('sky_estate_v13_day')) asked.push(r.url());
+    });
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/?debug=1');
+    await consent(page);
+    await ready(page);
+    await page.waitForTimeout(1500);
+    expect(asked).toEqual([]);
+    await page.getByRole('button', { name: 'Day', exact: true }).click();
+    await expect.poll(() => asked.length, { timeout: 15000 }).toBe(1);
+    await expect.poll(async () => (await film(page)).noon, { timeout: 15000 }).toBeGreaterThan(0.95);
+  });
+
+  test('is the estate\u2019s alone: gone indoors, and on no other page', async ({ page }) => {
+    await page.setViewportSize(VIEWPORT);
+    await page.goto('/');
+    await consent(page);
+    await ready(page);
+    await expect(page.locator('.hour-choice')).toBeVisible();
+    await scrollToCopy(page, 'station-1');
+    await expect.poll(() => page.locator('.hour-choice').evaluate((e) => getComputedStyle(e).visibility), { timeout: 8000 }).toBe('hidden');
+    await page.goto('/about');
+    await page.waitForTimeout(800);
+    expect(await page.locator('.hour-choice').count()).toBe(0);
+  });
+});
+

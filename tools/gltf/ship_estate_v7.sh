@@ -14,6 +14,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BLENDER="${BLENDER:-C:/Program Files/Blender Foundation/Blender 5.2/blender.exe}"
 BLEND="${BLEND:-C:/dev/Blender/mansion_estate_V7.blend}"
 WORK="${WORK:-C:/dev/Blender/_v7out}"
+GI_WORK="${GI_WORK:-C:/dev/Blender/_v7gi}"
 
 if [ -z "${SKIP_BUILD:-}" ]; then
   python "$ROOT/tools/gltf/make_estate_textures_v7.py" "$ROOT/assets/materials/_v7"
@@ -69,6 +70,11 @@ fi
 # export below carries them. ~15 minutes on a laptop GPU at full size.
 if [ -z "${SKIP_AO:-}" ]; then
   "$BLENDER" --background "$BLEND" --python "$ROOT/tools/blender/bake_estate_ao_v7.py" -- "${AO_WORK:-C:/dev/Blender/_v7ao}"
+  # The bounced light, the lamps and the rest of the sky (the brief of 2026-11-01), on the
+  # same UV2, so after it. Its two atlases stay on disk: they are not in the .blend, and
+  # attach_gi_maps.py below puts them in the file after the resize.
+  mkdir -p "$GI_WORK"
+  "$BLENDER" --background "$BLEND" --python "$ROOT/tools/blender/bake_estate_gi_v7.py" -- "$GI_WORK"
 fi
 
 rm -rf "$WORK" && mkdir -p "$WORK/ex"
@@ -79,6 +85,7 @@ rm -rf "$WORK" && mkdir -p "$WORK/ex"
   gltf-transform copy b.glb ex/scene.gltf
   python "$ROOT/tools/gltf/fix_estate_materials_v7.py" ex/scene.gltf
   python "$ROOT/tools/gltf/resize_estate_textures_v7.py" ex/scene.gltf
+  python "$ROOT/tools/gltf/attach_gi_maps.py" ex/scene.gltf "$GI_WORK/gi_arch.png" "$GI_WORK/gi_ground.png"
   python "$ROOT/tools/gltf/encode_ktx2.py" ex/scene.gltf
   gltf-transform copy ex/scene.gltf k.glb
   # (Positions at 16 bits, not Draco's 14: the ground runs 1.8 km and at 14

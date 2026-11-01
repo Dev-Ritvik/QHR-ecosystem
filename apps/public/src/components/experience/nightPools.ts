@@ -44,9 +44,30 @@ export interface RoomLight {
   colour: THREE.Color;
 }
 
-/** The map's extent over the plan: x -32..32, z -28..36 (the house stands at
- *  x +/-15.5, z -10.3..13.25), 512 texels a side. */
-export const POOL_MAP = { x0: -32, z0: -28, size: 64, px: 512 } as const;
+/** The map's extent over the plan: x -48..48, z -28..68 (the house stands at
+ *  x +/-15.5, z -10.3..13.25; the forecourt's ring reaches z 44, the pool's deck
+ *  x -36), 768 texels a side. */
+export const POOL_MAP = { x0: -48, z0: -28, size: 96, px: 768 } as const;
+
+/** A lamp's pool at its foot: where, how far, how much, what colour. */
+export interface LampPool {
+  x: number;
+  z: number;
+  r: number;
+  power: number;
+  colour: readonly [number, number, number];
+}
+
+/** The lit swimming pool's light on the deck round it. */
+export interface PoolGlow {
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
+  reach: number;
+  power: number;
+  colour: readonly [number, number, number];
+}
 
 /** The evening's drive, written each frame by ExteriorLighting. */
 export const poolLight = { gain: 0 };
@@ -75,11 +96,54 @@ const smooth = (e0: number, e1: number, x: number) => {
  * against the brightest texel (8 bits carry a smooth tail that way), and
  * `max` is that brightest value.
  */
-export function buildPoolMap(lights: readonly RoomLight[]): { texture: THREE.DataTexture; max: number } {
+export function buildPoolMap(lights: readonly RoomLight[], lamps: readonly LampPool[] = [], glow?: PoolGlow): { texture: THREE.DataTexture; max: number } {
   const { x0, z0, size, px } = POOL_MAP;
   const cell = size / px;
   const acc = new Float32Array(px * px * 3);
   const reach = 12;
+  // THE ESTATE'S LAMPS (exteriorLamps.tsx): each a soft round pool at its foot.
+  for (const l of lamps) {
+    const i0 = Math.max(0, Math.floor((l.x - l.r - x0) / cell));
+    const i1 = Math.min(px - 1, Math.ceil((l.x + l.r - x0) / cell));
+    const j0 = Math.max(0, Math.floor((l.z - l.r - z0) / cell));
+    const j1 = Math.min(px - 1, Math.ceil((l.z + l.r - z0) / cell));
+    for (let j = j0; j <= j1; j += 1) {
+      const z = z0 + (j + 0.5) * cell;
+      for (let i = i0; i <= i1; i += 1) {
+        const x = x0 + (i + 0.5) * cell;
+        const d = Math.hypot(x - l.x, z - l.z) / l.r;
+        if (d >= 1) continue;
+        const e = l.power * (1 - d * d) * (1 - d * d);
+        const k = (j * px + i) * 3;
+        acc[k] += l.colour[0] * e;
+        acc[k + 1] += l.colour[1] * e;
+        acc[k + 2] += l.colour[2] * e;
+      }
+    }
+  }
+  // AND THE LIT POOL'S OWN LIGHT ON THE DECK ROUND IT, dying off the coping.
+  if (glow) {
+    const reachOut = glow.reach * 3;
+    const i0 = Math.max(0, Math.floor((glow.x0 - reachOut - x0) / cell));
+    const i1 = Math.min(px - 1, Math.ceil((glow.x1 + reachOut - x0) / cell));
+    const j0 = Math.max(0, Math.floor((glow.z0 - reachOut - z0) / cell));
+    const j1 = Math.min(px - 1, Math.ceil((glow.z1 + reachOut - z0) / cell));
+    for (let j = j0; j <= j1; j += 1) {
+      const z = z0 + (j + 0.5) * cell;
+      for (let i = i0; i <= i1; i += 1) {
+        const x = x0 + (i + 0.5) * cell;
+        const dx = Math.max(glow.x0 - x, 0, x - glow.x1);
+        const dz = Math.max(glow.z0 - z, 0, z - glow.z1);
+        const d = Math.hypot(dx, dz);
+        if (d <= 0 || d > reachOut) continue;
+        const e = glow.power * Math.exp(-d / glow.reach);
+        const k = (j * px + i) * 3;
+        acc[k] += glow.colour[0] * e;
+        acc[k + 1] += glow.colour[1] * e;
+        acc[k + 2] += glow.colour[2] * e;
+      }
+    }
+  }
   for (const l of lights) {
     const r = l.colour.r;
     const g = l.colour.g;
@@ -156,7 +220,7 @@ export function buildPoolMap(lights: readonly RoomLight[]): { texture: THREE.Dat
 
 /** Ground materials: the lawn, the paving, the terrace, the steps, the beds,
  *  the kerbs. */
-const GROUND_RE = /^MAT_(Lawn|Stone_Paving|Stone_Flags|Gravel|Stone_Terrace|Stone_Steps|Soil|Stone_Trim_AOG)/;
+const GROUND_RE = /^MAT_(Lawn|Stone_Paving|Stone_Flags|Gravel|Stone_Terrace|Stone_Steps|Soil|Stone_Trim)/;
 
 const POOL_VERTEX = /* glsl */ `
 #include <project_vertex>
@@ -181,6 +245,9 @@ const POOL_FRAGMENT = /* glsl */ `
     // Only faces that look up take the pools: a wall or a riser in front of a
     // window is lit by the window, not by the ground's map.
     float up = smoothstep(0.55, 0.9, (inverseTransformDirection(normal, viewMatrix)).y);
+    // (and what is near the ground: the map is of the ground, and the roof's rail
+    // stands over it)
+    up *= 1.0 - smoothstep(1.0, 1.7, vPoolWorld.y);
     reflectedLight.indirectDiffuse += diffuseColor.rgb * (s * s) * uPoolMax * uPoolGain * up;
   }
 }

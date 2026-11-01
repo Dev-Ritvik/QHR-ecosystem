@@ -49,6 +49,7 @@ import {
   stationFilter,
   tableBandFilter,
 } from './lensFilter';
+import { HOURS, twilightAt } from './filmHours';
 
 /** The shader's density at a point of the frame, in stops (FilmGrade's
  *  ndFilter, restated). */
@@ -286,16 +287,34 @@ describe('the layout', () => {
 
   it('is a grad from the top edge, leaning to the title, for as long as the words are up', () => {
     holdingsFilter(0.62, aspect);
-    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops, 9);
-    expect(layoutSkyStops(0.62)).toBeCloseTo(LAYOUT_SKY.stops, 9);
-    expect(lensFilter.shape.x).toBe(LAYOUT_SKY.lean.cx);
+    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops * (1 - LAYOUT_SKY.duskOff * twilightAt(0.62)), 9);
+    expect(layoutSkyStops(0.62)).toBeCloseTo(LAYOUT_SKY.stops * (1 - LAYOUT_SKY.duskOff * twilightAt(0.62)), 9);
+    expect(lensFilter.shape.x).toBeCloseTo(LAYOUT_SKY.lean.cx + (LAYOUT_SKY.dusk.cx - LAYOUT_SKY.lean.cx) * twilightAt(0.62), 9);
     expect(lensFilter.shape.y).toBeGreaterThan(1);
     // whole behind the title, down to its foot
-    expect(stopsAt(EDGE + 0.05, 1 - 0.12)).toBeCloseTo(LAYOUT_SKY.stops, 1);
-    expect(stopsAt(EDGE + 0.1, 1 - (LAYOUT_SKY.full - 0.02))).toBeGreaterThan(LAYOUT_SKY.stops * 0.95);
+    expect(stopsAt(EDGE + 0.05, 1 - 0.12)).toBeCloseTo(lensFilter.stops, 1);
     // and gone over the house's roofline and the land under it
     expect(stopsAt(0.4, 1 - (LAYOUT_SKY.zero + 0.02))).toBe(0);
     expect(stopsAt(0.6, 1 - 0.8)).toBe(0);
+    // (down to the title's foot while the mist behind it is golden and bright)
+    holdingsFilter(HOURS.twilight[0], aspect);
+    expect(stopsAt(EDGE + 0.1, 1 - (LAYOUT_SKY.full - 0.02))).toBeGreaterThan(lensFilter.stops * 0.95);
+  });
+
+  it('leans to the title in the golden light and stands off the afterglow by the blue hour', () => {
+    holdingsFilter(HOURS.twilight[0], aspect);
+    expect(lensFilter.shape.x).toBe(LAYOUT_SKY.lean.cx);
+    expect(lensFilter.shape.z).toBe(LAYOUT_SKY.lean.rx);
+    holdingsFilter(HOURS.twilight[1], aspect);
+    expect(lensFilter.shape.x).toBe(LAYOUT_SKY.dusk.cx);
+    expect(lensFilter.shape.z).toBe(LAYOUT_SKY.dusk.rx);
+    // whole behind the title, as it was; nothing over the afterglow, the frame's middle
+    expect(stopsAt(EDGE + 0.05, 1 - 0.12)).toBeCloseTo(lensFilter.stops, 1);
+    expect(stopsAt(0.28, 1 - 0.12)).toBeCloseTo(lensFilter.stops, 1);
+    expect(stopsAt(0.58, 1 - 0.05)).toBe(0);
+    // and its colour is the golden hour's alone
+    expect(coverGrade(HOURS.twilight[0])).toBeGreaterThan(0);
+    expect(coverGrade(HOURS.twilight[1])).toBe(0);
   });
 
   it('wears the soft density under its line and its cue, for as long as they are up', () => {
@@ -311,7 +330,7 @@ describe('the layout', () => {
     holdingsFilter(0.62, aspect);
     expect(lensFilter.inner).toBeGreaterThan(0);
     expect(lensFilter.inner).toBeLessThan(1);
-    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops, 9);
+    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops * (1 - LAYOUT_SKY.duskOff * twilightAt(0.62)), 9);
   });
 
   it('is off outside its chapter, and comes and goes without a step', () => {
@@ -386,8 +405,8 @@ describe("the cover's sky", () => {
     holdingsFilter(0.5, 1.6);
     expect(lensFilter.stops).toBe(0);
     holdingsFilter(0.62, 1.6);
-    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops, 9);
-    expect(lensFilter.shape.x).toBe(LAYOUT_SKY.lean.cx);
+    expect(lensFilter.stops).toBeCloseTo(LAYOUT_SKY.stops * (1 - LAYOUT_SKY.duskOff * twilightAt(0.62)), 9);
+    expect(lensFilter.shape.y).toBeGreaterThan(1);
   });
 
   it("wears a soft density under the small type on the land, on a second ellipse, while that copy is up", () => {
@@ -566,14 +585,18 @@ describe('the phone, in the hall', () => {
 });
 
 describe("the header's band", () => {
-  it('is the day\'s by day, the evening\'s under the lit sunset, and the night\'s at dusk', () => {
+  it('is the day\'s by day and lets go as the sky goes dark: the blue hour\'s, then midnight\'s', () => {
     expect(headerBandOutside(0)).toBe(HEADER_BAND.day);
     expect(headerBandOutside(1)).toBeCloseTo(HEADER_BAND.evening, 6);
     expect(headerBandOutside(1, 1)).toBeCloseTo(HEADER_BAND.night, 6);
-    // never less than a stop: under that the band's ceiling is not fully down
+    // down at each step of the way: a band over a dark sky is a dark band
+    let last = Infinity;
     for (const [e, n] of [[0, 0], [0.5, 0], [1, 0], [1, 0.5], [1, 1]] as const) {
-      expect(headerBandOutside(e, n)).toBeGreaterThanOrEqual(1);
+      const v = headerBandOutside(e, n);
+      expect(v).toBeLessThan(last);
+      last = v;
     }
+    expect(HEADER_BAND.day).toBeGreaterThanOrEqual(1);
   });
 
   it('rides between them without a step', () => {

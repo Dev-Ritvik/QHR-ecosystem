@@ -2,7 +2,7 @@
 //
 // The estate's water as contracts: one treatment for every sheet of it, a
 // mirror that is never brighter than what it faces, the house and the hedges
-// where a mirror would put them, and no noise in the trough.
+// where a mirror would put them, and coping on all four sides of the pool.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,7 +27,6 @@ import {
   WATER_FUNCTIONS,
   WATER_NORMAL,
   WATER_REFLECTION,
-  WATER_SUN,
   dressWater,
   followWaterHour,
   splitCanal,
@@ -96,7 +95,7 @@ describe('one water', () => {
     expect(dressWater(root)).toBe(3);
     for (const [mesh, kind] of [[pool, 'pool'], [canal, 'canal'], [fountain, 'fountain']] as const) {
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
-      expect(mat.customProgramCacheKey()).toBe(`estate-water-v4-${kind}`);
+      expect(mat.customProgramCacheKey()).toBe(`estate-water-v5-${kind}`);
       expect(mat.roughness).toBe(WATER[kind].rough);
       // seen by what it reflects: the contact occlusion leaves it alone
       expect(mat.defines).toHaveProperty('ESTATE_EMITTER');
@@ -110,7 +109,7 @@ describe('one water', () => {
       expect(shader.uniforms.uWaterF0).toBe(waterUniforms[kind].uWaterF0);
       expect(shader.uniforms.uProbe).toBe(waterUniforms[kind].uProbe);
       expect(shader.vertexShader).toContain('vRipplePos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      for (const part of ['vec4 waterProxy(', 'vec4 waterStanding(', 'material.specularColor = vec3( uWaterF0 );', 'radiance = seen * waterShade;', 'reflectedLight.directSpecular *= uWaterSun * waterShade;']) {
+      for (const part of ['vec4 waterProxy(', 'vec4 waterStanding(', 'material.specularColor = vec3( uWaterF0 );', 'radiance = seen * waterMirror;', 'reflectedLight.directSpecular *= uWaterSun;']) {
         expect(shader.fragmentShader).toContain(part);
       }
       // every hook is left in place for whoever dresses the material next
@@ -146,7 +145,7 @@ describe('a mirror, and never more than one', () => {
     // The forensic audit of 2026-10-09 (#17): at the door frame the pool held
     // the sunset's probe at a gain of 1.6 under a sky gone to a third.
     const src = read('ExteriorModel.tsx');
-    expect(src).toContain('const sky = Math.max(1e-3, scene.backgroundIntensity);');
+    expect(src).toContain('const sky = Math.max(1e-3, scene.backgroundIntensity * skyLightAt(filmState.evening, filmState.night));');
     expect(src).toContain('u.uProbeGain.value = sky / hour.sky;');
     expect(src).toContain('const want = WATER_RE.test(r.mat.name) ? shown : r.gain * base * dusk;');
     expect(WATER_FUNCTIONS).toContain('return textureLod(uProbe, dir, uProbeLod).rgb * uProbeGain;');
@@ -246,10 +245,8 @@ describe('what the water faces', () => {
     expect(WATER_FUNCTIONS).toContain('hemisphereLights[0].groundColor');
   });
 
-  it("gives the pool its coping on three sides and none at the overflow, the canal its kerb all round", () => {
-    const pool = waterUniforms.pool.uBoxRim.value;
-    expect(pool.x).toBeLessThan(-1000);
-    expect([pool.y, pool.z, pool.w]).toEqual([POOL.z0, POOL.x1, POOL.z1]);
+  it('gives the pool its coping and the canal its kerb, all round', () => {
+    expect(waterUniforms.pool.uBoxRim.value.toArray()).toEqual([POOL.x0, POOL.z0, POOL.x1, POOL.z1]);
     expect(waterUniforms.pool.uBoxRimTop.value).toBe(POOL.coping);
     expect(waterUniforms.canal.uBoxRim.value.toArray()).toEqual([CANAL.x0, CANAL.z0, CANAL.x1, CANAL.z1]);
     expect(waterUniforms.canal.uBoxRimTop.value).toBe(CANAL.kerb);
@@ -257,18 +254,7 @@ describe('what the water faces', () => {
   });
 });
 
-describe('the trough beside the pool', () => {
-  it('is dark by where it lies, with no noise in it', () => {
-    // The lens's contact occlusion printed its sampling noise on the trough's
-    // water as a stipple ("a low-resolution noise texture with visible
-    // blocks"). The pass leaves water alone; the slot's shade is by height.
-    expect(POOL.trough).toBeLessThan(POOL.level - 0.5);
-    expect(WATER.troughShade).toBeLessThan(0.6);
-    expect(WATER.troughShade).toBeGreaterThan(0.1);
-    expect(WATER_COLOUR).toContain('waterShade = mix(uTroughShade, 1.0, smoothstep(uPoolLevel - 0.35, uPoolLevel - 0.05, vRipplePos.y));');
-    expect(WATER_SUN).toContain('waterShade');
-  });
-
+describe('the pool', () => {
   it('is an aqua under the reflection again, at the user’s word (the concept built 1:1)', () => {
     // The forensic audit's slate (#17) and the paid audit's dark mirror, kept
     // by the client, were set aside by the user on 2026-10-27: the concept's

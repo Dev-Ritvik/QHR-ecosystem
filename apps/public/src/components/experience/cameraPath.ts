@@ -35,6 +35,7 @@
 // solid geometry BETWEEN two perfectly good keyframes.
 
 import * as THREE from 'three';
+import { twilightAt } from './filmHours';
 import { FILM_SHARE } from './filmShares';
 import { ld, lookdevOn } from './lookdev';
 
@@ -106,27 +107,6 @@ export interface CameraBeat {
    * the subject has to hold the frame on its own.
    */
   frameOffset: number;
-  /**
-   * How far into evening this beat is, 0..1. Optional; absent means 0.
-   *
-   * WHY THE FILM CHANGES TIME OF DAY, AND WHY THAT IS NOT "DARKEN EVERYTHING"
-   *
-   * The exterior ships a DAYLIGHT grade fitted to the hero. The interior it
-   * cuts to is a candlelit hall — wall sconces with visible flames, and a
-   * lightmap baked for lamplight. So the film already crossed from noon to
-   * night; the veil was hiding that cut rather than motivating it.
-   *
-   * Letting evening fall across the last exterior chapter motivates it, and
-   * pays for itself twice. The constellation is ADDITIVE light, and additive
-   * light over a sunlit equirect sky is invisible by construction: the shipped
-   * frame put a 12m sphere over a bright cloud bank and the sphere read as
-   * dust. Against a falling sky it reads as light, with no change to the
-   * shader at all.
-   *
-   * It is ZERO for the hero, the quarter and the three-quarter, so every frame
-   * the Phase 5 grade was fitted against is untouched.
-   */
-  evening?: number;
 }
 
 /*
@@ -363,9 +343,6 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     // the axis then lies within a road's width of his road. Thirty-seven metres
     // up over the west lawn, on a 48-degree lens. (Fitted first with the house
     // left out of the angle: 34 degrees round, the house too square-on.)
-    // A DAY FRAME. The evening that used to fall over the crane now falls over
-    // the descent that follows (APPROACH_BEATS): the founder's land is golden
-    // and misty, as the cover is.
     at: FILM_SHARE,
     position: [-62.4, 37.2, 95.8],
     target: [20.0, 1.2, 7.5],
@@ -375,7 +352,6 @@ export const FILM_BEATS: readonly CameraBeat[] = [
     roll: 0.0,
     // The house is left of the middle by the aim alone.
     frameOffset: 0,
-    evening: 0,
   },
 ];
 
@@ -386,8 +362,8 @@ export const FILM_BEATS: readonly CameraBeat[] = [
  * whole way until it settles right of it.
  *
  * These are waypoints, not beats: the curve passes through them but no lens or
- * light is set at them (the lens and the evening run from the three-quarter
- * straight to the layout, lensAt). The first is the crane as it was, so the
+ * light is set at them (the lens runs from the three-quarter straight to the
+ * layout, lensAt). The first is the crane as it was, so the
  * revolution's last stretch, which a Catmull-Rom shapes by the point after it,
  * is the stretch that was approved (cameraPath.test.ts).
  */
@@ -423,8 +399,8 @@ export const APPROACH_BEATS: readonly CameraBeat[] = [
   FILM_BEATS[FILM_BEATS.length - 1],
   {
     id: 'descent',
-    // Down off the layout over the west lawn's plots, the house ahead and the
-    // evening falling on it: the dusk is complete here, where the flank was.
+    // Down off the layout over the west lawn's plots, the house ahead with its
+    // lamps on, and the twilight going to night (filmHours.ts).
     at: FILM_SHARE + APPROACH_SPAN * 0.33,
     position: [-44.0, 19.0, 80.0],
     target: [0.0, 6.0, 10.0],
@@ -433,7 +409,6 @@ export const APPROACH_BEATS: readonly CameraBeat[] = [
     fov: 42,
     roll: 0.02,
     frameOffset: 2.4 * ESTATE_SCALE,
-    evening: 1,
   },
   {
     id: 'forecourt',
@@ -448,7 +423,6 @@ export const APPROACH_BEATS: readonly CameraBeat[] = [
     fov: 41,
     roll: 0.025,
     frameOffset: 1.4 * ESTATE_SCALE,
-    evening: 1,
   },
   {
     id: 'axis-far',
@@ -469,7 +443,6 @@ export const APPROACH_BEATS: readonly CameraBeat[] = [
     fov: 36,
     roll: 0.008,
     frameOffset: 0.5,
-    evening: 1,
   },
   {
     id: 'axis',
@@ -481,7 +454,6 @@ export const APPROACH_BEATS: readonly CameraBeat[] = [
     fov: 32,
     roll: 0.0,
     frameOffset: 0.15,
-    evening: 1,
   },
   {
     id: 'door',
@@ -511,7 +483,6 @@ export const APPROACH_BEATS: readonly CameraBeat[] = [
     fov: 30,
     roll: 0.0,
     frameOffset: 0.0,
-    evening: 1,
   },
 ];
 
@@ -950,17 +921,14 @@ export function atmosphereAt(scroll: number): {
     const b = BEATS[i + 1];
     if (s <= b.at) {
       const k = b.at === a.at ? 0 : (s - a.at) / (b.at - a.at);
-      const ea = a.evening ?? 0;
-      const eb = b.evening ?? 0;
       return {
         near: a.fog[0] + (b.fog[0] - a.fog[0]) * k,
         far: a.fog[1] + (b.fog[1] - a.fog[1]) * k,
         key: a.keyIntensity + (b.keyIntensity - a.keyIntensity) * k,
-        evening: ea + (eb - ea) * k,
+        evening: twilightAt(s),
       };
     }
   }
   const last = BEATS[BEATS.length - 1];
-  return { near: last.fog[0], far: last.fog[1], key: last.keyIntensity,
-           evening: last.evening ?? 0 };
+  return { near: last.fog[0], far: last.fog[1], key: last.keyIntensity, evening: twilightAt(s) };
 }

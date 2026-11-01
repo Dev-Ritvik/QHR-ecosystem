@@ -44,6 +44,7 @@ import { doorwayState } from './doorway';
 import { filmState } from './FilmGrade';
 import { markFocusDepth } from './LensFocus';
 import { ld } from './lookdev';
+import { sceneWarm } from './sceneWarm';
 
 /**
  * Where it hangs, and how it is made; metres, three's axes (y up, the front of
@@ -117,6 +118,8 @@ export function PorticoLantern({ tier }: { tier: DeviceTier }) {
   /** Frames of shadow still owed: the cube is drawn while this is positive. */
   const owed = useRef(0);
   const wasOn = useRef(false);
+  /** The shadow's first draw has been had (below). */
+  const shadowBuilt = useRef(false);
   useFrame(() => {
     const on = lanternOn(filmState.evening, filmState.night);
     glass.emissiveIntensity = LANTERN.glow * on;
@@ -149,6 +152,14 @@ export function PorticoLantern({ tier }: { tier: DeviceTier }) {
     l.intensity = ld('lantern', LANTERN.power) * on;
     if (!shadows) return;
     l.shadow.autoUpdate = false;
+    // ITS FIRST DRAW UNDER THE STILL (sceneWarm.ts), with the rest of what the estate
+    // builds: on the frame the lamp first came on it built its six distance programs
+    // and its map, MEASURED 140 ms in a presenting browser on an integrated card, at
+    // leg 0.61, half way from the gold to the blue.
+    if (!shadowBuilt.current && sceneWarm.drawing) {
+      shadowBuilt.current = true;
+      l.shadow.needsUpdate = true;
+    }
     // Drawn when the lamp comes on (a few frames, for a model still arriving),
     // and for as long as the door's leaves are moving.
     if (on > 0 && !wasOn.current) owed.current = 90;

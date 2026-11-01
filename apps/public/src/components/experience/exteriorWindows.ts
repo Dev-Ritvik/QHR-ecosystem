@@ -87,7 +87,9 @@ export const DUSK_FROM = 0.6;
 export const DAYLIGHT_REACH = 2.2;
 /** The lamps by day, and what the evening's drive (0..1.3) adds to them. */
 export const LAMP_DAY = 0.16;
-export const EVENING_INTERIOR = 1.0;
+export const EVENING_INTERIOR = 3.0;
+/** A lit room's pane from far off, as a share of its lamps' light. */
+const ROOM_FAR_PANE = 0.1;
 /** The drive's own ceiling (WorldCanvas: WINDOW_EVENING_GLOW + WINDOW_NIGHT_GLOW). */
 export const EVENING_DRIVE_MAX = 0.72;
 
@@ -114,6 +116,8 @@ export const roomUniforms = {
   uInteriorEvening: { value: EVENING_INTERIOR },
   uLampDay: { value: LAMP_DAY },
   uRoomSilk: { value: DRAPE_LAMP },
+  /** How far the lit rooms have gone to their far-off amber, 0..1 (WorldCanvas). */
+  uRoomFar: { value: 0 },
 };
 
 /** Look-dev: the rooms' light, live (lookdev.ts). Call once a frame. */
@@ -134,6 +138,7 @@ uniform float uInteriorDusk;
 uniform float uInteriorEvening;
 uniform float uLampDay;
 uniform float uRoomSilk;
+uniform float uRoomFar;
 varying vec3 vInteriorWorld;
 varying vec3 vRoomC;
 varying vec3 vRoomH;
@@ -254,6 +259,11 @@ vec3 interiorRoom(vec3 pos, vec3 rd, vec3 nW, float evening) {
     vec3 silk = vec3(0.8, 0.72, 0.6) * fold * (vec3(0.9, 0.95, 1.0) * sky * 0.8 + tint * lamps * uRoomSilk);
     room = mix(room, silk, drape);
   }
+  // Lamplight through the eye of a camera balanced for the blue hour's sky: amber.
+  room *= mix(vec3(1.0), vec3(1.0, 0.8, 0.52), dusk * dusk);
+  // AND FROM FAR OFF A LIT ROOM IS A PANE OF AMBER, its lamp and its drapes a pixel or
+  // two: the reference's windows at the blue hour, 178, 150, 113 at their mean.
+  room = mix(room, vec3(1.0, 0.62, 0.3) * lamps * ${ROOM_FAR_PANE.toFixed(2)}, uRoomFar * 0.8);
   return room;
 }
 `;
@@ -446,6 +456,7 @@ export function dressWindows(root: THREE.Object3D): number {
         shader.uniforms.uInteriorEvening = roomUniforms.uInteriorEvening;
         shader.uniforms.uLampDay = roomUniforms.uLampDay;
         shader.uniforms.uRoomSilk = roomUniforms.uRoomSilk;
+        shader.uniforms.uRoomFar = roomUniforms.uRoomFar;
         shader.vertexShader = shader.vertexShader
           .replace(
             'void main() {',

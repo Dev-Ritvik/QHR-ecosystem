@@ -94,6 +94,25 @@ export const ASHLAR = { from: 0.9, course: 0.38, stone: 0.92, joint: 0.008, dept
 export const BOUNDARY = { coping: 2.3, fall: [0.45, 1.25], depth: 0.6 } as const;
 
 /**
+ * AND IT IS LAID (the brief of 2026-11-01: "perimeter stone walls"). The paid audit of
+ * 2026-10-04 made it a weathered render, which from the cover was a long pale strip
+ * with nothing in it. Coursed rubble: courses `course` metres high, each with its own
+ * length of stone (`stone`, shortest and longest), a joint `joint` wide, each stone its
+ * own tone. In the world, like the ashlar's, and put down as the courses shrink toward
+ * a pixel; at the far end of the park the tone is all that is left of it.
+ */
+export const BOUNDARY_STONE = { course: 0.31, stone: [0.55, 1.05], joint: 0.014, tone: 0.3, depth: 0.5, from: 0.5, to: 1.2 } as const;
+
+/**
+ * THE FORECOURT'S SETTS (the same brief: "cobblestone driveways"; the forecourt itself
+ * stays the polished stone the user's Feature 1 brief asked for, and these are its
+ * edging and the car's bay: tools/blender/build_estate_v7.py, forecourt_setts). Granite,
+ * `size` metres square, laid in running bond, a joint `joint` wide, each one its own
+ * tone, and put down as they shrink toward a pixel.
+ */
+export const SETTS = { size: 0.11, joint: 0.009, tone: 0.34, depth: 0.62, from: 0.05, to: 0.13 } as const;
+
+/**
  * THE COMPOUND WALL AT THE FAR END OF THE PARK. Its coping's top is 54 cm
  * across the wall and each pier stands 15 cm out of its face (the model,
  * build_compound_wall). From the orbit the far run is a hundred metres off
@@ -187,9 +206,28 @@ float estateGrime = 0.0;
     estateGrime = max(estateGrime, below * dribble * 0.6);
   }
   #endif
-  // THE COMPOUND WALL, UNDER ITS OWN COPING (BOUNDARY, below): the same
-  // dribbles, from the one ledge it has.
+  // THE COMPOUND WALL, LAID IN COURSES (BOUNDARY_STONE, below).
   #ifdef ESTATE_BOUNDARY
+  {
+    vec3 fn = abs(cross(dFdx(w), dFdy(w)));
+    float along = fn.z > fn.x ? w.x : w.z;
+    float cy = w.y / ${BOUNDARY_STONE.course.toFixed(3)};
+    float course = floor(cy);
+    float len = mix(${BOUNDARY_STONE.stone[0].toFixed(2)}, ${BOUNDARY_STONE.stone[1].toFixed(2)}, ageHash(vec3(course, 3.1, 7.7)));
+    float tt = along / len + 7.3 * ageHash(vec3(course, 1.9, 2.3));
+    float fy = fract(cy), fx = fract(tt);
+    float dh = min(fy, 1.0 - fy) * ${BOUNDARY_STONE.course.toFixed(3)};
+    float dv = min(fx, 1.0 - fx) * len;
+    float px = max(length(fwidth(w)), 1.0e-4);
+    float joint = clamp((${(BOUNDARY_STONE.joint / 2).toFixed(4)} + 0.5 * px - min(dh, dv)) / px, 0.0, 1.0);
+    float upright = 1.0 - smoothstep(0.2, 0.5, fn.y / max(fn.x + fn.y + fn.z, 1.0e-6));
+    float stone = ageHash(vec3(course, floor(tt), 1.0));
+    float seen = 1.0 - smoothstep(${BOUNDARY_STONE.from.toFixed(2)}, ${BOUNDARY_STONE.to.toFixed(2)}, px / ${BOUNDARY_STONE.course.toFixed(3)});
+    diffuseColor.rgb *= 1.0 + ${BOUNDARY_STONE.tone.toFixed(2)} * (stone * 2.0 - 1.0) * upright * max(seen, 0.2);
+    diffuseColor.rgb *= mix(vec3(0.95, 0.98, 1.03), vec3(1.05, 1.0, 0.92), ageHash(vec3(floor(tt), course, 9.0)));
+    diffuseColor.rgb *= 1.0 - ${BOUNDARY_STONE.depth.toFixed(2)} * joint * upright * seen;
+  }
+  // UNDER ITS OWN COPING (BOUNDARY, below): the same dribbles, from the one ledge it has.
   {
     float lane = ageNoise(vec3((w.x + w.z) * 3.4, 0.0, (w.x - w.z) * 3.4));
     float fall = ${BOUNDARY.fall[0].toFixed(2)} + ${(BOUNDARY.fall[1] - BOUNDARY.fall[0]).toFixed(2)} * (0.5 + 0.5 * lane);
@@ -337,6 +375,63 @@ const SLATE = /* glsl */ `
 }
 `;
 
+/**
+ * THE WALKS ROUND THE HOUSE ARE PAVED (the user's reference of 2026-11-01: "paved stone
+ * walkways around the courtyard"). The podium's walk and the rear walk to the canal are
+ * the one mesh with the forecourt (build_estate_v7.py, drive_forecourt), and were its
+ * polished dark stone: a dark sheet at the foot of the house. The forecourt stays polished
+ * (the user's Feature 1 brief); these are laid in flags, `flag` metres in running bond,
+ * each its own tone, by where they stand. In the world, like the ashlar.
+ */
+export const WALK = { flag: [0.6, 0.3] as const, joint: 0.012, tone: 0.2, depth: 0.55, colour: [0.46, 0.41, 0.34] as const, rough: 0.84 } as const;
+
+const WALK_COLOUR = /* glsl */ `
+#include <color_fragment>
+float estateWalk = 0.0;
+{
+  vec3 w = vAgeWorld;
+  estateWalk = max(step(abs(w.x), 17.5) * step(abs(w.z), 12.3), step(abs(w.x), 3.9) * step(w.z, -12.3) * step(-17.7, w.z));
+  if (estateWalk > 0.5) {
+    vec2 p = w.xz / vec2(${WALK.flag.map((v) => v.toFixed(2)).join(', ')});
+    float row = floor(p.y);
+    vec2 q = vec2(p.x + 0.5 * mod(row, 2.0), p.y);
+    vec2 id = floor(q), f = fract(q);
+    vec2 d = min(f, 1.0 - f) * vec2(${WALK.flag.map((v) => v.toFixed(2)).join(', ')});
+    float px = max(length(fwidth(w.xz)), 1.0e-4);
+    float joint = clamp((${(WALK.joint / 2).toFixed(4)} + 0.5 * px - min(d.x, d.y)) / px, 0.0, 1.0);
+    float seen = 1.0 - smoothstep(0.08, 0.24, px);
+    vec3 flag = vec3(${WALK.colour.map((v) => v.toFixed(2)).join(', ')});
+    flag *= 1.0 + ${WALK.tone.toFixed(2)} * (ageHash(vec3(id, 3.0)) * 2.0 - 1.0) * max(seen, 0.3);
+    flag *= mix(vec3(0.98, 0.99, 1.02), vec3(1.03, 1.0, 0.94), ageHash(vec3(id, 8.0)));
+    flag *= 1.0 - ${WALK.depth.toFixed(2)} * joint * seen;
+    diffuseColor.rgb = flag;
+  }
+}
+`;
+
+const WALK_ROUGH = /* glsl */ `
+#include <roughnessmap_fragment>
+roughnessFactor = mix(roughnessFactor, ${WALK.rough.toFixed(2)}, estateWalk);
+`;
+
+const SETT_COLOUR = /* glsl */ `
+#include <color_fragment>
+{
+  vec2 g = vAgeWorld.xz;
+  vec2 p = g / ${SETTS.size.toFixed(3)};
+  float row = floor(p.y);
+  vec2 q = vec2(p.x + 0.5 * mod(row, 2.0), p.y);
+  vec2 id = floor(q), f = fract(q);
+  vec2 d = min(f, 1.0 - f) * ${SETTS.size.toFixed(3)};
+  float px = max(length(fwidth(g)), 1.0e-4);
+  float joint = clamp((${(SETTS.joint / 2).toFixed(4)} + 0.5 * px - min(d.x, d.y)) / px, 0.0, 1.0);
+  float seen = 1.0 - smoothstep(${SETTS.from.toFixed(2)}, ${SETTS.to.toFixed(2)}, px);
+  diffuseColor.rgb *= 1.0 + ${SETTS.tone.toFixed(2)} * (ageHash(vec3(id, 3.0)) * 2.0 - 1.0) * seen;
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.95, 0.92, 0.88), ageHash(vec3(id, 8.0)));
+  diffuseColor.rgb *= 1.0 - ${SETTS.depth.toFixed(2)} * joint * seen;
+}
+`;
+
 const HEDGE_COLOUR = /* glsl */ `
 #include <color_fragment>
 {
@@ -364,16 +459,18 @@ const HEDGE_NORMAL = /* glsl */ `
 }
 `;
 
-type Kind = 'stone' | 'slate' | 'hedge';
+type Kind = 'stone' | 'slate' | 'hedge' | 'setts' | 'drive';
 const RULES: { re: RegExp; kind: Kind }[] = [
   { re: /^MAT_Stone_(Wall|Trim|Rustic|Boundary)(_AOG?)?$/, kind: 'stone' },
   { re: /^MAT_Roof(_Slate)?(_AO)?$/, kind: 'slate' },
   { re: /^MAT_Hedge$/, kind: 'hedge' },
+  { re: /^MAT_Setts(_AOG)?$/, kind: 'setts' },
+  { re: /^MAT_Drive_Polished(_AOG)?$/, kind: 'drive' },
 ];
 
 /** Dress the estate's stone, roof and hedges. Returns how many per kind. */
 export function dressSurfaces(root: THREE.Object3D): Record<Kind, number> {
-  const count: Record<Kind, number> = { stone: 0, slate: 0, hedge: 0 };
+  const count: Record<Kind, number> = { stone: 0, slate: 0, hedge: 0, setts: 0, drive: 0 };
   const done = new Set<THREE.Material>();
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -415,6 +512,10 @@ export function dressSurfaces(root: THREE.Object3D): Record<Kind, number> {
             .replace('#include <aomap_fragment>', STONE_BOUNCE);
         }
         if (kind === 'slate') frag = frag.replace('#include <color_fragment>', SLATE);
+        if (kind === 'setts') frag = frag.replace('#include <color_fragment>', SETT_COLOUR);
+        if (kind === 'drive') {
+          frag = frag.replace('#include <color_fragment>', WALK_COLOUR).replace('#include <roughnessmap_fragment>', WALK_ROUGH);
+        }
         if (kind === 'hedge') {
           frag = frag
             .replace('#include <color_fragment>', HEDGE_COLOUR)

@@ -62,9 +62,12 @@ def look(name, default):
 
 
 # ---- the look (each overridable from the environment for look-dev)
-FOOT = lin((236, 222, 196))      # the sky's foot, away from the sun
-FOOT_SUN = lin((252, 226, 182))  # and toward it
-ZENITH = lin((178, 180, 176))    # overhead: a warm grey, no blue
+FOOT = lin(tuple(int(v) for v in os.environ.get("FOOT_RGB", "236,222,196").split(",")))      # the sky's foot, away from the sun
+FOOT_SUN = lin(tuple(int(v) for v in os.environ.get("FOOT_SUN_RGB", "252,226,182").split(",")))  # and toward it
+# (178, 180, 176) until v14, the user's reference of 2026-11-01: a warm dusk of a grey
+# overhead, and the cream at its foot standing higher (SKY_POW was 0.55).
+ZENITH = lin(tuple(int(v) for v in os.environ.get("ZENITH_RGB", "178,180,176").split(",")))
+SKY_POW = look("SKY_POW", 0.55)
 SKY_GAIN = look("SKY_GAIN", 1.0)
 AP_M = look("AP_M", 14000.0)      # distance haze: e-folding distance, m
 MIST_H = look("MIST_H", 300.0)   # mist thins by e over this height, m
@@ -106,7 +109,7 @@ side = 0.5 + 0.5 * (np.cos(AZ) * SUN3[0] / flat + np.sin(AZ) * SUN3[2] / flat)
 
 
 def sky_at(EL_, side_, ang_):
-    t = np.clip(np.degrees(EL_) / 38.0, 0, 1) ** 0.55
+    t = np.clip(np.degrees(EL_) / 38.0, 0, 1) ** SKY_POW
     foot = FOOT[None, None, :] * (1 - side_[..., None] ** 3) + FOOT_SUN[None, None, :] * side_[..., None] ** 3
     s = foot * (1 - t[..., None]) + ZENITH[None, None, :] * t[..., None]
     glow = 0.55 * np.exp(-((ang_ / 30.0) ** 2)) + 1.6 * np.exp(-((ang_ / 7.0) ** 2))

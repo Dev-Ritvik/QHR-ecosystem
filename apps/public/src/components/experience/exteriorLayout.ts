@@ -26,8 +26,7 @@
 //   wide wherever it is, under the trees and the palms as ink on the ground
 //   would be, and only while the chapter is on the screen (layoutOn).
 //   ITS WORDS are type, stood over the ground along the line of what they name
-//   (LayoutMarks: each `[data-layout-label]` of site-home's chapter), with its
-//   crosshairs over their places.
+//   (LayoutMarks: each `[data-layout-label]` of site-home's chapter).
 //
 // ALL OF IT IS THIS CHAPTER'S. The roads, their kerbs, the trees planted for the
 // frame arrive with its air (layoutAir), by a dissolve, and the palms, the
@@ -50,6 +49,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { hazeUniforms } from './exteriorHaze';
 import { journeyState } from './journey';
+import { filmState } from './FilmGrade';
 import { keepDepthAlpha } from './LensFocus';
 
 const FT = 0.3048;
@@ -385,7 +385,7 @@ const DITHER = 'fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy) + 5.588238 *
  * onBeforeCompile behind). It casts nothing: a shadow cannot go by a dissolve, and
  * one of these lifting from the lawn all at once is the thing the eye would catch.
  */
-function standBack(im: THREE.InstancedMesh, gone: readonly number[]): void {
+function standBack(im: THREE.InstancedMesh, gone: readonly number[], back = false): void {
   const m = new THREE.Matrix4();
   const c = new THREE.Color();
   const none = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -394,6 +394,7 @@ function standBack(im: THREE.InstancedMesh, gone: readonly number[]): void {
   own.onBeforeCompile = src.onBeforeCompile;
   own.customProgramCacheKey = src.customProgramCacheKey;
   own.userData.leave = true;
+  if (back) own.userData.back = true;
   const mesh = new THREE.InstancedMesh(im.geometry, own, gone.length);
   mesh.name = `${im.name}_leaving`;
   mesh.castShadow = false;
@@ -428,9 +429,30 @@ function standBack(im: THREE.InstancedMesh, gone: readonly number[]): void {
  * gate, is left undrawn across each mouth. All of it only while the layout is up:
  * each goes by a dissolve on its air and comes back after it.
  */
-export function clearJunctions(root: THREE.Object3D): { palms: number; garden: number; lamps: number; kerbs: number } {
+export function clearJunctions(root: THREE.Object3D): { palms: number; garden: number; lamps: number; kerbs: number; walls: number } {
   root.updateMatrixWorld(true);
-  const out = { palms: 0, garden: 0, lamps: 0, kerbs: 0 };
+  const out = { palms: 0, garden: 0, lamps: 0, kerbs: 0, walls: 0 };
+  // (AND THE ESTATE'S WALL. From up here it is a long pale line ruled along the far
+  // edge of the plots, which the founder's frame does not have: under the blue
+  // hour's fill the palest thing on the land. And the helipad, whose white ring stood
+  // through the trees as a stray arc beside the pool. On materials of their own: they
+  // go by the same dissolve, far off, and are back as the camera comes down.)
+  const wallOwn = new Map<THREE.Material, THREE.Material>();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !/^(estate_wall|helipad_)/.test(mesh.name) || Array.isArray(mesh.material)) return;
+    const from = mesh.material;
+    let own = wallOwn.get(from);
+    if (!own) {
+      own = from.clone();
+      own.onBeforeCompile = from.onBeforeCompile;
+      own.customProgramCacheKey = from.customProgramCacheKey;
+      own.userData.leave = true;
+      wallOwn.set(from, own);
+    }
+    mesh.material = own;
+    out.walls += 1;
+  });
   // (with their margin: two stood on the first block's west line, across it)
   const blocks = layoutBlocks();
   const onABlock = (x: number, z: number) =>
@@ -460,7 +482,7 @@ export function clearJunctions(root: THREE.Object3D): { palms: number; garden: n
       if (palm ? open || inJunction(p.x, p.z, 0.6) : inJunction(p.x, p.z, 2) || onABlock(p.x, p.z)) gone.push(i);
     }
     if (!gone.length) continue;
-    standBack(im, gone);
+    standBack(im, gone, palm);
     if (palm) out.palms += gone.length;
     else out.garden += gone.length;
   }
@@ -628,7 +650,7 @@ export function wetTheRoads(root: THREE.Object3D): number {
 
 // ── The survey's drawing ───────────────────────────────────────────────────
 
-export const layoutUniforms = { uLayout: { value: 0 }, uLow: { value: 0 } };
+export const layoutUniforms = { uLayout: { value: 0 }, uLow: { value: 0 }, uLayoutDusk: { value: 0 } };
 let sheetMesh: THREE.Mesh | null = null;
 
 /** The ground's lie as the drawing gives it (the cover's survey's own:
@@ -679,6 +701,7 @@ export function layoutSheet(): THREE.Mesh {
     fragmentShader: /* glsl */ `
       uniform float uLayout;
       uniform float uLow;
+      uniform float uLayoutDusk;
       varying vec3 vWorld;
       ${LIE_GLSL}
       ${WET_NOISE_GLSL}
@@ -779,16 +802,22 @@ export function layoutSheet(): THREE.Mesh {
                * smoothstep(${f(z0)}, ${f(z0 + 8)}, p.y) * (1.0 - smoothstep(${f(z1 - 8)}, ${f(z1)}, p.y));
         ink *= uLayout;
         shade *= uLow;
+        // (the dapple is the low sun's, and it goes with it)
+        shade *= 1.0 - 0.75 * uLayoutDusk;
         // the veil over the lawn round the house
         float northOf = 1.0 - smoothstep(${f(LAYOUT.roads[0] - LAYOUT.road / 2 - 3)}, ${f(LAYOUT.roads[0] - LAYOUT.road / 2)}, p.y);
         float veil = uLow * northOf * mix(${f(LAYOUT.veil.west)}, ${f(LAYOUT.veil.east)}, smoothstep(6.0, 30.0, p.x))
                    * smoothstep(${f(z0)}, ${f(z0 + 8)}, p.y) * smoothstep(${f(x0)}, ${f(x0 + 8)}, p.x) * (1.0 - smoothstep(${f(x1 - 8)}, ${f(x1)}, p.x));
         shade *= 1.0 - northOf;
+        // (The misty light is gone with the sun: the land under the blue hour is
+        // its own dark, and the drawing a white line on it. filmHours.ts.)
+        veil *= 1.0 - uLayoutDusk;
         float a = 1.0 - (1.0 - ink) * (1.0 - shade) * (1.0 - veil);
         if (a < 0.003) discard;
         // a warm ivory, toward the founder's bronze, over the shade's dark
         vec3 veilColour = vec3(${LAYOUT.veil.colour.map(f).join(', ')});
-        gl_FragColor = vec4((vec3(0.88, 0.78, 0.58) * ink + veilColour * veil * (1.0 - ink)) / a, a);
+        vec3 inkColour = mix(vec3(0.88, 0.78, 0.58), vec3(0.84, 0.84, 0.82), uLayoutDusk);
+        gl_FragColor = vec4((inkColour * ink + veilColour * veil * (1.0 - ink)) / a, a);
       }`,
     transparent: true,
     depthWrite: false,
@@ -820,7 +849,6 @@ export function layoutSheet(): THREE.Mesh {
  * founder's frame sets its words: along the line of the road or the plot they
  * name, upright and whole, not laid flat (laid flat at this height a line of
  * type is two-fifths of its height), a little pressed toward the ground.
- * Crosshairs (`[data-layout-mark="i"]`) stand over LAYOUT_MARKS.
  */
 export const LAYOUT_LABELS: readonly {
   at: readonly [number, number];
@@ -851,36 +879,26 @@ export const LAYOUT_LABELS: readonly {
   { at: [54, 38.6], along: [1, 0], near: 130 },
 ];
 
-export const LAYOUT_MARKS: readonly (readonly [number, number, number])[] = [
-  // on the east lawn beside the house (his, right of the portico), the block
-  // beyond the side road (his upper-right plot's), and the first block's foot
-  // (his, beside the status)
-  [28.2, 0, 10.2],
-  [60, 0, 60],
-  [-23.3, 0, 68.8],
-];
-
 const A = new THREE.Vector3();
 const B = new THREE.Vector3();
 
 /**
  * The drawing's fade, and its words set over the ground: each frame the
  * sheet's uniform, every `[data-layout-label]` stood over its place along its
- * line, every `[data-layout-mark]` over its point, and the chapter's status
- * (`[data-layout-hud]`), all faded with the drawing. Renders nothing.
+ * line, and the chapter's status (`[data-layout-hud]`), all faded with the
+ * drawing. Renders nothing.
  */
 export function LayoutMarks() {
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
   const labels = useRef<HTMLElement[]>([]);
   const widths = useRef(new Map<HTMLElement, number>());
-  const marks = useRef<HTMLElement[]>([]);
   const huds = useRef<HTMLElement[]>([]);
   const next = useRef(0);
   const shown = useRef(-1);
   useEffect(
     () => () => {
-      for (const el of [...labels.current, ...marks.current, ...huds.current]) el.style.opacity = '0';
+      for (const el of [...labels.current, ...huds.current]) el.style.opacity = '0';
     },
     [],
   );
@@ -889,19 +907,20 @@ export function LayoutMarks() {
     const low = layoutLow(journeyState.leg, journeyState.legProgress, !!journeyState.film);
     layoutUniforms.uLayout.value = on;
     layoutUniforms.uLow.value = low;
+    layoutUniforms.uLayoutDusk.value = filmState.evening;
     if (sheetMesh) sheetMesh.visible = low > 0;
-    roadSheen.value = layoutAir(journeyState.leg, journeyState.legProgress, !!journeyState.film);
+    // (the sheen is the golden hour's: at the blue hour, grey clouds on the road)
+    roadSheen.value = layoutAir(journeyState.leg, journeyState.legProgress, !!journeyState.film) * (1 - 0.85 * filmState.evening);
     roadGlint.value = 1 - (1 - LAYOUT.low.glint) * low;
     const now = performance.now();
     if (now > next.current) {
       next.current = now + 1000;
       labels.current = Array.from(document.querySelectorAll<HTMLElement>('[data-layout-label]'));
       for (const el of labels.current) widths.current.set(el, el.offsetWidth);
-      marks.current = Array.from(document.querySelectorAll<HTMLElement>('[data-layout-mark]'));
       huds.current = Array.from(document.querySelectorAll<HTMLElement>('[data-layout-hud]'));
     }
     if (on <= 0.001) {
-      if (shown.current !== 0) for (const el of [...labels.current, ...marks.current, ...huds.current]) el.style.opacity = '0';
+      if (shown.current !== 0) for (const el of [...labels.current, ...huds.current]) el.style.opacity = '0';
       shown.current = 0;
       return;
     }
@@ -934,15 +953,6 @@ export function LayoutMarks() {
       const whole = ax - half > 8 && ax + half < W - 8;
       el.style.transform = `translate3d(${ax.toFixed(1)}px, ${ay.toFixed(1)}px, 0) rotate(${turn.toFixed(4)}rad) scale(${k.toFixed(3)}, ${(k * press).toFixed(3)}) translate(-50%, -50%)`;
       el.style.opacity = seen && whole ? on.toFixed(3) : '0';
-    }
-    for (const el of marks.current) {
-      const m = LAYOUT_MARKS[Number(el.dataset.layoutMark)];
-      if (!m) continue;
-      A.set(m[0], m[1], m[2]).project(camera);
-      const seen = A.z < 1 && Math.abs(A.x) < 1.1 && Math.abs(A.y) < 1.1;
-      const [x, y] = px(A);
-      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
-      el.style.opacity = seen ? on.toFixed(3) : '0';
     }
     for (const el of huds.current) el.style.opacity = on.toFixed(3);
   });

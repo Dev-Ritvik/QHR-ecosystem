@@ -102,12 +102,12 @@ describe('the rooms behind the windows', () => {
     // By day the lamps are a fraction of the daylight the window lets in.
     expect(LAMP_DAY).toBeLessThan(DAY_INTERIOR / 2);
     // At full night the brightest wall of the brightest room (0.7 ivory under
-    // 1.5 of lamp) stays under the print's white: the first drive put it at
-    // five times white and every lit pane clipped alike, the second at two and
-    // a half, and the paid audit (2026-10-04) still read the lit windows as
-    // "bright yellow/orange rectangles". A room glows; a light box clips.
+    // 1.5 of lamp): the first drive put it at five times white and every lit
+    // pane clipped alike. The user's references of 2026-11-01 ask for lit rooms
+    // that are the brightest thing in a dark frame, amber and not cream, so the
+    // print's shoulder takes it now: two and a half times white, and no more.
     const night = LAMP_DAY + EVENING_INTERIOR * EVENING_DRIVE_MAX;
-    expect(0.7 * 1.5 * night).toBeLessThan(1.0);
+    expect(0.7 * 1.5 * night).toBeLessThan(2.6);
     // ...and is still a lit room: several times the daylight it had at noon.
     expect(night).toBeGreaterThan(DAY_INTERIOR * 1.5);
     // The daylight dies into the room, and goes with the evening.
@@ -165,14 +165,14 @@ describe('the ageing of the surfaces', () => {
     const hedge = mk('MAT_Hedge');
     const lawn = mk('MAT_Lawn_AOG');
     const gold = mk('MAT_Gold');
-    expect(dressSurfaces(root)).toEqual({ stone: 2, slate: 1, hedge: 1 });
+    expect(dressSurfaces(root)).toEqual({ stone: 2, slate: 1, hedge: 1, setts: 0, drive: 0 });
     expect(stone.customProgramCacheKey()).toBe('estate-aged-stone');
     expect(slate.customProgramCacheKey()).toBe('estate-aged-slate');
     expect(hedge.customProgramCacheKey()).toBe('estate-aged-hedge');
     expect(lawn.customProgramCacheKey()).not.toContain('estate-aged');
     expect(gold.customProgramCacheKey()).not.toContain('estate-aged');
     // idempotent
-    expect(dressSurfaces(root)).toEqual({ stone: 0, slate: 0, hedge: 0 });
+    expect(dressSurfaces(root)).toEqual({ stone: 0, slate: 0, hedge: 0, setts: 0, drive: 0 });
   });
 
   it('lays the wall in courses, and neither the trim nor the rusticated base', () => {

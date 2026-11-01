@@ -30,6 +30,7 @@
 import { Vector4 } from 'three';
 import { copyPresence, type CopyPane, type ScreenBox } from './copyZone';
 import { ld } from './lookdev';
+import { BAND_SKY, bandSkyAt, heldBright, hourChoice, midnightHeld, twilightHeld } from './filmHours';
 
 export const lensFilter = {
   /** Stops of density at the ellipse's heart; 0 is no filter. */
@@ -50,6 +51,8 @@ export const lensFilter = {
   /** How far the band stands open over the middle of the frame, 0..1: the
    *  layout's sky (holdingsFilter). The header stands at the frame's two ends. */
   topGap: 0,
+  /** How much of the golden hour's colour the band is printed in, 0..1 (HEADER_BAND.warm). */
+  topWarm: 0,
   /** Stops over the WHOLE frame: the lens closed down (codaFilter). Like the
    *  band, it never adds to the others: at each point the densest holds. */
   all: 0,
@@ -119,14 +122,27 @@ export const lensFilter = {
  */
 export const HEADER_BAND = {
   day: 1.6,
-  evening: 2.0,
-  night: 1.2,
+  // (0.7 until the reference of the blue hour, whose afterglow stands behind the
+  // header's controls: a band under a stop brings its ceiling only part of the way
+  // down, and ENQUIRE stood on 128 to 144, 2.7 to 3.4:1, at all eight sizes.)
+  evening: 1,
+  night: 0.3,
   hall: 2.2,
   full: 0.07,
   zero: 0.24,
+  /** How much of midnight there is when the band begins to let go, and has. */
+  letGo: [0.45, 1] as const,
   zeroOutside: 0.16,
   zeroOutsideTall: 0.3,
   ceiling: 0.4,
+  /**
+   * AND THE GOLDEN HOUR'S COLOUR. A neutral density on the cream sky of the user's reference
+   * (2026-11-01) prints grey: a storm cloud in each top corner of a clear evening. This is
+   * the same density in a warm glass, the top of that sky gone to amber: a gain on each
+   * channel in scene-linear light, whole where the band is whole, and nothing at noon, at
+   * dusk or at night, when the sky is not that colour.
+   */
+  warm: [1, 0.82, 0.56] as const,
 } as const;
 
 /** The band outside, for this much of the film's evening (0 day .. 1 fallen)
@@ -136,7 +152,8 @@ export function headerBandOutside(evening: number, night = 0): number {
   const n = Math.min(1, Math.max(0, night));
   const day = ld('bandDay', HEADER_BAND.day);
   const at = day + (ld('bandEvening', HEADER_BAND.evening) - day) * (e * e * (3 - 2 * e));
-  return at + (ld('bandNight', HEADER_BAND.night) - at) * (n * n * (3 - 2 * n));
+  // (let go only as midnight takes the afterglow off the sky behind it)
+  return at + (ld('bandNight', HEADER_BAND.night) - at) * smooth(HEADER_BAND.letGo[0], HEADER_BAND.letGo[1], n);
 }
 
 /** The holdings' opening frames, in exterior-leg progress. The density is
@@ -201,7 +218,7 @@ function onStage(cx: number, cy: number, rx: number, ry: number, aspect: number)
  * a margin. So a light band comes back for those frames only, and is gone
  * again before the door, where the top of the frame is the attic's dark.
  */
-export const HEADER_APPROACH = { stops: 0.6, from: [0.8, 0.84], to: [0.91, 0.95] } as const;
+export const HEADER_APPROACH = { stops: 0.25, from: [0.8, 0.84], to: [0.91, 0.95] } as const;
 
 /** The band through the approach, at this place on the exterior leg. */
 export function headerBandApproach(legS: number): number {
@@ -420,15 +437,16 @@ export function tableBandFilter(panes: readonly CopyPane[], dt: number, model = 
  * the hall at the end of the way out by the door, and a reach that stepped
  * from the hall's to its own would lift a strip of the picture in one frame.
  */
-export function headerBandReach(outside = false, dt = Infinity, tall = false): void {
+export function headerBandReach(outside = false, dt = Infinity, tall = false, legS = 0): void {
   tableBand.on = 0;
-  lensFilter.topFull = ld('bandFull', HEADER_BAND.full);
+  const sky = outside && !tall ? bandSkyAt(legS) : 0;
+  lensFilter.topFull = ld('bandFull', HEADER_BAND.full) + (BAND_SKY.full - HEADER_BAND.full) * sky;
   if (!outside) {
     lensFilter.topZero = HEADER_BAND.zero;
     return;
   }
   // (`tall`: a frame that is not wide, where the sky is a third of the picture)
-  const want = ld('bandZero', tall ? HEADER_BAND.zeroOutsideTall : HEADER_BAND.zeroOutside);
+  const want = ld('bandZero', tall ? HEADER_BAND.zeroOutsideTall : HEADER_BAND.zeroOutside) + (BAND_SKY.zero - HEADER_BAND.zeroOutside) * sky;
   lensFilter.topZero += (want - lensFilter.topZero) * (1 - Math.exp(-Math.max(0, dt) / 0.35));
 }
 
@@ -475,6 +493,13 @@ export const LAYOUT_SKY = {
   // so the house's roofline beside the title is left its light)
   stops: 1.6,
   lean: { cx: 0.12, rx: 0.6 },
+  // AND BY THE BLUE HOUR its fall has gone longer and stands off the middle of the
+  // frame, where the reference has its afterglow (over the title the sky is dark
+  // by then, and under this it stood at 75, 48, 50 where the reference has 207,
+  // 168, 137). From the left of the frame: whole over the title, gone by 900 of
+  // 1920.
+  dusk: { cx: -0.2, rx: 0.72 },
+  duskOff: 0.75,
   full: 0.4,
   zero: 0.56,
   from: [0.55, 0.59] as const,
@@ -486,9 +511,32 @@ export function layoutSkyStops(legS: number): number {
   return (
     ld('layoutSky', LAYOUT_SKY.stops) *
     smooth(LAYOUT_SKY.from[0], LAYOUT_SKY.from[1], legS) *
-    (1 - smooth(LAYOUT_SKY.to[0], LAYOUT_SKY.to[1], legS))
+    (1 - smooth(LAYOUT_SKY.to[0], LAYOUT_SKY.to[1], legS)) *
+    // (by the blue hour a dark mountain stands behind the title, and the grad on it
+    // only made it black)
+    (1 - LAYOUT_SKY.duskOff * twilightHeld(legS))
   );
 }
+
+/**
+ * AND UNDER AN HOUR THE VISITOR HAS HELD (HourChoice.tsx). The densities here were each
+ * ridden to what stands behind the words at the film's own hour there. Hold the day over
+ * the layout, whose film has gone blue by then, or noon over any of it, and the same words
+ * stand on a brighter picture. Stops, measured at 1920x945 and 390x844.
+ */
+export const HELD_ND = {
+  /** On the small type on the land, at noon. */
+  land: 0.95,
+  /** On the layout's sky, at any hour brighter than its own. */
+  layout: 0.45,
+  /** On a phone's layout, the same. */
+  layoutPhone: 0.5,
+  /** At the foot of the frame by the door, at noon. */
+  door: 0.65,
+  /** And on a phone on its side, whose line stands against the foot of the steps: at any
+   *  hour brighter than the film's own there. */
+  doorShort: 1.75,
+} as const;
 
 /**
  * THE COVER'S SKY (the paid audit of 2026-10-04, passes 2 and 6: "typography
@@ -526,14 +574,19 @@ export const COVER_SKY = {
   lean: { cx: 0.14, rx: 1.05 },
   full: 0.32,
   zero: 0.46,
-  off: [0.31, 0.345] as const,
+  // ([0.31, 0.345] until the user's reference of 2026-11-01: the orbit's line has gone by
+  // 0.285, and for a stretch of the frame that reference is of this stood over a sky
+  // with nothing in it to protect, at 2.3 stops: the bright horizon it asks for, greyed.)
+  off: [0.278, 0.31] as const,
   // RIDDEN UP AS THE CAMERA COMES ROUND TO THE EVENING. The orbit's line
   // stands in this sky, and over the second half of its stretch the sunset
   // comes up behind it: measured at 1920x945 and 1440x900 on the restored
   // path, its gilt word on a ground of 123 to 134 at leg 0.26 and 147 at
   // 0.305 with the day's 1.45 stops. Seven-tenths of a stop more by 0.275,
   // as an operator rides a grad into a brightening sky.
-  ride: { from: 0.225, to: 0.275, stops: 0.7 },
+  // (from 0.225 until the plate of the user's reference, 2026-11-01: "We do not" stood on
+  // 167 at 0.24.)
+  ride: { from: 0.2, to: 0.275, stops: 0.7 },
 } as const;
 /**
  * AND THE GRAD HAS A COLOUR. The forensic audit of 2026-10-09 (#6): "The
@@ -585,8 +638,10 @@ export const COVER_GRADE = {
 /** How much of the cover's coloured grad is on at this point of the exterior
  *  leg, 0..1. */
 export function coverGrade(legS: number): number {
-  // (and on the layout's grad, whose sky is the same golden haze: LAYOUT_SKY)
-  const layout = smooth(LAYOUT_SKY.from[0], LAYOUT_SKY.from[1], legS) * (1 - smooth(LAYOUT_SKY.to[0], LAYOUT_SKY.to[1], legS));
+  // (and on the layout's grad, whose sky is the same golden haze: LAYOUT_SKY; for
+  // as long as it is golden. On the blue hour's mist that umber was a lilac.)
+  const layout =
+    smooth(LAYOUT_SKY.from[0], LAYOUT_SKY.from[1], legS) * (1 - smooth(LAYOUT_SKY.to[0], LAYOUT_SKY.to[1], legS)) * (1 - twilightHeld(legS));
   return Math.max(1 - smooth(COVER_GRADE.off[0], COVER_GRADE.off[1], legS), layout);
 }
 
@@ -641,6 +696,37 @@ export function skyRide(legS: number): number {
   return ld('coverSkyRide', COVER_SKY.ride.stops) * smooth(COVER_SKY.ride.from, COVER_SKY.ride.to, legS);
 }
 
+/**
+ * AND OVER THE FIRST TURN, ON A FRAME THAT IS NOT VERY WIDE. On the plate of the user's
+ * reference the horizon's glow is the brightest thing in that sky, and on a frame of 16:9
+ * or squarer the title's last word reaches the middle of the picture, where the glow
+ * stands: as the camera starts to move "districts" crosses it (measured at 1440x900 and
+ * 1600x900 from leg 0.03 to 0.09: on 151 to 168, 2.03:1 at the worst). The wider frames
+ * have that word out over the great tree. So there the grad is ridden up while it crosses.
+ */
+export const COVER_GLOW = {
+  stops: 0.7,
+  on: [0.012, 0.035] as const,
+  off: [0.095, 0.125] as const,
+  aspect: [1.85, 2.02] as const,
+} as const;
+
+/** And on a tablet on its side, where the gilt line stands in it from the first frame
+ *  (at 1180x820 and 1024x768, "from." at 2.95:1), a touch more of the grad all along. */
+export const COVER_SQUARE = { share: 0.12, aspect: [1.5, 1.62] as const } as const;
+/** Where the band's opening over the layout's sky is held in on such a frame: ENQUIRE
+ *  stands nearer the middle of it (at 1024x768, 4.3:1). */
+export const GAP_SQUARE = { held: 0.4, aspect: [1.36, 1.5] as const } as const;
+
+export function coverGlowStops(legS: number, aspect: number): number {
+  return (
+    COVER_GLOW.stops *
+    smooth(COVER_GLOW.on[0], COVER_GLOW.on[1], legS) *
+    (1 - smooth(COVER_GLOW.off[0], COVER_GLOW.off[1], legS)) *
+    (1 - smooth(COVER_GLOW.aspect[0], COVER_GLOW.aspect[1], aspect))
+  );
+}
+
 /** The cover's sky grad at this point of the exterior leg, in stops. */
 export function coverSkyStops(legS: number): number {
   return (ld('coverSky', COVER_SKY.stops) + skyRide(legS)) * (1 - smooth(COVER_SKY.off[0], COVER_SKY.off[1], legS));
@@ -672,7 +758,7 @@ export function holdingsFilter(
   const grade = coverGrade(legS);
   lensFilter.sky.cool = grade * ld('coverCool', 1);
   lensFilter.sky.warm = grade * ld('coverWarm', 1);
-  const land = ld('landStops', LAND_ND.stops) * Math.max(c, r, l);
+  const land = (ld('landStops', LAND_ND.stops) + HELD_ND.land * hourChoice.noon) * Math.max(c, r, l);
   lensFilter.second.stops = land < 0.004 ? 0 : land;
   if (land > 0) {
     onEdge(
@@ -683,9 +769,17 @@ export function holdingsFilter(
     );
     lensFilter.second.inner = ld('landInner', LAND_ND.inner);
   }
-  const sky = coverSkyStops(legS);
-  const layout = layoutSkyStops(legS);
-  lensFilter.topGap = ld('layoutGap', 1) * (layout / Math.max(1e-3, ld('layoutSky', LAYOUT_SKY.stops)));
+  const sky =
+    coverSkyStops(legS) * (1 + COVER_SQUARE.share * (1 - smooth(COVER_SQUARE.aspect[0], COVER_SQUARE.aspect[1], aspect))) +
+    coverGlowStops(legS, aspect);
+  const layoutOn = smooth(LAYOUT_SKY.from[0], LAYOUT_SKY.from[1], legS) * (1 - smooth(LAYOUT_SKY.to[0], LAYOUT_SKY.to[1], legS));
+  const layout = layoutSkyStops(legS) + HELD_ND.layout * heldBright() * layoutOn;
+  // (and stands open as long as there is an afterglow to see: only the header's two
+  // ends are the header's, and the reference's sky is bright between them)
+  const afterglow = twilightHeld(legS) * (1 - smooth(0.5, 1, midnightHeld(legS)));
+  // (not on a phone on its side, whose ENQUIRE stands three-quarters of the way across)
+  lensFilter.topGap =
+    short ? 0 : ld('layoutGap', 1) * Math.max(layoutOn, afterglow) * (1 - GAP_SQUARE.held * (1 - smooth(GAP_SQUARE.aspect[0], GAP_SQUARE.aspect[1], aspect)));
   // A grad anchored at the top edge: an ellipse centred above the frame,
   // wide enough that across the frame its edge is a line. The cover's, or
   // the layout's (LAYOUT_SKY), whichever is the denser here.
@@ -704,7 +798,13 @@ export function holdingsFilter(
   const vZero = 1 - ld('layoutSkyZero', LAYOUT_SKY.zero);
   const ry = cy - vZero;
   lensFilter.stops = layout;
-  lensFilter.shape.set(ld('layoutSkyCx', LAYOUT_SKY.lean.cx), cy, ld('layoutSkyRx', LAYOUT_SKY.lean.rx), ry);
+  const dusk = twilightHeld(legS);
+  lensFilter.shape.set(
+    ld('layoutSkyCx', LAYOUT_SKY.lean.cx + (LAYOUT_SKY.dusk.cx - LAYOUT_SKY.lean.cx) * dusk),
+    cy,
+    ld('layoutSkyRx', LAYOUT_SKY.lean.rx + (LAYOUT_SKY.dusk.rx - LAYOUT_SKY.lean.rx) * dusk),
+    ry,
+  );
   lensFilter.inner = (cy - vFull) / ry;
 }
 
@@ -733,10 +833,11 @@ export const APPROACH_ND = {
  * The approach's grad for this frame, over whatever the exterior's other
  * filter wrote: the denser stands. Call after holdingsFilter / phoneSkyFilter.
  */
-export function approachFilter(legS: number): void {
-  const on =
-    smooth(APPROACH_ND.from[0], APPROACH_ND.from[1], legS) * (1 - smooth(APPROACH_ND.to[0], APPROACH_ND.to[1], legS));
-  const stops = APPROACH_ND.stops * on;
+export function approachFilter(legS: number, short = false): void {
+  const coming = smooth(APPROACH_ND.from[0], APPROACH_ND.from[1], legS);
+  const on = coming * (1 - smooth(APPROACH_ND.to[0], APPROACH_ND.to[1], legS));
+  // (at the middle of the day the stone by the door stays bright under its line)
+  const stops = Math.max(APPROACH_ND.stops * on, (short ? HELD_ND.doorShort * heldBright() : HELD_ND.door * hourChoice.noon) * coming);
   if (stops <= lensFilter.stops) return;
   lensFilter.stops = stops;
   const vFull = 1 - APPROACH_ND.full;
@@ -878,7 +979,7 @@ export function phoneSkyFilter(panes: readonly CopyPane[], legS: number, dt: num
   // ground of 130 at 2.6:1 and the line under it at 3.96:1.)
   const density = (id: string) =>
     id === 'holdings'
-      ? holdingsDensity(legS) + PHONE_HOLDINGS_BOOST * opening + PHONE_HOLDINGS_MIST
+      ? holdingsDensity(legS) + PHONE_HOLDINGS_BOOST * opening + PHONE_HOLDINGS_MIST + HELD_ND.layoutPhone * heldBright()
       : id === 'revolution'
         ? PHONE_SKY_ND.revolution + skyRide(legS)
         : PHONE_SKY_ND[id] ?? 0;

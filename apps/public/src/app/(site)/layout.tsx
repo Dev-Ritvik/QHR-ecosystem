@@ -3,6 +3,7 @@ import { ConsentPanel } from '@/components/consent/ConsentPanel';
 import { SiteHeader } from '@/components/site/SiteHeader';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { RouteVeil } from '@/components/site/RouteVeil';
+import { ReticleCursor } from '@/components/site/ReticleCursor';
 import { TelemetryProvider } from '@/lib/telemetry/TelemetryProvider';
 import { MarketingPixels } from '@/lib/marketing/pixels';
 import { PostHogProvider } from './posthog-provider';
@@ -52,6 +53,9 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
               had a canvas. One device, every navigation. */}
           <RouteVeil />
           <ConsentPanel />
+          {/* The site's cursor, on every page of the segment. (The kiosk, on its own
+              subdomain, is touch.) */}
+          <ReticleCursor />
           {/* Renders nothing at all without Marketing consent — no script tag,
               no network request. A pixel loaded and then told not to track has
               still handed the vendor an IP and a referrer. */}

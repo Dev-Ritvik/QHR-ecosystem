@@ -40,7 +40,14 @@ import {
   splitCanal,
   waterShared,
   waterUniforms,
+  POOL,
 } from './exteriorWater';
+import { LAMP_POOLS, dressLampWash, lampsOn } from './exteriorLamps';
+import { layGroundField } from './exteriorGround';
+import { followGrass, plantGrass } from './exteriorGrass';
+import { dressEstateGI, followGI } from './exteriorGI';
+import { MIRROR_SCALE, makePoolMirror, markMirrored } from './poolMirror';
+import { skyLightAt } from './filmHours';
 import { ld } from './lookdev';
 import { journeyState } from './journey';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -48,10 +55,10 @@ import { attachLoaders } from './HallModel';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { guardAnisotropy } from './materialGuards';
 import { markFocusDepth } from './LensFocus';
-import { dressLawn, sharpenTextures } from './exteriorLawn';
+import { dressLawn, followLawn, sharpenTextures } from './exteriorLawn';
 import { dressFoliage, followSun } from './exteriorFoliage';
 import { dressPalmCrowns, replantBelt, varyTrees } from './exteriorTrees';
-import { dressHaze, horizonSkirt } from './exteriorHaze';
+import { dressHaze, hazeUniforms, horizonSkirt } from './exteriorHaze';
 import { plantJungle } from './exteriorJungle';
 import { SurveyPins, surveySheet } from './exteriorSurvey';
 import { LAYOUT, LayoutMarks, clearJunctions, layLayout, layoutAir, layoutFades, layoutSheet, wetTheRoads } from './exteriorLayout';
@@ -1541,7 +1548,8 @@ function useSkyReflections(reflectors: { current: SkyReflector[] }) {
   useFrame(() => {
     const sky = scene.environment;
     const base = scene.environmentIntensity;
-    followWaterHour(filmState.evening);
+    // (the pool's lamps are at their brightest at the blue hour, and low by midnight)
+    followWaterHour(filmState.evening, lampsOn(filmState.evening) * (1 - POOL_LAMPS_MIDNIGHT * filmState.night));
     // The sky panorama keeps its daylight when the film's evening falls (only
     // the background is dimmed), so a surface still reflecting it at dusk
     // glowed. The sky-lit polish falls with the evening: to fifteen per cent
@@ -1553,7 +1561,9 @@ function useSkyReflections(reflectors: { current: SkyReflector[] }) {
     // and the night). At fifteen per cent of the day's sky the fountain and
     // the canal reflected nothing for the whole of the evening; at the day's
     // whole sky they would glow under a dusk one. Neither: what is above them.
-    const shown = scene.backgroundIntensity * ld('waterSky', WATER_SKY);
+    // (and the prefiltered sky it has is the golden hour's: it goes with the
+    // twilight, whose water has its probe or the lamps' light.)
+    const shown = scene.backgroundIntensity * ld('waterSky', WATER_SKY) * (1 - 0.9 * filmState.evening);
     for (const r of reflectors.current) {
       if (r.mat.envMap !== sky) {
         r.mat.envMap = sky;
@@ -1573,7 +1583,7 @@ export const WATER_SKY = 1.0;
 const PROBED = ['pool', 'canal'] as const;
 type Probed = (typeof PROBED)[number];
 /** The film's hour a probe was taken at, and how strong the sky was drawn. */
-type Hour = { evening: number; night: number; sky: number };
+type Hour = { evening: number; night: number; noon: number; sky: number };
 
 /**
  * THE WATER'S PROBES (exteriorWater.ts, poolProbe.ts): the estate photographed
@@ -1628,7 +1638,8 @@ function useWaterProbes(root: THREE.Object3D, enabled: boolean) {
     const st = state.current;
     // The low tier renders without shadows, and without this.
     if (!enabled || !gl.shadowMap.enabled) return;
-    const sky = Math.max(1e-3, scene.backgroundIntensity);
+    // (the sky as drawn now: its plate's strength, and the hour's light in it)
+    const sky = Math.max(1e-3, scene.backgroundIntensity * skyLightAt(filmState.evening, filmState.night));
     for (const kind of PROBED) {
       const s = st.shown[kind];
       if (s) waterUniforms[kind].uProbeGain.value = sky / s.hour.sky;
@@ -1669,11 +1680,11 @@ function useWaterProbes(root: THREE.Object3D, enabled: boolean) {
       u.uProbeGain.value = sky / hour.sky;
       return;
     }
-    const now: Hour = { evening: filmState.evening, night: filmState.night, sky };
+    const now: Hour = { evening: filmState.evening, night: filmState.night, noon: filmState.noon, sky };
     for (let i = 0; i < PROBED.length; i += 1) {
       const kind = PROBED[(st.turn + i) % PROBED.length];
       const s = st.shown[kind];
-      if (s && Math.abs(s.hour.evening - now.evening) < HOUR_STEP && Math.abs(s.hour.night - now.night) < HOUR_STEP) {
+      if (s && Math.abs(s.hour.evening - now.evening) < HOUR_STEP && Math.abs(s.hour.night - now.night) < HOUR_STEP && Math.abs(s.hour.noon - now.noon) < HOUR_STEP) {
         continue;
       }
       st.turn = (st.turn + i + 1) % PROBED.length;
@@ -1682,6 +1693,38 @@ function useWaterProbes(root: THREE.Object3D, enabled: boolean) {
       break;
     }
   });
+}
+
+/**
+ * The pool's mirror (poolMirror.ts): its layer, and its draw once a frame, after the
+ * camera has moved and before the composer. The sun's map says the tier, as for the
+ * probes: the low tier has none and keeps the cube.
+ */
+function usePoolMirror(root: THREE.Object3D) {
+  const scene = useThree((s) => s.scene);
+  const mirror = useMemo(makePoolMirror, []);
+  useEffect(() => {
+    markMirrored(root);
+    return () => mirror.dispose();
+  }, [root, mirror]);
+  useFrame(({ gl, camera }) => {
+    for (let o: THREE.Object3D | null = root; o; o = o.parent) {
+      if (!o.visible) {
+        mirror.off();
+        return;
+      }
+    }
+    if (!gl.shadowMap.enabled || (camera as THREE.PerspectiveCamera).isPerspectiveCamera !== true) {
+      mirror.off();
+      return;
+    }
+    let map = 0;
+    scene.traverseVisible((o) => {
+      const l = o as THREE.DirectionalLight;
+      if (map === 0 && l.isDirectionalLight && l.castShadow) map = l.shadow.mapSize.x;
+    });
+    mirror.step(gl, scene, camera as THREE.PerspectiveCamera, map >= 4096 ? MIRROR_SCALE.high : map >= 2048 ? MIRROR_SCALE.mid : 0);
+  }, 0.5);
 }
 
 /**
@@ -1705,6 +1748,8 @@ export const LAMPS = {
   whole: 0.75,
   glass: [0.8, 0.78, 0.72],
   warm: [1.0, 0.72, 0.42],
+  /** The file's own strength, against the night they are lit in. */
+  lit: 0.28,
 } as const;
 const LAMP_RE = /^MAT_Light_/;
 
@@ -1736,7 +1781,7 @@ function useEstateLamps(root: THREE.Object3D) {
   useFrame(() => {
     const on = THREE.MathUtils.smoothstep(filmState.evening, ld('lampsFrom', LAMPS.from), ld('lampsWhole', LAMPS.whole));
     for (const l of lamps.current) {
-      const want = l.full * on;
+      const want = l.full * on * LAMPS.lit;
       if (l.mat.emissiveIntensity !== want) l.mat.emissiveIntensity = want;
     }
   });
@@ -1744,6 +1789,23 @@ function useEstateLamps(root: THREE.Object3D) {
 
 /** Where the house stands, for which way each window faces out of it. */
 const HOUSE_MIDDLE = new THREE.Vector3(0, 0, 1.5);
+/** The evening over which the avenue's palms come back through the layout's frame. */
+const PALMS_BACK = [0.3, 0.85] as const;
+/** How much of their colour the royal palms give up with the evening. */
+const PALM_DARK = 0.6;
+
+/** How much of the pool's lamps is taken down by midnight. */
+const POOL_LAMPS_MIDNIGHT = 0.85;
+/** What the lit swimming pool throws on the deck round it (nightPools.ts). */
+const POOL_DECK_LIGHT = {
+  x0: POOL.x0,
+  x1: POOL.x1,
+  z0: POOL.z0,
+  z1: POOL.z1,
+  reach: 1,
+  power: 0.12,
+  colour: [0.2, 0.86, 0.95] as const,
+};
 
 /**
  * The lit rooms' pools of light on the ground (nightPools.ts): every window of
@@ -1763,7 +1825,8 @@ function dressNightPools(root: THREE.Object3D): {
   });
   if (!windows) return { lights: 0, materials: 0, texture: null };
   const lights = roomLights(windows, HOUSE_MIDDLE);
-  const map = buildPoolMap(lights);
+  // (with the estate's lamps, and the lit pool's light on its deck)
+  const map = buildPoolMap(lights, LAMP_POOLS, POOL_DECK_LIGHT);
   return { lights: lights.length, materials: dressPools(root, map), texture: map.texture };
 }
 
@@ -2080,6 +2143,8 @@ export function ExteriorModel({
   /** The horizon's skirt (exteriorHaze.ts): a ring round the eye. */
   const skirt = useRef<THREE.Mesh | null>(null);
   const fades = useRef<ReturnType<typeof layoutFades>>({ arriving: [], leaving: [] });
+  const palms = useRef<{ material: THREE.MeshStandardMaterial; colour: THREE.Color }[]>([]);
+  const grass = useRef<THREE.InstancedMesh | null>(null);
   useFrame((state, delta) => {
     waterShared.uTime.value += delta;
     // It stands round the camera, wherever the camera is (in the estate's own
@@ -2088,11 +2153,19 @@ export function ExteriorModel({
     if (ring?.parent) ring.parent.worldToLocal(ring.position.copy(state.camera.position));
     // (And it stands higher up the hills over the layout: the founder's mist.)
     const air = layoutAir(journeyState.leg, journeyState.legProgress, !!journeyState.film);
-    if (ring) ring.scale.y = 1 + (ld('layoutMist', LAYOUT.mist.lift) - 1) * air;
+    // (less so at the blue hour, whose mountains stand clear of the valley's mist)
+    if (ring) ring.scale.y = 1 + (ld('layoutMist', LAYOUT.mist.lift) * (1 - 0.45 * filmState.evening) - 1) * air;
     // (And what is that frame's only is drawn while its air is up, and what stands
     // where it is laid until its air is whole.)
     for (const m of fades.current.arriving) m.visible = air > 0;
-    for (const m of fades.current.leaving) m.visible = air < 1;
+    // (the avenue's palms come back with the blue hour, as the reference has them)
+    const back = THREE.MathUtils.smoothstep(filmState.evening, PALMS_BACK[0], PALMS_BACK[1]);
+    hazeUniforms.uHazeBack.value = back;
+    // (and dark, with the evening: a royal palm's trunk is pale, and under the sky's
+    // light it stood out of the reference's dark land as a white post)
+    const palmDark = 1 - PALM_DARK * filmState.evening;
+    for (const { material, colour } of palms.current) material.color.copy(colour).multiplyScalar(palmDark);
+    for (const m of fades.current.leaving) m.visible = air < 1 || (m.userData.back === true && back > 0);
     // Looked for at most twice a second: a scene with no shadow-casting sun
     // (the dusk rollback) must not be traversed every frame.
     if ((!sun.current || !sun.current.parent) && (sunSearch.current -= delta) <= 0) {
@@ -2104,10 +2177,17 @@ export function ExteriorModel({
       });
     }
     followSun(sun.current, delta);
+    followGI(sun.current, lampsOn(filmState.evening));
+    followLawn(filmState.evening, filmState.noon, state.gl.shadowMap.enabled);
+    // The blades (exteriorGrass.ts): by the tier, as the sun's map says it (the low
+    // tier has none, and keeps the sward).
+    const sunMap = sun.current?.castShadow ? sun.current.shadow.mapSize.x : 0;
+    followGrass(grass.current, state.camera, delta, sunMap >= 4096 ? 1 : sunMap >= 2048 ? 0.5 : 0);
   });
   const reflectors = useRef<SkyReflector[]>([]);
   useSkyReflections(reflectors);
   useWaterProbes(root, true);
+  usePoolMirror(root);
   useEstateLamps(root);
 
   useEffect(() => {
@@ -2155,17 +2235,24 @@ export function ExteriorModel({
     const foliage = dressFoliage(root);
     const rooms = dressWindows(root);
     const aged = dressSurfaces(root);
+    // The bake's light (exteriorGI.ts), onto the stone's own occlusion and the lawn's.
+    const baked = dressEstateGI(root);
     // The stone's eased arrises, which are their own facets only from close
     // by (exteriorArris.ts).
     dressArrises(root);
     // The lit rooms' pools of light on the ground (nightPools.ts): after the
     // surfaces, so they chain onto the stone's and the lawn's own shaders.
     const pools = dressNightPools(root);
+    dressLampWash(root);
     const sharpened = sharpenTextures(root, Math.min(8, gl.capabilities.getMaxAnisotropy()));
     // The layout's junctions cleared of the avenue's palms, lamps and kerb
     // (exteriorLayout.ts): after the trees are varied, and before the air
     // wraps the kerb's material.
     const junctions = clearJunctions(root);
+    // What stands on the lawn, from where it now stands (exteriorGround.ts).
+    layGroundField(root);
+    // And the blades, where the camera comes down to them (exteriorGrass.ts).
+    grass.current = plantGrass(root) ?? (root.getObjectByName('estate_grass') as THREE.InstancedMesh | null);
     // ...and the roads wet, on the same terms (the forecourt left as it is).
     wetTheRoads(root);
     // LAST of the shader passes: the air, toward the sky on each fragment's
@@ -2183,6 +2270,13 @@ export function ExteriorModel({
     // And where the land ends, air (exteriorHaze.ts, HORIZON_SKIRT).
     skirt.current = horizonSkirt(root);
     fades.current = layoutFades(root);
+    const palmMats = new Set<THREE.MeshStandardMaterial>();
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+      if (mesh.material.name.startsWith('MAT_Palm_Royal')) palmMats.add(mesh.material as THREE.MeshStandardMaterial);
+    });
+    palms.current = [...palmMats].map((material) => ({ material, colour: material.color.clone() }));
     // THE COVER'S SURVEY AND ITS NEAR LEAVES (the concept built 1:1,
     // 2026-10-27; exteriorSurvey.ts, coverLeaves.ts): under the root, so the
     // warm-up builds their programs with the rest.
@@ -2257,6 +2351,8 @@ export function ExteriorModel({
     console.info('[exterior_jungle]', JSON.stringify(jungle));
     // eslint-disable-next-line no-console
     console.info('[exterior_layout]', JSON.stringify({ laid, junctions }));
+    // eslint-disable-next-line no-console
+    console.info('[exterior_gi]', JSON.stringify(baked));
     // eslint-disable-next-line no-console
     console.info('[exterior_census]', JSON.stringify({
       url,

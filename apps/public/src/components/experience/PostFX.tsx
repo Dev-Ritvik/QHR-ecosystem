@@ -95,7 +95,7 @@ import {
 } from 'postprocessing';
 import type { DeviceTier } from '@estate/domain/telemetry/device-tier';
 import { FILM_GRADE, FilmGrade, HALL_GRADE, type FilmGradeEffect } from './FilmGrade';
-import { LensFocus } from './LensFocus';
+import { DepthOff, LensFocus } from './LensFocus';
 import { passageLight } from './passageLight';
 import type { SceneSet } from './poses';
 import type { Grade } from './WorldCanvas';
@@ -381,6 +381,7 @@ export function PostFX({
     // the grade and the vignette are one shader between them.
     return (
       <EffectComposer multisampling={MULTISAMPLING}>
+        <DepthOff />
         <BrightnessContrast ref={bindContrast} brightness={0} contrast={GRADE.contrast} />
         <HueSaturation ref={bindSaturation} hue={0} saturation={GRADE.saturation} />
         <FilmGrade ref={bindPrint} settings={printSettings} />
@@ -403,7 +404,7 @@ export function PostFX({
       {/* FIRST, and on its own pass: the lens reads the scene's depth from
           the alpha channel, which the next pass clamps away (LensFocus.tsx).
           It rests at zero strength anywhere but the exterior leg. */}
-      {lens ? <LensFocus active={film || hall} stillHall={still && hall} /> : <></>}
+      {lens ? <LensFocus active={film || hall} stillHall={still && hall} /> : <DepthOff />}
       {/* Selective, per set (BLOOM / HALL_BLOOM): only light sources cross
           the threshold. Driven through the ref, like the grade below, so the
           threshold at the door is a uniform write. */}
